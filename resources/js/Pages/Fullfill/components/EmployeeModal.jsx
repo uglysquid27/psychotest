@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+import IncompleteSelectionModal from './IncompleteSelectionModal';
+
 
 export default function EmployeeModal({
     showModal,
@@ -14,10 +16,11 @@ export default function EmployeeModal({
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedSubSection, setSelectedSubSection] = useState('all');
     const [tempSelectedIds, setTempSelectedIds] = useState([]);
+    const [showIncompleteModal, setShowIncompleteModal] = useState(false);
 
     const availableSubSections = useMemo(() => {
         const subSectionMap = new Map();
-        
+
         allSortedEligibleEmployees.forEach(emp => {
             emp.subSections.forEach(subSection => {
                 if (!subSectionMap.has(subSection.id)) {
@@ -43,7 +46,7 @@ export default function EmployeeModal({
 
         if (searchTerm.trim()) {
             const searchLower = searchTerm.toLowerCase();
-            filtered = filtered.filter(emp => 
+            filtered = filtered.filter(emp =>
                 emp.name.toLowerCase().includes(searchLower) ||
                 emp.nik.toLowerCase().includes(searchLower)
             );
@@ -51,7 +54,7 @@ export default function EmployeeModal({
 
         if (selectedSubSection !== 'all') {
             const subSectionId = parseInt(selectedSubSection);
-            filtered = filtered.filter(emp => 
+            filtered = filtered.filter(emp =>
                 emp.subSections.some(ss => ss.id === subSectionId)
             );
         }
@@ -60,13 +63,13 @@ export default function EmployeeModal({
     }, [allSortedEligibleEmployees, searchTerm, selectedSubSection]);
 
     const sameSubSectionEmployees = useMemo(() => {
-        return filteredEmployees.filter(emp => 
+        return filteredEmployees.filter(emp =>
             emp.subSections.some(ss => ss.id === request.sub_section_id)
         );
     }, [filteredEmployees, request.sub_section_id]);
 
     const otherSubSectionEmployees = useMemo(() => {
-        return filteredEmployees.filter(emp => 
+        return filteredEmployees.filter(emp =>
             !emp.subSections.some(ss => ss.id === request.sub_section_id)
         );
     }, [filteredEmployees, request.sub_section_id]);
@@ -89,7 +92,7 @@ export default function EmployeeModal({
                     return prev;
                 }
 
-                const currentSelection = prev.map(id => 
+                const currentSelection = prev.map(id =>
                     allSortedEligibleEmployees.find(e => e.id === id)
                 ).filter(Boolean);
 
@@ -113,32 +116,27 @@ export default function EmployeeModal({
     };
 
     const applyMultiSelection = () => {
-        const finalSelection = tempSelectedIds.map(id => 
+        const finalSelection = tempSelectedIds.map(id =>
             allSortedEligibleEmployees.find(e => e.id === id)
         ).filter(Boolean);
 
         const maleCount = finalSelection.filter(e => e.gender === 'male').length;
         const femaleCount = finalSelection.filter(e => e.gender === 'female').length;
 
-        if (request.male_count > 0 && maleCount < request.male_count) {
-            alert(`Diperlukan minimal ${request.male_count} karyawan laki-laki`);
-            return;
-        }
+        const missingMale = Math.max(0, (request.male_count || 0) - maleCount);
+        const missingFemale = Math.max(0, (request.female_count || 0) - femaleCount);
+        const missingTotal = Math.max(0, request.requested_amount - tempSelectedIds.length);
 
-        if (request.female_count > 0 && femaleCount < request.female_count) {
-            alert(`Diperlukan minimal ${request.female_count} karyawan perempuan`);
-            return;
-        }
+        const hasGenderRequirements = (request.male_count || 0) > 0 || (request.female_count || 0) > 0;
+        const meetsGenderRequirements = maleCount >= (request.male_count || 0) && femaleCount >= (request.female_count || 0);
+        const meetsTotalRequirements = tempSelectedIds.length >= request.requested_amount;
 
-        if (tempSelectedIds.length !== request.requested_amount) {
-            const confirmMessage = `Anda memilih ${tempSelectedIds.length} dari ${request.requested_amount} karyawan yang dibutuhkan. Lanjutkan?`;
-            if (!confirm(confirmMessage)) {
-                return;
-            }
-        }
-
-        if (handleMultiSelect(tempSelectedIds)) {
+        if (meetsGenderRequirements && meetsTotalRequirements) {
+            handleMultiSelect(tempSelectedIds);
             setShowModal(false);
+        } else {
+            // Show incomplete selection modal
+            setShowIncompleteModal(true);
         }
     };
 
@@ -170,29 +168,28 @@ export default function EmployeeModal({
             <div
                 key={emp.id}
                 onClick={() => !isDisabledInSingle && toggleEmployeeSelection(emp.id)}
-                className={`cursor-pointer text-left p-3 rounded-md border transition relative ${
-                    isSelected
-                        ? multiSelectMode 
-                            ? 'bg-green-100 dark:bg-green-900/40 border-green-400 dark:border-green-600 ring-2 ring-green-500 dark:ring-green-400'
-                            : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'
-                        : isCurrentlyScheduled
-                            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/40'
-                            : isFemale
-                                ? 'hover:bg-pink-50 dark:hover:bg-pink-900/20 border-pink-200 dark:border-pink-700'
-                                : 'hover:bg-blue-50 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-700'
-                } ${isDisabledInSingle ? 'cursor-not-allowed opacity-60' : ''}`}
+                className={`cursor-pointer text-left p-3 rounded-md border transition relative ${isSelected
+                    ? multiSelectMode
+                        ? 'bg-green-100 dark:bg-green-900/40 border-green-400 dark:border-green-600 ring-2 ring-green-500 dark:ring-green-400'
+                        : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'
+                    : isCurrentlyScheduled
+                        ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/40'
+                        : isFemale
+                            ? 'hover:bg-pink-50 dark:hover:bg-pink-900/20 border-pink-200 dark:border-pink-700'
+                            : 'hover:bg-blue-50 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-700'
+                    } ${isDisabledInSingle ? 'cursor-not-allowed opacity-60' : ''}`}
             >
                 {multiSelectMode && (
                     <div className="absolute top-2 right-2">
                         <input
                             type="checkbox"
                             checked={isSelectedInMulti}
-                            onChange={() => {}} // Handled by parent click
+                            onChange={() => { }} // Handled by parent click
                             className="w-5 h-5 text-green-600 bg-white border-gray-300 rounded focus:ring-green-500 focus:ring-2"
                         />
                     </div>
                 )}
-                
+
                 <div className="flex justify-between items-start">
                     <div className={multiSelectMode ? 'pr-8' : ''}>
                         <strong className="text-gray-900 dark:text-gray-100">{emp.name}</strong>
@@ -211,11 +208,10 @@ export default function EmployeeModal({
                     </div>
                     {!multiSelectMode && (
                         <div className="flex flex-col items-end">
-                            <span className={`text-xs px-1 rounded mb-1 ${
-                                isFemale
-                                    ? 'bg-pink-100 dark:bg-pink-900/40 text-pink-800 dark:text-pink-300'
-                                    : 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300'
-                            }`}>
+                            <span className={`text-xs px-1 rounded mb-1 ${isFemale
+                                ? 'bg-pink-100 dark:bg-pink-900/40 text-pink-800 dark:text-pink-300'
+                                : 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300'
+                                }`}>
                                 {isFemale ? 'P' : 'L'}
                             </span>
                             {isCurrentlyScheduled && (
@@ -269,15 +265,14 @@ export default function EmployeeModal({
                         <div className="flex items-center space-x-4">
                             <button
                                 onClick={toggleMultiSelectMode}
-                                className={`px-4 py-2 rounded-md font-medium transition-colors ${
-                                    multiSelectMode 
-                                        ? 'bg-green-600 hover:bg-green-700 text-white' 
-                                        : 'bg-blue-600 hover:bg-blue-700 text-white'
-                                }`}
+                                className={`px-4 py-2 rounded-md font-medium transition-colors ${multiSelectMode
+                                    ? 'bg-green-600 hover:bg-green-700 text-white'
+                                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                                    }`}
                             >
                                 {multiSelectMode ? '📋 Mode Multi-Select' : '🔄 Mode Single Select'}
                             </button>
-                            
+
                             {multiSelectMode && (
                                 <div className="flex space-x-2">
                                     <button
@@ -435,6 +430,30 @@ export default function EmployeeModal({
                             Tutup
                         </button>
                     </div>
+                )}
+
+                {showIncompleteModal && (
+                    <IncompleteSelectionModal
+                        show={showIncompleteModal}
+                        onClose={() => setShowIncompleteModal(false)}
+                        onConfirm={() => {
+                            handleMultiSelect(tempSelectedIds);
+                            setShowIncompleteModal(false);
+                            setShowModal(false);
+                        }}
+                        request={request}
+                        selectedCount={tempSelectedIds.length}
+                        requiredMale={request.male_count || 0}
+                        requiredFemale={request.female_count || 0}
+                        currentMaleCount={tempSelectedIds.filter(id => {
+                            const emp = allSortedEligibleEmployees.find(e => e.id === id);
+                            return emp?.gender === 'male';
+                        }).length}
+                        currentFemaleCount={tempSelectedIds.filter(id => {
+                            const emp = allSortedEligibleEmployees.find(e => e.id === id);
+                            return emp?.gender === 'female';
+                        }).length}
+                    />
                 )}
             </div>
         </div>
