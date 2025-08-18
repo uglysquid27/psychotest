@@ -17,7 +17,6 @@ class EmployeeDashboardController extends Controller
     {
         $employee = Auth::guard('employee')->user();
 
-        // Eager load relationships for display in the frontend
         $mySchedules = Schedule::with([
                 'manPowerRequest.shift',
                 'subSection.section',
@@ -39,14 +38,9 @@ class EmployeeDashboardController extends Controller
     public function sameDayEmployees(Schedule $schedule)
     {
         $employee = Auth::guard('employee')->user();
-        
-        // Verify schedule ownership
-        //abort_unless($schedule->employee_id === $employee->id, 403);
-    
-        // Get the current section
+
         $currentSection = $schedule->subSection->section;
-        
-        // Get all schedules for the same day and section
+
         $schedules = Schedule::with(['employee', 'subSection', 'manPowerRequest.shift'])
             ->whereHas('subSection', function($q) use ($currentSection) {
                 $q->where('section_id', $currentSection->id);
@@ -54,13 +48,10 @@ class EmployeeDashboardController extends Controller
             ->whereDate('date', $schedule->date)
             ->where('employee_id', '!=', $employee->id)
             ->get();
-            
-        // Group by shift
+
         $shiftGroups = [];
-        
         foreach ($schedules as $s) {
             $shiftId = $s->manPowerRequest->shift_id;
-            
             if (!isset($shiftGroups[$shiftId])) {
                 $shiftGroups[$shiftId] = [
                     'shift_name' => $s->manPowerRequest->shift->name,
@@ -69,7 +60,7 @@ class EmployeeDashboardController extends Controller
                     'employees' => []
                 ];
             }
-            
+
             $shiftGroups[$shiftId]['employees'][] = [
                 'id' => $s->id,
                 'employee' => $s->employee,
@@ -78,11 +69,8 @@ class EmployeeDashboardController extends Controller
                 'rejection_reason' => $s->rejection_reason
             ];
         }
-        
-        // Sort shifts by start time
-        uasort($shiftGroups, function($a, $b) {
-            return strcmp($a['start_time'], $b['start_time']);
-        });
+
+        uasort($shiftGroups, fn($a, $b) => strcmp($a['start_time'], $b['start_time']));
 
         return response()->json([
             'current_schedule' => [
@@ -96,25 +84,20 @@ class EmployeeDashboardController extends Controller
 
     public function respond(Request $req, Schedule $schedule)
     {
-        // Validate the incoming request data
         $req->validate([
             'status' => 'required|in:accepted,rejected',
             'rejection_reason' => 'nullable|required_if:status,rejected|string|max:1000',
         ]);
-    
-        // Ensure the schedule belongs to the authenticated employee
+
         $employee = Auth::guard('employee')->user();
-        //abort_unless($schedule->employee_id === $employee->id, 403, 'Unauthorized action.');
-    
-        // Start a database transaction to ensure atomicity for multiple updates
-        DB::transaction(function () use ($req, $schedule, $employee) {
+
+        DB::transaction(function () use ($req, $schedule) {
             $data = ['status' => $req->status];
-        
-            // Add rejection reason if status is rejected, otherwise set to null
+
             if ($req->status === 'rejected') {
                 $data['rejection_reason'] = $req->rejection_reason;
-                
-                // Update employee status and cuti
+
+                // Reset employee status
                 $employeeToUpdate = Employee::find($schedule->employee_id);
                 if ($employeeToUpdate) {
                     $employeeToUpdate->status = 'available';
@@ -122,7 +105,7 @@ class EmployeeDashboardController extends Controller
                     $employeeToUpdate->save();
                 }
 
-                // Update manpower request status
+                // Reset manpower request
                 $manPowerRequest = ManPowerRequest::find($schedule->man_power_request_id);
                 if ($manPowerRequest) {
                     $manPowerRequest->status = 'pending';
@@ -131,12 +114,10 @@ class EmployeeDashboardController extends Controller
             } else {
                 $data['rejection_reason'] = null;
             }
-        
-            // Update the schedule status and rejection reason
+
             $schedule->update($data);
         });
-    
-        // Redirect back with a success message
+
         return back()->with('success', 'Status berhasil diperbarui.');
     }
 }
