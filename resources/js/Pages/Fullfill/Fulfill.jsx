@@ -18,7 +18,6 @@ export default function Fulfill({
     message,
     auth 
 }) {
-    // Dark mode state
     const [isDarkMode, setIsDarkMode] = useState(() => {
         if (typeof window !== 'undefined') {
             return localStorage.getItem('darkMode') === 'true' || 
@@ -27,7 +26,6 @@ export default function Fulfill({
         return false;
     });
 
-    // Toggle dark mode
     const toggleDarkMode = () => {
         setIsDarkMode(prev => {
             const newMode = !prev;
@@ -43,7 +41,6 @@ export default function Fulfill({
         });
     };
 
-    // Apply dark mode class on mount
     useEffect(() => {
         if (typeof window !== 'undefined') {
             if (isDarkMode) {
@@ -54,7 +51,6 @@ export default function Fulfill({
         }
     }, [isDarkMode]);
 
-    // Normalize gender with strict validation
     const normalizeGender = (gender) => {
         if (!gender) {
             console.warn('Employee missing gender, defaulting to male');
@@ -68,7 +64,6 @@ export default function Fulfill({
         return normalized;
     };
 
-    // Combine and normalize employee data
     const combinedEmployees = useMemo(() => {
         return [
             ...sameSubSectionEmployees.map(emp => ({
@@ -88,62 +83,48 @@ export default function Fulfill({
         ];
     }, [sameSubSectionEmployees, otherSubSectionEmployees, currentScheduledIds]);
 
-    // Sort employees with gender priority
-   const allSortedEligibleEmployees = useMemo(() => {
-    const sorted = [...combinedEmployees].sort((a, b) => {
-        // 1. Currently scheduled employees first
-        if (a.isCurrentlyScheduled !== b.isCurrentlyScheduled) {
-            return a.isCurrentlyScheduled ? -1 : 1;
-        }
+    const allSortedEligibleEmployees = useMemo(() => {
+        const sorted = [...combinedEmployees].sort((a, b) => {
+            if (a.isCurrentlyScheduled !== b.isCurrentlyScheduled) {
+                return a.isCurrentlyScheduled ? -1 : 1;
+            }
 
-        // 2. Calculate total score as simple sum of components
-        const aTotalScore = (a.workload_points || 0) + (a.blind_test_points || 0) + (a.average_rating || 0);
-        const bTotalScore = (b.workload_points || 0) + (b.blind_test_points || 0) + (b.average_rating || 0);
- 
+            const aTotalScore = (a.workload_points || 0) + (a.blind_test_points || 0) + (a.average_rating || 0);
+            const bTotalScore = (b.workload_points || 0) + (b.blind_test_points || 0) + (b.average_rating || 0);
 
-        // 3. Priority to matching gender requirements
-        const aGenderMatch = request.male_count > 0 && a.gender === 'male' ? 0 :
-            request.female_count > 0 && a.gender === 'female' ? 0 : 1;
-        const bGenderMatch = request.male_count > 0 && b.gender === 'male' ? 0 :
-            request.female_count > 0 && b.gender === 'female' ? 0 : 1;
-        if (aGenderMatch !== bGenderMatch) return aGenderMatch - bGenderMatch;
+            const aGenderMatch = request.male_count > 0 && a.gender === 'male' ? 0 :
+                request.female_count > 0 && a.gender === 'female' ? 0 : 1;
+            const bGenderMatch = request.male_count > 0 && b.gender === 'male' ? 0 :
+                request.female_count > 0 && b.gender === 'female' ? 0 : 1;
+            if (aGenderMatch !== bGenderMatch) return aGenderMatch - bGenderMatch;
 
-        // 4. Higher total score first (new simple sum)
-        if (aTotalScore !== bTotalScore) {
-            return bTotalScore - aTotalScore;
-        }
+            if (aTotalScore !== bTotalScore) {
+                return bTotalScore - aTotalScore;
+            }
 
-        // 5. Same sub-section first
-        const aIsSame = a.subSections.some(ss => ss.id === request.sub_section_id);
-        const bIsSame = b.subSections.some(ss => ss.id === request.sub_section_id);
-        if (aIsSame !== bIsSame) return aIsSame ? -1 : 1;
+            const aIsSame = a.subSections.some(ss => ss.id === request.sub_section_id);
+            const bIsSame = b.subSections.some(ss => ss.id === request.sub_section_id);
+            if (aIsSame !== bIsSame) return aIsSame ? -1 : 1;
 
-        // 6. Bulanan before harian
-        if (a.type === 'bulanan' && b.type === 'harian') return -1;
-        if (a.type === 'harian' && b.type === 'bulanan') return 1;
+            if (a.type === 'bulanan' && b.type === 'harian') return -1;
+            if (a.type === 'harian' && b.type === 'bulanan') return 1;
 
-        // 7. For harian, higher weight first
-        if (a.type === 'harian' && b.type === 'harian') {
-            return b.working_day_weight - a.working_day_weight;
-        }
+            if (a.type === 'harian' && b.type === 'harian') {
+                return b.working_day_weight - a.working_day_weight;
+            }
 
-        // 8. Finally, sort by ID to ensure consistent ordering
-        return a.id - b.id;
-    });
+            return a.id - b.id;
+        });
 
-    return sorted;
-}, [combinedEmployees, request.sub_section_id, request.male_count, request.female_count]);
+        return sorted;
+    }, [combinedEmployees, request.sub_section_id, request.male_count, request.female_count]);
 
-
-    // Initial selection - prioritize currently scheduled employees
     const initialSelectedIds = useMemo(() => {
-        // First try to use currently scheduled employees
         const validCurrentIds = currentScheduledIds.filter(id => 
             allSortedEligibleEmployees.some(e => e.id === id)
         );
         
         if (validCurrentIds.length > 0) {
-            // Fill remaining slots with new selections if needed
             if (validCurrentIds.length < request.requested_amount) {
                 const remainingCount = request.requested_amount - validCurrentIds.length;
                 const remainingEmployees = allSortedEligibleEmployees
@@ -156,12 +137,10 @@ export default function Fulfill({
             return validCurrentIds.slice(0, request.requested_amount);
         }
 
-        // Fall back to original selection logic if no current schedules
         const requiredMale = request.male_count || 0;
         const requiredFemale = request.female_count || 0;
         const totalRequired = requiredMale + requiredFemale;
 
-        // Separate employees by gender and sub-section
         const sameSubMales = allSortedEligibleEmployees
             .filter(e => e.gender === 'male' && e.subSections.some(ss => ss.id === request.sub_section_id));
         const sameSubFemales = allSortedEligibleEmployees
@@ -173,13 +152,9 @@ export default function Fulfill({
 
         const selected = [];
 
-        // 1. First pick required males from same sub-section
         selected.push(...sameSubMales.slice(0, requiredMale).map(e => e.id));
-
-        // 2. Then pick required females from same sub-section
         selected.push(...sameSubFemales.slice(0, requiredFemale).map(e => e.id));
 
-        // 3. If still need more males, take from other sub-sections
         const currentMaleCount = selected.filter(id => {
             const emp = allSortedEligibleEmployees.find(e => e.id === id);
             return emp?.gender === 'male';
@@ -190,7 +165,6 @@ export default function Fulfill({
             selected.push(...otherSubMales.slice(0, needed).map(e => e.id));
         }
 
-        // 4. If still need more females, take from other sub-sections
         const currentFemaleCount = selected.filter(id => {
             const emp = allSortedEligibleEmployees.find(e => e.id === id);
             return emp?.gender === 'female';
@@ -201,7 +175,6 @@ export default function Fulfill({
             selected.push(...otherSubFemales.slice(0, needed).map(e => e.id));
         }
 
-        // 5. Fill remaining slots with best candidates regardless of gender
         if (selected.length < request.requested_amount) {
             const remaining = allSortedEligibleEmployees
                 .filter(e => !selected.includes(e.id))
@@ -221,18 +194,16 @@ export default function Fulfill({
     const [showModal, setShowModal] = useState(false);
     const [changingEmployeeIndex, setChangingEmployeeIndex] = useState(null);
     const [backendError, setBackendError] = useState(null);
+    const [multiSelectMode, setMultiSelectMode] = useState(false);
 
-    // Sync selectedIds with Inertia's form data
     useEffect(() => {
         setData('employee_ids', selectedIds);
     }, [selectedIds]);
 
-    // Reset selection when initialSelectedIds changes
     useEffect(() => {
         setSelectedIds(initialSelectedIds);
     }, [initialSelectedIds]);
 
-    // Calculate gender statistics
     const genderStats = useMemo(() => {
         const stats = {
             total: 0,
@@ -277,7 +248,6 @@ export default function Fulfill({
         e.preventDefault();
         setBackendError(null);
 
-        // Validate gender requirements
         const selectedEmployees = selectedIds.map(id =>
             allSortedEligibleEmployees.find(e => e.id === id)
         );
@@ -316,7 +286,6 @@ export default function Fulfill({
         const newIds = [...selectedIds];
         const currentEmpId = newIds[changingEmployeeIndex];
 
-        // Prevent duplicate selection (unless it's the same employee)
         if (newEmployeeId !== currentEmpId && newIds.includes(newEmployeeId)) {
             alert('Karyawan ini sudah dipilih');
             return;
@@ -325,7 +294,6 @@ export default function Fulfill({
         const newEmployee = allSortedEligibleEmployees.find(e => e.id === newEmployeeId);
         const currentEmp = allSortedEligibleEmployees.find(e => e.id === currentEmpId);
 
-        // Calculate new gender counts
         let newMaleCount = selectedIds.filter(id => {
             const emp = allSortedEligibleEmployees.find(e => e.id === id);
             return emp?.gender === 'male';
@@ -336,7 +304,6 @@ export default function Fulfill({
             return emp?.gender === 'female';
         }).length;
 
-        // Adjust counts based on replacement
         if (currentEmp) {
             if (currentEmp.gender === 'male') newMaleCount--;
             if (currentEmp.gender === 'female') newFemaleCount--;
@@ -345,7 +312,6 @@ export default function Fulfill({
         if (newEmployee.gender === 'male') newMaleCount++;
         if (newEmployee.gender === 'female') newFemaleCount++;
 
-        // Validate against requirements
         if (request.male_count > 0 && newMaleCount > request.male_count) {
             alert(`Maksimum ${request.male_count} karyawan laki-laki diperbolehkan`);
             return;
@@ -362,9 +328,38 @@ export default function Fulfill({
         setChangingEmployeeIndex(null);
     }, [changingEmployeeIndex, selectedIds, allSortedEligibleEmployees, request.male_count, request.female_count]);
 
+    // New function to handle multi-selection
+    const handleMultiSelect = useCallback((newSelectedIds) => {
+        // Validate gender requirements
+        const selectedEmployees = newSelectedIds.map(id =>
+            allSortedEligibleEmployees.find(e => e.id === id)
+        ).filter(Boolean);
+
+        const maleCount = selectedEmployees.filter(e => e.gender === 'male').length;
+        const femaleCount = selectedEmployees.filter(e => e.gender === 'female').length;
+
+        if (request.male_count > 0 && maleCount > request.male_count) {
+            alert(`Maksimum ${request.male_count} karyawan laki-laki diperbolehkan`);
+            return false;
+        }
+
+        if (request.female_count > 0 && femaleCount > request.female_count) {
+            alert(`Maksimum ${request.female_count} karyawan perempuan diperbolehkan`);
+            return false;
+        }
+
+        // If validation passes, update the selection
+        setSelectedIds(newSelectedIds);
+        return true;
+    }, [allSortedEligibleEmployees, request.male_count, request.female_count]);
+
     const getEmployeeDetails = useCallback((id) => {
         return allSortedEligibleEmployees.find(emp => emp.id === id);
     }, [allSortedEligibleEmployees]);
+
+    const toggleMultiSelectMode = useCallback(() => {
+        setMultiSelectMode(prev => !prev);
+    }, []);
 
     if (request.status === 'fulfilled' && !request.schedules?.length) {
         return (
@@ -458,6 +453,8 @@ export default function Fulfill({
                         selectedIds={selectedIds}
                         getEmployeeDetails={getEmployeeDetails}
                         openChangeModal={openChangeModal}
+                        multiSelectMode={multiSelectMode}
+                        toggleMultiSelectMode={toggleMultiSelectMode}
                     />
 
                     <ConfirmationSection 
@@ -473,6 +470,9 @@ export default function Fulfill({
                     allSortedEligibleEmployees={allSortedEligibleEmployees}
                     selectedIds={selectedIds}
                     selectNewEmployee={selectNewEmployee}
+                    handleMultiSelect={handleMultiSelect}
+                    multiSelectMode={multiSelectMode}
+                    toggleMultiSelectMode={toggleMultiSelectMode}
                 />
             </div>
         </AuthenticatedLayout>

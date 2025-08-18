@@ -6,12 +6,15 @@ export default function EmployeeModal({
     request,
     allSortedEligibleEmployees,
     selectedIds,
-    selectNewEmployee
+    selectNewEmployee,
+    handleMultiSelect,
+    multiSelectMode,
+    toggleMultiSelectMode
 }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedSubSection, setSelectedSubSection] = useState('all');
+    const [tempSelectedIds, setTempSelectedIds] = useState([]);
 
-    // Get unique subsections with section info
     const availableSubSections = useMemo(() => {
         const subSectionMap = new Map();
         
@@ -28,7 +31,6 @@ export default function EmployeeModal({
         });
 
         return Array.from(subSectionMap.values()).sort((a, b) => {
-            // First sort by section name, then by subsection name
             if (a.section_name !== b.section_name) {
                 return a.section_name.localeCompare(b.section_name);
             }
@@ -36,11 +38,9 @@ export default function EmployeeModal({
         });
     }, [allSortedEligibleEmployees]);
 
-    // Filter employees based on search and subsection
     const filteredEmployees = useMemo(() => {
         let filtered = allSortedEligibleEmployees;
 
-        // Filter by search term (name or NIK)
         if (searchTerm.trim()) {
             const searchLower = searchTerm.toLowerCase();
             filtered = filtered.filter(emp => 
@@ -49,7 +49,6 @@ export default function EmployeeModal({
             );
         }
 
-        // Filter by subsection
         if (selectedSubSection !== 'all') {
             const subSectionId = parseInt(selectedSubSection);
             filtered = filtered.filter(emp => 
@@ -60,7 +59,6 @@ export default function EmployeeModal({
         return filtered;
     }, [allSortedEligibleEmployees, searchTerm, selectedSubSection]);
 
-    // Separate filtered employees by same/other subsection
     const sameSubSectionEmployees = useMemo(() => {
         return filteredEmployees.filter(emp => 
             emp.subSections.some(ss => ss.id === request.sub_section_id)
@@ -73,11 +71,88 @@ export default function EmployeeModal({
         );
     }, [filteredEmployees, request.sub_section_id]);
 
-    if (!showModal) return null;
+    const toggleEmployeeSelection = (employeeId) => {
+        if (!multiSelectMode) {
+            selectNewEmployee(employeeId);
+            return;
+        }
+
+        setTempSelectedIds(prev => {
+            const isCurrentlySelected = prev.includes(employeeId);
+            const newEmployee = allSortedEligibleEmployees.find(e => e.id === employeeId);
+
+            if (isCurrentlySelected) {
+                return prev.filter(id => id !== employeeId);
+            } else {
+                if (prev.length >= request.requested_amount) {
+                    alert(`Maksimum ${request.requested_amount} karyawan dapat dipilih`);
+                    return prev;
+                }
+
+                const currentSelection = prev.map(id => 
+                    allSortedEligibleEmployees.find(e => e.id === id)
+                ).filter(Boolean);
+
+                const newSelectionWithEmployee = [...currentSelection, newEmployee];
+                const maleCount = newSelectionWithEmployee.filter(e => e.gender === 'male').length;
+                const femaleCount = newSelectionWithEmployee.filter(e => e.gender === 'female').length;
+
+                if (request.male_count > 0 && maleCount > request.male_count) {
+                    alert(`Maksimum ${request.male_count} karyawan laki-laki diperbolehkan`);
+                    return prev;
+                }
+
+                if (request.female_count > 0 && femaleCount > request.female_count) {
+                    alert(`Maksimum ${request.female_count} karyawan perempuan diperbolehkan`);
+                    return prev;
+                }
+
+                return [...prev, employeeId];
+            }
+        });
+    };
+
+    const applyMultiSelection = () => {
+        const finalSelection = tempSelectedIds.map(id => 
+            allSortedEligibleEmployees.find(e => e.id === id)
+        ).filter(Boolean);
+
+        const maleCount = finalSelection.filter(e => e.gender === 'male').length;
+        const femaleCount = finalSelection.filter(e => e.gender === 'female').length;
+
+        if (request.male_count > 0 && maleCount < request.male_count) {
+            alert(`Diperlukan minimal ${request.male_count} karyawan laki-laki`);
+            return;
+        }
+
+        if (request.female_count > 0 && femaleCount < request.female_count) {
+            alert(`Diperlukan minimal ${request.female_count} karyawan perempuan`);
+            return;
+        }
+
+        if (tempSelectedIds.length !== request.requested_amount) {
+            const confirmMessage = `Anda memilih ${tempSelectedIds.length} dari ${request.requested_amount} karyawan yang dibutuhkan. Lanjutkan?`;
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+        }
+
+        if (handleMultiSelect(tempSelectedIds)) {
+            setShowModal(false);
+        }
+    };
+
+    const cancelMultiSelection = () => {
+        setTempSelectedIds([]);
+        setShowModal(false);
+    };
 
     const renderEmployeeCard = (emp) => {
-        const isSelected = selectedIds.includes(emp.id);
+        const isSelectedInSingle = selectedIds.includes(emp.id);
+        const isSelectedInMulti = tempSelectedIds.includes(emp.id);
+        const isSelected = multiSelectMode ? isSelectedInMulti : isSelectedInSingle;
         const isCurrentlyScheduled = emp.isCurrentlyScheduled;
+        const isDisabledInSingle = !multiSelectMode && isSelectedInSingle;
 
         let displaySubSectionName = 'Tidak Ada Bagian';
         if (emp.subSections && emp.subSections.length > 0) {
@@ -92,22 +167,34 @@ export default function EmployeeModal({
         const isFemale = emp.gender === 'female';
 
         return (
-            <button
+            <div
                 key={emp.id}
-                onClick={() => !isSelected && selectNewEmployee(emp.id)}
-                disabled={isSelected}
-                className={`text-left p-3 rounded-md border transition ${
+                onClick={() => !isDisabledInSingle && toggleEmployeeSelection(emp.id)}
+                className={`cursor-pointer text-left p-3 rounded-md border transition relative ${
                     isSelected
-                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700 cursor-not-allowed'
+                        ? multiSelectMode 
+                            ? 'bg-green-100 dark:bg-green-900/40 border-green-400 dark:border-green-600 ring-2 ring-green-500 dark:ring-green-400'
+                            : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'
                         : isCurrentlyScheduled
                             ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/40'
                             : isFemale
                                 ? 'hover:bg-pink-50 dark:hover:bg-pink-900/20 border-pink-200 dark:border-pink-700'
                                 : 'hover:bg-blue-50 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-700'
-                }`}
+                } ${isDisabledInSingle ? 'cursor-not-allowed opacity-60' : ''}`}
             >
+                {multiSelectMode && (
+                    <div className="absolute top-2 right-2">
+                        <input
+                            type="checkbox"
+                            checked={isSelectedInMulti}
+                            onChange={() => {}} // Handled by parent click
+                            className="w-5 h-5 text-green-600 bg-white border-gray-300 rounded focus:ring-green-500 focus:ring-2"
+                        />
+                    </div>
+                )}
+                
                 <div className="flex justify-between items-start">
-                    <div>
+                    <div className={multiSelectMode ? 'pr-8' : ''}>
                         <strong className="text-gray-900 dark:text-gray-100">{emp.name}</strong>
                         <div className="mt-1 text-gray-500 dark:text-gray-400 text-xs">
                             <p>NIK: {emp.nik}</p>
@@ -122,24 +209,28 @@ export default function EmployeeModal({
                             <p>Rating: {emp.average_rating.toFixed(1)}</p>
                         </div>
                     </div>
-                    <div className="flex flex-col items-end">
-                        <span className={`text-xs px-1 rounded mb-1 ${
-                            isFemale
-                                ? 'bg-pink-100 dark:bg-pink-900/40 text-pink-800 dark:text-pink-300'
-                                : 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300'
-                        }`}>
-                            {isFemale ? 'P' : 'L'}
-                        </span>
-                        {isCurrentlyScheduled && (
-                            <span className="text-xs px-1 rounded bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300">
-                                Sudah dijadwalkan
+                    {!multiSelectMode && (
+                        <div className="flex flex-col items-end">
+                            <span className={`text-xs px-1 rounded mb-1 ${
+                                isFemale
+                                    ? 'bg-pink-100 dark:bg-pink-900/40 text-pink-800 dark:text-pink-300'
+                                    : 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300'
+                            }`}>
+                                {isFemale ? 'P' : 'L'}
                             </span>
-                        )}
-                    </div>
+                            {isCurrentlyScheduled && (
+                                <span className="text-xs px-1 rounded bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300">
+                                    Sudah dijadwalkan
+                                </span>
+                            )}
+                        </div>
+                    )}
                 </div>
-            </button>
+            </div>
         );
     };
+
+    if (!showModal) return null;
 
     return (
         <div
@@ -152,7 +243,16 @@ export default function EmployeeModal({
             >
                 {/* Header with close button */}
                 <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
-                    <h3 className="font-bold text-xl text-gray-900 dark:text-gray-100">Pilih Karyawan Baru</h3>
+                    <div className="flex items-center space-x-4">
+                        <h3 className="font-bold text-xl text-gray-900 dark:text-gray-100">
+                            {multiSelectMode ? 'Pilih Multiple Karyawan' : 'Pilih Karyawan Baru'}
+                        </h3>
+                        {multiSelectMode && (
+                            <span className="px-3 py-1 text-sm bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 rounded-full">
+                                {tempSelectedIds.length} / {request.requested_amount} terpilih
+                            </span>
+                        )}
+                    </div>
                     <button
                         onClick={() => setShowModal(false)}
                         className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
@@ -161,6 +261,63 @@ export default function EmployeeModal({
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
+                </div>
+
+                {/* Multi-select mode toggle */}
+                <div className="p-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                            <button
+                                onClick={toggleMultiSelectMode}
+                                className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                                    multiSelectMode 
+                                        ? 'bg-green-600 hover:bg-green-700 text-white' 
+                                        : 'bg-blue-600 hover:bg-blue-700 text-white'
+                                }`}
+                            >
+                                {multiSelectMode ? '📋 Mode Multi-Select' : '🔄 Mode Single Select'}
+                            </button>
+                            
+                            {multiSelectMode && (
+                                <div className="flex space-x-2">
+                                    <button
+                                        onClick={() => setTempSelectedIds([])}
+                                        className="px-3 py-1 text-sm bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-900/60 text-red-800 dark:text-red-300 rounded-md"
+                                    >
+                                        🗑️ Clear All
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            const availableIds = filteredEmployees
+                                                .slice(0, request.requested_amount)
+                                                .map(emp => emp.id);
+                                            setTempSelectedIds(availableIds);
+                                        }}
+                                        className="px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900/40 hover:bg-blue-200 dark:hover:bg-blue-900/60 text-blue-800 dark:text-blue-300 rounded-md"
+                                    >
+                                        ✅ Select Top {Math.min(request.requested_amount, filteredEmployees.length)}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {multiSelectMode && (
+                            <div className="flex space-x-2">
+                                <button
+                                    onClick={cancelMultiSelection}
+                                    className="px-4 py-2 bg-gray-500 dark:bg-gray-600 hover:bg-gray-600 dark:hover:bg-gray-700 text-white rounded-md transition-colors"
+                                >
+                                    ❌ Batal
+                                </button>
+                                <button
+                                    onClick={applyMultiSelection}
+                                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors"
+                                >
+                                    ✅ Terapkan Pilihan
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Search and Filter Section */}
@@ -268,15 +425,17 @@ export default function EmployeeModal({
                 </div>
 
                 {/* Footer */}
-                <div className="flex justify-end p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-                    <button
-                        type="button"
-                        onClick={() => setShowModal(false)}
-                        className="bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-700 px-6 py-2 rounded-lg text-gray-700 dark:text-gray-200 transition-colors"
-                    >
-                        Tutup
-                    </button>
-                </div>
+                {!multiSelectMode && (
+                    <div className="flex justify-end p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+                        <button
+                            type="button"
+                            onClick={() => setShowModal(false)}
+                            className="bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-700 px-6 py-2 rounded-lg text-gray-700 dark:text-gray-200 transition-colors"
+                        >
+                            Tutup
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );
