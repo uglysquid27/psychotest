@@ -58,22 +58,21 @@ export default function Inactive() {
     setShowModal(true);
   };
 
-  // Show delete modal
-  const showDeleteModal = (employeeId, employeeName) => {
-    setModalConfig({
-      title: 'Hapus Pegawai',
-      message: `Apakah Anda yakin ingin menghapus data pegawai ${employeeName}? Data yang dihapus tidak dapat dikembalikan.`,
-      action: () => {
-        router.delete(route('employee-attendance.destroy', employeeId), {
-          preserveScroll: true,
-          onSuccess: () => router.reload(),
-        }); // Fixed: Added missing closing parenthesis here
-        setShowModal(false);
-      },
-      employeeName,
-    });
-    setShowModal(true);
-  };
+const showDeleteModal = (employeeId, employeeName) => {
+  setModalConfig({
+    title: 'Hapus Pegawai',
+    message: `Apakah Anda yakin ingin menghapus data pegawai ${employeeName}? Data yang dihapus tidak dapat dikembalikan.`,
+    action: () => {
+      router.delete(`/employee-attendance/${employeeId}`, {
+        preserveScroll: true,
+        onSuccess: () => router.reload(),
+      });
+      setShowModal(false);
+    },
+    employeeName,
+  });
+  setShowModal(true);
+};
 
   return (
     <AuthenticatedLayout

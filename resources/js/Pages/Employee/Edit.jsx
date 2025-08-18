@@ -75,7 +75,7 @@ export default function Edit({ employee }) {
                             <div className="flex items-center space-x-4 mb-6">
                                 {/* Photo */}
                                 <div
-                                    className="relative flex-shrink-0 h-16 w-16 rounded-full bg-indigo-100 flex items-center justify-center overflow-hidden cursor-pointer group"
+                                    className="relative flex-shrink-0 h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden cursor-pointer group"
                                     onClick={handlePhotoClick}
                                     title="Klik untuk mengubah foto"
                                 >
@@ -86,9 +86,20 @@ export default function Edit({ employee }) {
                                             className="h-full w-full object-cover"
                                         />
                                     ) : (
-                                        <span className="text-indigo-600 text-xl font-medium">
-                                            {employee.name.charAt(0).toUpperCase()}
-                                        </span>
+                                        <svg
+                                            className="h-8 w-8 text-gray-400"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                            aria-hidden="true"
+                                        >
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth="1.5"
+                                                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                                            />
+                                        </svg>
                                     )}
                                     <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 flex items-center justify-center transition-all duration-200">
                                         <svg
@@ -123,7 +134,6 @@ export default function Edit({ employee }) {
 
                                 <div>
                                     <h3 className="text-lg font-medium text-gray-900">{employee.name}</h3>
-                                    {/* <p className="text-sm text-gray-500">{employee.position || 'No position specified'}</p> */}
                                 </div>
                             </div>
 

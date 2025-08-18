@@ -27,106 +27,107 @@ class EmployeeSum extends Controller
     use AuthorizesRequests;
 
   public function index(Request $request): Response
-    {
-        $query = Employee::with([
-            'workload' => function($query) {
-                $query->latest()->limit(1);
-            },
-            'schedules' => function ($query) {
-                $query->whereDate('date', Carbon::today())
-                    ->with('manPowerRequest.shift');
-            }, 
-            'subSections.section',
-            'blindTests' => function ($query) {
-                $query->orderBy('test_date', 'desc')->limit(1);
-            },
-            'ratings' => function ($query) {
-                $query->latest()->limit(1);
-            }
-        ]);
-
-        // Apply Filters
-        if ($request->has('status') && $request->input('status') !== 'All') {
-            $query->where('status', $request->input('status'));
+{
+    $query = Employee::with([
+        'workload' => function($query) {
+            $query->latest()->limit(1);
+        },
+        'schedules' => function ($query) {
+            $query->whereDate('date', Carbon::today())
+                ->with('manPowerRequest.shift');
+        }, 
+        'subSections.section',
+        'blindTests' => function ($query) {
+            $query->orderBy('test_date', 'desc')->limit(1);
+        },
+        'ratings' => function ($query) {
+            $query->latest()->limit(1);
         }
+    ])->where('status', '!=', 'deactivated') // Add this line to exclude deactivated employees
+      ->whereNull('deactivated_at'); // Also exclude employees with deactivated_at timestamp
 
-        if ($request->has('section') && $request->input('section') !== 'All') {
-            $sectionName = $request->input('section');
-            $query->whereHas('subSections.section', function ($q) use ($sectionName) {
-                $q->where('name', $sectionName);
-            });
-        }
-
-        if ($request->has('sub_section') && $request->input('sub_section') !== 'All') {
-            $subSectionName = $request->input('sub_section');
-            $query->whereHas('subSections', function ($q) use ($subSectionName) {
-                $q->where('name', $subSectionName);
-            });
-        }
-
-        // Search by Name or NIK
-        if ($request->has('search') && $request->input('search') !== null) {
-            $searchTerm = $request->input('search');
-            $query->where(function ($q) use ($searchTerm) {
-                $q->where('name', 'like', '%' . $searchTerm . '%')
-                    ->orWhere('nik', 'like', '%' . $searchTerm . '%');
-            });
-        }
-
-        $employees = $query->orderBy('name')
-        ->paginate(10)
-        ->through(function ($employee) {
-            // Override status based on today's schedule
-            $employee->status = $employee->isAssignedToday() ? 'assigned' : 'available';
-
-            // Get workload data
-            $latestWorkload = $employee->workload->first();
-            $totalWorkCount = $latestWorkload ? $latestWorkload->total_work_count : 0;
-            $weeklyWorkCount = $latestWorkload ? $latestWorkload->week : 0;
-            
-            // Use the same calculation method as in update
-            $workloadPoint = $this->calculateWorkloadPoint($weeklyWorkCount);
-
-                // Rating Logic
-                $latestIndividualRating = $employee->ratings->first();
-                $actualRating = $latestIndividualRating ? $latestIndividualRating->rating : 0;
-                $employee->setAttribute('calculated_rating', $actualRating);
-
-                // Blind Test KPI Contribution
-                $blindTestKpiContribution = 0;
-                $latestBlindTest = $employee->blindTests->first();
-                if ($latestBlindTest) {
-                    $blindTestKpiContribution = $latestBlindTest->result;
-                }
-
-                $workingDayWeight = 165 + $blindTestKpiContribution;
-
-                  $employee->setAttribute('total_work_count', $totalWorkCount);
-            $employee->setAttribute('weekly_work_count', $weeklyWorkCount);
-            $employee->setAttribute('workload_point', $workloadPoint);
-
-                // Remove unnecessary relations
-                unset($employee->schedules);
-                unset($employee->blindTests);
-                unset($employee->ratings);
-                unset($employee->workload);
-
-                return $employee;
-            });
-
-        // Fetch filter dropdown options
-        $allStatuses = ['All', 'available', 'assigned'];
-        $allSections = Section::select('name')->distinct()->pluck('name')->toArray();
-        $allSubSections = SubSection::select('name')->distinct()->pluck('name')->toArray();
-
-        return Inertia::render('EmployeeAttendance/Index', [
-            'employees' => $employees,
-            'filters' => $request->only(['status', 'section', 'sub_section', 'search']),
-            'uniqueStatuses' => $allStatuses,
-            'uniqueSections' => array_merge(['All'], $allSections),
-            'uniqueSubSections' => array_merge(['All'], $allSubSections),
-        ]);
+    // Apply Filters
+    if ($request->has('status') && $request->input('status') !== 'All') {
+        $query->where('status', $request->input('status'));
     }
+
+    if ($request->has('section') && $request->input('section') !== 'All') {
+        $sectionName = $request->input('section');
+        $query->whereHas('subSections.section', function ($q) use ($sectionName) {
+            $q->where('name', $sectionName);
+        });
+    }
+
+    if ($request->has('sub_section') && $request->input('sub_section') !== 'All') {
+        $subSectionName = $request->input('sub_section');
+        $query->whereHas('subSections', function ($q) use ($subSectionName) {
+            $q->where('name', $subSectionName);
+        });
+    }
+
+    // Search by Name or NIK
+    if ($request->has('search') && $request->input('search') !== null) {
+        $searchTerm = $request->input('search');
+        $query->where(function ($q) use ($searchTerm) {
+            $q->where('name', 'like', '%' . $searchTerm . '%')
+                ->orWhere('nik', 'like', '%' . $searchTerm . '%');
+        });
+    }
+
+    $employees = $query->orderBy('name')
+    ->paginate(10)
+    ->through(function ($employee) {
+        // Override status based on today's schedule
+        $employee->status = $employee->isAssignedToday() ? 'assigned' : 'available';
+
+        // Get workload data
+        $latestWorkload = $employee->workload->first();
+        $totalWorkCount = $latestWorkload ? $latestWorkload->total_work_count : 0;
+        $weeklyWorkCount = $latestWorkload ? $latestWorkload->week : 0;
+        
+        // Use the same calculation method as in update
+        $workloadPoint = $this->calculateWorkloadPoint($weeklyWorkCount);
+
+            // Rating Logic
+            $latestIndividualRating = $employee->ratings->first();
+            $actualRating = $latestIndividualRating ? $latestIndividualRating->rating : 0;
+            $employee->setAttribute('calculated_rating', $actualRating);
+
+            // Blind Test KPI Contribution
+            $blindTestKpiContribution = 0;
+            $latestBlindTest = $employee->blindTests->first();
+            if ($latestBlindTest) {
+                $blindTestKpiContribution = $latestBlindTest->result;
+            }
+
+            $workingDayWeight = 165 + $blindTestKpiContribution;
+
+              $employee->setAttribute('total_work_count', $totalWorkCount);
+        $employee->setAttribute('weekly_work_count', $weeklyWorkCount);
+        $employee->setAttribute('workload_point', $workloadPoint);
+
+            // Remove unnecessary relations
+            unset($employee->schedules);
+            unset($employee->blindTests);
+            unset($employee->ratings);
+            unset($employee->workload);
+
+            return $employee;
+        });
+
+    // Fetch filter dropdown options
+    $allStatuses = ['All', 'available', 'assigned'];
+    $allSections = Section::select('name')->distinct()->pluck('name')->toArray();
+    $allSubSections = SubSection::select('name')->distinct()->pluck('name')->toArray();
+
+    return Inertia::render('EmployeeAttendance/Index', [
+        'employees' => $employees,
+        'filters' => $request->only(['status', 'section', 'sub_section', 'search']),
+        'uniqueStatuses' => $allStatuses,
+        'uniqueSections' => array_merge(['All'], $allSections),
+        'uniqueSubSections' => array_merge(['All'], $allSubSections),
+    ]);
+}
 
    public function updateWorkloads(Request $request)
 {
@@ -465,16 +466,16 @@ protected function calculateWorkloadPoint(int $weeklyWorkCount): int
     }
     
     public function destroy(Employee $employee)
-    {
-        if ($employee->status !== 'deactivated') {
-            return back()->with('error', 'Only deactivated employees can be deleted');
-        }
-    
-        $employee->delete();
-    
-        return redirect()->route('employee-attendance.inactive')
-            ->with('success', 'Employee permanently deleted');
+{
+    if ($employee->status !== 'deactivated') {
+        return back()->with('error', 'Hanya pegawai yang dinonaktifkan yang dapat dihapus');
     }
+
+    $employee->delete();
+
+    return redirect()->route('employee-attendance.inactive')
+        ->with('success', 'Pegawai berhasil dihapus permanen');
+}
 
     public function showLicense(Employee $employee)
     {

@@ -10,7 +10,7 @@ import UpdateWorkloadModal from './components/UpdateWorkloadModal';
 
 export default function Index() {
   const { employees: paginationData, filters, uniqueStatuses, uniqueSections, uniqueSubSections, auth } = usePage().props;
-  const employees = paginationData.data;
+  const employees = paginationData.data.filter(employee => employee.status.toLowerCase() !== 'deactivated');
   const paginationLinks = paginationData.links;
   const isUser = auth.user?.role === 'user';
 
