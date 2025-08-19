@@ -13,25 +13,26 @@ use Illuminate\Support\Facades\DB;
 
 class EmployeeDashboardController extends Controller
 {
-    public function index()
+        public function index()
     {
-        $employee = Auth::guard('employee')->user();
+        /** @var Employee $employee */
+        $employee = auth()->user();
 
-        $mySchedules = Schedule::with([
-                'manPowerRequest.shift',
-                'subSection.section',
-                'employee'
-            ])
-            ->where('employee_id', $employee->id)
-            ->whereDate('date', '>=', Carbon::today())
-            ->orderBy('date', 'asc')
+        $incompleteProfile = false;
+        if (is_null($employee->kelurahan) || is_null($employee->kecamatan)) {
+            $incompleteProfile = true;
+        }
+
+        $mySchedules = $employee->schedules()
+            ->with(['manPowerRequest.shift', 'subSection.section'])
             ->get();
 
-        return Inertia::render('EmployeeDashboard', [
+        return inertia('EmployeeDashboard', [
             'auth' => [
                 'user' => $employee,
             ],
             'mySchedules' => $mySchedules,
+            'incompleteProfile' => $incompleteProfile,
         ]);
     }
 
@@ -42,7 +43,7 @@ class EmployeeDashboardController extends Controller
         $currentSection = $schedule->subSection->section;
 
         $schedules = Schedule::with(['employee', 'subSection', 'manPowerRequest.shift'])
-            ->whereHas('subSection', function($q) use ($currentSection) {
+            ->whereHas('subSection', function ($q) use ($currentSection) {
                 $q->where('section_id', $currentSection->id);
             })
             ->whereDate('date', $schedule->date)
