@@ -16,7 +16,7 @@ const MoonIcon = () => (
     </svg>
 );
 
-export default function AuthenticatedLayout({ header, children }) {
+export default function AuthenticatedLayout({ header, children, hideSidebar = false }) {
     const { auth } = usePage().props;
     const user = auth && auth.user ? auth.user : null;
     const [isDark, setIsDark] = useState(false);
@@ -94,208 +94,210 @@ export default function AuthenticatedLayout({ header, children }) {
             </header>
 
             {/* Sidebar */}
-            <aside className={`fixed md:sticky top-0 inset-y-0 left-0 transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 w-64 bg-white/90 dark:bg-gray-800/90 backdrop-blur-lg flex flex-col shadow-2xl pt-4 md:pt-8 z-40 transition-transform duration-300 ease-in-out h-screen border-r border-gray-200 dark:border-gray-700 rounded-r-3xl`}>
-                {/* Close button for mobile */}
-                <div className="md:hidden flex justify-end p-4">
-                    <button
-                        onClick={toggleMobileMenu}
-                        className="text-gray-600 dark:text-gray-300 focus:outline-none transition-transform hover:scale-110"
-                        aria-label="Close menu"
-                    >
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
+            {!hideSidebar && (
+                <aside className={`fixed md:sticky top-0 inset-y-0 left-0 transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 w-64 bg-white/90 dark:bg-gray-800/90 backdrop-blur-lg flex flex-col shadow-2xl pt-4 md:pt-8 z-40 transition-transform duration-300 ease-in-out h-screen border-r border-gray-200 dark:border-gray-700 rounded-r-3xl`}>
+                    {/* Close button for mobile */}
+                    <div className="md:hidden flex justify-end p-4">
+                        <button
+                            onClick={toggleMobileMenu}
+                            className="text-gray-600 dark:text-gray-300 focus:outline-none transition-transform hover:scale-110"
+                            aria-label="Close menu"
+                        >
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
 
-                <div className="flex h-16 md:h-20 items-center justify-center px-4 transition-opacity duration-200">
-                    <Link href="/dashboard" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
-                        <ApplicationLogo className="h-8 md:h-10 w-auto fill-current text-indigo-600 dark:text-indigo-400" />
-                    </Link>
-                </div>
+                    <div className="flex h-16 md:h-20 items-center justify-center px-4 transition-opacity duration-200">
+                        <Link href="/dashboard" className="flex items-center space-x-2 hover:opacity-80 transition-opacity">
+                            <ApplicationLogo className="h-8 md:h-10 w-auto fill-current text-indigo-600 dark:text-indigo-400" />
+                        </Link>
+                    </div>
 
-                {/* Main Navigation */}
-                <nav className="flex flex-col flex-grow p-3 space-y-2 overflow-y-auto custom-scrollbar">
-                    {/* Admin/User Links - Shown at the top */}
-                    {(isAdmin || isUser) && (
-                        <>
-                            <NavLink
-                                href={route('dashboard')}
-                                active={route().current('dashboard')}
-                                className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
+                    {/* Main Navigation */}
+                    <nav className="flex flex-col flex-grow p-3 space-y-2 overflow-y-auto custom-scrollbar">
+                        {/* Admin/User Links - Shown at the top */}
+                        {(isAdmin || isUser) && (
+                            <>
+                                <NavLink
+                                    href={route('dashboard')}
+                                    active={route().current('dashboard')}
+                                    className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
         hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400
         ${route().current('dashboard')
-                                        ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
-                                        : 'text-gray-700 dark:text-gray-200'
-                                    }`}
-                            >
-                                <span className="block">{isAdmin ? 'Admin Dashboard' : 'User Dashboard'}</span>
-                            </NavLink>
+                                            ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
+                                            : 'text-gray-700 dark:text-gray-200'
+                                        }`}
+                                >
+                                    <span className="block">{isAdmin ? 'Admin Dashboard' : 'User Dashboard'}</span>
+                                </NavLink>
 
-                            {(isAdmin || isUser) && (
-                                <>
-                                    <NavLink
-                                        href={route('manpower-requests.index')}
-                                        active={route().current('manpower-requests.index')}
-                                        className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
+                                {(isAdmin || isUser) && (
+                                    <>
+                                        <NavLink
+                                            href={route('manpower-requests.index')}
+                                            active={route().current('manpower-requests.index')}
+                                            className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
         hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400
         ${route().current('manpower-requests.index')
-                                                ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
-                                                : 'text-gray-700 dark:text-gray-200'
-                                            }`}
-                                    >
-                                        <span className="block">Manpower Requests</span>
-                                    </NavLink>
-                                    <NavLink
-                                        href={route('schedules.index')}
-                                        active={route().current('schedules.index')}
-                                        className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
+                                                    ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
+                                                    : 'text-gray-700 dark:text-gray-200'
+                                                }`}
+                                        >
+                                            <span className="block">Manpower Requests</span>
+                                        </NavLink>
+                                        <NavLink
+                                            href={route('schedules.index')}
+                                            active={route().current('schedules.index')}
+                                            className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
         hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400
         ${route().current('schedules.index')
-                                                ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
-                                                : 'text-gray-700 dark:text-gray-200'
-                                            }`}
-                                    >
-                                        <span className="block">Schedules</span>
-                                    </NavLink>
-                                    <NavLink
-                                        href={route('employee-attendance.index')}
-                                        active={route().current('employee-attendance.index')}
-                                        className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
+                                                    ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
+                                                    : 'text-gray-700 dark:text-gray-200'
+                                                }`}
+                                        >
+                                            <span className="block">Schedules</span>
+                                        </NavLink>
+                                        <NavLink
+                                            href={route('employee-attendance.index')}
+                                            active={route().current('employee-attendance.index')}
+                                            className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
         hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400
         ${route().current('employee-attendance.index')
-                                                ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
-                                                : 'text-gray-700 dark:text-gray-200'
-                                            }`}
-                                    >
-                                        <span className="block">Employees</span>
-                                    </NavLink>
-                                    <NavLink
-                                        href={route('employee-blind-test.index')}
-                                        active={route().current('employee-blind-test.index')}
-                                        className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
+                                                    ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
+                                                    : 'text-gray-700 dark:text-gray-200'
+                                                }`}
+                                        >
+                                            <span className="block">Employees</span>
+                                        </NavLink>
+                                        <NavLink
+                                            href={route('employee-blind-test.index')}
+                                            active={route().current('employee-blind-test.index')}
+                                            className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
         hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400
         ${route().current('employee-blind-test.index')
-                                                ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
-                                                : 'text-gray-700 dark:text-gray-200'
-                                            }`}
-                                    >
-                                        <span className="block">Blind Tests</span>
-                                    </NavLink>
-                                    {isAdmin && (
-                                        <>
-                                            <NavLink
-                                                href={route('shifts.index')}
-                                                active={route().current('shifts.index')}
-                                                className="block py-3 md:py-4 px-3 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-200 ease-in-out text-center md:text-left"
-                                                activeClassName="bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold"
+                                                    ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
+                                                    : 'text-gray-700 dark:text-gray-200'
+                                                }`}
+                                        >
+                                            <span className="block">Blind Tests</span>
+                                        </NavLink>
+                                        {isAdmin && (
+                                            <>
+                                                <NavLink
+                                                    href={route('shifts.index')}
+                                                    active={route().current('shifts.index')}
+                                                    className="block py-3 md:py-4 px-3 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-200 ease-in-out text-center md:text-left"
+                                                    activeClassName="bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold"
 
-                                            >
-                                                <span className="block">Shifts</span>
-                                            </NavLink>
-                                            <NavLink
-                                                href={route('admin.permits.index')}
-                                                active={route().current('admin.permits.index')}
-                                                className="block py-3 md:py-4 px-3 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-200 ease-in-out text-center md:text-left"
-                                                activeClassName="bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold"
+                                                >
+                                                    <span className="block">Shifts</span>
+                                                </NavLink>
+                                                <NavLink
+                                                    href={route('admin.permits.index')}
+                                                    active={route().current('admin.permits.index')}
+                                                    className="block py-3 md:py-4 px-3 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-200 ease-in-out text-center md:text-left"
+                                                    activeClassName="bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold"
 
-                                            >
-                                                <span className="block">Admin Permits</span>
-                                            </NavLink>
-                                        </>
-                                    )}
-                                    <NavLink
-                                        href={route('lunch-coupons.index')}
-                                        active={route().current('lunch-coupons.index')}
-                                        className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
+                                                >
+                                                    <span className="block">Admin Permits</span>
+                                                </NavLink>
+                                            </>
+                                        )}
+                                        <NavLink
+                                            href={route('lunch-coupons.index')}
+                                            active={route().current('lunch-coupons.index')}
+                                            className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
         hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400
         ${route().current('lunch-coupons.index')
-                                                ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
-                                                : 'text-gray-700 dark:text-gray-200'
-                                            }`}
-                                    >
-                                        <span className="block">Lunch Coupons</span>
-                                    </NavLink>
-                                </>
-                            )}
-                        </>
-                    )}
+                                                    ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
+                                                    : 'text-gray-700 dark:text-gray-200'
+                                                }`}
+                                        >
+                                            <span className="block">Lunch Coupons</span>
+                                        </NavLink>
+                                    </>
+                                )}
+                            </>
+                        )}
 
-                    {/* Employee Links - Shown at the bottom */}
-                    {!isAdmin && !isUser && (
-                        <>
-                            <NavLink
-                                href={route('employee.dashboard')}
-                                active={route().current('employee.dashboard')}
-                                className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
+                        {/* Employee Links - Shown at the bottom */}
+                        {!isAdmin && !isUser && (
+                            <>
+                                <NavLink
+                                    href={route('employee.dashboard')}
+                                    active={route().current('employee.dashboard')}
+                                    className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
         hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400
         ${route().current('employee.dashboard')
-                                        ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
-                                        : 'text-gray-700 dark:text-gray-200'
-                                    }`}
-                            >
-                                <span className="block">Employee Dashboard</span>
-                            </NavLink>
+                                            ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
+                                            : 'text-gray-700 dark:text-gray-200'
+                                        }`}
+                                >
+                                    <span className="block">Employee Dashboard</span>
+                                </NavLink>
 
-                            <NavLink
-                                href={route('employee.permits.index')}
-                                active={route().current('employee.permits.index')}
-                                className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
+                                <NavLink
+                                    href={route('employee.permits.index')}
+                                    active={route().current('employee.permits.index')}
+                                    className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
         hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400
         ${route().current('employee-permits.index')
-                                        ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
-                                        : 'text-gray-700 dark:text-gray-200'
-                                    }`}
-                            >
-                                <span className="block">Leave Requests</span>
-                            </NavLink>
-                            <NavLink
-                                href={route('employee.license')}
-                                active={route().current('employee.license')}
-                                className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
+                                            ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
+                                            : 'text-gray-700 dark:text-gray-200'
+                                        }`}
+                                >
+                                    <span className="block">Leave Requests</span>
+                                </NavLink>
+                                <NavLink
+                                    href={route('employee.license')}
+                                    active={route().current('employee.license')}
+                                    className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
         hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400
         ${route().current('employee.license')
-                                        ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
-                                        : 'text-gray-700 dark:text-gray-200'
-                                    }`}
-                            >
-                                <span className="block">SIO Input</span>
-                            </NavLink>
-                            <NavLink
-                                href={route('employee.employees.edit', { employee: auth.user.id })}
-                                active={route().current('employee.employees.edit')}
-                                className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
+                                            ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
+                                            : 'text-gray-700 dark:text-gray-200'
+                                        }`}
+                                >
+                                    <span className="block">SIO Input</span>
+                                </NavLink>
+                                <NavLink
+                                    href={route('employee.employees.edit', { employee: auth.user.id })}
+                                    active={route().current('employee.employees.edit')}
+                                    className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
         hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400
         ${route().current('employee.employees.edit')
-                                        ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
-                                        : 'text-gray-700 dark:text-gray-200'
-                                    }`}
-                            >
-                                <span className="block">Edit Profile</span>
-                            </NavLink>
-                        </>
-                    )}
+                                            ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
+                                            : 'text-gray-700 dark:text-gray-200'
+                                        }`}
+                                >
+                                    <span className="block">Edit Profile</span>
+                                </NavLink>
+                            </>
+                        )}
 
-                    <div className="flex-grow"></div>
+                        <div className="flex-grow"></div>
 
-                    <Link
-                        href={route('logout')}
-                        method="post"
-                        as="button"
-                        className="w-full text-left py-4 md:py-6 px-3 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-red-100/50 dark:hover:bg-red-900/50 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-all duration-200 ease-in-out"
-                    >
-                        Log Out
-                    </Link>
-                </nav>
+                        <Link
+                            href={route('logout')}
+                            method="post"
+                            as="button"
+                            className="w-full text-left py-4 md:py-6 px-3 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-red-100/50 dark:hover:bg-red-900/50 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-all duration-200 ease-in-out"
+                        >
+                            Log Out
+                        </Link>
+                    </nav>
 
-                <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm flex flex-col space-y-3 transition-colors duration-200 rounded-br-3xl">
-                    <div className="font-semibold text-gray-800 dark:text-gray-100">{user ? user.name : 'Memuat...'}</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">{user ? (user.email || user.nik) : ''}</div>
-                </div>
-            </aside>
-
+                    <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm flex flex-col space-y-3 transition-colors duration-200 rounded-br-3xl">
+                        <div className="font-semibold text-gray-800 dark:text-gray-100">{user ? user.name : 'Memuat...'}</div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">{user ? (user.email || user.nik) : ''}</div>
+                    </div>
+                </aside>
+            )}
             {/* Overlay for mobile menu */}
-            {isMobileMenuOpen && (
+
+            {!hideSidebar && isMobileMenuOpen && (
                 <div
                     className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 md:hidden transition-opacity duration-300 ease-in-out opacity-100"
                     onClick={toggleMobileMenu}

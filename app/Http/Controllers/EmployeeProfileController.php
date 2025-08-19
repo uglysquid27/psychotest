@@ -17,6 +17,11 @@ class EmployeeProfileController extends Controller
 {
     public function edit(Employee $employee)
     {
+        $incompleteProfile = false;
+        if (is_null($employee->kelurahan) || is_null($employee->kecamatan)) {
+            $incompleteProfile = true;
+        }
+
         return inertia('Employee/Edit', [
             'employee' => $employee->only([
                 'id',
@@ -41,6 +46,10 @@ class EmployeeProfileController extends Controller
                 'group',
                 'photo',
             ]),
+            'incompleteProfile' => $incompleteProfile,
+            'auth' => [
+                'user' => $employee,
+            ],
         ]);
     }
 
@@ -52,13 +61,13 @@ class EmployeeProfileController extends Controller
                 'required',
                 'string',
                 'max:16',
-                Rule::unique('employees')->ignore($employee->id), // ✅ KTP harus unik
+                Rule::unique('employees')->ignore($employee->id),
             ],
             'email' => [
                 'required',
                 'email',
                 'max:255',
-                Rule::unique('employees')->ignore($employee->id), // ✅ supaya email unik tapi abaikan email milik employee ini sendiri
+                Rule::unique('employees')->ignore($employee->id),
             ],
             'type' => 'required|in:harian,bulanan',
             'gender' => 'required|in:male,female',
@@ -125,7 +134,7 @@ class EmployeeProfileController extends Controller
     public function updatePhoto(Request $request, Employee $employee)
     {
         $request->validate([
-            'photo' => ['required', 'image', 'mimes:jpeg,png,jpg', 'max:5120'], // allow up to 5MB before resize
+            'photo' => ['required', 'image', 'mimes:jpeg,png,jpg', 'max:5120'],
         ]);
 
         try {
