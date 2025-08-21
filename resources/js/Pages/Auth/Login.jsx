@@ -4,8 +4,8 @@ import InputLabel from '@/Components/InputLabel';
 import PrimaryButton from '@/Components/PrimaryButton';
 import TextInput from '@/Components/TextInput';
 import GuestLayout from '@/Layouts/GuestLayout';
-import { Head, Link, useForm } from '@inertiajs/react';
-import { useState } from 'react';
+import { Head, Link, useForm, router } from '@inertiajs/react';
+import { useState, useEffect } from 'react';
 
 // Icons dari Heroicons (pastikan sudah terinstal atau ganti dengan icon lain)
 import { EyeIcon, EyeSlashIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
@@ -18,6 +18,14 @@ export default function Login({ status, canResetPassword }) {
     });
 
     const [showPassword, setShowPassword] = useState(false);
+
+    // Reset route to /login when component mounts
+    useEffect(() => {
+        const currentPath = window.location.pathname;
+        if (currentPath !== '/login') {
+            router.replace('/login', {}, { preserveState: true });
+        }
+    }, []);
 
     const submit = (e) => {
         e.preventDefault();

@@ -271,30 +271,9 @@ class EmployeeSum extends Controller
         ]);
     }
 
-    public function edit(Employee $employee)
+public function edit(Employee $employee)
 {
     $sections = Section::with('subSections')->get();
-
-    // Get all unique section names (excluding 'All')
-    $uniqueSections = $sections->pluck('name')
-        ->unique()
-        ->reject(fn($name) => $name === 'All')
-        ->values()
-        ->toArray();
-
-    // Group sub-sections by section name
-    $groupedSubSections = $sections->mapWithKeys(function ($section) {
-        return [$section->name => $section->subSections->pluck('name')->toArray()];
-    });
-
-    // Get current sections from employee's sub-sections - MAKE SURE THESE ARE STRINGS
-    $currentSections = $employee->subSections->pluck('section.name')
-        ->unique()
-        ->values() // This ensures you get a simple array
-        ->toArray();
-
-    // Load employee license information if exists
-    $license = OperatorLicense::where('employee_id', $employee->id)->first();
 
     return Inertia::render('EmployeeAttendance/Edit', [
         'employee' => [
@@ -305,74 +284,52 @@ class EmployeeSum extends Controller
             'status' => $employee->status,
             'cuti' => $employee->cuti,
             'gender' => $employee->gender,
-            'sections' => $currentSections, // This should be an array of strings
             'sub_sections' => $employee->subSections->pluck('name')->toArray(),
-            'license' => $license ? [
-                'expiry_date' => $license->expiry_date,
-                'license_number' => $license->license_number,
-                'isExpired' => $license->expiry_date && Carbon::parse($license->expiry_date)->isPast(),
-                'isExpiringSoon' => $license->expiry_date && Carbon::parse($license->expiry_date)->between(
-                    now(),
-                    now()->addDays(30)
-                ),
-            ] : null,
         ],
-        'sections' => $uniqueSections, // This should be an array of strings
-        'groupedSubSections' => $groupedSubSections->toArray(), // Convert to array
+        'sections' => $sections,
     ]);
 }
 
-    public function update(Request $request, Employee $employee)
-    {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'nik' => 'required|string|max:255|unique:employees,nik,' . $employee->id,
-            'password' => ['nullable', 'confirmed', Rules\Password::defaults()],
-            'type' => 'required|in:harian,bulanan',
-            'status' => 'required|in:available,assigned,on leave',
-            'cuti' => 'required|in:yes,no',
-            'gender' => 'required|in:male,female',
-            'sections' => 'required|array|min:1',
-            'sections.*' => 'string|exists:sections,name',
-            'sub_sections' => 'required|array|min:1',
-            'sub_sections.*' => 'string|exists:sub_sections,name',
-        ]);
+   public function update(Request $request, Employee $employee)
+{
+    $validated = $request->validate([
+        'name' => 'required|string|max:255',
+        'nik' => 'required|string|max:255|unique:employees,nik,' . $employee->id,
+        'password' => ['nullable', 'confirmed', Rules\Password::defaults()],
+        'type' => 'required|in:harian,bulanan',
+        'status' => 'required|in:available,assigned,on leave',
+        'cuti' => 'required|in:yes,no',
+        'gender' => 'required|in:male,female',
+        'sub_sections' => 'required|array|min:1',
+        'sub_sections.*' => 'string|exists:sub_sections,name',
+    ]);
 
-        // Verify each subsection belongs to at least one selected section
-        $validSubSections = [];
-        foreach ($validated['sub_sections'] as $subSectionName) {
-            $subSection = SubSection::where('name', $subSectionName)
-                ->whereHas('section', function ($query) use ($validated) {
-                    $query->whereIn('name', $validated['sections']);
-                })
-                ->first();
+    // Get sub-section IDs from names
+    $subSectionIds = SubSection::whereIn('name', $validated['sub_sections'])
+        ->pluck('id')
+        ->toArray();
 
-            if ($subSection) {
-                $validSubSections[] = $subSection->id;
-            }
+    DB::transaction(function () use ($employee, $validated, $subSectionIds) {
+        $updateData = [
+            'name' => $validated['name'],
+            'nik' => $validated['nik'],
+            'type' => $validated['type'],
+            'status' => $validated['status'],
+            'cuti' => $validated['cuti'],
+            'gender' => $validated['gender'],
+        ];
+
+        if (!empty($validated['password'])) {
+            $updateData['password'] = Hash::make($validated['password']);
         }
 
-        DB::transaction(function () use ($employee, $validated, $validSubSections) {
-            $updateData = [
-                'name' => $validated['name'],
-                'nik' => $validated['nik'],
-                'type' => $validated['type'],
-                'status' => $validated['status'],
-                'cuti' => $validated['cuti'],
-                'gender' => $validated['gender'],
-            ];
+        $employee->update($updateData);
+        $employee->subSections()->sync($subSectionIds);
+    });
 
-            if (!empty($validated['password'])) {
-                $updateData['password'] = Hash::make($validated['password']);
-            }
-
-            $employee->update($updateData);
-            $employee->subSections()->sync($validSubSections);
-        });
-
-        return redirect()->route('employee-attendance.index')
-            ->with('success', 'Employee updated successfully.');
-    }
+    return redirect()->route('employee-attendance.index')
+        ->with('success', 'Employee updated successfully.');
+}
 
     public function inactive(Request $request)
     {

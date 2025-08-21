@@ -1,17 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { usePage, Link, router } from '@inertiajs/react';
+import React, { useState } from 'react';
+import { useForm, usePage, Link } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 
 export default function Edit() {
-    const { employee, sections, groupedSubSections, errors } = usePage().props;
+    const { employee, sections: allSections } = usePage().props;
+    const [selectedSection, setSelectedSection] = useState(null);
+    const [showSubSectionModal, setShowSubSectionModal] = useState(false);
+    const [tempSelectedSubSections, setTempSelectedSubSections] = useState([]);
 
-    // Ensure sections and sub_sections are always arrays
-    const initialSections = Array.isArray(employee.sections) ? employee.sections :
-        (employee.sections ? [employee.sections] : []);
-    const initialSubSections = Array.isArray(employee.sub_sections) ? employee.sub_sections :
-        (employee.sub_sections ? [employee.sub_sections] : []);
+    // Prepare sections data with sub_sections
+    const sections = allSections.map(section => ({
+        ...section,
+        sub_sections: section.sub_sections || []
+    }));
 
-    const [formData, setFormData] = useState({
+    const { data, setData, put, processing, errors } = useForm({
         name: employee.name || '',
         nik: employee.nik || '',
         password: '',
@@ -20,93 +23,65 @@ export default function Edit() {
         status: employee.status || 'available',
         cuti: employee.cuti || 'no',
         gender: employee.gender || 'male',
-        sections: initialSections,
-        sub_sections: initialSubSections,
+        sub_sections: employee.sub_sections || [],
     });
 
-    const [availableSubSections, setAvailableSubSections] = useState([]);
-    const [sectionSubSectionMap, setSectionSubSectionMap] = useState({});
+    const handleSectionSelect = (section) => {
+        setSelectedSection(section);
+        // Pre-select any subsections that are already selected for this section
+        const currentSectionSubs = data.sub_sections.filter(subName => 
+            section.sub_sections.some(sub => sub.name === subName)
+        );
+        setTempSelectedSubSections(currentSectionSubs);
+        setShowSubSectionModal(true);
+    };
 
-    // Build mapping of subsections to their parent sections
-    useEffect(() => {
-        const map = {};
-        Object.entries(groupedSubSections).forEach(([section, subSections]) => {
-            subSections.forEach(subSection => {
-                if (!map[subSection]) map[subSection] = [];
-                map[subSection].push(section);
-            });
+    const handleSubSectionCheckboxChange = (subSectionName) => {
+        setTempSelectedSubSections(prev => {
+            if (prev.includes(subSectionName)) {
+                return prev.filter(name => name !== subSectionName);
+            } else {
+                return [...prev, subSectionName];
+            }
         });
-        setSectionSubSectionMap(map);
-    }, [groupedSubSections]);
+    };
 
-    // Update available subsections when sections change
-    useEffect(() => {
-        if (formData.sections && formData.sections.length > 0) {
-            const subs = formData.sections.flatMap(section =>
-                groupedSubSections[section] || []
-            );
-            setAvailableSubSections([...new Set(subs)]);
-
-            // Filter subsections to only keep those that belong to selected sections
-            setFormData(prev => ({
-                ...prev,
-                sub_sections: prev.sub_sections.filter(sub =>
-                    subs.includes(sub) &&
-                    sectionSubSectionMap[sub]?.some(s => formData.sections.includes(s))
-                )
-            }));
+    const handleSelectAll = () => {
+        if (!selectedSection) return;
+        
+        if (tempSelectedSubSections.length === selectedSection.sub_sections.length) {
+            // If all are selected, deselect all
+            setTempSelectedSubSections([]);
         } else {
-            setAvailableSubSections([]);
-            setFormData(prev => ({ ...prev, sub_sections: [] }));
+            // Select all subsections
+            setTempSelectedSubSections(selectedSection.sub_sections.map(sub => sub.name));
         }
-    }, [formData.sections, groupedSubSections, sectionSubSectionMap]);
-
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleSectionChange = (e) => {
-        const { value, checked } = e.target;
-        setFormData(prev => {
-            const newSections = checked
-                ? [...prev.sections, value]
-                : prev.sections.filter(s => s !== value);
-
-            return {
-                ...prev,
-                sections: newSections,
-                // Reset subsections that don't belong to the new sections
-                sub_sections: prev.sub_sections.filter(sub =>
-                    newSections.some(section =>
-                        sectionSubSectionMap[sub]?.includes(section)
-                    )
-                )
-            };
-        });
+    const applySubSectionSelection = () => {
+        if (!selectedSection) return;
+        
+        // Merge with existing selections from other sections
+        const otherSectionsSubs = data.sub_sections.filter(
+            name => !selectedSection.sub_sections.some(sub => sub.name === name)
+        );
+        const updated = [...otherSectionsSubs, ...tempSelectedSubSections];
+        setData('sub_sections', updated);
+        setShowSubSectionModal(false);
     };
 
-    const handleSubSectionChange = (e) => {
-        const { value, checked } = e.target;
-        setFormData(prev => {
-            const newSubSections = checked
-                ? [...prev.sub_sections, value]
-                : prev.sub_sections.filter(ss => ss !== value);
-            return { ...prev, sub_sections: newSubSections };
-        });
+    const handleRemoveSubSection = (subSectionName) => {
+        const updated = data.sub_sections.filter(name => name !== subSectionName);
+        setData('sub_sections', updated);
     };
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        router.put(route('employee-attendance.update', employee.id), formData, {
-            preserveScroll: true,
+        put(route('employee-attendance.update', employee.id), {
             onError: (errors) => {
                 if (errors.password) {
-                    setFormData(prev => ({
-                        ...prev,
-                        password: '',
-                        password_confirmation: ''
-                    }));
+                    setData('password', '');
+                    setData('password_confirmation', '');
                 }
             }
         });
@@ -147,9 +122,8 @@ export default function Edit() {
                                             <input
                                                 type="text"
                                                 id="name"
-                                                name="name"
-                                                value={formData.name}
-                                                onChange={handleChange}
+                                                value={data.name}
+                                                onChange={(e) => setData('name', e.target.value)}
                                                 className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                                 required
                                             />
@@ -163,9 +137,8 @@ export default function Edit() {
                                             <input
                                                 type="text"
                                                 id="nik"
-                                                name="nik"
-                                                value={formData.nik}
-                                                onChange={handleChange}
+                                                value={data.nik}
+                                                onChange={(e) => setData('nik', e.target.value)}
                                                 className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                                 required
                                             />
@@ -178,9 +151,8 @@ export default function Edit() {
                                             </label>
                                             <select
                                                 id="gender"
-                                                name="gender"
-                                                value={formData.gender}
-                                                onChange={handleChange}
+                                                value={data.gender}
+                                                onChange={(e) => setData('gender', e.target.value)}
                                                 className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                                 required
                                             >
@@ -195,9 +167,8 @@ export default function Edit() {
                                             </label>
                                             <select
                                                 id="type"
-                                                name="type"
-                                                value={formData.type}
-                                                onChange={handleChange}
+                                                value={data.type}
+                                                onChange={(e) => setData('type', e.target.value)}
                                                 className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                                 required
                                             >
@@ -217,9 +188,8 @@ export default function Edit() {
                                             </label>
                                             <select
                                                 id="status"
-                                                name="status"
-                                                value={formData.status}
-                                                onChange={handleChange}
+                                                value={data.status}
+                                                onChange={(e) => setData('status', e.target.value)}
                                                 className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                                 required
                                             >
@@ -235,9 +205,8 @@ export default function Edit() {
                                             </label>
                                             <select
                                                 id="cuti"
-                                                name="cuti"
-                                                value={formData.cuti}
-                                                onChange={handleChange}
+                                                value={data.cuti}
+                                                onChange={(e) => setData('cuti', e.target.value)}
                                                 className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                                 required
                                             >
@@ -253,9 +222,8 @@ export default function Edit() {
                                             <input
                                                 type="password"
                                                 id="password"
-                                                name="password"
-                                                value={formData.password}
-                                                onChange={handleChange}
+                                                value={data.password}
+                                                onChange={(e) => setData('password', e.target.value)}
                                                 className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                             />
                                             {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
@@ -268,9 +236,8 @@ export default function Edit() {
                                             <input
                                                 type="password"
                                                 id="password_confirmation"
-                                                name="password_confirmation"
-                                                value={formData.password_confirmation}
-                                                onChange={handleChange}
+                                                value={data.password_confirmation}
+                                                onChange={(e) => setData('password_confirmation', e.target.value)}
                                                 className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                             />
                                         </div>
@@ -292,100 +259,70 @@ export default function Edit() {
                                     </div>
                                 </div>
 
-                                {/* Section Assignment */}
-                                <div className="space-y-4">
-                                    <h3 className="text-lg font-medium border-b pb-2">Section Assignment</h3>
+                                {/* Section + Subsection */}
+                                <div className="bg-gray-50 dark:bg-gray-700 p-4 sm:p-6 rounded-lg">
+                                    <h3 className="font-medium text-gray-700 dark:text-gray-300 text-lg mb-4">
+                                        Section and Sub Section Assignment
+                                    </h3>
 
-                                    {/* Sections Checkbox Group */}
-                                    <div className="mb-4">
-                                        <label className="block text-sm font-medium mb-2">
-                                            Sections (Select at least one)
-                                        </label>
-                                        <div className="flex flex-wrap gap-2">
-                                            {sections.map(sectionName => (
-                                                <div key={sectionName} className="flex items-center">
-                                                    <input
-                                                        type="checkbox"
-                                                        id={`section-${sectionName}`}
-                                                        name="sections"
-                                                        value={sectionName}
-                                                        checked={formData.sections.includes(sectionName)}
-                                                        onChange={handleSectionChange}
-                                                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                                                    />
-                                                    <label
-                                                        htmlFor={`section-${sectionName}`}
-                                                        className="ml-2 block text-sm text-gray-700 dark:text-gray-300"
-                                                    >
-                                                        {sectionName}
-                                                    </label>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        {errors.sections && (
-                                            <p className="text-red-500 text-sm mt-1">{errors.sections}</p>
-                                        )}
-                                    </div>
-
-                                    {/* Sub-sections Grouped by Section */}
-                                    {formData.sections.length > 0 && (
+                                    <div className="space-y-6">
+                                        {/* Section Selection */}
                                         <div>
-                                            <label className="block text-sm font-medium mb-2">Sub Sections</label>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                {formData.sections.map(sectionName => {
-                                                    const sectionSubs = groupedSubSections[sectionName] || [];
-                                                    return (
-                                                        <div
-                                                            key={sectionName}
-                                                            className="border border-gray-200 dark:border-gray-700 rounded-md p-3"
-                                                        >
-                                                            <h4 className="font-medium text-gray-800 dark:text-gray-200 mb-2">
-                                                                {sectionName}
-                                                            </h4>
-                                                            <div className="space-y-2 max-h-60 overflow-y-auto">
-                                                                {sectionSubs.length > 0 ? (
-                                                                    sectionSubs.map(subName => (
-                                                                        <div key={subName} className="flex items-center">
-                                                                            <input
-                                                                                type="checkbox"
-                                                                                id={`sub-section-${sectionName}-${subName}`}
-                                                                                name="sub_sections"
-                                                                                value={subName}
-                                                                                checked={formData.sub_sections.includes(subName)}
-                                                                                onChange={handleSubSectionChange}
-                                                                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
-                                                                            />
-                                                                            <label
-                                                                                htmlFor={`sub-section-${sectionName}-${subName}`}
-                                                                                className="ml-2 block text-sm text-gray-700 dark:text-gray-300"
-                                                                            >
-                                                                                {subName}
-                                                                            </label>
-                                                                        </div>
-                                                                    ))
-                                                                ) : (
-                                                                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                                                                        No sub-sections available
-                                                                    </p>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
+                                            <h4 className="text-md font-medium mb-3">Select Section</h4>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                {sections.map((section) => (
+                                                    <button
+                                                        key={section.id}
+                                                        type="button"
+                                                        onClick={() => handleSectionSelect(section)}
+                                                        className="p-4 border rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 text-left transition-colors duration-200"
+                                                    >
+                                                        <h4 className="font-medium text-gray-900 dark:text-gray-100">
+                                                            {section.name}
+                                                        </h4>
+                                                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                                                            {data.sub_sections.filter(name => 
+                                                                section.sub_sections.some(sub => sub.name === name)
+                                                            ).length} of {section.sub_sections.length} sub sections selected
+                                                        </p>
+                                                    </button>
+                                                ))}
                                             </div>
-                                            {errors.sub_sections && (
-                                                <p className="text-red-500 text-sm mt-1">{errors.sub_sections}</p>
+                                        </div>
+
+                                        {/* Selected SubSections */}
+                                        <div>
+                                            <h4 className="text-md font-medium mb-3">Selected Sub Sections</h4>
+                                            {data.sub_sections.length === 0 ? (
+                                                <p className="text-sm text-gray-500">No sub sections selected yet</p>
+                                            ) : (
+                                                <div className="flex flex-wrap gap-2">
+                                                    {data.sub_sections.map((name) => (
+                                                        <div key={name} className="flex items-center bg-indigo-100 dark:bg-gray-600 px-3 py-1 rounded-full text-sm">
+                                                            <span className="text-indigo-800 dark:text-gray-100">{name}</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleRemoveSubSection(name)}
+                                                                className="ml-2 text-indigo-600 dark:text-gray-300 hover:text-indigo-900 dark:hover:text-gray-100"
+                                                            >
+                                                                &times;
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             )}
                                         </div>
-                                    )}
+                                    </div>
+                                    {errors.sub_sections && <p className="mt-2 text-red-500 text-sm">{errors.sub_sections}</p>}
                                 </div>
 
                                 <div className="flex justify-end pt-6 border-t border-gray-200 dark:border-gray-700">
                                     <button
                                         type="submit"
-                                        className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                        disabled={processing}
+                                        className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                                     >
-                                        Save Changes
+                                        {processing ? 'Saving...' : 'Save Changes'}
                                     </button>
                                 </div>
                             </form>
@@ -393,6 +330,79 @@ export default function Edit() {
                     </div>
                 </div>
             </div>
+
+            {/* Sub Section Modal */}
+            {showSubSectionModal && selectedSection && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto">
+                    <div 
+                        className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
+                        onClick={() => setShowSubSectionModal(false)}
+                    ></div>
+                    
+                    <div className="inline-block w-full max-w-md p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white dark:bg-gray-800 shadow-xl rounded-lg">
+                        <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                            <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-gray-100 mb-4">
+                                Select Sub Sections from {selectedSection.name}
+                            </h3>
+                            
+                            <div className="mb-4 flex justify-between items-center">
+                                <button
+                                    type="button"
+                                    onClick={handleSelectAll}
+                                    className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
+                                >
+                                    {tempSelectedSubSections.length === selectedSection.sub_sections.length 
+                                        ? 'Deselect All' 
+                                        : 'Select All'}
+                                </button>
+                                <span className="text-sm text-gray-500 dark:text-gray-400">
+                                    {tempSelectedSubSections.length} selected
+                                </span>
+                            </div>
+                            
+                            <div className="max-h-96 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-md">
+                                <div className="space-y-0 divide-y divide-gray-200 dark:divide-gray-700">
+                                    {selectedSection.sub_sections.map((subSection) => (
+                                        <label 
+                                            key={subSection.id}
+                                            className={`flex items-center px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                                                tempSelectedSubSections.includes(subSection.name) ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
+                                            }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={tempSelectedSubSections.includes(subSection.name)}
+                                                onChange={() => handleSubSectionCheckboxChange(subSection.name)}
+                                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                            />
+                                            <span className="ml-3 text-sm text-gray-700 dark:text-gray-300">
+                                                {subSection.name}
+                                            </span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                            <button
+                                type="button"
+                                onClick={applySubSectionSelection}
+                                className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm"
+                            >
+                                Apply
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setShowSubSectionModal(false)}
+                                className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-600 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </AuthenticatedLayout>
     );
 }

@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import IncompleteSelectionModal from './IncompleteSelectionModal';
 
-
 export default function EmployeeModal({
     showModal,
     setShowModal,
@@ -191,19 +190,43 @@ export default function EmployeeModal({
                 )}
 
                 <div className="flex justify-between items-start">
-                    <div className={multiSelectMode ? 'pr-8' : ''}>
-                        <strong className="text-gray-900 dark:text-gray-100">{emp.name}</strong>
-                        <div className="mt-1 text-gray-500 dark:text-gray-400 text-xs">
-                            <p>NIK: {emp.nik}</p>
-                            <p>Tipe: {emp.type}</p>
-                            <p>Sub: {displaySubSectionName}</p>
-                            <p>Skor: {emp.total_score.toFixed(2)}</p>
-                            {emp.type === 'harian' && (
-                                <p>Bobot Kerja: {emp.working_day_weight}</p>
-                            )}
-                            <p>Beban Kerja: {emp.workload_points}</p>
-                            <p>Test Buta: {emp.blind_test_points}</p>
-                            <p>Rating: {emp.average_rating.toFixed(1)}</p>
+                    <div className={`flex ${multiSelectMode ? 'pr-8' : ''}`}>
+                        {/* Employee Photo */}
+                        <div className="mr-3 flex-shrink-0">
+                            {emp.photo ? (
+                                <img 
+                                    src={`/storage/${emp.photo}`} 
+                                    alt={emp.name}
+                                    className="w-12 h-12 rounded-full object-cover border border-gray-300 dark:border-gray-600"
+                                    onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                />
+                            ) : null}
+                            <div 
+                                className={`w-12 h-12 rounded-full flex items-center justify-center border border-gray-300 dark:border-gray-600 ${emp.photo ? 'hidden' : 'bg-gray-200 dark:bg-gray-700'}`}
+                            >
+                                <span className="text-gray-500 dark:text-gray-400 text-lg font-semibold">
+                                    {emp.name.charAt(0).toUpperCase()}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <strong className="text-gray-900 dark:text-gray-100">{emp.name}</strong>
+                            <div className="mt-1 text-gray-500 dark:text-gray-400 text-xs">
+                                <p>NIK: {emp.nik}</p>
+                                <p>Tipe: {emp.type}</p>
+                                <p>Sub: {displaySubSectionName}</p>
+                                <p>Skor: {emp.total_score.toFixed(2)}</p>
+                                {emp.type === 'harian' && (
+                                    <p>Bobot Kerja: {emp.working_day_weight}</p>
+                                )}
+                                <p>Beban Kerja: {emp.workload_points}</p>
+                                <p>Test Buta: {emp.blind_test_points}</p>
+                                <p>Rating: {emp.average_rating.toFixed(1)}</p>
+                            </div>
                         </div>
                     </div>
                     {!multiSelectMode && (

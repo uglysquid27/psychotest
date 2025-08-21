@@ -134,6 +134,7 @@ class ManPowerRequestFulfillmentController extends Controller
                     'type' => $employee->type,
                     'status' => $employee->status,
                     'cuti' => $employee->cuti,
+                    'photo' => $employee->photo,
                     'gender' => $employee->gender,
                     'created_at' => $employee->created_at,
                     'updated_at' => $employee->updated_at,
