@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminPermitController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SubSectionController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
@@ -18,6 +19,7 @@ use App\Http\Controllers\LunchCouponController;
 use App\Http\Controllers\RatingController;
 use App\Http\Middleware\PreventBackAfterLogout;
 use App\Http\Controllers\EmployeeProfileController;
+
 // app/Http/Controllers/LicenseVerificationController.php
 /*
 |--------------------------------------------------------------------------
@@ -151,10 +153,20 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
                 ->name('employee-attendance.activate');
             Route::post('/process-deactivation', [EmployeeSum::class, 'processDeactivation'])
                 ->name('employee-attendance.process-deactivation');
-             Route::delete('/', [EmployeeSum::class, 'destroy'])
-            ->name('employee-attendance.destroy');
+            Route::delete('/', [EmployeeSum::class, 'destroy'])
+                ->name('employee-attendance.destroy');
         });
     });
+
+     Route::prefix('sections')->group(function () {
+    Route::get('/', [SubSectionController::class, 'index'])->name('sections.index');
+    Route::get('/create', [SubSectionController::class, 'create'])->name('sections.create');
+    Route::post('/', [SubSectionController::class, 'store'])->name('sections.store');
+    Route::get('/{subSection}/edit', [SubSectionController::class, 'edit'])->name('sections.edit');
+    Route::put('/{subSection}', [SubSectionController::class, 'update'])->name('sections.update');
+    Route::delete('/{subSection}', [SubSectionController::class, 'destroy'])->name('sections.destroy');
+});
+
 
     Route::get('/employees/{employee}/license', [LicenseVerificationController::class, 'showEmployeeLicense'])
         ->name('employees.license.show');
