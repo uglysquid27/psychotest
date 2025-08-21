@@ -5,6 +5,12 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 export default function Edit() {
     const { employee, sections, groupedSubSections, errors } = usePage().props;
 
+    // Ensure sections and sub_sections are always arrays
+    const initialSections = Array.isArray(employee.sections) ? employee.sections :
+        (employee.sections ? [employee.sections] : []);
+    const initialSubSections = Array.isArray(employee.sub_sections) ? employee.sub_sections :
+        (employee.sub_sections ? [employee.sub_sections] : []);
+
     const [formData, setFormData] = useState({
         name: employee.name || '',
         nik: employee.nik || '',
@@ -14,8 +20,8 @@ export default function Edit() {
         status: employee.status || 'available',
         cuti: employee.cuti || 'no',
         gender: employee.gender || 'male',
-        sections: employee.sections || [],
-        sub_sections: employee.sub_sections || [],
+        sections: initialSections,
+        sub_sections: initialSubSections,
     });
 
     const [availableSubSections, setAvailableSubSections] = useState([]);
@@ -35,7 +41,7 @@ export default function Edit() {
 
     // Update available subsections when sections change
     useEffect(() => {
-        if (formData.sections.length > 0) {
+        if (formData.sections && formData.sections.length > 0) {
             const subs = formData.sections.flatMap(section =>
                 groupedSubSections[section] || []
             );
@@ -104,13 +110,6 @@ export default function Edit() {
                 }
             }
         });
-    };
-
-    // Check if a subsection belongs to any selected section
-    const isSubSectionAvailable = (subSection) => {
-        return formData.sections.some(section =>
-            sectionSubSectionMap[subSection]?.includes(section)
-        );
     };
 
     return (
@@ -303,19 +302,22 @@ export default function Edit() {
                                             Sections (Select at least one)
                                         </label>
                                         <div className="flex flex-wrap gap-2">
-                                            {sections.map(section => (
-                                                <div key={section} className="flex items-center">
+                                            {sections.map(sectionName => (
+                                                <div key={sectionName} className="flex items-center">
                                                     <input
                                                         type="checkbox"
-                                                        id={`section-${section}`}
+                                                        id={`section-${sectionName}`}
                                                         name="sections"
-                                                        value={section}
-                                                        checked={formData.sections.includes(section)}
+                                                        value={sectionName}
+                                                        checked={formData.sections.includes(sectionName)}
                                                         onChange={handleSectionChange}
                                                         className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                                                     />
-                                                    <label htmlFor={`section-${section}`} className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                                                        {section}
+                                                    <label
+                                                        htmlFor={`section-${sectionName}`}
+                                                        className="ml-2 block text-sm text-gray-700 dark:text-gray-300"
+                                                    >
+                                                        {sectionName}
                                                     </label>
                                                 </div>
                                             ))}
@@ -328,33 +330,37 @@ export default function Edit() {
                                     {/* Sub-sections Grouped by Section */}
                                     {formData.sections.length > 0 && (
                                         <div>
-                                            <label className="block text-sm font-medium mb-2">
-                                                Sub Sections
-                                            </label>
+                                            <label className="block text-sm font-medium mb-2">Sub Sections</label>
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                                {formData.sections.map(section => {
-                                                    const sectionSubs = groupedSubSections[section] || [];
+                                                {formData.sections.map(sectionName => {
+                                                    const sectionSubs = groupedSubSections[sectionName] || [];
                                                     return (
-                                                        <div key={section} className="border border-gray-200 dark:border-gray-700 rounded-md p-3">
-                                                            <h4 className="font-medium text-gray-800 dark:text-gray-200 mb-2">{section}</h4>
+                                                        <div
+                                                            key={sectionName}
+                                                            className="border border-gray-200 dark:border-gray-700 rounded-md p-3"
+                                                        >
+                                                            <h4 className="font-medium text-gray-800 dark:text-gray-200 mb-2">
+                                                                {/* Ensure sectionName is a string by converting it */}
+                                                                {String(sectionName)}
+                                                            </h4>
                                                             <div className="space-y-2 max-h-60 overflow-y-auto">
                                                                 {sectionSubs.length > 0 ? (
-                                                                    sectionSubs.map(subSection => (
-                                                                        <div key={subSection} className="flex items-center">
+                                                                    sectionSubs.map(subName => (
+                                                                        <div key={subName} className="flex items-center">
                                                                             <input
                                                                                 type="checkbox"
-                                                                                id={`sub-section-${section}-${subSection}`}
+                                                                                id={`sub-section-${sectionName}-${subName}`}
                                                                                 name="sub_sections"
-                                                                                value={subSection}
-                                                                                checked={formData.sub_sections.includes(subSection)}
+                                                                                value={subName}
+                                                                                checked={formData.sub_sections.includes(subName)}
                                                                                 onChange={handleSubSectionChange}
                                                                                 className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                                                                             />
                                                                             <label
-                                                                                htmlFor={`sub-section-${section}-${subSection}`}
+                                                                                htmlFor={`sub-section-${sectionName}-${subName}`}
                                                                                 className="ml-2 block text-sm text-gray-700 dark:text-gray-300"
                                                                             >
-                                                                                {subSection}
+                                                                                {subName}
                                                                             </label>
                                                                         </div>
                                                                     ))

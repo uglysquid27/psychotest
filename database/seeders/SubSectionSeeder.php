@@ -10,71 +10,72 @@ class SubSectionSeeder extends Seeder
 {
     public function run(): void
     {
-        // Get all sections first
         $sections = Section::all();
 
-        // Sub-sections data based on Excel file
         $subSectionsData = [
-    'Finished goods' => [
-        'Leader Finished goods', // Changed from 'Leader FG'
-        'Admin Finished goods',  // Changed from 'Admin FG'
-        'Penandaan',
-        'Putway',
-        'Checker SAP',           // Changed from 'SAP'
-        // Removed 'Repallet', 'Pembuatan Partisi' as not in data
-    ],
-    'Delivery' => [
-        'Leader Delivery',
-        'Dispatcer',             // Note spelling in data
-        'Picker',
-        'Admin Delivery',
-        'Checker SAP',           // Note case
-    ],
-    'Loader' => [
-        'Loader',
-        'Bongkar Material/Cap/Juice' // Added
-    ],
-    'RM/PM' => [
-        'Admin RM/PM',
-        'Checker',               // Changed from 'Checker RM/PM'
-        'Buffer Room',
-        'Penimbangan',
-        // Removed 'Checker Snack Bar' as not in data
-        'Bongkar Material/Cap/Juice'
-    ],
-    'Operator Forklift' => [
-        'Operator Forklift',
-        'Dispatcer'             // Added as it appears in data
-    ],
-    'Inspeksi' => [
-        'Leader Inspeksi',
-        'Admin Inspeksi',
-        'Camera Offline',
-        'Meja',
-        'Shrink',
-        'Cluster',
-        'Stickering',
-        'Rework',
-        'Repallet',             // Added
-        'Pembuatan Partisi',    // Added
-        'Cleaning Pallet',      // Added
-        'Leader Meja',
-        // Removed several not in data
-    ],
-    'Produksi' => [
-        'Reject',
-        'OC1',
-        'OC2'
-    ]
-    // Removed 'Store' section as not in data
-];
+            'Finished goods' => [
+                'Leader Finished goods',
+                'Admin Finished goods',
+                'Penandaan',
+                'Putway',
+                'Checker SAP',
+                'Dispatcer',
+            ],
+            'Delivery' => [
+                'Leader Delivery',
+                'Dispatcer',
+                'Picker',
+                'Admin Delivery',
+                'Checker SAP',
+            ],
+            'Loader' => [
+                'Loader',
+                'Bongkar Material/Cap/Juice'
+            ],
+            'RM/PM' => [
+                'Admin RM/PM',
+                'Checker',
+                'Buffer Room',
+                'Penimbangan',
+                'Bongkar Material/Cap/Juice'
+            ],
+            'Operator Forklift' => [
+                // 'Operator Forklift',
+                // 👉 new forklift sub-sections based on your new data
+                'CB DELIVERY',
+                'RT DELIVERY',
+                'CB FINISH GOOD',
+                'RT FINISH GOOD',
+                'CB FINISH GOOD & INSPEKSI',
+                'CB RMPM'
+            ],
+            'Inspeksi' => [
+                'Leader Inspeksi',
+                'Admin Inspeksi',
+                'Camera Offline',
+                'Meja',
+                'Shrink',
+                'Cluster',
+                'Stickering',
+                'Rework',
+                'Repallet',
+                'Pembuatan Partisi',
+                'Cleaning Pallet',
+                'Leader Meja',
+            ],
+            'Produksi' => [
+                'Reject',
+                'OC1',
+                'OC2'
+            ]
+        ];
 
         foreach ($sections as $section) {
             if (isset($subSectionsData[$section->name])) {
                 foreach ($subSectionsData[$section->name] as $subSectionName) {
-                    SubSection::create([
+                    SubSection::firstOrCreate([
                         'section_id' => $section->id,
-                        'name' => $subSectionName
+                        'name'       => $subSectionName
                     ]);
                 }
             }

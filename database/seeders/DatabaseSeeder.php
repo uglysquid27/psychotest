@@ -28,6 +28,7 @@ class DatabaseSeeder extends Seeder
 
             // Junction table seeder
             EmployeeSubSectionSeeder::class, // Depends on Employees and SubSections
+            ForkliftEmployeeSubSectionSeeder::class,
 
             // Main application data
             // ManPowerRequestSeeder::class, // Depends on SubSections and Shifts

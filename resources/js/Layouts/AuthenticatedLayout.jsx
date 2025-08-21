@@ -21,6 +21,23 @@ export default function AuthenticatedLayout({ header, children, hideSidebar = fa
     const user = auth && auth.user ? auth.user : null;
     const [isDark, setIsDark] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    // Define forklift operator NIKs
+    const forkliftOperatorNiks = [
+        '10797', '10485', '10640', '11299', '10933', '11321', '10843', '10866',
+        '11302', '10494', '10803', '11108', '10858', '10786', '11301', '10625',
+        '10833', '10850', '10838', '10954', '10845', '10864', '10859', '10630',
+        '10873', '10855', '10818', '10726', '10871', '11319', '10828', '10781',
+        '10616', '10824', '10484', '11324', '10612', '10798', '10576', '10804',
+        '10821'
+    ];
+
+    // Check if current user is a forklift operator based on NIK
+    const isForkliftOperator = user && user.nik && forkliftOperatorNiks.includes(user.nik);
+
+    // console.log('=== FORKLIFT OPERATOR CHECK ===');
+    // console.log('User NIK:', user?.nik);
+    // console.log('Is Forklift Operator:', isForkliftOperator);
+    // console.log('================================');
 
     // Effect to initialize theme
     useEffect(() => {
@@ -250,18 +267,22 @@ export default function AuthenticatedLayout({ header, children, hideSidebar = fa
                                 >
                                     <span className="block">Leave Requests</span>
                                 </NavLink>
-                                <NavLink
-                                    href={route('employee.license')}
-                                    active={route().current('employee.license')}
-                                    className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
-        hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400
-        ${route().current('employee.license')
-                                            ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
-                                            : 'text-gray-700 dark:text-gray-200'
-                                        }`}
-                                >
-                                    <span className="block">SIO Input</span>
-                                </NavLink>
+                                
+                                {isForkliftOperator && (
+                                    <NavLink
+                                        href={route('employee.license')}
+                                        active={route().current('employee.license')}
+                                        className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
+hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400
+${route().current('employee.license')
+                                                ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
+                                                : 'text-gray-700 dark:text-gray-200'
+                                            }`}
+                                    >
+                                        <span className="block">SIO Input</span>
+                                    </NavLink>
+                                )}
+                                
                                 <NavLink
                                     href={route('employee.employees.edit', { employee: auth.user.id })}
                                     active={route().current('employee.employees.edit')}

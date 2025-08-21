@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { useForm, usePage } from '@inertiajs/react';
-import { Link } from '@inertiajs/react';
+import { useForm, usePage, Link } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 
 export default function Create() {
-  const { uniqueSections, uniqueSubSections } = usePage().props;
+  const { sections } = usePage().props;
   const [selectedSection, setSelectedSection] = useState(null);
   const [showSubSectionModal, setShowSubSectionModal] = useState(false);
   const [selectedSubSections, setSelectedSubSections] = useState([]);
+  const [tempSelectedSubSections, setTempSelectedSubSections] = useState([]);
 
   const { data, setData, post, processing, errors } = useForm({
     name: '',
@@ -23,31 +23,55 @@ export default function Create() {
 
   const handleSectionSelect = (section) => {
     setSelectedSection(section);
+    // Pre-select any subsections that are already selected for this section
+    const currentSectionSubs = section.sub_sections
+      .filter(sub => selectedSubSections.includes(sub.name))
+      .map(sub => sub.name);
+    setTempSelectedSubSections(currentSectionSubs);
     setShowSubSectionModal(true);
   };
 
-  const handleSubSectionSelect = (subSection) => {
-    if (!selectedSubSections.includes(subSection)) {
-      const updatedSubSections = [...selectedSubSections, subSection];
-      setSelectedSubSections(updatedSubSections);
-      setData('sub_sections', updatedSubSections);
+  const handleSubSectionCheckboxChange = (subSectionName) => {
+    setTempSelectedSubSections(prev => {
+      if (prev.includes(subSectionName)) {
+        return prev.filter(name => name !== subSectionName);
+      } else {
+        return [...prev, subSectionName];
+      }
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (tempSelectedSubSections.length === selectedSection.sub_sections.length) {
+      // If all are selected, deselect all
+      setTempSelectedSubSections([]);
+    } else {
+      // Select all subsections
+      setTempSelectedSubSections(selectedSection.sub_sections.map(sub => sub.name));
     }
+  };
+
+  const applySubSectionSelection = () => {
+    // Merge with existing selections from other sections
+    const otherSectionsSubs = selectedSubSections.filter(
+      name => !selectedSection.sub_sections.some(sub => sub.name === name)
+    );
+    const updated = [...otherSectionsSubs, ...tempSelectedSubSections];
+    setSelectedSubSections(updated);
+    setData('sub_sections', updated);
     setShowSubSectionModal(false);
   };
 
-  const handleRemoveSubSection = (subSectionToRemove) => {
-    const updatedSubSections = selectedSubSections.filter(
-      subSection => subSection !== subSectionToRemove
-    );
-    setSelectedSubSections(updatedSubSections);
-    setData('sub_sections', updatedSubSections);
+  const handleRemoveSubSection = (subSectionName) => {
+    const updated = selectedSubSections.filter(name => name !== subSectionName);
+    setSelectedSubSections(updated);
+    setData('sub_sections', updated);
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     post(route('employee-attendance.store'), {
       onSuccess: () => {
-        // Reset form on success
         setSelectedSubSections([]);
       },
     });
@@ -83,7 +107,6 @@ export default function Create() {
                   <h3 className="font-medium text-gray-700 dark:text-gray-300 text-lg mb-4">
                     Informasi Dasar
                   </h3>
-                  
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Name */}
                     <div>
@@ -162,7 +185,6 @@ export default function Create() {
                   <h3 className="font-medium text-gray-700 dark:text-gray-300 text-lg mb-4">
                     Kata Sandi
                   </h3>
-                  
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Password */}
                     <div>
@@ -244,48 +266,50 @@ export default function Create() {
                   </div>
                 </div>
 
-                {/* Section Selection */}
+                {/* Section + Subsection */}
                 <div className="bg-gray-50 dark:bg-gray-700 p-4 sm:p-6 rounded-lg">
                   <h3 className="font-medium text-gray-700 dark:text-gray-300 text-lg mb-4">
                     Pilih Section dan Sub Section
                   </h3>
-                  
+
                   <div className="space-y-6">
                     {/* Section Selection */}
                     <div>
                       <h4 className="text-md font-medium mb-3">Pilih Section</h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {uniqueSections?.filter(section => section !== 'All').map((section) => (
+                        {sections.map((section) => (
                           <button
-                            key={section}
+                            key={section.id}
                             type="button"
                             onClick={() => handleSectionSelect(section)}
                             className="p-4 border rounded-md hover:bg-gray-100 dark:hover:bg-gray-600 text-left transition-colors duration-200"
                           >
                             <h4 className="font-medium text-gray-900 dark:text-gray-100">
-                              {section}
+                              {section.name}
                             </h4>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                              {selectedSubSections.filter(name => 
+                                section.sub_sections.some(sub => sub.name === name)
+                              ).length} of {section.sub_sections.length} sub sections selected
+                            </p>
                           </button>
                         ))}
                       </div>
                     </div>
 
-                    {/* Selected Sub Sections */}
+                    {/* Selected SubSections */}
                     <div>
                       <h4 className="text-md font-medium mb-3">Sub Section Terpilih</h4>
                       {selectedSubSections.length === 0 ? (
                         <p className="text-sm text-gray-500">Belum ada sub section yang dipilih</p>
                       ) : (
                         <div className="flex flex-wrap gap-2">
-                          {selectedSubSections.map((subSection) => (
-                            <div
-                              key={subSection}
-                              className="flex items-center bg-indigo-100 dark:bg-gray-600 px-3 py-1 rounded-full text-sm"
-                            >
-                              <span className="text-indigo-800 dark:text-gray-100">{subSection}</span>
+                          {selectedSubSections.map((name) => (
+                            <div key={name} className="flex items-center bg-indigo-100 dark:bg-gray-600 px-3 py-1 rounded-full text-sm">
+                              <span className="text-indigo-800 dark:text-gray-100">{name}</span>
                               <button
                                 type="button"
-                                onClick={() => handleRemoveSubSection(subSection)}
+                                onClick={() => handleRemoveSubSection(name)}
                                 className="ml-2 text-indigo-600 dark:text-gray-300 hover:text-indigo-900 dark:hover:text-gray-100"
                               >
                                 &times;
@@ -322,7 +346,7 @@ export default function Create() {
       </div>
 
       {/* Sub Section Modal */}
-      {showSubSectionModal && (
+      {showSubSectionModal && selectedSection && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto">
           <div 
             className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
@@ -332,32 +356,44 @@ export default function Create() {
           <div className="inline-block w-full max-w-md p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white dark:bg-gray-800 shadow-xl rounded-lg">
             <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
               <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-gray-100 mb-4">
-                Pilih Sub Section dari {selectedSection}
+                Pilih Sub Section dari {selectedSection.name}
               </h3>
               
-              <div className="max-h-96 overflow-y-auto">
-                <div className="space-y-2">
-                  {uniqueSubSections
-                    ?.filter(subSection => subSection !== 'All')
-                    .filter(subSection => subSection.includes(selectedSection))
-                    .map((subSection) => (
-                      <button
-                        key={subSection}
-                        type="button"
-                        onClick={() => handleSubSectionSelect(subSection)}
-                        disabled={selectedSubSections.includes(subSection)}
-                        className={`w-full text-left px-3 py-2 text-sm rounded-md ${
-                          selectedSubSections.includes(subSection)
-                            ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                            : 'hover:bg-indigo-100 dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        {subSection}
-                        {selectedSubSections.includes(subSection) && (
-                          <span className="ml-2 text-indigo-600 dark:text-indigo-400">(Sudah dipilih)</span>
-                        )}
-                      </button>
-                    ))}
+              <div className="mb-4 flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={handleSelectAll}
+                  className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
+                >
+                  {tempSelectedSubSections.length === selectedSection.sub_sections.length 
+                    ? 'Deselect All' 
+                    : 'Select All'}
+                </button>
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  {tempSelectedSubSections.length} selected
+                </span>
+              </div>
+              
+              <div className="max-h-96 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-md">
+                <div className="space-y-0 divide-y divide-gray-200 dark:divide-gray-700">
+                  {selectedSection.sub_sections.map((subSection) => (
+                    <label 
+                      key={subSection.id}
+                      className={`flex items-center px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                        tempSelectedSubSections.includes(subSection.name) ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={tempSelectedSubSections.includes(subSection.name)}
+                        onChange={() => handleSubSectionCheckboxChange(subSection.name)}
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                      <span className="ml-3 text-sm text-gray-700 dark:text-gray-300">
+                        {subSection.name}
+                      </span>
+                    </label>
+                  ))}
                 </div>
               </div>
             </div>
@@ -365,10 +401,17 @@ export default function Create() {
             <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
               <button
                 type="button"
-                onClick={() => setShowSubSectionModal(false)}
+                onClick={applySubSectionSelection}
                 className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm"
               >
-                Tutup
+                Terapkan
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowSubSectionModal(false)}
+                className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-600 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+              >
+                Batal
               </button>
             </div>
           </div>

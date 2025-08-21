@@ -40,6 +40,42 @@ class AuthenticatedSessionController extends Controller
                 ]);
             }
 
+            // After successful employee login, load their sections and subsections
+            $employee = Auth::guard('employee')->user();
+            if ($employee) {
+                // Load the employee's subsections with their sections
+                $employee->load('subSections.section');
+                
+                // Store additional employee data in session for easy access
+                $employeeSections = $employee->subSections->map(function($subSection) {
+                    return [
+                        'sub_section_id' => $subSection->id,
+                        'sub_section_name' => $subSection->name,
+                        'section_id' => $subSection->section ? $subSection->section->id : null,
+                        'section_name' => $subSection->section ? $subSection->section->name : null,
+                    ];
+                });
+                
+                // Check if employee is a forklift operator
+                $isForkliftOperator = $employee->subSections->contains(function ($sub) {
+                    return $sub->section && $sub->section->name === 'Operator Forklift';
+                });
+                
+                // Store in session
+                session([
+                    'employee_sections' => $employeeSections,
+                    'is_forklift_operator' => $isForkliftOperator
+                ]);
+
+                // Debug: Log what we're storing in session (remove this after testing)
+                \Log::info('Employee login - storing in session:', [
+                    'employee_id' => $employee->id,
+                    'employee_name' => $employee->name,
+                    'sections' => $employeeSections,
+                    'is_forklift_operator' => $isForkliftOperator
+                ]);
+            }
+
             $request->session()->regenerate();
             return redirect()->intended(route('employee.dashboard'));
         } else {
@@ -65,6 +101,9 @@ class AuthenticatedSessionController extends Controller
         // Logout from all guards
         Auth::guard('web')->logout();
         Auth::guard('employee')->logout();
+
+        // Clear employee-specific session data
+        $request->session()->forget(['employee_sections', 'is_forklift_operator']);
 
         // Invalidate and regenerate
         $request->session()->invalidate();
