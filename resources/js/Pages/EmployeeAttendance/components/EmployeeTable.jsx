@@ -1,9 +1,50 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from '@inertiajs/react';
 import EmployeeStatusBadge from './EmployeeStatusBadge';
 import EmployeeActions from './EmployeeActions';
 
 const EmployeeTable = ({ employees, totalWorkCount, totalWeeklyWorkCount, isUser }) => {
+  const [expandedEmployees, setExpandedEmployees] = useState(new Set());
+
+  const toggleExpand = (employeeId) => {
+    const newExpanded = new Set(expandedEmployees);
+    if (newExpanded.has(employeeId)) {
+      newExpanded.delete(employeeId);
+    } else {
+      newExpanded.add(employeeId);
+    }
+    setExpandedEmployees(newExpanded);
+  };
+
+  const renderSubSections = (employee) => {
+    if (!employee.sub_sections || employee.sub_sections.length === 0) {
+      return 'N/A';
+    }
+
+    const isExpanded = expandedEmployees.has(employee.id);
+    const subSectionNames = employee.sub_sections.map(ss => ss.name);
+    
+    if (isExpanded || subSectionNames.length <= 3) {
+      return subSectionNames.join(', ');
+    }
+
+    const firstThree = subSectionNames.slice(0, 3).join(', ');
+    const remainingCount = subSectionNames.length - 3;
+
+    return (
+      <>
+        {firstThree}
+        <span 
+          className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer ml-1"
+          onClick={() => toggleExpand(employee.id)}
+          title={`Show all ${subSectionNames.length} sub-sections`}
+        >
+          ...(+{remainingCount})
+        </span>
+      </>
+    );
+  };
+
   return (
     <div className="hidden sm:block bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -42,7 +83,7 @@ const EmployeeTable = ({ employees, totalWorkCount, totalWeeklyWorkCount, isUser
                     {employee.type ? employee.type.charAt(0).toUpperCase() + employee.type.slice(1) : 'N/A'}
                   </td>
                   <td className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300">
-                    {employee.sub_sections && employee.sub_sections.length > 0 ? employee.sub_sections.map(ss => ss.name).join(', ') : 'N/A'}
+                    {renderSubSections(employee)}
                   </td>
                   <td className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300">
                     {employee.sub_sections && employee.sub_sections.length > 0 ? [...new Set(employee.sub_sections.map(ss => ss.section?.name || 'N/A'))].join(', ') : 'N/A'}

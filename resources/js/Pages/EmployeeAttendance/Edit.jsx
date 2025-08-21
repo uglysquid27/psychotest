@@ -340,8 +340,7 @@ export default function Edit() {
                                                             className="border border-gray-200 dark:border-gray-700 rounded-md p-3"
                                                         >
                                                             <h4 className="font-medium text-gray-800 dark:text-gray-200 mb-2">
-                                                                {/* Ensure sectionName is a string by converting it */}
-                                                                {String(sectionName)}
+                                                                {sectionName}
                                                             </h4>
                                                             <div className="space-y-2 max-h-60 overflow-y-auto">
                                                                 {sectionSubs.length > 0 ? (
