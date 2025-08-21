@@ -46,8 +46,16 @@ export default function UpdateProfileInformationForm({ employee, className }) {
         return num.toString().padStart(3, '0');
     };
 
+    // Check if address is locked (kelurahan and kecamatan are filled)
+    const isAddressLocked = employee.kelurahan && employee.kecamatan;
+
     const submit = (e) => {
         e.preventDefault();
+
+        // If address is locked, prevent submission
+        if (isAddressLocked) {
+            return;
+        }
 
         // Format RT/RW before submitting
         const formattedData = {
@@ -63,6 +71,7 @@ export default function UpdateProfileInformationForm({ employee, className }) {
             },
         });
     };
+
     return (
         <section className={className}>
             <ToastNotification
@@ -79,6 +88,11 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                 <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
                     Perbarui informasi pribadi dan detail kontak karyawan.
                 </p>
+                {isAddressLocked && (
+                    <div className="mt-2 p-3 bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded-md">
+                        <p className="text-sm">Data karyawan telah terkunci dan tidak dapat diubah karena alamat (kelurahan & kecamatan) sudah terisi.</p>
+                    </div>
+                )}
             </header>
 
             <form onSubmit={submit} className="mt-6 grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
@@ -109,12 +123,16 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                             type="text"
                             value={data.ktp}
                             onChange={(e) => {
+                                if (isAddressLocked) return;
                                 const value = e.target.value.replace(/\D/g, '').slice(0, 16);
                                 setData('ktp', value);
                             }}
-                            className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 pr-12 dark:bg-gray-700 dark:text-gray-200"
+                            className={`block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 pr-12 dark:bg-gray-700 dark:text-gray-200 ${
+                                isAddressLocked ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''
+                            }`}
                             required
                             maxLength={16}
+                            readOnly={isAddressLocked}
                         />
                         <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                             <span className="text-gray-500 dark:text-gray-400 text-xs">
@@ -138,9 +156,15 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                             id="name"
                             type="text"
                             value={data.name}
-                            onChange={(e) => setData('name', toTitleCase(e.target.value))}
-                            className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200"
+                            onChange={(e) => {
+                                if (isAddressLocked) return;
+                                setData('name', toTitleCase(e.target.value));
+                            }}
+                            className={`block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200 ${
+                                isAddressLocked ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''
+                            }`}
                             required
+                            readOnly={isAddressLocked}
                         />
                     </div>
                     {errors.name && <p className="mt-1 text-sm text-red-600 dark:text-red-500">{errors.name}</p>}
@@ -156,9 +180,15 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                             id="email"
                             type="email"
                             value={data.email}
-                            onChange={(e) => setData('email', e.target.value.toLowerCase())}
-                            className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200"
+                            onChange={(e) => {
+                                if (isAddressLocked) return;
+                                setData('email', e.target.value.toLowerCase());
+                            }}
+                            className={`block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200 ${
+                                isAddressLocked ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''
+                            }`}
                             required
+                            readOnly={isAddressLocked}
                         />
                     </div>
                     {errors.email && <p className="mt-1 text-sm text-red-600 dark:text-red-500">{errors.email}</p>}
@@ -173,9 +203,14 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                         <select
                             id="type"
                             value={data.type}
-                            onChange={(e) => setData('type', e.target.value)}
-                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 bg-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 cursor-not-allowed"
-                            disabled
+                            onChange={(e) => {
+                                if (isAddressLocked) return;
+                                setData('type', e.target.value);
+                            }}
+                            className={`block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 bg-gray-100 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 ${
+                                isAddressLocked ? 'cursor-not-allowed' : ''
+                            }`}
+                            disabled={true} // Always disabled as per original code
                         >
                             <option value="harian">Harian</option>
                             <option value="bulanan">Bulanan</option>
@@ -193,9 +228,15 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                         <select
                             id="gender"
                             value={data.gender}
-                            onChange={(e) => setData('gender', e.target.value)}
-                            className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200"
+                            onChange={(e) => {
+                                if (isAddressLocked) return;
+                                setData('gender', e.target.value);
+                            }}
+                            className={`block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200 ${
+                                isAddressLocked ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''
+                            }`}
                             required
+                            disabled={isAddressLocked}
                         >
                             <option value="male">Laki-laki</option>
                             <option value="female">Perempuan</option>
@@ -213,8 +254,14 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                         <select
                             id="marital"
                             value={data.marital}
-                            onChange={(e) => setData('marital', e.target.value)}
-                            className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200"
+                            onChange={(e) => {
+                                if (isAddressLocked) return;
+                                setData('marital', e.target.value);
+                            }}
+                            className={`block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200 ${
+                                isAddressLocked ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''
+                            }`}
+                            disabled={isAddressLocked}
                         >
                             <option value="">Pilih Status</option>
                             <option value="K0">K/O - Nikah, Tanpa Anak</option>
@@ -240,9 +287,15 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                             id="birth_date"
                             type="date"
                             value={data.birth_date || ''}
-                            onChange={(e) => setData('birth_date', e.target.value)}
-                            className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200"
+                            onChange={(e) => {
+                                if (isAddressLocked) return;
+                                setData('birth_date', e.target.value);
+                            }}
+                            className={`block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200 ${
+                                isAddressLocked ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''
+                            }`}
                             required
+                            readOnly={isAddressLocked}
                         />
                     </div>
                     {errors.birth_date && <p className="mt-1 text-sm text-red-600 dark:text-red-500">{errors.birth_date}</p>}
@@ -257,9 +310,15 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                         <select
                             id="religion"
                             value={data.religion}
-                            onChange={(e) => setData('religion', e.target.value)}
-                            className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200"
+                            onChange={(e) => {
+                                if (isAddressLocked) return;
+                                setData('religion', e.target.value);
+                            }}
+                            className={`block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200 ${
+                                isAddressLocked ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''
+                            }`}
                             required
+                            disabled={isAddressLocked}
                         >
                             <option value="">Pilih Agama</option>
                             <option value="Islam">Islam</option>
@@ -283,8 +342,14 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                             id="phone"
                             type="tel"
                             value={data.phone}
-                            onChange={(e) => setData('phone', e.target.value)}
-                            className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200"
+                            onChange={(e) => {
+                                if (isAddressLocked) return;
+                                setData('phone', e.target.value);
+                            }}
+                            className={`block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200 ${
+                                isAddressLocked ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''
+                            }`}
+                            readOnly={isAddressLocked}
                         />
                     </div>
                     {errors.phone && <p className="mt-1 text-sm text-red-600 dark:text-red-500">{errors.phone}</p>}
@@ -305,9 +370,15 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                                 id="street"
                                 type="text"
                                 value={data.street}
-                                onChange={(e) => setData('street', toTitleCase(e.target.value))}
-                                className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200"
+                                onChange={(e) => {
+                                    if (isAddressLocked) return;
+                                    setData('street', toTitleCase(e.target.value));
+                                }}
+                                className={`block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200 ${
+                                    isAddressLocked ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''
+                                }`}
                                 required
+                                readOnly={isAddressLocked}
                             />
                             {errors.street && <p className="mt-1 text-sm text-red-600 dark:text-red-500">{errors.street}</p>}
                         </div>
@@ -322,6 +393,7 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                                 type="text"
                                 value={data.rt}
                                 onChange={(e) => {
+                                    if (isAddressLocked) return;
                                     const value = e.target.value;
                                     // Only allow numbers and empty string
                                     if (value === '' || /^\d+$/.test(value)) {
@@ -330,14 +402,18 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                                     }
                                 }}
                                 onBlur={(e) => {
+                                    if (isAddressLocked) return;
                                     // Pad with zeros only when leaving the field
                                     if (e.target.value.length > 0) {
                                         setData('rt', e.target.value.padStart(3, '0'));
                                     }
                                 }}
-                                className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200"
+                                className={`block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200 ${
+                                    isAddressLocked ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''
+                                }`}
                                 maxLength={3}
                                 required
+                                readOnly={isAddressLocked}
                             />
                             {errors.rt && <p className="mt-1 text-sm text-red-600 dark:text-red-500">{errors.rt}</p>}
                             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -355,6 +431,7 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                                 type="text"
                                 value={data.rw}
                                 onChange={(e) => {
+                                    if (isAddressLocked) return;
                                     const value = e.target.value;
                                     // Only allow numbers and empty string
                                     if (value === '' || /^\d+$/.test(value)) {
@@ -363,14 +440,18 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                                     }
                                 }}
                                 onBlur={(e) => {
+                                    if (isAddressLocked) return;
                                     // Pad with zeros only when leaving the field
                                     if (e.target.value.length > 0) {
                                         setData('rw', e.target.value.padStart(3, '0'));
                                     }
                                 }}
-                                className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200"
+                                className={`block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200 ${
+                                    isAddressLocked ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''
+                                }`}
                                 maxLength={3}
                                 required
+                                readOnly={isAddressLocked}
                             />
                             {errors.rw && <p className="mt-1 text-sm text-red-600 dark:text-red-500">{errors.rw}</p>}
                             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -387,9 +468,15 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                                 id="kelurahan"
                                 type="text"
                                 value={data.kelurahan}
-                                onChange={(e) => setData('kelurahan', toTitleCase(e.target.value))}
-                                className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200"
+                                onChange={(e) => {
+                                    if (isAddressLocked) return;
+                                    setData('kelurahan', toTitleCase(e.target.value));
+                                }}
+                                className={`block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200 ${
+                                    isAddressLocked ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''
+                                }`}
                                 required
+                                readOnly={isAddressLocked}
                             />
                             {errors.kelurahan && <p className="mt-1 text-sm text-red-600 dark:text-red-500">{errors.kelurahan}</p>}
                         </div>
@@ -402,9 +489,15 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                                 id="kecamatan"
                                 type="text"
                                 value={data.kecamatan}
-                                onChange={(e) => setData('kecamatan', toTitleCase(e.target.value))}
-                                className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200"
+                                onChange={(e) => {
+                                    if (isAddressLocked) return;
+                                    setData('kecamatan', toTitleCase(e.target.value));
+                                }}
+                                className={`block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200 ${
+                                    isAddressLocked ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''
+                                }`}
                                 required
+                                readOnly={isAddressLocked}
                             />
                             {errors.kecamatan && <p className="mt-1 text-sm text-red-600 dark:text-red-500">{errors.kecamatan}</p>}
                         </div>
@@ -418,9 +511,15 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                                 id="kabupaten_kota"
                                 type="text"
                                 value={data.kabupaten_kota}
-                                onChange={(e) => setData('kabupaten_kota', toTitleCase(e.target.value))}
-                                className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200"
+                                onChange={(e) => {
+                                    if (isAddressLocked) return;
+                                    setData('kabupaten_kota', toTitleCase(e.target.value));
+                                }}
+                                className={`block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200 ${
+                                    isAddressLocked ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''
+                                }`}
                                 required
+                                readOnly={isAddressLocked}
                             />
                             {errors.kabupaten_kota && <p className="mt-1 text-sm text-red-600 dark:text-red-500">{errors.kabupaten_kota}</p>}
                         </div>
@@ -434,9 +533,15 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                                 id="provinsi"
                                 type="text"
                                 value={data.provinsi}
-                                onChange={(e) => setData('provinsi', toTitleCase(e.target.value))}
-                                className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200"
+                                onChange={(e) => {
+                                    if (isAddressLocked) return;
+                                    setData('provinsi', toTitleCase(e.target.value));
+                                }}
+                                className={`block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200 ${
+                                    isAddressLocked ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''
+                                }`}
                                 required
+                                readOnly={isAddressLocked}
                             />
                             {errors.provinsi && <p className="mt-1 text-sm text-red-600 dark:text-red-500">{errors.provinsi}</p>}
                         </div>
@@ -451,13 +556,17 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                                 type="text"
                                 value={data.kode_pos}
                                 onChange={(e) => {
+                                    if (isAddressLocked) return;
                                     const numOnly = e.target.value.replace(/\D/g, '').slice(0, 5);
                                     setData('kode_pos', numOnly);
                                 }}
-                                className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200"
+                                className={`block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:focus:border-indigo-500 dark:focus:ring-indigo-500 sm:text-sm py-2 px-3 dark:bg-gray-700 dark:text-gray-200 ${
+                                    isAddressLocked ? 'bg-gray-100 dark:bg-gray-800 cursor-not-allowed' : ''
+                                }`}
                                 placeholder="12345"
                                 maxLength={5}
                                 required
+                                readOnly={isAddressLocked}
                             />
                             {errors.kode_pos && <p className="mt-1 text-sm text-red-600 dark:text-red-500">{errors.kode_pos}</p>}
                         </div>
@@ -477,8 +586,10 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                     </div>
                     <button
                         type="submit"
-                        className="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-medium text-sm text-white uppercase tracking-widest hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150 shadow-sm disabled:opacity-75"
-                        disabled={processing}
+                        className={`inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-medium text-sm text-white uppercase tracking-widest hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150 shadow-sm ${
+                            isAddressLocked ? 'bg-gray-400 hover:bg-gray-400 cursor-not-allowed' : ''
+                        }`}
+                        disabled={processing || isAddressLocked}
                     >
                         {processing ? 'Menyimpan...' : 'Simpan Perubahan'}
                     </button>

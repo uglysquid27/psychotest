@@ -72,22 +72,49 @@ class SubSectionController extends Controller
     }
 
     /**
-     * Show the form for editing the specified sub section.
+     * Show the form for editing a section.
      */
-    public function edit(SubSection $subSection)
+    public function editSection(Section $section)
+    {
+        return Inertia::render('Sections/EditSection', [
+            'section' => $section,
+        ]);
+    }
+
+    /**
+     * Show the form for editing a sub section.
+     */
+    public function editSubSection(SubSection $subSection)
     {
         $sections = Section::orderBy('name')->get();
 
-        return Inertia::render('Sections/Edit', [
+        return Inertia::render('Sections/EditSubSection', [
             'subSection' => $subSection,
             'sections' => $sections,
         ]);
     }
 
     /**
-     * Update the specified sub section.
+     * Update a section.
      */
-    public function update(Request $request, SubSection $subSection)
+    public function updateSection(Request $request, Section $section)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255|unique:sections,name,' . $section->id,
+        ]);
+
+        $section->update([
+            'name' => $request->name,
+        ]);
+
+        return redirect()->route('sections.index')
+            ->with('success', 'Section updated successfully.');
+    }
+
+    /**
+     * Update a sub section.
+     */
+    public function updateSubSection(Request $request, SubSection $subSection)
     {
         $request->validate([
             'section_id' => 'required|exists:sections,id',
@@ -104,9 +131,22 @@ class SubSectionController extends Controller
     }
 
     /**
-     * Remove the specified sub section.
+     * Remove a section.
      */
-    public function destroy(SubSection $subSection)
+    public function destroySection(Section $section)
+    {
+        // Delete all subsections first
+        $section->subSections()->delete();
+        $section->delete();
+
+        return redirect()->route('sections.index')
+            ->with('success', 'Section and all its subsections deleted successfully.');
+    }
+
+    /**
+     * Remove a sub section.
+     */
+    public function destroySubSection(SubSection $subSection)
     {
         $subSection->delete();
 

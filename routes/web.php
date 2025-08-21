@@ -158,13 +158,20 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
         });
     });
 
-     Route::prefix('sections')->group(function () {
+Route::prefix('sections')->group(function () {
     Route::get('/', [SubSectionController::class, 'index'])->name('sections.index');
     Route::get('/create', [SubSectionController::class, 'create'])->name('sections.create');
     Route::post('/', [SubSectionController::class, 'store'])->name('sections.store');
-    Route::get('/{subSection}/edit', [SubSectionController::class, 'edit'])->name('sections.edit');
-    Route::put('/{subSection}', [SubSectionController::class, 'update'])->name('sections.update');
-    Route::delete('/{subSection}', [SubSectionController::class, 'destroy'])->name('sections.destroy');
+    
+    // Section routes
+    Route::get('/{section}/edit-section', [SubSectionController::class, 'editSection'])->name('sections.edit-section');
+    Route::put('/{section}/update-section', [SubSectionController::class, 'updateSection'])->name('sections.update-section');
+    Route::delete('/{section}/destroy-section', [SubSectionController::class, 'destroySection'])->name('sections.destroy-section');
+    
+    // SubSection routes
+    Route::get('/{subSection}/edit-subsection', [SubSectionController::class, 'editSubSection'])->name('sections.edit-subsection');
+    Route::put('/{subSection}/update-subsection', [SubSectionController::class, 'updateSubSection'])->name('sections.update-subsection');
+    Route::delete('/{subSection}/destroy-subsection', [SubSectionController::class, 'destroySubSection'])->name('sections.destroy-subsection');
 });
 
 
