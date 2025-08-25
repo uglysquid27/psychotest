@@ -243,6 +243,18 @@ export default function AuthenticatedLayout({ header, children, hideSidebar = fa
                                         >
                                             <span className="block">Lunch Coupons</span>
                                         </NavLink>
+                                        <NavLink
+                                            href={route('kraepelin.index')}
+                                            active={route().current('kraepelin.index')}
+                                            className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
+        hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400
+        ${route().current('kraepelin.index')
+                                                    ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
+                                                    : 'text-gray-700 dark:text-gray-200'
+                                                }`}
+                                        >
+                                            <span className="block">Kreapelin</span>
+                                        </NavLink>
                                     </>
                                 )}
                             </>

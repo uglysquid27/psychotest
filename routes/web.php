@@ -19,6 +19,7 @@ use App\Http\Controllers\LunchCouponController;
 use App\Http\Controllers\RatingController;
 use App\Http\Middleware\PreventBackAfterLogout;
 use App\Http\Controllers\EmployeeProfileController;
+use App\Http\Controllers\KraepelinController;
 
 // app/Http/Controllers/LicenseVerificationController.php
 /*
@@ -158,21 +159,21 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
         });
     });
 
-Route::prefix('sections')->group(function () {
-    Route::get('/', [SubSectionController::class, 'index'])->name('sections.index');
-    Route::get('/create', [SubSectionController::class, 'create'])->name('sections.create');
-    Route::post('/', [SubSectionController::class, 'store'])->name('sections.store');
-    
-    // Section routes
-    Route::get('/{section}/edit-section', [SubSectionController::class, 'editSection'])->name('sections.edit-section');
-    Route::put('/{section}/update-section', [SubSectionController::class, 'updateSection'])->name('sections.update-section');
-    Route::delete('/{section}/destroy-section', [SubSectionController::class, 'destroySection'])->name('sections.destroy-section');
-    
-    // SubSection routes
-    Route::get('/{subSection}/edit-subsection', [SubSectionController::class, 'editSubSection'])->name('sections.edit-subsection');
-    Route::put('/{subSection}/update-subsection', [SubSectionController::class, 'updateSubSection'])->name('sections.update-subsection');
-    Route::delete('/{subSection}/destroy-subsection', [SubSectionController::class, 'destroySubSection'])->name('sections.destroy-subsection');
-});
+    Route::prefix('sections')->group(function () {
+        Route::get('/', [SubSectionController::class, 'index'])->name('sections.index');
+        Route::get('/create', [SubSectionController::class, 'create'])->name('sections.create');
+        Route::post('/', [SubSectionController::class, 'store'])->name('sections.store');
+        
+        // Section routes
+        Route::get('/{section}/edit-section', [SubSectionController::class, 'editSection'])->name('sections.edit-section');
+        Route::put('/{section}/update-section', [SubSectionController::class, 'updateSection'])->name('sections.update-section');
+        Route::delete('/{section}/destroy-section', [SubSectionController::class, 'destroySection'])->name('sections.destroy-section');
+        
+        // SubSection routes
+        Route::get('/{subSection}/edit-subsection', [SubSectionController::class, 'editSubSection'])->name('sections.edit-subsection');
+        Route::put('/{subSection}/update-subsection', [SubSectionController::class, 'updateSubSection'])->name('sections.update-subsection');
+        Route::delete('/{subSection}/destroy-subsection', [SubSectionController::class, 'destroySubSection'])->name('sections.destroy-subsection');
+    });
 
 
     Route::get('/employees/{employee}/license', [LicenseVerificationController::class, 'showEmployeeLicense'])
@@ -248,4 +249,15 @@ Route::prefix('sections')->group(function () {
     Route::get('/admin/permits', [AdminPermitController::class, 'index'])->name('admin.permits.index');
     Route::post('/admin/permits/{permit}/respond', [AdminPermitController::class, 'respond'])
         ->name('admin.permits.respond');
+
+    Route::prefix('kraepelin')->name('kraepelin.')->group(function () {
+        Route::get('/', [KraepelinController::class, 'index'])->name('index');
+        Route::post('/start', [KraepelinController::class, 'start'])->name('start');
+        Route::post('/submit', [KraepelinController::class, 'submit'])->name('submit');
+        Route::get('/results', [KraepelinController::class, 'results'])->name('results');
+        Route::get('/results/{id}', [KraepelinController::class, 'show'])->name('show');
+        Route::delete('/results/{id}', [KraepelinController::class, 'destroy'])->name('destroy');
+        Route::get('/employees', [KraepelinController::class, 'employees'])->name('employees');
+        // Route::get('/export/{id}', [KraepelinController::class, 'export'])->name('export');
+    });
 });
