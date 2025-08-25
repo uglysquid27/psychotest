@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdminPermitController;
 use App\Http\Controllers\AnalogiController;
+use App\Http\Controllers\KetelitianController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SubSectionController;
 use Illuminate\Support\Facades\Route;
@@ -272,6 +273,11 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     Route::prefix('analogi')->name('analogi.')->group(function () {
         Route::get('/', [AnalogiController::class, 'index'])->name('index');
             Route::post('/submit', [AnalogiController::class, 'submit'])->name('submit'); // tambah route submit
+
+    });
+    Route::prefix('ketelitian')->name('ketelitian.')->group(function () {
+        Route::get('/', [KetelitianController::class, 'index'])->name('index');
+            Route::post('/submit', [KetelitianController::class, 'submit'])->name('submit'); // tambah route submit
 
     });
 
