@@ -20,6 +20,7 @@ use App\Http\Controllers\RatingController;
 use App\Http\Middleware\PreventBackAfterLogout;
 use App\Http\Controllers\EmployeeProfileController;
 use App\Http\Controllers\KraepelinController;
+use App\Http\Controllers\WarteggTestController;
 
 // app/Http/Controllers/LicenseVerificationController.php
 /*
@@ -259,5 +260,11 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
         Route::delete('/results/{id}', [KraepelinController::class, 'destroy'])->name('destroy');
         Route::get('/employees', [KraepelinController::class, 'employees'])->name('employees');
         // Route::get('/export/{id}', [KraepelinController::class, 'export'])->name('export');
+    });
+    Route::prefix('wartegg')->name('wartegg.')->group(function () {
+       Route::get('/', [WarteggTestController::class, 'index'])->name('index');
+    Route::post('/', [WarteggTestController::class, 'store'])->name('store');
+    Route::get('/history', [WarteggTestController::class, 'history'])->name('history');
+    Route::get('/{warteggTest}', [WarteggTestController::class, 'show'])->name('show');
     });
 });
