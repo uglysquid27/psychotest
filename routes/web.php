@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminPermitController;
+use App\Http\Controllers\AnalogiController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SubSectionController;
 use Illuminate\Support\Facades\Route;
@@ -164,12 +165,12 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
         Route::get('/', [SubSectionController::class, 'index'])->name('sections.index');
         Route::get('/create', [SubSectionController::class, 'create'])->name('sections.create');
         Route::post('/', [SubSectionController::class, 'store'])->name('sections.store');
-        
+
         // Section routes
         Route::get('/{section}/edit-section', [SubSectionController::class, 'editSection'])->name('sections.edit-section');
         Route::put('/{section}/update-section', [SubSectionController::class, 'updateSection'])->name('sections.update-section');
         Route::delete('/{section}/destroy-section', [SubSectionController::class, 'destroySection'])->name('sections.destroy-section');
-        
+
         // SubSection routes
         Route::get('/{subSection}/edit-subsection', [SubSectionController::class, 'editSubSection'])->name('sections.edit-subsection');
         Route::put('/{subSection}/update-subsection', [SubSectionController::class, 'updateSubSection'])->name('sections.update-subsection');
@@ -262,9 +263,16 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
         // Route::get('/export/{id}', [KraepelinController::class, 'export'])->name('export');
     });
     Route::prefix('wartegg')->name('wartegg.')->group(function () {
-       Route::get('/', [WarteggTestController::class, 'index'])->name('index');
-    Route::post('/', [WarteggTestController::class, 'store'])->name('store');
-    Route::get('/history', [WarteggTestController::class, 'history'])->name('history');
-    Route::get('/{warteggTest}', [WarteggTestController::class, 'show'])->name('show');
+        Route::get('/', [WarteggTestController::class, 'index'])->name('index');
+        Route::post('/', [WarteggTestController::class, 'store'])->name('store');
+        Route::get('/history', [WarteggTestController::class, 'history'])->name('history');
+        Route::get('/{warteggTest}', [WarteggTestController::class, 'show'])->name('show');
     });
+
+    Route::prefix('analogi')->name('analogi.')->group(function () {
+        Route::get('/', [AnalogiController::class, 'index'])->name('index');
+            Route::post('/submit', [AnalogiController::class, 'submit'])->name('submit'); // tambah route submit
+
+    });
+
 });
