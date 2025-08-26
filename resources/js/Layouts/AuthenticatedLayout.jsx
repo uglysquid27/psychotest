@@ -21,6 +21,12 @@ export default function AuthenticatedLayout({ header, children, hideSidebar = fa
     const user = auth && auth.user ? auth.user : null;
     const [isDark, setIsDark] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+      const [isPsikotesOpen, setIsPsikotesOpen] = useState(false);
+
+  const togglePsikotes = () => {
+    setIsPsikotesOpen(!isPsikotesOpen);
+  };
+
     // Define forklift operator NIKs
     const forkliftOperatorNiks = [
         '10797', '10485', '10640', '11299', '10933', '11321', '10843', '10866',
@@ -242,55 +248,49 @@ export default function AuthenticatedLayout({ header, children, hideSidebar = fa
                                                 }`}
                                         >
                                             <span className="block">Lunch Coupons</span>
-                                        </NavLink>
-                                        <NavLink
-                                            href={route('kraepelin.index')}
-                                            active={route().current('kraepelin.index')}
-                                            className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
-        hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400
-        ${route().current('kraepelin.index')
-                                                    ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
-                                                    : 'text-gray-700 dark:text-gray-200'
-                                                }`}
-                                        >
-                                            <span className="block">Kreapelin</span>
-                                        </NavLink>
-                                        <NavLink
-                                            href={route('wartegg.index')}
-                                            active={route().current('wartegg.index')}
-                                            className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
-        hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400
-        ${route().current('wartegg.index')
-                                                    ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
-                                                    : 'text-gray-700 dark:text-gray-200'
-                                                }`}
-                                        >
-                                            <span className="block">Wartegg</span>
-                                        </NavLink>
-                                        <NavLink
-                                            href={route('analogi.index')}
-                                            active={route().current('analogi.index')}
-                                            className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
-        hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400
-        ${route().current('analogi.index')
-                                                    ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
-                                                    : 'text-gray-700 dark:text-gray-200'
-                                                }`}
-                                        >
-                                            <span className="block">Analogi</span>
-                                        </NavLink>
-                                        <NavLink
-                                            href={route('ketelitian.index')}
-                                            active={route().current('ketelitian.index')}
-                                            className={`block py-3 md:py-4 px-3 text-sm font-medium rounded-lg transition-all duration-200 ease-in-out text-center md:text-left
-        hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400
-        ${route().current('ketelitian.index')
-                                                    ? 'bg-indigo-100/50 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
-                                                    : 'text-gray-700 dark:text-gray-200'
-                                                }`}
-                                        >
-                                            <span className="block">Ketelitian</span>
-                                        </NavLink>
+                                   </NavLink>
+                                   <div>
+          <button
+            onClick={togglePsikotes}
+            className="w-full text-left py-3 md:py-4 px-3 text-sm font-medium rounded-lg flex justify-between items-center text-gray-700 dark:text-gray-200 hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-200 ease-in-out"
+          >
+            <span>Psikotes</span>
+            <span className={`transform transition-transform duration-200 ${isPsikotesOpen ? 'rotate-90' : ''}`}>▶</span>
+          </button>
+
+          {isPsikotesOpen && (
+            <div className="pl-4 mt-2 space-y-1">
+              <NavLink
+                href={route('kraepelin.index')}
+                active={route().current('kraepelin.index')}
+                className="block py-2 px-3 text-sm rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
+              >
+                Kraepelin
+              </NavLink>
+              <NavLink
+                href={route('wartegg.index')}
+                active={route().current('wartegg.index')}
+                className="block py-2 px-3 text-sm rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
+              >
+                Wartegg
+              </NavLink>
+              <NavLink
+                href={route('analogi.index')}
+                active={route().current('analogi.index')}
+                className="block py-2 px-3 text-sm rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
+              >
+                Analogi
+              </NavLink>
+              <NavLink
+                href={route('ketelitian.index')}
+                active={route().current('ketelitian.index')}
+                className="block py-2 px-3 text-sm rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
+              >
+                Ketelitian
+              </NavLink>
+            </div>
+          )}
+        </div>
                                     </>
                                 )}
                             </>
