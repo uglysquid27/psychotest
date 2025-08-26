@@ -23,6 +23,9 @@ use App\Http\Middleware\PreventBackAfterLogout;
 use App\Http\Controllers\EmployeeProfileController;
 use App\Http\Controllers\KraepelinController;
 use App\Http\Controllers\WarteggTestController;
+use App\Http\Controllers\HitunganController;
+use App\Http\Controllers\TesDeretController;
+use App\Http\Controllers\SpasialController;
 
 // app/Http/Controllers/LicenseVerificationController.php
 /*
@@ -278,6 +281,21 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     Route::prefix('ketelitian')->name('ketelitian.')->group(function () {
         Route::get('/', [KetelitianController::class, 'index'])->name('index');
             Route::post('/submit', [KetelitianController::class, 'submit'])->name('submit'); // tambah route submit
+
+    });
+    Route::prefix('hitungan')->name('hitungan.')->group(function () {
+        Route::get('/', [HitunganController::class, 'index'])->name('index');
+            Route::post('/submit', [HitunganController::class, 'submit'])->name('submit'); // tambah route submit
+
+    });
+    Route::prefix('deret')->name('deret.')->group(function () {
+        Route::get('/', [TesDeretController::class, 'index'])->name('index');
+            Route::post('/submit', [TesDeretController::class, 'submit'])->name('submit'); // tambah route submit
+
+    });
+    Route::prefix('spasial')->name('spasial.')->group(function () {
+        Route::get('/', [SpasialController::class, 'index'])->name('index');
+            Route::post('/submit', [SpasialController::class, 'submit'])->name('submit'); // tambah route submit
 
     });
 

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600">
+  <!-- kotak putih besar -->
+  <!-- <rect x="230" y="280" width="150" height="150" fill="white" stroke="black" stroke-width="3"/> -->
+
+  <!-- dua garis: horizontal di kanan, vertikal di atas -->
+  <!-- garis horizontal di kanan (lebih panjang) -->
+  <line x1="100" y1="70" x2="550" y2="70" stroke="black" stroke-width="8"/>
+  <!-- garis vertikal di atas (lebih panjang) -->
+  <line x1="700" y1="170" x2="700" y2="370" stroke="black" stroke-width="10"/>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+  <!-- Kotak -->
+  <!-- <rect x="230" y="100" width="150" height="150" fill="white" stroke="black" stroke-width="3"/> -->
+
+  <!-- Lengkungan U keluar (dibalik arah kuadratik) -->
+  <g transform="translate(-250,-100) scale(1.5)">
+    <path d="M 260 170 Q 305 140 350 170" fill="none" stroke="black" stroke-width="2"/>
+  </g>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="880">
+  <!-- kotak putih besar -->
+  <!-- <rect x="50" y="100" width="150" height="150" fill="white" stroke="black" stroke-width="3"/> -->
+
+  <rect 
+    x="657.5"  
+    y="167.5" 
+    width="60" 
+    height="60" 
+    fill="black"/>
+</svg>

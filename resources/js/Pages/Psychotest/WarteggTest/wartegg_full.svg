@@ -1,0 +1,55 @@
+<svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+  <!-- Title -->
+  <text x="400" y="40" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="black">TEST WARTEGG</text>
+  
+  <!-- Top row number boxes -->
+  <rect x="50" y="60" width="30" height="20" fill="none" stroke="black" stroke-width="1"/>
+  <rect x="230" y="60" width="30" height="20" fill="none" stroke="black" stroke-width="1"/>
+  <rect x="410" y="60" width="30" height="20" fill="none" stroke="black" stroke-width="1"/>
+  <rect x="590" y="60" width="30" height="20" fill="none" stroke="black" stroke-width="1"/>
+  
+  <!-- Top row of test boxes -->
+  <!-- Box 1: Single dot -->
+  <rect x="50" y="100" width="150" height="150" fill="white" stroke="black" stroke-width="3"/>
+  <circle cx="125" cy="175" r="3" fill="black"/>
+  
+  <!-- Box 2: Curved line (wave) -->
+  <rect x="230" y="100" width="150" height="150" fill="white" stroke="black" stroke-width="3"/>
+  <path d="M 260 160 Q 290 140 320 160 Q 350 180 380 160" fill="none" stroke="black" stroke-width="2"/>
+  
+  <!-- Box 3: Three vertical lines -->
+  <rect x="410" y="100" width="150" height="150" fill="white" stroke="black" stroke-width="3"/>
+  <line x1="460" y1="200" x2="460" y2="230" stroke="black" stroke-width="2"/>
+  <line x1="485" y1="190" x2="485" y2="240" stroke="black" stroke-width="2"/>
+  <line x1="510" y1="180" x2="510" y2="220" stroke="black" stroke-width="2"/>
+  
+  <!-- Box 4: Small square -->
+  <rect x="590" y="100" width="150" height="150" fill="white" stroke="black" stroke-width="3"/>
+  <rect x="650" y="140" width="15" height="15" fill="black"/>
+  
+  <!-- Bottom row of test boxes -->
+  <!-- Box 5: Your uploaded SVG -->
+  <rect x="50" y="280" width="150" height="150" fill="white" stroke="black" stroke-width="3"/>
+  <svg x="50" y="280" width="150" height="150" viewBox="0 0 1200 630" preserveAspectRatio="xMidYMid meet">
+    <image href="Screenshot-2025-08-26-at-11.23.32 (1).svg" width="1200" height="630" />
+  </svg>
+  
+  <!-- Box 6: Horizontal line with vertical line -->
+  <rect x="230" y="280" width="150" height="150" fill="white" stroke="black" stroke-width="3"/>
+  <line x1="260" y1="340" x2="350" y2="340" stroke="black" stroke-width="2"/>
+  <line x1="305" y1="320" x2="305" y2="410" stroke="black" stroke-width="2"/>
+  
+  <!-- Box 7: Small arc/curve -->
+  <rect x="410" y="280" width="150" height="150" fill="white" stroke="black" stroke-width="3"/>
+  <path d="M 460 370 Q 485 350 510 370" fill="none" stroke="black" stroke-width="2"/>
+  
+  <!-- Box 8: Large arc -->
+  <rect x="590" y="280" width="150" height="150" fill="white" stroke="black" stroke-width="3"/>
+  <path d="M 620 350 Q 665 320 710 350" fill="none" stroke="black" stroke-width="2"/>
+  
+  <!-- Bottom row number boxes -->
+  <rect x="50" y="450" width="30" height="20" fill="none" stroke="black" stroke-width="1"/>
+  <rect x="230" y="450" width="30" height="20" fill="none" stroke="black" stroke-width="1"/>
+  <rect x="410" y="450" width="30" height="20" fill="none" stroke="black" stroke-width="1"/>
+  <rect x="590" y="450" width="30" height="20" fill="none" stroke="black" stroke-width="1"/>
+</svg>

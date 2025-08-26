@@ -21,11 +21,11 @@ export default function AuthenticatedLayout({ header, children, hideSidebar = fa
     const user = auth && auth.user ? auth.user : null;
     const [isDark, setIsDark] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-      const [isPsikotesOpen, setIsPsikotesOpen] = useState(false);
+    const [isPsikotesOpen, setIsPsikotesOpen] = useState(false);
 
-  const togglePsikotes = () => {
-    setIsPsikotesOpen(!isPsikotesOpen);
-  };
+    const togglePsikotes = () => {
+        setIsPsikotesOpen(!isPsikotesOpen);
+    };
 
     // Define forklift operator NIKs
     const forkliftOperatorNiks = [
@@ -248,49 +248,71 @@ export default function AuthenticatedLayout({ header, children, hideSidebar = fa
                                                 }`}
                                         >
                                             <span className="block">Lunch Coupons</span>
-                                   </NavLink>
-                                   <div>
-          <button
-            onClick={togglePsikotes}
-            className="w-full text-left py-3 md:py-4 px-3 text-sm font-medium rounded-lg flex justify-between items-center text-gray-700 dark:text-gray-200 hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-200 ease-in-out"
-          >
-            <span>Psikotes</span>
-            <span className={`transform transition-transform duration-200 ${isPsikotesOpen ? 'rotate-90' : ''}`}>▶</span>
-          </button>
+                                        </NavLink>
+                                        <div>
+                                            <button
+                                                onClick={togglePsikotes}
+                                                className="w-full text-left py-3 md:py-4 px-3 text-sm font-medium rounded-lg flex justify-between items-center text-gray-700 dark:text-gray-200 hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-200 ease-in-out"
+                                            >
+                                                <span>Psikotes</span>
+                                                <span className={`transform transition-transform duration-200 ${isPsikotesOpen ? 'rotate-90' : ''}`}>▶</span>
+                                            </button>
 
-          {isPsikotesOpen && (
-            <div className="pl-4 mt-2 space-y-1">
-              <NavLink
-                href={route('kraepelin.index')}
-                active={route().current('kraepelin.index')}
-                className="block py-2 px-3 text-sm rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
-              >
-                Kraepelin
-              </NavLink>
-              <NavLink
-                href={route('wartegg.index')}
-                active={route().current('wartegg.index')}
-                className="block py-2 px-3 text-sm rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
-              >
-                Wartegg
-              </NavLink>
-              <NavLink
-                href={route('analogi.index')}
-                active={route().current('analogi.index')}
-                className="block py-2 px-3 text-sm rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
-              >
-                Analogi
-              </NavLink>
-              <NavLink
-                href={route('ketelitian.index')}
-                active={route().current('ketelitian.index')}
-                className="block py-2 px-3 text-sm rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
-              >
-                Ketelitian
-              </NavLink>
-            </div>
-          )}
-        </div>
+                                            {isPsikotesOpen && (
+                                                <div className="pl-4 mt-2 space-y-1">
+                                                    <NavLink
+                                                        href={route('kraepelin.index')}
+                                                        active={route().current('kraepelin.index')}
+                                                        className="block py-2 px-3 text-sm rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
+                                                    >
+                                                        Kraepelin
+                                                    </NavLink>
+                                                    <NavLink
+                                                        href={route('wartegg.index')}
+                                                        active={route().current('wartegg.index')}
+                                                        className="block py-2 px-3 text-sm rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
+                                                    >
+                                                        Wartegg
+                                                    </NavLink>
+                                                    <NavLink
+                                                        href={route('analogi.index')}
+                                                        active={route().current('analogi.index')}
+                                                        className="block py-2 px-3 text-sm rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
+                                                    >
+                                                        Analogi
+                                                    </NavLink>
+                                                    <NavLink
+                                                        href={route('ketelitian.index')}
+                                                        active={route().current('ketelitian.index')}
+                                                        className="block py-2 px-3 text-sm rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
+                                                    >
+                                                        Ketelitian
+                                                    </NavLink>
+                                                    <NavLink
+                                                        href={route('hitungan.index')}
+                                                        active={route().current('hitungan.index')}
+                                                        className="block py-2 px-3 text-sm rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
+                                                    >
+                                                        Hitungan Cepat
+                                                    </NavLink>
+                                                     <NavLink
+                                                        href={route('deret.index')}
+                                                        active={route().current('deret.index')}
+                                                        className="block py-2 px-3 text-sm rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
+                                                    >
+                                                        Tes Deret
+                                                    </NavLink>
+                                                     <NavLink
+                                                        href={route('spasial.index')}
+                                                        active={route().current('spasial.index')}
+                                                        className="block py-2 px-3 text-sm rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
+                                                    >
+                                                        Spasial
+                                                    </NavLink>
+
+                                                </div>
+                                            )}
+                                        </div>
                                     </>
                                 )}
                             </>
@@ -324,7 +346,7 @@ export default function AuthenticatedLayout({ header, children, hideSidebar = fa
                                 >
                                     <span className="block">Leave Requests</span>
                                 </NavLink>
-                                
+
                                 {isForkliftOperator && (
                                     <NavLink
                                         href={route('employee.license')}
@@ -339,7 +361,7 @@ ${route().current('employee.license')
                                         <span className="block">SIO Input</span>
                                     </NavLink>
                                 )}
-                                
+
                                 <NavLink
                                     href={route('employee.employees.edit', { employee: auth.user.id })}
                                     active={route().current('employee.employees.edit')}

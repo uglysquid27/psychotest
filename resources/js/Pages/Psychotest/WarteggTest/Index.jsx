@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { useForm } from "@inertiajs/react";
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { Brush, Eraser, Minus, Circle, Square, RotateCcw, Download } from "lucide-react";
 
 export default function WarteggTest() {
     const [currentBox, setCurrentBox] = useState(0);
@@ -10,31 +9,70 @@ export default function WarteggTest() {
     const containerRef = useRef(null);
     const [drawing, setDrawing] = useState(false);
     const [context, setContext] = useState(null);
+    const [svgError, setSvgError] = useState(Array(8).fill(false));
+
+    const [currentTool, setCurrentTool] = useState("brush");
+    const [brushSize, setBrushSize] = useState(2);
+    const [brushColor, setBrushColor] = useState("#000000");
+    const [brushOpacity, setBrushOpacity] = useState(1);
+    const [isShapeMode, setIsShapeMode] = useState(false);
+    const [startPoint, setStartPoint] = useState(null);
 
     const [boxes, setBoxes] = useState([
-        { id: 1, drawing: '', story: '', completed: false },
-        { id: 2, drawing: '', story: '', completed: false },
-        { id: 3, drawing: '', story: '', completed: false },
-        { id: 4, drawing: '', story: '', completed: false },
-        { id: 5, drawing: '', story: '', completed: false },
-        { id: 6, drawing: '', story: '', completed: false },
-        { id: 7, drawing: '', story: '', completed: false },
-        { id: 8, drawing: '', story: '', completed: false },
+        { id: 1, drawing: "", story: "", completed: false },
+        { id: 2, drawing: "", story: "", completed: false },
+        { id: 3, drawing: "", story: "", completed: false },
+        { id: 4, drawing: "", story: "", completed: false },
+        { id: 5, drawing: "", story: "", completed: false },
+        { id: 6, drawing: "", story: "", completed: false },
+        { id: 7, drawing: "", story: "", completed: false },
+        { id: 8, drawing: "", story: "", completed: false },
     ]);
 
-    const { data, setData, post, errors } = useForm({
-        drawings: boxes,
-        completed_at: null,
-    });
+    // Path ke SVG - menggunakan path absolut
+    const boxSvgs = [
+        "/wartegg_file/box1.svg",
+        "/wartegg_file/box2.svg",
+        "/wartegg_file/box3.svg",
+        "/wartegg_file/box4.svg",
+        "/wartegg_file/box5.svg",
+        "/wartegg_file/box6.svg",
+        "/wartegg_file/box7.svg",
+        "/wartegg_file/box8.svg",
+    ];
 
-    const symbols = ["●", "⌒", "〓", "◻", "⌓", "| |", "⋰", "◠"];
+    // Fungsi untuk membuat SVG placeholder jika file tidak ditemukan
+    const createPlaceholderSvg = (index) => {
+        return `data:image/svg+xml;base64,${btoa(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+                <rect width="100" height="100" fill="#f0f0f0" stroke="#ccc" stroke-width="2"/>
+                <text x="50" y="50" text-anchor="middle" dominant-baseline="middle" font-family="Arial" font-size="14" fill="#666">Box ${index + 1}</text>
+            </svg>
+        `)}`;
+    };
 
-    const drawSymbol = (ctx, symbol) => {
-        ctx.font = `${ctx.canvas.width / 6}px Arial`;
-        ctx.fillStyle = "black";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(symbol, ctx.canvas.width / 2, ctx.canvas.height / 2);
+    const tools = [
+        { id: "brush", icon: Brush, name: "Brush" },
+        { id: "eraser", icon: Eraser, name: "Eraser" },
+        { id: "line", icon: Minus, name: "Line" },
+        { id: "circle", icon: Circle, name: "Circle" },
+        { id: "rectangle", icon: Square, name: "Rectangle" },
+    ];
+
+    const setupCanvas = () => {
+        if (!context) return;
+        context.lineCap = "round";
+        context.lineJoin = "round";
+        context.lineWidth = brushSize;
+        context.globalAlpha = brushOpacity;
+
+        if (currentTool === "eraser") {
+            context.globalCompositeOperation = "destination-out";
+        } else {
+            context.globalCompositeOperation = "source-over";
+            context.strokeStyle = brushColor;
+            context.fillStyle = brushColor;
+        }
     };
 
     const resizeCanvas = () => {
@@ -42,22 +80,15 @@ export default function WarteggTest() {
         const canvas = canvasRef.current;
         const parentWidth = containerRef.current.offsetWidth;
         const size = Math.min(parentWidth - 20, 400);
-        
-        // Only resize if dimensions actually changed
+
         if (canvas.width !== size || canvas.height !== size) {
             const currentDrawing = boxes[currentBox].drawing;
             canvas.width = size;
             canvas.height = size;
-            
-            // Reinitialize context after resize
-            const ctx = canvas.getContext('2d');
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = '#000000';
+
+            const ctx = canvas.getContext("2d");
             setContext(ctx);
-            
-            // Redraw content
+
             if (currentDrawing) {
                 const img = new Image();
                 img.onload = () => {
@@ -66,8 +97,27 @@ export default function WarteggTest() {
                 };
                 img.src = currentDrawing;
             } else {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                drawSymbol(ctx, symbols[currentBox]);
+                // Coba load SVG, jika error gunakan placeholder
+                const svg = new Image();
+                svg.onload = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(svg, 0, 0, canvas.width, canvas.height);
+                };
+                svg.onerror = () => {
+                    // Jika SVG gagal dimuat, gunakan placeholder
+                    const placeholder = new Image();
+                    placeholder.onload = () => {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(placeholder, 0, 0, canvas.width, canvas.height);
+                    };
+                    placeholder.src = createPlaceholderSvg(currentBox);
+                    
+                    // Tandai bahwa SVG ini error
+                    const newSvgError = [...svgError];
+                    newSvgError[currentBox] = true;
+                    setSvgError(newSvgError);
+                };
+                svg.src = boxSvgs[currentBox];
             }
         }
     };
@@ -75,7 +125,23 @@ export default function WarteggTest() {
     const resetCanvas = () => {
         if (context && canvasRef.current) {
             context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-            drawSymbol(context, symbols[currentBox]);
+            
+            // Coba load SVG, jika error gunakan placeholder
+            const svg = new Image();
+            svg.onload = () => {
+                context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+                context.drawImage(svg, 0, 0, canvasRef.current.width, canvasRef.current.height);
+            };
+            svg.onerror = () => {
+                const placeholder = new Image();
+                placeholder.onload = () => {
+                    context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+                    context.drawImage(placeholder, 0, 0, canvasRef.current.width, canvasRef.current.height);
+                };
+                placeholder.src = createPlaceholderSvg(currentBox);
+            };
+            svg.src = boxSvgs[currentBox];
+            
             setHasUnsavedChanges(false);
         }
     };
@@ -86,12 +152,11 @@ export default function WarteggTest() {
         return () => window.removeEventListener("resize", resizeCanvas);
     }, []);
 
-    // Effect untuk menangani perubahan box
     useEffect(() => {
         if (context && canvasRef.current) {
             const canvas = canvasRef.current;
             context.clearRect(0, 0, canvas.width, canvas.height);
-            
+
             if (boxes[currentBox].drawing) {
                 const img = new Image();
                 img.onload = () => {
@@ -99,41 +164,114 @@ export default function WarteggTest() {
                 };
                 img.src = boxes[currentBox].drawing;
             } else {
-                drawSymbol(context, symbols[currentBox]);
+                // Coba load SVG, jika error gunakan placeholder
+                const svg = new Image();
+                svg.onload = () => {
+                    context.clearRect(0, 0, canvas.width, canvas.height);
+                    context.drawImage(svg, 0, 0, canvas.width, canvas.height);
+                };
+                svg.onerror = () => {
+                    const placeholder = new Image();
+                    placeholder.onload = () => {
+                        context.clearRect(0, 0, canvas.width, canvas.height);
+                        context.drawImage(placeholder, 0, 0, canvas.width, canvas.height);
+                    };
+                    placeholder.src = createPlaceholderSvg(currentBox);
+                    
+                    // Tandai bahwa SVG ini error
+                    const newSvgError = [...svgError];
+                    newSvgError[currentBox] = true;
+                    setSvgError(newSvgError);
+                };
+                svg.src = boxSvgs[currentBox];
             }
-            
-            // Reset drawing state saat pindah box
+
             setHasUnsavedChanges(false);
             setDrawing(false);
         }
-    }, [currentBox, boxes]);
+    }, [currentBox, boxes, context]);
+
+    useEffect(() => {
+        setupCanvas();
+    }, [context, currentTool, brushSize, brushColor, brushOpacity]);
+
+    const getMousePos = (e) => {
+        const rect = canvasRef.current.getBoundingClientRect();
+        return {
+            x: (e.clientX || e.touches[0].clientX) - rect.left,
+            y: (e.clientY || e.touches[0].clientY) - rect.top,
+        };
+    };
 
     const startDrawing = (e) => {
         if (!context) return;
-        const rect = canvasRef.current.getBoundingClientRect();
-        context.beginPath();
-        context.moveTo(
-            (e.clientX || e.touches[0].clientX) - rect.left,
-            (e.clientY || e.touches[0].clientY) - rect.top
-        );
-        setDrawing(true);
+        const pos = getMousePos(e);
+
+        if (["line", "circle", "rectangle"].includes(currentTool)) {
+            setStartPoint(pos);
+            setIsShapeMode(true);
+        } else {
+            setupCanvas();
+            context.beginPath();
+            context.moveTo(pos.x, pos.y);
+            setDrawing(true);
+        }
         setHasUnsavedChanges(true);
     };
 
     const draw = (e) => {
-        if (!drawing || !context) return;
-        const rect = canvasRef.current.getBoundingClientRect();
-        context.lineTo(
-            (e.clientX || e.touches[0].clientX) - rect.left,
-            (e.clientY || e.touches[0].clientY) - rect.top
-        );
-        context.stroke();
+        if (!context) return;
+        const pos = getMousePos(e);
+
+        if (isShapeMode) return;
+        if (!drawing) return;
+
+        setupCanvas();
+        if (currentTool === "brush" || currentTool === "eraser") {
+            context.lineTo(pos.x, pos.y);
+            context.stroke();
+        }
     };
 
-    const stopDrawing = () => {
+    const stopDrawing = (e) => {
         if (!context) return;
-        context.closePath();
-        setDrawing(false);
+
+        if (isShapeMode && startPoint) {
+            const pos = getMousePos(e);
+            drawShape(startPoint, pos);
+            setIsShapeMode(false);
+            setStartPoint(null);
+        }
+
+        if (drawing) {
+            context.closePath();
+            setDrawing(false);
+        }
+    };
+
+    const drawShape = (start, end) => {
+        if (!context) return;
+        setupCanvas();
+        context.beginPath();
+
+        switch (currentTool) {
+            case "line":
+                context.moveTo(start.x, start.y);
+                context.lineTo(end.x, end.y);
+                context.stroke();
+                break;
+            case "circle":
+                const radius = Math.sqrt(Math.pow(end.x - start.x, 2) + Math.pow(end.y - start.y, 2));
+                context.arc(start.x, start.y, radius, 0, 2 * Math.PI);
+                context.stroke();
+                break;
+            case "rectangle":
+                const width = end.x - start.x;
+                const height = end.y - start.y;
+                context.rect(start.x, start.y, width, height);
+                context.stroke();
+                break;
+        }
     };
 
     const saveDrawing = () => {
@@ -146,6 +284,15 @@ export default function WarteggTest() {
         }
     };
 
+    const downloadCanvas = () => {
+        if (canvasRef.current) {
+            const link = document.createElement("a");
+            link.download = `wartegg-box-${currentBox + 1}.png`;
+            link.href = canvasRef.current.toDataURL();
+            link.click();
+        }
+    };
+
     const handleStoryChange = (e) => {
         const updatedBoxes = [...boxes];
         updatedBoxes[currentBox].story = e.target.value;
@@ -153,70 +300,57 @@ export default function WarteggTest() {
     };
 
     const navigateToBox = (index) => {
-        // Jika ada perubahan yang belum disimpan di box saat ini, simpan dulu
         if (hasUnsavedChanges) {
             saveDrawing();
         }
-        
-        // Pindah ke box yang dipilih
         setCurrentBox(index);
     };
 
     const nextBox = () => {
         if (currentBox < 7) {
-            // Save current drawing if any
-            if (hasUnsavedChanges) {
-                saveDrawing();
-            }
-            
-            // Move to next box
+            if (hasUnsavedChanges) saveDrawing();
             setCurrentBox(currentBox + 1);
         }
     };
 
     const prevBox = () => {
         if (currentBox > 0) {
-            // Save current drawing if any
-            if (hasUnsavedChanges) {
-                saveDrawing();
-            }
-            
-            // Move to previous box
+            if (hasUnsavedChanges) saveDrawing();
             setCurrentBox(currentBox - 1);
         }
     };
 
     const finishTest = () => {
-        // Save current drawing if any
-        if (hasUnsavedChanges) {
-            saveDrawing();
-        }
-        
-        // Check if all boxes are completed
-        const allCompleted = boxes.every(box => box.completed);
-        if (allCompleted) {
-            setIsFinished(true);
-        } else {
-            alert('Harap selesaikan semua gambar sebelum menyelesaikan tes.');
-        }
-    };
-
-    const confirmSubmit = () => {
-        setData({
-            drawings: boxes,
-            completed_at: new Date().toISOString(),
-        });
-        post(route('wartegg-test.store'));
+        if (hasUnsavedChanges) saveDrawing();
+        const allCompleted = boxes.every((box) => box.completed);
+        if (allCompleted) setIsFinished(true);
+        else alert("Harap selesaikan semua gambar sebelum menyelesaikan tes.");
     };
 
     const resetDrawing = () => {
         if (context && canvasRef.current) {
             context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-            drawSymbol(context, symbols[currentBox]);
+            
+            // Coba load SVG, jika error gunakan placeholder
+            const svg = new Image();
+            svg.onload = () => {
+                context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+                context.drawImage(svg, 0, 0, canvasRef.current.width, canvasRef.current.height);
+            };
+            svg.onerror = () => {
+                const placeholder = new Image();
+                placeholder.onload = () => {
+                    context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+                    context.drawImage(placeholder, 0, 0, canvasRef.current.width, canvasRef.current.height);
+                };
+                placeholder.src = createPlaceholderSvg(currentBox);
+            };
+            svg.src = boxSvgs[currentBox];
+            
             const updatedBoxes = [...boxes];
-            updatedBoxes[currentBox].drawing = '';
+            updatedBoxes[currentBox].drawing = "";
             updatedBoxes[currentBox].completed = false;
-            updatedBoxes[currentBox].story = '';
+            updatedBoxes[currentBox].story = "";
             setBoxes(updatedBoxes);
             setHasUnsavedChanges(false);
         }
@@ -229,15 +363,34 @@ export default function WarteggTest() {
         return (
             <div
                 key={boxNumber}
-                className={`relative w-20 h-20 sm:w-24 sm:h-24 border-2 flex items-center justify-center text-2xl sm:text-3xl
-                    ${isCurrent ? 'border-4 border-blue-500' : 'border-gray-800'}
-                    ${boxes[index].completed ? 'bg-green-100' : 'bg-white'}
+                className={`relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 border-2 flex items-center justify-center
+                    ${isCurrent ? "border-4 border-blue-500" : "border-gray-800"}
+                    ${boxes[index].completed ? "bg-green-100" : "bg-white"}
                     cursor-pointer transition-all duration-200 hover:scale-105`}
                 onClick={() => navigateToBox(index)}
             >
-                {symbols[index]}
+                {svgError[index] ? (
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-gray-100 text-gray-500 text-xs text-center">
+                        Box {boxNumber}
+                    </div>
+                ) : (
+                    <img 
+                        src={boxSvgs[index]} 
+                        alt={`Box ${boxNumber}`} 
+                        className="w-10 h-10 sm:w-12 sm:h-12"
+                        onError={(e) => {
+                            // Jika gambar gagal dimuat, gunakan placeholder
+                            e.target.style.display = 'none';
+                            const newSvgError = [...svgError];
+                            newSvgError[index] = true;
+                            setSvgError(newSvgError);
+                        }}
+                    />
+                )}
                 {boxes[index].completed && (
-                    <span className="absolute bottom-1 right-1 text-green-600 text-xs font-bold">✔</span>
+                    <span className="absolute bottom-1 right-1 text-green-600 text-xs font-bold">
+                        ✔
+                    </span>
                 )}
                 {isCurrent && (
                     <span className="absolute top-1 right-1 text-blue-500 text-xs font-bold">•</span>
@@ -247,168 +400,139 @@ export default function WarteggTest() {
     };
 
     return (
-        <AuthenticatedLayout
-            header={<h2 className="font-semibold text-gray-800 dark:text-gray-200 text-xl leading-tight">Tes Wartegg</h2>}
-        >
-            <div className="min-h-screen bg-gray-100 py-4">
-                <div className="container mx-auto px-4">
-                    <div className="bg-white border border-gray-300 p-4 sm:p-6 rounded-lg shadow-md">
+        <div className="min-h-screen bg-gray-100 py-4">
+            <div className="container mx-auto px-2 sm:px-4">
+                <div className="bg-white border border-gray-300 p-3 sm:p-6 rounded-lg shadow-md">
+                    <h1 className="text-xl sm:text-2xl font-bold text-center mb-4 sm:mb-6">TEST WARTEGG</h1>
 
-                        {/* Grid box */}
-                        <div className="grid grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8 justify-center">
-                            {[1,2,3,4,5,6,7,8].map(renderBox)}
+                    {/* Informasi jika SVG tidak ditemukan */}
+                    {svgError.some(error => error) && (
+                        <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-3 mb-3 sm:p-4 sm:mb-4 text-sm sm:text-base" role="alert">
+                            <p className="font-bold">Perhatian</p>
+                            <p>Beberapa gambar SVG tidak dapat dimuat. Aplikasi menggunakan placeholder sebagai pengganti.</p>
                         </div>
+                    )}
 
-                        {/* Progress indicator */}
-                        <div className="mb-6">
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="text-sm font-medium">Progress: {boxes.filter(b => b.completed).length} dari 8</span>
-                                <span className="text-sm font-medium">Kotak {currentBox + 1} dari 8</span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                <div 
-                                    className="bg-blue-600 h-2.5 rounded-full" 
-                                    style={{ width: `${(boxes.filter(b => b.completed).length / 8) * 100}%` }}
-                                ></div>
-                            </div>
-                        </div>
+                    {/* Grid box */}
+                    <div className="grid grid-cols-4 gap-2 sm:gap-3 md:gap-4 mb-4 sm:mb-6 md:mb-8 justify-center">
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map(renderBox)}
+                    </div>
 
-                        {/* Canvas + Story */}
-                        {!isFinished && (
-                            <div className="flex flex-col md:flex-row gap-6 sm:gap-8 mb-8">
-                                <div ref={containerRef} className="flex-1">
-                                    <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-center">
-                                        Gambar pada Kotak {currentBox + 1} - {symbols[currentBox]}
-                                    </h3>
-                                    <div className="border-2 border-gray-300 rounded-lg p-3 sm:p-4 bg-white">
-                                        <canvas
-                                            ref={canvasRef}
-                                            onMouseDown={startDrawing}
-                                            onMouseMove={draw}
-                                            onMouseUp={stopDrawing}
-                                            onMouseLeave={stopDrawing}
-                                            onTouchStart={(e) => { e.preventDefault(); startDrawing(e); }}
-                                            onTouchMove={(e) => { e.preventDefault(); draw(e); }}
-                                            onTouchEnd={stopDrawing}
-                                            className="border border-gray-300 cursor-crosshair w-full h-auto mx-auto"
-                                            style={{ touchAction: 'none', maxWidth: "100%", aspectRatio: "1/1" }}
-                                        />
-                                        <div className="mt-3 flex justify-center gap-2">
-                                            <button onClick={resetDrawing} className="px-3 py-2 bg-red-500 text-white rounded-md text-sm">
-                                                Hapus
-                                            </button>
-                                            <button 
-                                                onClick={saveDrawing} 
-                                                disabled={!hasUnsavedChanges}
-                                                className="px-3 py-2 bg-blue-600 text-white rounded-md text-sm disabled:opacity-50"
-                                            >
-                                                Simpan
-                                            </button>
-                                        </div>
-                                        {boxes[currentBox].completed && !hasUnsavedChanges && (
-                                            <p className="text-green-600 text-sm mt-2 text-center">✔ Gambar tersimpan</p>
-                                        )}
-                                        {hasUnsavedChanges && (
-                                            <p className="text-yellow-600 text-sm mt-2 text-center">⚠ Perubahan belum disimpan</p>
-                                        )}
+                    {/* Canvas + Story */}
+                    {!isFinished && (
+                        <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 md:gap-8 mb-6 sm:mb-8">
+                            <div ref={containerRef} className="flex-1">
+                                <h3 className="text-sm sm:text-base md:text-lg font-semibold mb-2 sm:mb-3 md:mb-4 text-center">
+                                    Gambar pada Kotak {currentBox + 1}
+                                </h3>
+                                <div className="border-2 border-gray-300 rounded-lg p-2 sm:p-3 md:p-4 bg-white">
+                                    <canvas
+                                        ref={canvasRef}
+                                        onMouseDown={startDrawing}
+                                        onMouseMove={draw}
+                                        onMouseUp={stopDrawing}
+                                        onMouseLeave={stopDrawing}
+                                        onTouchStart={(e) => {
+                                            e.preventDefault();
+                                            startDrawing(e);
+                                        }}
+                                        onTouchMove={(e) => {
+                                            e.preventDefault();
+                                            draw(e);
+                                        }}
+                                        onTouchEnd={stopDrawing}
+                                        className="border border-gray-300 cursor-crosshair w-full h-auto mx-auto"
+                                        style={{
+                                            touchAction: "none",
+                                            maxWidth: "100%",
+                                            aspectRatio: "1/1",
+                                            cursor: currentTool === "eraser" ? "crosshair" : "default",
+                                        }}
+                                    />
+                                    <div className="mt-2 sm:mt-3 flex flex-wrap justify-center gap-2">
+                                        <button
+                                            onClick={resetDrawing}
+                                            className="px-2 sm:px-3 py-1 sm:py-2 bg-red-500 text-white rounded-md text-xs sm:text-sm flex items-center gap-1"
+                                        >
+                                            <RotateCcw size={14} className="hidden sm:block" />
+                                            Reset
+                                        </button>
+                                        <button
+                                            onClick={saveDrawing}
+                                            disabled={!hasUnsavedChanges}
+                                            className="px-2 sm:px-3 py-1 sm:py-2 bg-blue-600 text-white rounded-md text-xs sm:text-sm disabled:opacity-50"
+                                        >
+                                            Simpan
+                                        </button>
+                                        <button
+                                            onClick={downloadCanvas}
+                                            className="px-2 sm:px-3 py-1 sm:py-2 bg-green-500 text-white rounded-md text-xs sm:text-sm flex items-center gap-1"
+                                        >
+                                            <Download size={14} className="hidden sm:block" />
+                                            Download
+                                        </button>
                                     </div>
                                 </div>
-                                <div className="flex-1">
-                                    <h3 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 text-center">Cerita Gambar</h3>
-                                    <textarea
-                                        value={boxes[currentBox].story}
-                                        onChange={handleStoryChange}
-                                        placeholder="Tuliskan cerita tentang gambar yang Anda buat..."
-                                        className="w-full h-48 sm:h-64 p-3 sm:p-4 border border-gray-300 rounded-lg resize-none text-sm sm:text-base"
-                                    />
-                                    <p className="text-gray-500 text-xs mt-1">Cerita akan otomatis tersimpan saat Anda mengetik</p>
-                                </div>
                             </div>
-                        )}
-
-                        {/* PREVIEW MODE */}
-                        {isFinished && (
-                            <div className="mb-8">
-                                <h3 className="text-lg sm:text-xl font-bold mb-4 text-center">Preview Hasil Wartegg</h3>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    {boxes.map((box, i) => (
-                                        <div key={i} className="border rounded-lg p-2 flex flex-col bg-gray-50">
-                                            <div className="text-center text-2xl mb-1">{symbols[i]}</div>
-                                            {box.drawing ? (
-                                                <img src={box.drawing} alt={`Box ${i+1}`} className="w-full h-32 object-contain border rounded"/>
-                                            ) : (
-                                                <div className="w-full h-32 flex items-center justify-center text-gray-400 border rounded">(Kosong)</div>
-                                            )}
-                                            <p className="mt-2 text-sm text-gray-700">{box.story || "(Tidak ada cerita)"}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="flex justify-center mt-6 gap-4">
-                                    <button 
-                                        onClick={() => setIsFinished(false)} 
-                                        className="px-6 py-3 bg-gray-500 text-white rounded-lg shadow"
-                                    >
-                                        Kembali Edit
-                                    </button>
-                                    <button 
-                                        onClick={confirmSubmit} 
-                                        className="px-6 py-3 bg-green-600 text-white rounded-lg shadow"
-                                    >
-                                        Konfirmasi & Kirim
-                                    </button>
-                                </div>
+                            <div className="flex-1">
+                                <h3 className="text-sm sm:text-base md:text-lg font-semibold mb-2 sm:mb-3 md:mb-4 text-center">
+                                    Cerita Gambar
+                                </h3>
+                                <textarea
+                                    value={boxes[currentBox].story}
+                                    onChange={handleStoryChange}
+                                    placeholder="Tuliskan cerita tentang gambar yang Anda buat..."
+                                    className="w-full h-40 sm:h-48 md:h-64 p-2 sm:p-3 md:p-4 border border-gray-300 rounded-lg resize-none text-xs sm:text-sm md:text-base"
+                                />
                             </div>
-                        )}
+                        </div>
+                    )}
 
-                        {/* Navigation */}
-                        {!isFinished && (
-                            <div className="flex justify-between">
+                    {/* Navigation */}
+                    {!isFinished && (
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
+                            <button
+                                onClick={prevBox}
+                                disabled={currentBox === 0}
+                                className="px-3 sm:px-4 md:px-6 py-1 sm:py-2 bg-gray-500 text-white rounded-md disabled:opacity-50 text-xs sm:text-sm md:text-base w-full sm:w-auto"
+                            >
+                                ← Sebelumnya
+                            </button>
+                            <div className="flex flex-wrap justify-center gap-1 sm:gap-2 order-first sm:order-none mb-2 sm:mb-0">
+                                {[0, 1, 2, 3, 4, 5, 6, 7].map((index) => (
+                                    <button
+                                        key={index}
+                                        onClick={() => navigateToBox(index)}
+                                        className={`w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm
+                                            ${currentBox === index
+                                                ? "bg-blue-500 text-white"
+                                                : boxes[index].completed
+                                                ? "bg-green-100 text-green-800"
+                                                : "bg-gray-200 text-gray-800"}`}
+                                    >
+                                        {index + 1}
+                                    </button>
+                                ))}
+                            </div>
+                            {currentBox < 7 ? (
                                 <button
-                                    onClick={prevBox}
-                                    disabled={currentBox === 0}
-                                    className="px-4 sm:px-6 py-2 bg-gray-500 text-white rounded-md disabled:opacity-50 text-sm sm:text-base"
+                                    onClick={nextBox}
+                                    className="px-3 sm:px-4 md:px-6 py-1 sm:py-2 bg-blue-600 text-white rounded-md text-xs sm:text-sm md:text-base w-full sm:w-auto"
                                 >
-                                    ← Sebelumnya
+                                    Berikutnya →
                                 </button>
-                                <div className="flex gap-2">
-                                    {[0,1,2,3,4,5,6,7].map(index => (
-                                        <button
-                                            key={index}
-                                            onClick={() => navigateToBox(index)}
-                                            className={`w-8 h-8 rounded-full flex items-center justify-center text-sm
-                                                ${currentBox === index ? 'bg-blue-500 text-white' : 
-                                                  boxes[index].completed ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-800'}`}
-                                        >
-                                            {index+1}
-                                        </button>
-                                    ))}
-                                </div>
-                                {currentBox < 7 ? (
-                                    <button
-                                        onClick={nextBox}
-                                        className="px-4 sm:px-6 py-2 bg-blue-600 text-white rounded-md text-sm sm:text-base"
-                                    >
-                                        Berikutnya →
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={finishTest}
-                                        className="px-4 sm:px-6 py-2 bg-green-600 text-white rounded-md text-sm sm:text-base"
-                                    >
-                                        Selesaikan Tes
-                                    </button>
-                                )}
-                            </div>
-                        )}
-
-                        {errors.drawings && (
-                            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm sm:text-base">
-                                {errors.drawings}
-                            </div>
-                        )}
-                    </div>
+                            ) : (
+                                <button
+                                    onClick={finishTest}
+                                    className="px-3 sm:px-4 md:px-6 py-1 sm:py-2 bg-green-600 text-white rounded-md text-xs sm:text-sm md:text-base w-full sm:w-auto"
+                                >
+                                    Selesaikan Tes
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
-        </AuthenticatedLayout>
+        </div>
     );
 }
