@@ -65,7 +65,7 @@ export default function Login({ status, canResetPassword }) {
                     <div className="mb-5">
                         <InputLabel
                             htmlFor="credential"
-                            value="Email / NIK"
+                            value="NIK"
                             className="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-300"
                         />
 
@@ -78,7 +78,7 @@ export default function Login({ status, canResetPassword }) {
                             autoComplete="username"
                             isFocused={true}
                             onChange={(e) => setData('credential', e.target.value)}
-                            placeholder="Masukkan Email atau NIK"
+                            placeholder="Masukkan NIK"
                         />
 
                         <InputError
