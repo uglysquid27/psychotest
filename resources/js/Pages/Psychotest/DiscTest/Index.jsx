@@ -49,45 +49,71 @@ export default function DiscTest({ initialQuestions = [] }) {
     };
 
     const handleAnswer = (optionIndex, value) => {
-        const newAnswers = [...userAnswers];
-        const currentAnswer = { ...newAnswers[currentIndex] };
-
-        // Create a copy of current options
-        const newOptions = [...currentAnswer.options];
-
-        // If selecting M, remove any existing M first
+    const newAnswers = [...userAnswers];
+    const currentAnswer = { ...newAnswers[currentIndex] };
+    
+    // Create a copy of current options
+    const newOptions = [...currentAnswer.options];
+    
+    // If we're setting a value programmatically (from the new logic)
+    if (value) {
         if (value === 'M') {
+            // Remove any existing M first
             const currentMIndex = newOptions.findIndex(opt => opt === 'M');
             if (currentMIndex !== -1) {
                 newOptions[currentMIndex] = null;
             }
             newOptions[optionIndex] = 'M';
-        }
-        // If selecting L, remove any existing L first
+        } 
         else if (value === 'L') {
+            // Remove any existing L first
             const currentLIndex = newOptions.findIndex(opt => opt === 'L');
             if (currentLIndex !== -1) {
                 newOptions[currentLIndex] = null;
             }
             newOptions[optionIndex] = 'L';
         }
-        // If deselecting (setting to null), just set to null
-        else {
+    } 
+    // If clicking without a predefined value (the new logic)
+    else {
+        const currentValue = newOptions[optionIndex];
+        const hasM = newOptions.includes('M');
+        const hasL = newOptions.includes('L');
+        
+        // If clicking on an already selected option, deselect it
+        if (currentValue === 'M' || currentValue === 'L') {
             newOptions[optionIndex] = null;
+        } 
+        // If no M selected yet, set this one to M
+        else if (!hasM) {
+            newOptions[optionIndex] = 'M';
+        } 
+        // If M is selected but no L, set this one to L
+        else if (hasM && !hasL) {
+            newOptions[optionIndex] = 'L';
+        } 
+        // If both M and L are already selected, replace L with this new selection
+        else if (hasM && hasL) {
+            const currentLIndex = newOptions.findIndex(opt => opt === 'L');
+            if (currentLIndex !== -1) {
+                newOptions[currentLIndex] = null;
+            }
+            newOptions[optionIndex] = 'L';
         }
+    }
 
-        currentAnswer.options = newOptions;
+    currentAnswer.options = newOptions;
 
-        // Update most and least based on the options
-        const mostIndex = newOptions.findIndex(opt => opt === 'M');
-        const leastIndex = newOptions.findIndex(opt => opt === 'L');
+    // Update most and least based on the options
+    const mostIndex = newOptions.findIndex(opt => opt === 'M');
+    const leastIndex = newOptions.findIndex(opt => opt === 'L');
 
-        currentAnswer.most = mostIndex !== -1 ? mostIndex : null;
-        currentAnswer.least = leastIndex !== -1 ? leastIndex : null;
+    currentAnswer.most = mostIndex !== -1 ? mostIndex : null;
+    currentAnswer.least = leastIndex !== -1 ? leastIndex : null;
 
-        newAnswers[currentIndex] = currentAnswer;
-        setUserAnswers(newAnswers);
-    };
+    newAnswers[currentIndex] = currentAnswer;
+    setUserAnswers(newAnswers);
+};
 
     const handleNext = () => {
         if (currentIndex < questions.length - 1) setCurrentIndex(currentIndex + 1);
@@ -254,7 +280,7 @@ export default function DiscTest({ initialQuestions = [] }) {
                                                         newValue = null;
                                                     }
 
-                                                    handleAnswer(optionIndex, newValue);
+                                                    handleAnswer(optionIndex);
                                                 }}
                                             >
                                                 <div className="flex items-start">
@@ -281,7 +307,8 @@ export default function DiscTest({ initialQuestions = [] }) {
                                     <svg className="w-5 h-5 inline-block mr-2 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
-                                    Klik pada pernyataan untuk mengubah nilai: M (Paling Cocok) atau L (Paling Tidak Cocok). Pastikan ada satu M dan satu L untuk setiap soal.
+                                    Klik pada pernyataan untuk mengubah nilai: M (Paling Cocok) atau L (Paling Tidak Cocok). Pastikan ada satu M dan satu L untuk setiap soal.<br />
+                                    Jika ingin mengubah pilihan, klik lagi pada pernyataan yang sudah diberi nilai.
                                 </div>
                             </div>
                         )}

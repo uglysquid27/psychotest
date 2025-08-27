@@ -50,32 +50,34 @@ export default function Fulfill({
             }
         }
     }, [isDarkMode]);
+    
 
     const normalizeGender = (gender) => {
         if (!gender) {
-            console.warn('Employee missing gender, defaulting to male');
+            //console.warn('Employee missing gender, defaulting to male');
             return 'male';
         }
         const normalized = gender.toString().toLowerCase().trim();
         if (normalized !== 'female' && normalized !== 'male') {
-            console.warn(`Invalid gender value: ${gender}, defaulting to male`);
+            //console.warn(`Invalid gender value: ${gender}, defaulting to male`);
             return 'male';
         }
         return normalized;
     };
 
     const combinedEmployees = useMemo(() => {
+        //console.log(sameSubSectionEmployees)
         return [
             ...sameSubSectionEmployees.map(emp => ({
                 ...emp,
-                subSections: emp.sub_sections_data || [],
+                subSections: emp.sub_sections_data || emp.sub_sections || [],
                 gender: normalizeGender(emp.gender),
                 originalGender: emp.gender,
                 isCurrentlyScheduled: currentScheduledIds.includes(emp.id)
             })),
             ...otherSubSectionEmployees.map(emp => ({
                 ...emp,
-                subSections: emp.sub_sections_data || [],
+                subSections: emp.sub_sections_data || emp.sub_sections || [],
                 gender: normalizeGender(emp.gender),
                 originalGender: emp.gender,
                 isCurrentlyScheduled: currentScheduledIds.includes(emp.id)
@@ -83,107 +85,174 @@ export default function Fulfill({
         ];
     }, [sameSubSectionEmployees, otherSubSectionEmployees, currentScheduledIds]);
 
+    
+
     const allSortedEligibleEmployees = useMemo(() => {
-        const sorted = [...combinedEmployees].sort((a, b) => {
-            if (a.isCurrentlyScheduled !== b.isCurrentlyScheduled) {
-                return a.isCurrentlyScheduled ? -1 : 1;
-            }
+    const sorted = [...combinedEmployees].sort((a, b) => {
+        if (a.isCurrentlyScheduled !== b.isCurrentlyScheduled) {
+            return a.isCurrentlyScheduled ? -1 : 1;
+        }
 
-            const aTotalScore = (a.workload_points || 0) + (a.blind_test_points || 0) + (a.average_rating || 0);
-            const bTotalScore = (b.workload_points || 0) + (b.blind_test_points || 0) + (b.average_rating || 0);
+        // PRIORITIZE SAME SUBSECTION
+        const aIsSame = a.subSections.some(ss => String(ss.id) === String(request.sub_section_id));
+const bIsSame = b.subSections.some(ss => String(ss.id) === String(request.sub_section_id));
 
-            const aGenderMatch = request.male_count > 0 && a.gender === 'male' ? 0 :
-                request.female_count > 0 && a.gender === 'female' ? 0 : 1;
-            const bGenderMatch = request.male_count > 0 && b.gender === 'male' ? 0 :
-                request.female_count > 0 && b.gender === 'female' ? 0 : 1;
-            if (aGenderMatch !== bGenderMatch) return aGenderMatch - bGenderMatch;
+        // console.log("A ini ======================")
+        // console.log("datanya ini =" + JSON.stringify(a.subSections) + " requestnya ini =" + JSON.stringify(request.sub_section_id) + " " + aIsSame)
+        // console.log("B ini ======================")
+        // console.log("datanya ini =" + JSON.stringify(b.subSections) + " requestnya ini =" + JSON.stringify(request.sub_section_id) + " " + bIsSame)
+        if (aIsSame !== bIsSame) return aIsSame ? -1 : 1;
 
-            if (aTotalScore !== bTotalScore) {
-                return bTotalScore - aTotalScore;
-            }
+        const aTotalScore = (a.workload_points || 0) + (a.blind_test_points || 0) + (a.average_rating || 0);
+        const bTotalScore = (b.workload_points || 0) + (b.blind_test_points || 0) + (b.average_rating || 0);
 
-            const aIsSame = a.subSections.some(ss => ss.id === request.sub_section_id);
-            const bIsSame = b.subSections.some(ss => ss.id === request.sub_section_id);
-            if (aIsSame !== bIsSame) return aIsSame ? -1 : 1;
+        const aGenderMatch = request.male_count > 0 && a.gender === 'male' ? 0 :
+            request.female_count > 0 && a.gender === 'female' ? 0 : 1;
+        const bGenderMatch = request.male_count > 0 && b.gender === 'male' ? 0 :
+            request.female_count > 0 && b.gender === 'female' ? 0 : 1;
+        if (aGenderMatch !== bGenderMatch) return aGenderMatch - bGenderMatch;
 
-            if (a.type === 'bulanan' && b.type === 'harian') return -1;
-            if (a.type === 'harian' && b.type === 'bulanan') return 1;
+        if (aTotalScore !== bTotalScore) {
+            return bTotalScore - aTotalScore;
+        }
 
-            if (a.type === 'harian' && b.type === 'harian') {
-                return b.working_day_weight - a.working_day_weight;
-            }
+        if (a.type === 'bulanan' && b.type === 'harian') return -1;
+        if (a.type === 'harian' && b.type === 'bulanan') return 1;
 
-            return a.id - b.id;
-        });
+        if (a.type === 'harian' && b.type === 'harian') {
+            return b.working_day_weight - a.working_day_weight;
+        }
 
-        return sorted;
-    }, [combinedEmployees, request.sub_section_id, request.male_count, request.female_count]);
+        return a.id - b.id;
+    });
+
+    return sorted;
+}, [combinedEmployees, request.sub_section_id, request.male_count, request.female_count]);
+
+useEffect(() => {
+  //console.log("All employees first few:", allSortedEligibleEmployees.slice(0, 5));
+  allSortedEligibleEmployees.slice(0, 5).forEach(e => {
+    //console.log("Emp:", e.name, "subSections:", e.subSections);
+  });
+}, [allSortedEligibleEmployees]);
+
 
     const initialSelectedIds = useMemo(() => {
-        const validCurrentIds = currentScheduledIds.filter(id => 
-            allSortedEligibleEmployees.some(e => e.id === id)
-        );
-        
-        if (validCurrentIds.length > 0) {
-            if (validCurrentIds.length < request.requested_amount) {
-                const remainingCount = request.requested_amount - validCurrentIds.length;
-                const remainingEmployees = allSortedEligibleEmployees
-                    .filter(e => !validCurrentIds.includes(e.id))
-                    .slice(0, remainingCount)
-                    .map(e => e.id);
-                
-                return [...validCurrentIds, ...remainingEmployees];
+    const validCurrentIds = currentScheduledIds.filter(id => 
+        allSortedEligibleEmployees.some(e => e.id === id)
+    );
+    
+    if (validCurrentIds.length > 0) {
+        if (validCurrentIds.length < request.requested_amount) {
+            const remainingCount = request.requested_amount - validCurrentIds.length;
+            
+            // PRIORITIZE SAME SUBSECTION FIRST
+            const remainingSameSubSection = allSortedEligibleEmployees
+                .filter(e => 
+                    !validCurrentIds.includes(e.id) && 
+                    e.subSections.some(ss => ss.id === request.sub_section_id)
+                )
+                .slice(0, remainingCount)
+                .map(e => e.id);
+            
+            if (remainingSameSubSection.length >= remainingCount) {
+                return [...validCurrentIds, ...remainingSameSubSection];
             }
-            return validCurrentIds.slice(0, request.requested_amount);
+            
+            // If not enough same subsection, get from other subsections
+            const remainingOtherSubSection = allSortedEligibleEmployees
+                .filter(e => 
+                    !validCurrentIds.includes(e.id) && 
+                    !e.subSections.some(ss => ss.id === request.sub_section_id)
+                )
+                .slice(0, remainingCount - remainingSameSubSection.length)
+                .map(e => e.id);
+            
+            return [...validCurrentIds, ...remainingSameSubSection, ...remainingOtherSubSection];
         }
+        return validCurrentIds.slice(0, request.requested_amount);
+    }
 
-        const requiredMale = request.male_count || 0;
-        const requiredFemale = request.female_count || 0;
-        const totalRequired = requiredMale + requiredFemale;
+    // Rest of the logic remains but ensure same subsection priority
+    const requiredMale = request.male_count || 0;
+    const requiredFemale = request.female_count || 0;
+    const totalRequired = requiredMale + requiredFemale;
 
-        const sameSubMales = allSortedEligibleEmployees
-            .filter(e => e.gender === 'male' && e.subSections.some(ss => ss.id === request.sub_section_id));
-        const sameSubFemales = allSortedEligibleEmployees
-            .filter(e => e.gender === 'female' && e.subSections.some(ss => ss.id === request.sub_section_id));
-        const otherSubMales = allSortedEligibleEmployees
-            .filter(e => e.gender === 'male' && !e.subSections.some(ss => ss.id === request.sub_section_id));
-        const otherSubFemales = allSortedEligibleEmployees
-            .filter(e => e.gender === 'female' && !e.subSections.some(ss => ss.id === request.sub_section_id));
+    // Get employees from same subsection first
+    const sameSubMales = allSortedEligibleEmployees
+        .filter(e => e.gender === 'male' && e.subSections.some(ss => ss.id === request.sub_section_id));
+    
+    const sameSubFemales = allSortedEligibleEmployees
+        .filter(e => e.gender === 'female' && e.subSections.some(ss => ss.id === request.sub_section_id));
 
-        const selected = [];
+    // Then from other subsections
+    const otherSubMales = allSortedEligibleEmployees
+        .filter(e => e.gender === 'male' && !e.subSections.some(ss => ss.id === request.sub_section_id));
+    
+    const otherSubFemales = allSortedEligibleEmployees
+        .filter(e => e.gender === 'female' && !e.subSections.some(ss => ss.id === request.sub_section_id));
 
-        selected.push(...sameSubMales.slice(0, requiredMale).map(e => e.id));
-        selected.push(...sameSubFemales.slice(0, requiredFemale).map(e => e.id));
+    const selected = [];
 
-        const currentMaleCount = selected.filter(id => {
-            const emp = allSortedEligibleEmployees.find(e => e.id === id);
-            return emp?.gender === 'male';
-        }).length;
+    // Always prioritize same subsection first
+    selected.push(...sameSubMales.slice(0, requiredMale).map(e => e.id));
+    selected.push(...sameSubFemales.slice(0, requiredFemale).map(e => e.id));
 
-        if (currentMaleCount < requiredMale) {
-            const needed = requiredMale - currentMaleCount;
-            selected.push(...otherSubMales.slice(0, needed).map(e => e.id));
-        }
+    // Then fill remaining from other subsections if needed
+    const currentMaleCount = selected.filter(id => {
+        const emp = allSortedEligibleEmployees.find(e => e.id === id);
+        return emp?.gender === 'male';
+    }).length;
 
-        const currentFemaleCount = selected.filter(id => {
-            const emp = allSortedEligibleEmployees.find(e => e.id === id);
-            return emp?.gender === 'female';
-        }).length;
+    if (currentMaleCount < requiredMale) {
+        const needed = requiredMale - currentMaleCount;
+        selected.push(...otherSubMales.slice(0, needed).map(e => e.id));
+    }
 
-        if (currentFemaleCount < requiredFemale) {
-            const needed = requiredFemale - currentFemaleCount;
-            selected.push(...otherSubFemales.slice(0, needed).map(e => e.id));
-        }
+    const currentFemaleCount = selected.filter(id => {
+        const emp = allSortedEligibleEmployees.find(e => e.id === id);
+        return emp?.gender === 'female';
+    }).length;
 
+    if (currentFemaleCount < requiredFemale) {
+        const needed = requiredFemale - currentFemaleCount;
+        selected.push(...otherSubFemales.slice(0, needed).map(e => e.id));
+    }
+
+    // Fill any remaining slots with same subsection employees first
+    if (selected.length < request.requested_amount) {
+        const remainingSameSub = allSortedEligibleEmployees
+            .filter(e => 
+                !selected.includes(e.id) && 
+                e.subSections.some(ss => ss.id === request.sub_section_id)
+            )
+            .slice(0, request.requested_amount - selected.length);
+        
+        selected.push(...remainingSameSub.map(e => e.id));
+        
+        // If still not enough, get from other subsections
         if (selected.length < request.requested_amount) {
-            const remaining = allSortedEligibleEmployees
-                .filter(e => !selected.includes(e.id))
+            const remainingOtherSub = allSortedEligibleEmployees
+                .filter(e => 
+                    !selected.includes(e.id) && 
+                    !e.subSections.some(ss => ss.id === request.sub_section_id)
+                )
                 .slice(0, request.requested_amount - selected.length);
-            selected.push(...remaining.map(e => e.id));
+            
+            selected.push(...remainingOtherSub.map(e => e.id));
         }
+    }
 
-        return selected.slice(0, request.requested_amount);
-    }, [allSortedEligibleEmployees, request.requested_amount, request.male_count, request.female_count, request.sub_section_id, currentScheduledIds]);
+    return selected.slice(0, request.requested_amount);
+}, [allSortedEligibleEmployees, request.requested_amount, request.male_count, request.female_count, request.sub_section_id, currentScheduledIds]);
+
+// In Fulfill.jsx, add this useEffect for debugging
+useEffect(() => {
+    //console.log('Request sub_section_id:', request.sub_section_id);
+    //console.log('Same subsection employees count:', sameSubSectionEmployees.length);
+    //console.log('Same subsection employees:', sameSubSectionEmployees);
+    //console.log('All employees first few:', allSortedEligibleEmployees.slice(0, 5));
+}, [request.sub_section_id, sameSubSectionEmployees, allSortedEligibleEmployees]);
 
     const { data, setData, post, processing, errors } = useForm({
         employee_ids: initialSelectedIds,

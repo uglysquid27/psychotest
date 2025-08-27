@@ -1,3 +1,7 @@
+const safeFixed = (num, decimals = 2) => {
+    return typeof num === "number" ? num.toFixed(decimals) : "0.00";
+};
+
 export default function EmployeeSelection({
     request,
     selectedIds,
@@ -69,7 +73,7 @@ export default function EmployeeSelection({
                                                 🏢 {employeeSubSection?.name || 'Lain'}
                                             </span>
                                             <span className="inline-block px-2 py-1 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-300">
-                                                ⭐ {employee.total_score.toFixed(2)}
+                                                ⭐ {safeFixed(employee.total_score, 2)}
                                             </span>
                                             {employee.type === 'harian' && (
                                                 <span className="inline-block px-2 py-1 rounded-full bg-cyan-100 dark:bg-cyan-900/40 text-cyan-800 dark:text-cyan-300">

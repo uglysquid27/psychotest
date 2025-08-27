@@ -61,18 +61,23 @@ export default function EmployeeModal({
         return filtered;
     }, [allSortedEligibleEmployees, searchTerm, selectedSubSection]);
 
+    // FIXED: More robust sub-section filtering
     const sameSubSectionEmployees = useMemo(() => {
+        const reqSubId = Number(request.sub_section_id);
         return filteredEmployees.filter(emp =>
-            emp.subSections.some(ss => ss.id === request.sub_section_id)
+            emp.subSections && emp.subSections.some(ss => Number(ss.id) === reqSubId)
         );
     }, [filteredEmployees, request.sub_section_id]);
-
+    
     const otherSubSectionEmployees = useMemo(() => {
+        const reqSubId = Number(request.sub_section_id);
         return filteredEmployees.filter(emp =>
-            !emp.subSections.some(ss => ss.id === request.sub_section_id)
+            !emp.subSections || !emp.subSections.some(ss => Number(ss.id) === reqSubId)
         );
     }, [filteredEmployees, request.sub_section_id]);
+    
 
+    // Rest of the component remains the same...
     const toggleEmployeeSelection = (employeeId) => {
         if (!multiSelectMode) {
             selectNewEmployee(employeeId);
@@ -194,8 +199,8 @@ export default function EmployeeModal({
                         {/* Employee Photo */}
                         <div className="mr-3 flex-shrink-0">
                             {emp.photo ? (
-                                <img 
-                                    src={`/storage/${emp.photo}`} 
+                                <img
+                                    src={`/storage/${emp.photo}`}
                                     alt={emp.name}
                                     className="w-12 h-12 rounded-full object-cover border border-gray-300 dark:border-gray-600"
                                     onError={(e) => {
@@ -204,7 +209,7 @@ export default function EmployeeModal({
                                     }}
                                 />
                             ) : null}
-                            <div 
+                            <div
                                 className={`w-12 h-12 rounded-full flex items-center justify-center border border-gray-300 dark:border-gray-600 ${emp.photo ? 'hidden' : 'bg-gray-200 dark:bg-gray-700'}`}
                             >
                                 <span className="text-gray-500 dark:text-gray-400 text-lg font-semibold">
@@ -212,7 +217,7 @@ export default function EmployeeModal({
                                 </span>
                             </div>
                         </div>
-                        
+
                         <div>
                             <strong className="text-gray-900 dark:text-gray-100">{emp.name}</strong>
                             <div className="mt-1 text-gray-500 dark:text-gray-400 text-xs">
