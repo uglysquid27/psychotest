@@ -1,127 +1,101 @@
 import { useState, useEffect, useRef } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 
-// Fungsi untuk menghasilkan soal random dengan hasil bilangan bulat
-const generateRandomQuestions = (count) => {
-  const operators = ['+', '-', '×'];
-  const questions = [];
-  
-  for (let i = 0; i < count; i++) {
-    // Tentukan jumlah operand (1-2), kurangi kompleksitas untuk hindari desimal
-    const operandCount = Math.floor(Math.random() * 2) + 1;
-    
-    if (operandCount === 1) {
-      // Soal dengan 1 operator
-      const operator = operators[Math.floor(Math.random() * operators.length)];
-      
-      if (operator === '+') {
-        const a = Math.floor(Math.random() * 100) + 1;
-        const b = Math.floor(Math.random() * 100) + 1;
-        questions.push({ a, operator, b });
-      } 
-      else if (operator === '-') {
-        const a = Math.floor(Math.random() * 100) + 50;
-        const b = Math.floor(Math.random() * 50) + 1;
-        // Pastikan a > b agar hasilnya positif
-        if (a > b) {
-          questions.push({ a, operator, b });
-        } else {
-          // Jika tidak, tukar nilai
-          questions.push({ a: b, operator, b: a });
-        }
-      }
-      else if (operator === '×') {
-        const a = Math.floor(Math.random() * 12) + 1; // Perkalian 1-12
-        const b = Math.floor(Math.random() * 12) + 1;
-        questions.push({ a, operator, b });
-      }
-    } 
-    else {
-      // Soal dengan 2 operator - hanya kombinasi sederhana
-      const operator = operators[Math.floor(Math.random() * operators.length)];
-      const operator2 = operators[Math.floor(Math.random() * operators.length)];
-      
-      // Pastikan hasilnya bulat dengan mengatur urutan operasi
-      if (operator === '+' && operator2 === '+') {
-        const a = Math.floor(Math.random() * 50) + 1;
-        const b = Math.floor(Math.random() * 50) + 1;
-        const c = Math.floor(Math.random() * 50) + 1;
-        questions.push({ a, operator, b, operator2, c });
-      }
-      else if (operator === '+' && operator2 === '-') {
-        const a = Math.floor(Math.random() * 50) + 1;
-        const b = Math.floor(Math.random() * 50) + 1;
-        const c = Math.floor(Math.random() * (a + b - 1)) + 1;
-        questions.push({ a, operator, b, operator2, c });
-      }
-      else if (operator === '-' && operator2 === '+') {
-        const a = Math.floor(Math.random() * 100) + 50;
-        const b = Math.floor(Math.random() * 50) + 1;
-        const c = Math.floor(Math.random() * 50) + 1;
-        if (a > b) {
-          questions.push({ a, operator, b, operator2, c });
-        } else {
-          questions.push({ a: b, operator, b: a, operator2, c });
-        }
-      }
-      else if (operator === '×' && operator2 === '+') {
-        const a = Math.floor(Math.random() * 10) + 1;
-        const b = Math.floor(Math.random() * 10) + 1;
-        const c = Math.floor(Math.random() * 50) + 1;
-        questions.push({ a, operator, b, operator2, c });
-      }
-      else if (operator === '×' && operator2 === '-') {
-        const a = Math.floor(Math.random() * 10) + 1;
-        const b = Math.floor(Math.random() * 10) + 1;
-        const product = a * b;
-        const c = Math.floor(Math.random() * (product - 1)) + 1;
-        questions.push({ a, operator, b, operator2, c });
-      }
-      else {
-        // Fallback ke pertanyaan sederhana
-        const a = Math.floor(Math.random() * 100) + 1;
-        const b = Math.floor(Math.random() * 100) + 1;
-        questions.push({ a, operator: '+', b });
-      }
-    }
+// Questions from the Excel file - now as a dataset for generating more questions
+const QUESTION_DATASET = [
+  // First set of questions (Hitungan Cepat 1)
+  { question: "8 + 1 + 5", answer: 14 },
+  { question: "10 x 2 x 3", answer: 60 },
+  { question: "1 - 1 x 1 - 1", answer: -1 },
+  { question: "4 x 5 : 1 - 3", answer: 17 },
+  { question: "3 x 3 : 3 + 21", answer: 24 },
+  { question: "100 x 10 : 100 - 9", answer: 1 },
+  { question: "16 x 2 : 8 - 4", answer: 0 },
+  { question: "(12 + 28 + 4 + 4) : 4", answer: 12 },
+  { question: "40 x 90 : 45 - 48", answer: 32 },
+  { question: "0.125 x 8 + 3", answer: 4 },
+  { question: "8 x 0.375 - 2", answer: 1 },
+  { question: "(10 + 41 + 9) : 60", answer: 1 },
+  { question: "7 x 14 : 49 + 9", answer: 11 },
+  { question: "18 x 12 : 2 + 7 - 87", answer: 28 },
+  { question: "4 x 9 + 29 - 7", answer: 58 },
+  { question: "3 x 4 : 3 + 84 + 9", answer: 97 },
+  { question: "(15 x 5 + 5 + 2) : 82", answer: 1 },
+  { question: "1000 : 500 + 98 - 90", answer: 10 },
+  { question: "(60 + 25 + 40 + 10) : 5", answer: 27 },
+  { question: "80 : 40 + 60 - 7", answer: 55 },
+  { question: "6 x 7 + 92 - 42", answer: 92 },
+  { question: "(5 + 74 + 4 - 2) : 9", answer: 9 },
+  { question: "99 x 9 : 99 - 8", answer: 1 },
+  { question: "85 + 43 - 40", answer: 88 },
+  { question: "160 : 16 + 20 - 30", answer: 0 },
+  { question: "(3 x 7 + 7 + 4) : 4", answer: 8 },
+  { question: "54 x 4 : 9 - 3", answer: 21 },
+  { question: "8 x 9 + 14 - 39", answer: 47 },
+  { question: "36 + 72 - 28", answer: 80 },
+  { question: "10 + 8 x 0.875", answer: 17 },
+  { question: "(8 x 2 + 2 + 10) : 4", answer: 7 },
+  { question: "17 + 86 - 82 - 2", answer: 19 },
+  { question: "6 x 7 : 6 + 17 + 20", answer: 44 },
+  { question: "6 x 60 : 5 + 5", answer: 77 },
+  { question: "490 : 49 + 65 - 75", answer: 0 },
+  { question: "2 x 3 : 3 + 2 + 8 - 6", answer: 6 },
+  { question: "8 x 9 : 9 + 8 + 4 - 2", answer: 18 },
+  { question: "45 x 45 : 45 - 4", answer: 41 },
+  { question: "8 x 7 + 14 + 5", answer: 75 },
+  { question: "(20+70+80+40) : 42", answer: 5 },
+  { question: "7 x 8 : 7 + 7 + 3 - 1", answer: 17 },
+  { question: "40 + 19 - 15 - 5", answer: 39 },
+  { question: "25 + 61 - 17", answer: 69 },
+  { question: "16 x 5 : 10 - 4", answer: 4 },
+  { question: "10 x 12 - 40 - 15", answer: 65 },
+  { question: "82 x 2 : 41 - 8", answer: -4 },
+  { question: "9 x 1 - 3 - 4", answer: 2 },
+  { question: "3 x 2 x 2 x 0 - 67 + 82", answer: 15 },
+  { question: "79 + 16 - 62", answer: 33 },
+  { question: "5 x 10 + 30 - 18", answer: 62 },
+];
+
+// Function to shuffle an array (Fisher-Yates algorithm)
+const shuffleArray = (array) => {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
   }
-  
-  return questions;
+  return newArray;
 };
 
-// Fungsi untuk menghitung hasil dari soal
-const calculateResult = (question) => {
-  let expression = '';
-  
-  if (question.operator3 && question.d) {
-    // 3 operator
-    expression = `${question.a} ${question.operator} ${question.b} ${question.operator2} ${question.c} ${question.operator3} ${question.d}`;
-  } else if (question.operator2 && question.c) {
-    // 2 operator
-    expression = `${question.a} ${question.operator} ${question.b} ${question.operator2} ${question.c}`;
-  } else {
-    // 1 operator
-    expression = `${question.a} ${question.operator} ${question.b}`;
-  }
-  
-  // Ganti simbol untuk kalkulasi
-  expression = expression.replace(/×/g, '*').replace(/÷/g, '/');
-  
-  try {
-    // Gunakan Function constructor untuk evaluasi ekspresi matematika
-    // Catatan: Dalam aplikasi produksi, gunakan parser matematika yang lebih aman
-    return eval(expression);
-  } catch (error) {
-    console.error("Error calculating result:", error);
-    return null;
-  }
+// Function to generate a random subset of questions
+const generateRandomQuestions = (count = 20) => {
+  // Shuffle the dataset and take the first 'count' questions
+  const shuffled = shuffleArray(QUESTION_DATASET);
+  return shuffled.slice(0, count);
 };
 
-// Fungsi untuk memeriksa apakah jawaban user benar
+// Function to parse a question string into a calculable expression
+const parseQuestion = (questionStr) => {
+  // Replace operators with JavaScript equivalents
+  let expression = questionStr
+    .replace(/:/g, '/')  // Replace division symbol
+    .replace(/x/g, '*')  // Replace multiplication symbol
+    .replace(/,/g, '.')  // Ensure decimal points use dot notation
+    .replace(/\(/g, '(') // Ensure proper parentheses
+    .replace(/\)/g, ')');
+  
+  return expression;
+};
+
+// Function to calculate the result of a question
+const calculateResult = (questionObj) => {
+  return questionObj.answer;
+};
+
+// Function to check if user's answer is correct
 const isAnswerCorrect = (userAnswer, correctResult) => {
   if (!userAnswer || userAnswer.trim() === '') return false;
   
-  // Parse jawaban user (mendukung format pecahan dan desimal)
+  // Parse user's answer (supporting fractions and decimals)
   let userValue;
   if (userAnswer.includes('/')) {
     const [numerator, denominator] = userAnswer.split('/').map(Number);
@@ -131,7 +105,7 @@ const isAnswerCorrect = (userAnswer, correctResult) => {
     userValue = parseFloat(userAnswer);
   }
   
-  // Bandingkan dengan toleransi kecil untuk kesalahan pembulatan
+  // Compare with a small tolerance for rounding errors
   return Math.abs(userValue - correctResult) < 0.0001;
 };
 
@@ -142,28 +116,37 @@ export default function HitunganCepat() {
   const [showNegative, setShowNegative] = useState(false);
   const [isTestFinished, setIsTestFinished] = useState(false);
   const [score, setScore] = useState(0);
+  const [questionCount, setQuestionCount] = useState(20); // Default number of questions
   const inputRefs = useRef([]);
   const containerRef = useRef(null);
 
-  // Generate questions on component mount
+  // Initialize with random questions on component mount
   useEffect(() => {
-    const generatedQuestions = generateRandomQuestions(20);
-    setQuestions(generatedQuestions);
-    setUserAnswers(Array(generatedQuestions.length).fill(''));
+    generateNewQuestions();
   }, []);
 
-  // Efek untuk scroll ke input yang aktif
+  // Function to generate new random questions
+  const generateNewQuestions = () => {
+    const newQuestions = generateRandomQuestions(questionCount);
+    setQuestions(newQuestions);
+    setUserAnswers(Array(newQuestions.length).fill(''));
+    setCurrentInputIndex(0);
+    setIsTestFinished(false);
+    setScore(0);
+  };
+
+  // Effect to scroll to the active input
   useEffect(() => {
     if (currentInputIndex !== null && inputRefs.current[currentInputIndex]) {
       const inputElement = inputRefs.current[currentInputIndex];
       const containerElement = containerRef.current;
       
-      // Hitung posisi elemen input relatif terhadap container
+      // Calculate input element position relative to container
       const inputTop = inputElement.offsetTop;
       const inputHeight = inputElement.offsetHeight;
       const containerHeight = containerElement.offsetHeight;
       
-      // Scroll ke posisi yang tepat
+      // Scroll to the correct position
       containerElement.scrollTo({
         top: inputTop - containerHeight / 2 + inputHeight / 2,
         behavior: 'smooth'
@@ -218,7 +201,7 @@ export default function HitunganCepat() {
     setShowNegative(false);
   };
 
-  // Fungsi untuk menyelesaikan tes dan menghitung skor
+  // Function to finish the test and calculate score
   const handleFinishTest = () => {
     let correctCount = 0;
     const results = questions.map((question, index) => {
@@ -239,22 +222,7 @@ export default function HitunganCepat() {
     setIsTestFinished(true);
   };
 
-  // Format pertanyaan berdasarkan jumlah operator
-  const formatQuestion = (q) => {
-    let questionText = `${q.a} ${q.operator} ${q.b}`;
-    
-    if (q.operator2 && q.c) {
-      questionText += ` ${q.operator2} ${q.c}`;
-    }
-    
-    if (q.operator3 && q.d) {
-      questionText += ` ${q.operator3} ${q.d}`;
-    }
-    
-    return questionText;
-  };
-
-  // Render hasil tes setelah selesai
+  // Render test results after completion
   const renderTestResults = () => {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -287,7 +255,7 @@ export default function HitunganCepat() {
                     className={`p-2 mb-2 rounded ${isCorrect ? 'bg-green-100 dark:bg-green-900/30' : 'bg-red-100 dark:bg-red-900/30'}`}
                   >
                     <div className="font-medium">
-                      {index + 1}. {formatQuestion(question)} = {userAnswers[index] || '(Tidak dijawab)'}
+                      {index + 1}. {question.question} = {userAnswers[index] || '(Tidak dijawab)'}
                     </div>
                     {!isCorrect && (
                       <div className="text-sm text-gray-600 dark:text-gray-400">
@@ -300,12 +268,20 @@ export default function HitunganCepat() {
             </div>
           </div>
           
-          <button
-            onClick={() => window.location.reload()}
-            className="w-full py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-semibold"
-          >
-            Coba Lagi
-          </button>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-semibold"
+            >
+              Coba Lagi
+            </button>
+            <button
+              onClick={generateNewQuestions}
+              className="py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold"
+            >
+              Soal Baru
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -314,202 +290,230 @@ export default function HitunganCepat() {
   return (
     <AuthenticatedLayout header={<h2 className="text-xl font-semibold">Tes Hitungan Cepat</h2>}>
       <div className="flex flex-col h-screen">
-        {/* Header dengan informasi progress */}
-        {/* <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
-          <div className="max-w-2xl mx-auto flex justify-between items-center">
-            <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
-              Soal {currentInputIndex + 1} dari {questions.length}
-            </span>
-            
-            {!isTestFinished && (
+        {/* Question Count Selector */}
+        {!isTestFinished && questions.length === 0 && (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md max-w-md w-full">
+              <h3 className="text-lg font-semibold mb-4 text-center">Jumlah Soal</h3>
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                {[10, 20, 30, 40, 50].map((count) => (
+                  <button
+                    key={count}
+                    onClick={() => {
+                      setQuestionCount(count);
+                      generateNewQuestions();
+                    }}
+                    className={`py-2 rounded ${
+                      questionCount === count 
+                        ? 'bg-indigo-600 text-white' 
+                        : 'bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                    }`}
+                  >
+                    {count}
+                  </button>
+                ))}
+              </div>
               <button
-                onClick={handleFinishTest}
-                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition"
+                onClick={generateNewQuestions}
+                className="w-full py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
               >
-                Selesai
+                Mulai Tes
               </button>
-            )}
-          </div>
-        </div> */}
-
-        {/* Area Soal dengan Scroll - Ditambahkan padding bottom lebih besar */}
-        <div 
-          ref={containerRef}
-          className="flex-1 overflow-y-auto p-6 pb-80" // Padding bottom lebih besar untuk numpad
-        >
-          <div className="max-w-2xl mx-auto">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {questions.map((q, idx) => (
-                <div 
-                  key={idx} 
-                  className={`flex items-center gap-2 p-3 rounded-lg ${currentInputIndex === idx ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-300' : 'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700'}`}
-                >
-                  <span className="w-6 text-gray-600 dark:text-gray-300 font-medium">{idx + 1}.</span>
-                  <span className="flex-1 font-medium text-gray-800 dark:text-gray-200">
-                    {formatQuestion(q)}
-                  </span>
-                  <span className="text-gray-600 dark:text-gray-300">=</span>
-                  <input
-                    ref={el => inputRefs.current[idx] = el}
-                    id={`input-${idx}`}
-                    type="text"
-                    value={userAnswers[idx]}
-                    onFocus={() => handleInputFocus(idx)}
-                    readOnly
-                    className="w-20 px-2 py-2 border border-gray-300 dark:border-gray-600 rounded text-center focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-medium"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Numpad Fixed di Bawah dengan layout umum */}
-        {!isTestFinished && (
-          <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-3 shadow-lg">
-            <div className="max-w-md mx-auto">
-              {/* Toggle untuk bilangan negatif */}
-              <div className="flex justify-center mb-2">
-                <button
-                  onClick={() => setShowNegative(!showNegative)}
-                  className={`px-3 py-1 rounded text-xs ${showNegative ? 'bg-red-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
-                >
-                  {showNegative ? 'Sembunyikan Negatif' : 'Tampilkan Negatif'}
-                </button>
-              </div>
-              
-              <div className="grid grid-cols-4 gap-2">
-                {/* Baris 1: 7, 8, 9, Backspace */}
-                <button
-                  onClick={() => handleNumpadClick('7')}
-                  className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
-                >
-                  7
-                </button>
-                <button
-                  onClick={() => handleNumpadClick('8')}
-                  className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
-                >
-                  8
-                </button>
-                <button
-                  onClick={() => handleNumpadClick('9')}
-                  className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
-                >
-                  9
-                </button>
-                <button
-                  onClick={() => handleNumpadClick('backspace')}
-                  className="py-3 px-2 rounded font-semibold text-lg bg-yellow-500 hover:bg-yellow-600 text-white"
-                >
-                  ⌫
-                </button>
-                
-                {/* Baris 2: 4, 5, 6, Clear */}
-                <button
-                  onClick={() => handleNumpadClick('4')}
-                  className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
-                >
-                  4
-                </button>
-                <button
-                  onClick={() => handleNumpadClick('5')}
-                  className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
-                >
-                  5
-                </button>
-                <button
-                  onClick={() => handleNumpadClick('6')}
-                  className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
-                >
-                  6
-                </button>
-                <button
-                  onClick={() => handleNumpadClick('C')}
-                  className="py-3 px-2 rounded font-semibold text-lg bg-red-500 hover:bg-red-600 text-white"
-                >
-                  C
-                </button>
-                
-                {/* Baris 3: 1, 2, 3, Negatif */}
-                <button
-                  onClick={() => handleNumpadClick('1')}
-                  className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
-                >
-                  1
-                </button>
-                <button
-                  onClick={() => handleNumpadClick('2')}
-                  className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
-                >
-                  2
-                </button>
-                <button
-                  onClick={() => handleNumpadClick('3')}
-                  className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
-                >
-                  3
-                </button>
-                <button
-                  onClick={() => handleNumpadClick('negative')}
-                  className={`py-3 px-2 rounded font-semibold text-lg ${showNegative ? 'bg-red-500 text-white' : 'bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
-                >
-                  -/+
-                </button>
-                
-                {/* Baris 4: 0, Pecahan, Previous, Next */}
-                <button
-                  onClick={() => handleNumpadClick('0')}
-                  className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
-                >
-                  0
-                </button>
-                <button
-                  onClick={() => handleNumpadClick('fraction')}
-                  className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
-                >
-                  ⁄
-                </button>
-                <button
-                  onClick={handlePrevious}
-                  disabled={currentInputIndex === 0}
-                  className="py-3 px-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-400 dark:hover:bg-gray-500 transition disabled:opacity-50 font-semibold"
-                >
-                  Prev
-                </button>
-                <button
-                  onClick={handleNext}
-                  disabled={currentInputIndex === questions.length - 1}
-                  className="py-3 px-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50 font-semibold"
-                >
-                  Next
-                </button>
-
-                {/* Baris 5: Tombol Selesai yang memanjang 2 kolom */}
-                <button
-                  onClick={handleFinishTest}
-                  className="col-span-2 py-3 bg-red-500 hover:bg-red-600 text-white rounded font-semibold transition"
-                >
-                  Selesai
-                </button>
-                <button
-                  onClick={() => handleNumpadClick('fraction')}
-                  className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200 invisible"
-                >
-                  ⁄
-                </button>
-                <button
-                  onClick={() => handleNumpadClick('fraction')}
-                  className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200 invisible"
-                >
-                  ⁄
-                </button>
-              </div>
             </div>
           </div>
         )}
+
+        {/* Question Area with Scroll - Added larger bottom padding */}
+        {questions.length > 0 && !isTestFinished && (
+          <>
+            <div 
+              ref={containerRef}
+              className="flex-1 overflow-y-auto p-6 pb-80" // Larger bottom padding for numpad
+            >
+              <div className="max-w-2xl mx-auto">
+                <div className="flex justify-between items-center mb-4">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">
+                    Soal {currentInputIndex + 1} dari {questions.length}
+                  </span>
+                  {/* <button
+                    onClick={generateNewQuestions}
+                    className="px-3 py-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded text-sm hover:bg-gray-300 dark:hover:bg-gray-600"
+                  >
+                    Acak Soal Baru
+                  </button> */}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {questions.map((q, idx) => (
+                    <div 
+                      key={idx} 
+                      className={`flex items-center gap-2 p-3 rounded-lg ${currentInputIndex === idx ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-300' : 'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700'}`}
+                    >
+                      <span className="w-6 text-gray-600 dark:text-gray-300 font-medium">{idx + 1}.</span>
+                      <span className="flex-1 font-medium text-gray-800 dark:text-gray-200">
+                        {q.question}
+                      </span>
+                      <span className="text-gray-600 dark:text-gray-300">=</span>
+                      <input
+                        ref={el => inputRefs.current[idx] = el}
+                        id={`input-${idx}`}
+                        type="text"
+                        value={userAnswers[idx]}
+                        onFocus={() => handleInputFocus(idx)}
+                        readOnly
+                        className="w-20 px-2 py-2 border border-gray-300 dark:border-gray-600 rounded text-center focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-medium"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Fixed Numpad at Bottom with common layout */}
+            <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-3 shadow-lg">
+              <div className="max-w-md mx-auto">
+                {/* Toggle for negative numbers */}
+                <div className="flex justify-center mb-2">
+                  <button
+                    onClick={() => setShowNegative(!showNegative)}
+                    className={`px-3 py-1 rounded text-xs ${showNegative ? 'bg-red-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
+                  >
+                    {showNegative ? 'Sembunyikan Negatif' : 'Tampilkan Negatif'}
+                  </button>
+                </div>
+                
+                <div className="grid grid-cols-4 gap-2">
+                  {/* Row 1: 7, 8, 9, Backspace */}
+                  <button
+                    onClick={() => handleNumpadClick('7')}
+                    className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
+                  >
+                    7
+                  </button>
+                  <button
+                    onClick={() => handleNumpadClick('8')}
+                    className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
+                  >
+                    8
+                  </button>
+                  <button
+                    onClick={() => handleNumpadClick('9')}
+                    className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
+                  >
+                    9
+                  </button>
+                  <button
+                    onClick={() => handleNumpadClick('backspace')}
+                    className="py-3 px-2 rounded font-semibold text-lg bg-yellow-500 hover:bg-yellow-600 text-white"
+                  >
+                    ⌫
+                  </button>
+                  
+                  {/* Row 2: 4, 5, 6, Clear */}
+                  <button
+                    onClick={() => handleNumpadClick('4')}
+                    className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
+                  >
+                    4
+                  </button>
+                  <button
+                    onClick={() => handleNumpadClick('5')}
+                    className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
+                  >
+                    5
+                  </button>
+                  <button
+                    onClick={() => handleNumpadClick('6')}
+                    className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
+                  >
+                    6
+                  </button>
+                  <button
+                    onClick={() => handleNumpadClick('C')}
+                    className="py-3 px-2 rounded font-semibold text-lg bg-red-500 hover:bg-red-600 text-white"
+                  >
+                    C
+                  </button>
+                  
+                  {/* Row 3: 1, 2, 3, Negative */}
+                  <button
+                    onClick={() => handleNumpadClick('1')}
+                    className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
+                  >
+                    1
+                  </button>
+                  <button
+                    onClick={() => handleNumpadClick('2')}
+                    className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
+                  >
+                    2
+                  </button>
+                  <button
+                    onClick={() => handleNumpadClick('3')}
+                    className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
+                  >
+                    3
+                  </button>
+                  <button
+                    onClick={() => handleNumpadClick('negative')}
+                    className={`py-3 px-2 rounded font-semibold text-lg ${showNegative ? 'bg-red-500 text-white' : 'bg-gray-300 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
+                  >
+                    -/+
+                  </button>
+                  
+                  {/* Row 4: 0, Fraction, Previous, Next */}
+                  <button
+                    onClick={() => handleNumpadClick('0')}
+                    className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
+                  >
+                    0
+                  </button>
+                  <button
+                    onClick={() => handleNumpadClick('fraction')}
+                    className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200"
+                  >
+                    ⁄
+                  </button>
+                  <button
+                    onClick={handlePrevious}
+                    disabled={currentInputIndex === 0}
+                    className="py-3 px-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-400 dark:hover:bg-gray-500 transition disabled:opacity-50 font-semibold"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    onClick={handleNext}
+                    disabled={currentInputIndex === questions.length - 1}
+                    className="py-3 px-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition disabled:opacity-50 font-semibold"
+                  >
+                    Next
+                  </button>
+
+                  {/* Row 5: Finish button spanning 2 columns */}
+                  <button
+                    onClick={handleFinishTest}
+                    className="col-span-2 py-3 bg-red-500 hover:bg-red-600 text-white rounded font-semibold transition"
+                  >
+                    Selesai
+                  </button>
+                  <button
+                    onClick={() => handleNumpadClick('fraction')}
+                    className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200 invisible"
+                  >
+                    ⁄
+                  </button>
+                  <button
+                    onClick={() => handleNumpadClick('fraction')}
+                    className="py-3 px-2 rounded font-semibold text-lg bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-700 text-gray-800 dark:text-gray-200 invisible"
+                  >
+                    ⁄
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
         
-        {/* Tampilkan hasil tes jika sudah selesai */}
+        {/* Show test results if finished */}
         {isTestFinished && renderTestResults()}
       </div>
     </AuthenticatedLayout>

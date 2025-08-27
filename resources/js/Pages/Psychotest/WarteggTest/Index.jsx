@@ -50,10 +50,10 @@ export default function WarteggTest() {
 
     // Alat gambar yang tersedia (dihapus circle outline)
     const tools = [
-        { id: "pencil", icon: Brush, name: "Pensil" },
-        { id: "line", icon: Minus, name: "Garis" },
-        { id: "filledCircle", icon: Circle, name: "Lingkaran" },
-        { id: "eraser", icon: Eraser, name: "Hapus" },
+        // { id: "pencil", icon: Brush, name: "Pensil" },
+        // { id: "line", icon: Minus, name: "Garis" },
+        // { id: "filledCircle", icon: Circle, name: "Lingkaran" },
+        // { id: "eraser", icon: Eraser, name: "Hapus" },
     ];
 
     // Fungsi untuk membuat SVG placeholder jika file tidak ditemukan

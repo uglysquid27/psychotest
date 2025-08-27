@@ -250,15 +250,17 @@ export default function AuthenticatedLayout({ header, children, hideSidebar = fa
                                             <span className="block">Lunch Coupons</span>
                                         </NavLink>
                                         <div>
-                                            <button
-                                                onClick={togglePsikotes}
-                                                className="w-full text-left py-3 md:py-4 px-3 text-sm font-medium rounded-lg flex justify-between items-center text-gray-700 dark:text-gray-200 hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-200 ease-in-out"
-                                            >
-                                                <span>Psikotes</span>
-                                                <span className={`transform transition-transform duration-200 ${isPsikotesOpen ? 'rotate-90' : ''}`}>▶</span>
-                                            </button>
+                                            {isAdmin && (
+                                                <button
+                                                    onClick={togglePsikotes}
+                                                    className="w-full text-left py-3 md:py-4 px-3 text-sm font-medium rounded-lg flex justify-between items-center text-gray-700 dark:text-gray-200 hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all duration-200 ease-in-out"
+                                                >
+                                                    <span>Psikotes</span>
+                                                    <span className={`transform transition-transform duration-200 ${isPsikotesOpen ? 'rotate-90' : ''}`}>▶</span>
+                                                </button>
+                                            )}
 
-                                            {isPsikotesOpen && (
+                                            {isAdmin && isPsikotesOpen && (
                                                 <div className="pl-4 mt-2 space-y-1">
                                                     <NavLink
                                                         href={route('kraepelin.index')}
@@ -295,19 +297,40 @@ export default function AuthenticatedLayout({ header, children, hideSidebar = fa
                                                     >
                                                         Hitungan Cepat
                                                     </NavLink>
-                                                     <NavLink
+                                                    <NavLink
                                                         href={route('deret.index')}
                                                         active={route().current('deret.index')}
                                                         className="block py-2 px-3 text-sm rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
                                                     >
                                                         Tes Deret
                                                     </NavLink>
-                                                     <NavLink
+                                                    <NavLink
                                                         href={route('spasial.index')}
                                                         active={route().current('spasial.index')}
                                                         className="block py-2 px-3 text-sm rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
                                                     >
                                                         Spasial
+                                                    </NavLink>
+                                                    <NavLink
+                                                        href={route('numerik.index')}
+                                                        active={route().current('numerik.index')}
+                                                        className="block py-2 px-3 text-sm rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
+                                                    >
+                                                        Numerik
+                                                    </NavLink>
+                                                    <NavLink
+                                                        href={route('disc.index')}
+                                                        active={route().current('disc.index')}
+                                                        className="block py-2 px-3 text-sm rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
+                                                    >
+                                                        DISC
+                                                    </NavLink>
+                                                    <NavLink
+                                                        href={route('personality.index')}
+                                                        active={route().current('personality.index')}
+                                                        className="block py-2 px-3 text-sm rounded-lg hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 hover:text-indigo-600 dark:hover:text-indigo-400"
+                                                    >
+                                                        Personality
                                                     </NavLink>
 
                                                 </div>

@@ -1,23 +1,18 @@
 import { useState, useRef, useEffect } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 
-export default function TesDeret({ initialQuestions = [] }) {
-  // Pastikan initialQuestions selalu array
+export default function PersonalityTest({ initialQuestions = [] }) {
   const questionsData = Array.isArray(initialQuestions) ? initialQuestions : [];
   
-  // Pilih 5 soal secara acak dari dataset
-  const getRandomQuestions = () => {
-    const shuffled = [...questionsData].sort(() => Math.random() - 0.5);
-    return shuffled.slice(0, 5);
-  };
-
-  // Langsung inisialisasi state dengan 5 soal acak
-  const [questions, setQuestions] = useState(getRandomQuestions());
-  const [userAnswers, setUserAnswers] = useState(Array(5).fill(''));
+  const [questions, setQuestions] = useState(questionsData);
+  const [userAnswers, setUserAnswers] = useState(Array(questionsData.length).fill(null));
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [score, setScore] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(60); // 1 menit
+  const [scores, setScores] = useState({ M: 0, S: 0, K: 0, P: 0 });
+  const [percentages, setPercentages] = useState({ M: 0, S: 0, K: 0, P: 0 });
+  const [personalityType, setPersonalityType] = useState('');
+  const [description, setDescription] = useState('');
+  const [timeLeft, setTimeLeft] = useState(600); // 10 minutes
   const [showResultsModal, setShowResultsModal] = useState(false);
   const [testStarted, setTestStarted] = useState(false);
   const timerRef = useRef(null);
@@ -47,38 +42,57 @@ export default function TesDeret({ initialQuestions = [] }) {
     return `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
   };
 
-  const handleChange = (e) => {
+  const handleAnswer = (optionIndex) => {
     const newAnswers = [...userAnswers];
-    newAnswers[currentIndex] = e.target.value;
+    newAnswers[currentIndex] = optionIndex;
     setUserAnswers(newAnswers);
   };
 
-  const handleNext = () => { if (currentIndex < questions.length - 1) setCurrentIndex(currentIndex + 1); };
-  const handlePrev = () => { if (currentIndex > 0) setCurrentIndex(currentIndex - 1); };
+  const handleNext = () => { 
+    if (currentIndex < questions.length - 1) setCurrentIndex(currentIndex + 1); 
+  };
+  
+  const handlePrev = () => { 
+    if (currentIndex > 0) setCurrentIndex(currentIndex - 1); 
+  };
+  
   const handleQuestionClick = (index) => setCurrentIndex(index);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (isSubmitted) return;
 
-    let calculatedScore = 0;
-    userAnswers.forEach((ans, idx) => {
-      if (parseInt(ans) === questions[idx].answer) calculatedScore++;
-    });
-
-    setScore(calculatedScore);
-    setIsSubmitted(true);
-    clearInterval(timerRef.current);
-    setShowResultsModal(true);
+    try {
+      const response = await fetch(route('personality.submit'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+        },
+        body: JSON.stringify({ answers: userAnswers })
+      });
+      
+      const result = await response.json();
+      setScores(result.scores);
+      setPercentages(result.percentages);
+      setPersonalityType(result.personalityType);
+      setDescription(result.description);
+      setIsSubmitted(true);
+      clearInterval(timerRef.current);
+      setShowResultsModal(true);
+    } catch (error) {
+      console.error('Error submitting test:', error);
+    }
   };
 
   const handleNewSession = () => {
-    const newQuestions = getRandomQuestions();
-    setQuestions(newQuestions);
-    setUserAnswers(Array(5).fill(''));
+    setUserAnswers(Array(questionsData.length).fill(null));
     setCurrentIndex(0);
     setIsSubmitted(false);
-    setScore(0);
-    setTimeLeft(60);
+    setScores({ M: 0, S: 0, K: 0, P: 0 });
+    setPercentages({ M: 0, S: 0, K: 0, P: 0 });
+    setPersonalityType('');
+    setDescription('');
+    setTimeLeft(600);
     setShowResultsModal(false);
     setTestStarted(false);
   };
@@ -92,18 +106,22 @@ export default function TesDeret({ initialQuestions = [] }) {
   };
 
   const currentQuestion = questions[currentIndex];
+  const currentAnswer = userAnswers[currentIndex];
+
+  // Check if all questions have been answered
+  const isTestComplete = userAnswers.every(answer => answer !== null);
 
   return (
-    <AuthenticatedLayout header={<h2 className="text-xl font-semibold">Tes Deret Angka</h2>}>
+    <AuthenticatedLayout header={<h2 className="text-xl font-semibold">Tes Kepribadian</h2>}>
       <div className="max-w-6xl mx-auto p-4 md:p-6">
         {/* Header dengan timer */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 md:p-6">
           <div className="text-center md:text-left">
-            <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white">Tes Deret Angka</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-300">Temukan pola dan isi angka yang hilang</p>
+            <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white">Tes Kepribadian</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-300">Temukan tipe kepribadian Anda</p>
           </div>
           <div className="flex flex-col items-center bg-gradient-to-r from-blue-500 to-indigo-600 p-3 rounded-lg shadow-md min-w-[120px]">
-            <div className={`text-lg font-semibold ${timeLeft < 10 ? 'text-red-300' : 'text-white'}`}>
+            <div className={`text-lg font-semibold ${timeLeft < 60 ? 'text-red-300' : 'text-white'}`}>
               {formatTime(timeLeft)}
             </div>
             <div className="text-xs text-white opacity-80">Sisa Waktu</div>
@@ -112,12 +130,13 @@ export default function TesDeret({ initialQuestions = [] }) {
 
         {!testStarted ? (
           <div className="mb-6 bg-white dark:text-white dark:bg-gray-800 rounded-xl shadow-md p-6 text-center">
-            <h3 className="text-xl font-bold mb-4">Selamat Datang di Tes Deret Angka</h3>
-            <p className="mb-4">Tes ini akan menguji kemampuan Anda dalam mengenali pola deret angka.</p>
+            <h3 className="text-xl font-bold mb-4">Selamat Datang di Tes Kepribadian</h3>
+            <p className="mb-4">Tes ini akan mengungkap tipe kepribadian Anda berdasarkan model Melankolis, Sanguinis, Koleris, dan Plegmatis.</p>
             <ul className="text-left list-disc pl-5 mb-6 mx-auto max-w-md">
-              <li>Terdapat 5 soal yang harus diselesaikan</li>
-              <li>Waktu pengerjaan: 1 menit</li>
-              <li>Isi angka yang hilang pada setiap deret</li>
+              <li>Terdapat {questions.length} soal yang harus diselesaikan</li>
+              <li>Waktu pengerjaan: 10 menit</li>
+              <li>Untuk setiap soal, pilih satu pernyataan yang paling menggambarkan diri Anda</li>
+              <li>Jawablah dengan jujur sesuai dengan diri Anda sendiri</li>
               <li>Klik "Mulai Tes" ketika Anda siap</li>
             </ul>
             <button 
@@ -140,13 +159,13 @@ export default function TesDeret({ initialQuestions = [] }) {
               </div>
             </div>
 
-            {/* Soal sekarang - Ditempatkan di atas tombol navigasi */}
+            {/* Soal sekarang */}
             {currentQuestion && (
               <div className="mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 md:p-6">
                 <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-3">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-blue-800 dark:text-blue-200 text-lg">Soal {currentIndex + 1}:</span>
-                    {userAnswers[currentIndex] && (
+                    {currentAnswer !== null && (
                       <span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded-full dark:bg-green-900 dark:text-green-200 flex items-center">
                         <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -155,50 +174,48 @@ export default function TesDeret({ initialQuestions = [] }) {
                       </span>
                     )}
                   </div>
+                </div>
+                
+                <div className="mb-4">
+                  <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-4">
+                    {currentQuestion.text}
+                  </h3>
                   
-                  {/* Counter di bawah header */}
-                  <div className="bg-blue-50 dark:bg-blue-900/30 px-3 py-2 rounded-lg">
-                    <span className="text-sm text-blue-700 dark:text-blue-300">Angka ke-{currentQuestion.sequence.findIndex(num => num === null) + 1} dari {currentQuestion.sequence.length}</span>
-                  </div>
-                </div>
-                
-                <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6 mb-6 dark:text-white">
-                  {currentQuestion.sequence.map((num, idx) => (
-                    <div key={idx} className="flex flex-col items-center">
-                      <div className={`w-12 h-12 md:w-14 md:h-14 rounded-lg flex items-center justify-center text-lg md:text-xl font-semibold transition-all duration-300
-                        ${num === null ? 
-                          'border-2 border-dashed border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 shadow-inner' : 
-                          'bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 shadow-md'
+                  <div className="grid grid-cols-1 gap-4">
+                    {currentQuestion.options.map((option, optionIndex) => (
+                      <div 
+                        key={optionIndex}
+                        className={`p-4 border rounded-lg cursor-pointer transition-all duration-200 ${
+                          currentAnswer === optionIndex
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 shadow-md' 
+                            : 'border-gray-300 dark:border-gray-600 hover:border-indigo-300 dark:hover:border-indigo-500'
                         }`}
+                        onClick={() => handleAnswer(optionIndex)}
                       >
-                        {num === null ? '?' : num}
-                      </div>
-                      {num === null && (
-                        <div className="mt-3">
-                          <input 
-                            type="number" 
-                            value={userAnswers[currentIndex]} 
-                            onChange={handleChange}
-                            className="w-16 md:w-20 border border-gray-300 rounded-lg px-3 py-2 text-center font-medium text-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                            placeholder="0"
-                            min="0"
-                          />
+                        <div className="flex items-start">
+                          <div className={`flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center mr-3 ${
+                            currentAnswer === optionIndex
+                              ? 'border-blue-500 bg-blue-500 text-white' 
+                              : 'border-gray-400 dark:border-gray-500'
+                          }`}>
+                            {currentAnswer === optionIndex && (
+                              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-800 dark:text-gray-200">{option.text}</p>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                
-                <div className="text-center text-sm text-gray-600 dark:text-gray-400 mt-4 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
-                  <svg className="w-5 h-5 inline-block mr-2 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Temukan pola dan isi angka yang hilang (ditandai dengan ?)
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Navigasi - Tepat di bawah soal */}
+            {/* Navigasi */}
             <div className="flex flex-col-reverse sm:flex-row justify-between gap-4 mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 md:p-6">
               <button onClick={handlePrev} disabled={currentIndex===0}
                 className="px-5 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center">
@@ -216,7 +233,11 @@ export default function TesDeret({ initialQuestions = [] }) {
                   </svg>
                 </button>
               ) : (
-                <button onClick={handleSubmit} className="px-5 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center justify-center">
+                <button 
+                  onClick={handleSubmit} 
+                  disabled={!isTestComplete}
+                  className="px-5 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center"
+                >
                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                   </svg>
@@ -225,7 +246,7 @@ export default function TesDeret({ initialQuestions = [] }) {
               )}
             </div>
 
-            {/* Grid soal - Ditempatkan di bawah tombol navigasi */}
+            {/* Grid soal */}
             <div className="mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 md:p-6">
               <h3 className="font-medium text-gray-700 dark:text-gray-300 mb-2">Daftar Soal:</h3>
               <div className="grid grid-cols-5 gap-2">
@@ -233,7 +254,7 @@ export default function TesDeret({ initialQuestions = [] }) {
                   <button key={idx} onClick={() => handleQuestionClick(idx)}
                     className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-200
                       ${currentIndex === idx ? 'bg-indigo-600 text-white shadow-lg transform scale-110' :
-                        userAnswers[idx] ? 'bg-green-500 text-white dark:bg-green-600' :
+                        userAnswers[idx] !== null ? 'bg-green-500 text-white dark:bg-green-600' :
                         'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
                       }`}
                   >{idx+1}</button>
@@ -248,27 +269,45 @@ export default function TesDeret({ initialQuestions = [] }) {
           <div className="fixed inset-0 overflow-y-auto z-50 flex items-center justify-center p-4">
             <div className="fixed inset-0 bg-black bg-opacity-50" onClick={closeModal}></div>
             <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-auto p-6">
-              <h3 className="text-xl md:text-2xl font-bold text-center mb-4 text-gray-800 dark:text-white">Hasil Tes Deret Angka</h3>
-              <div className="flex justify-center items-center mb-6">
-                <div className="relative">
-                  <div className="rounded-full w-40 h-40 bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center border-4 border-indigo-100 dark:border-indigo-900/30">
-                    <div className="text-center">
-                      <div className="text-4xl font-bold text-indigo-600 dark:text-indigo-400">{score}</div>
-                      <div className="text-gray-600 dark:text-gray-300">dari {questions.length}</div>
+              <h3 className="text-xl md:text-2xl font-bold text-center mb-4 text-gray-800 dark:text-white">Hasil Tes Kepribadian</h3>
+              
+              <div className="mb-6">
+                <h4 className="text-lg font-semibold text-center mb-3">Tipe Kepribadian Anda:</h4>
+                <p className="text-center text-indigo-600 dark:text-indigo-400 font-medium">
+                  {personalityType === 'M' && 'Melankolis'}
+                  {personalityType === 'S' && 'Sanguinis'}
+                  {personalityType === 'K' && 'Koleris'}
+                  {personalityType === 'P' && 'Plegmatis'}
+                </p>
+                <p className="text-center text-gray-600 dark:text-gray-300 mt-2">{description}</p>
+              </div>
+              
+              <div className="mb-6">
+                <h4 className="text-lg font-semibold text-center mb-3">Skor Kepribadian:</h4>
+                <div className="space-y-4">
+                  {Object.entries(percentages).map(([type, percentage]) => (
+                    <div key={type}>
+                      <div className="flex justify-between mb-1">
+                        <span className="font-medium">
+                          {type === 'M' && 'Melankolis'}
+                          {type === 'S' && 'Sanguinis'}
+                          {type === 'K' && 'Koleris'}
+                          {type === 'P' && 'Plegmatis'}
+                          : {percentage}%
+                        </span>
+                        <span>{scores[type]} poin</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                        <div 
+                          className="h-2.5 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600" 
+                          style={{ width: `${percentage}%` }}
+                        ></div>
+                      </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
               </div>
-              <div className="text-center mb-6">
-                <div className={`text-lg font-semibold ${
-                  score >= questions.length*0.8 ? 'text-green-600 dark:text-green-400' :
-                  score >= questions.length*0.6 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'
-                }`}>
-                  {score >= questions.length*0.8 ? 'Luar Biasa! 🎉' :
-                  score >= questions.length*0.6 ? 'Bagus! 👍' : 'Perlu latihan lebih'}
-                </div>
-                <p className="text-gray-600 dark:text-gray-300 mt-2">Skor Anda: {score} ({Math.round((score/questions.length)*100)}%)</p>
-              </div>
+              
               <div className="text-center">
                 <button onClick={handleNewSession}
                   className="px-5 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors duration-200 flex items-center justify-center mx-auto">
@@ -291,7 +330,7 @@ export default function TesDeret({ initialQuestions = [] }) {
         )}
 
         {/* Peringatan waktu hampir habis */}
-        {testStarted && timeLeft > 0 && timeLeft <= 10 && !isSubmitted && (
+        {testStarted && timeLeft > 0 && timeLeft <= 60 && !isSubmitted && (
           <div className="fixed bottom-4 right-4 bg-red-500 text-white p-4 rounded-lg shadow-lg animate-pulse">
             <div className="font-semibold flex items-center">
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

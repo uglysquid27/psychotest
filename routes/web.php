@@ -2,7 +2,9 @@
 
 use App\Http\Controllers\AdminPermitController;
 use App\Http\Controllers\AnalogiController;
+use App\Http\Controllers\DiscTestController;
 use App\Http\Controllers\KetelitianController;
+use App\Http\Controllers\PersonalityTestController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SubSectionController;
 use Illuminate\Support\Facades\Route;
@@ -26,6 +28,7 @@ use App\Http\Controllers\WarteggTestController;
 use App\Http\Controllers\HitunganController;
 use App\Http\Controllers\TesDeretController;
 use App\Http\Controllers\SpasialController;
+use App\Http\Controllers\TesNumerikController;
 
 // app/Http/Controllers/LicenseVerificationController.php
 /*
@@ -296,6 +299,21 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     Route::prefix('spasial')->name('spasial.')->group(function () {
         Route::get('/', [SpasialController::class, 'index'])->name('index');
             Route::post('/submit', [SpasialController::class, 'submit'])->name('submit'); // tambah route submit
+
+    });
+    Route::prefix('numerik')->name('numerik.')->group(function () {
+        Route::get('/', [TesNumerikController::class, 'index'])->name('index');
+            Route::post('/submit', [TesNumerikController::class, 'submit'])->name('submit'); // tambah route submit
+
+    });
+    Route::prefix('disc')->name('disc.')->group(function () {
+        Route::get('/', [DiscTestController::class, 'index'])->name('index');
+            Route::post('/submit', [DiscTestController::class, 'submit'])->name('submit'); // tambah route submit
+
+    });
+    Route::prefix('personality')->name('personality.')->group(function () {
+        Route::get('/', [PersonalityTestController::class, 'index'])->name('index');
+            Route::post('/submit', [PersonalityTestController::class, 'submit'])->name('submit'); // tambah route submit
 
     });
 

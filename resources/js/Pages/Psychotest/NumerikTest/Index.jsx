@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 
-export default function TesDeret({ initialQuestions = [] }) {
+export default function TesNumerikTabel({ initialQuestions = [] }) {
   // Pastikan initialQuestions selalu array
   const questionsData = Array.isArray(initialQuestions) ? initialQuestions : [];
   
@@ -17,7 +17,7 @@ export default function TesDeret({ initialQuestions = [] }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [score, setScore] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(60); // 1 menit
+  const [timeLeft, setTimeLeft] = useState(120); // 2 menit
   const [showResultsModal, setShowResultsModal] = useState(false);
   const [testStarted, setTestStarted] = useState(false);
   const timerRef = useRef(null);
@@ -78,7 +78,7 @@ export default function TesDeret({ initialQuestions = [] }) {
     setCurrentIndex(0);
     setIsSubmitted(false);
     setScore(0);
-    setTimeLeft(60);
+    setTimeLeft(120);
     setShowResultsModal(false);
     setTestStarted(false);
   };
@@ -94,16 +94,16 @@ export default function TesDeret({ initialQuestions = [] }) {
   const currentQuestion = questions[currentIndex];
 
   return (
-    <AuthenticatedLayout header={<h2 className="text-xl font-semibold">Tes Deret Angka</h2>}>
+    <AuthenticatedLayout header={<h2 className="text-xl font-semibold">Tes Numerik Tabel</h2>}>
       <div className="max-w-6xl mx-auto p-4 md:p-6">
         {/* Header dengan timer */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 md:p-6">
           <div className="text-center md:text-left">
-            <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white">Tes Deret Angka</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-300">Temukan pola dan isi angka yang hilang</p>
+            <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white">Tes Numerik Tabel</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-300">Analisis tabel dan isi angka yang sesuai</p>
           </div>
           <div className="flex flex-col items-center bg-gradient-to-r from-blue-500 to-indigo-600 p-3 rounded-lg shadow-md min-w-[120px]">
-            <div className={`text-lg font-semibold ${timeLeft < 10 ? 'text-red-300' : 'text-white'}`}>
+            <div className={`text-lg font-semibold ${timeLeft < 30 ? 'text-red-300' : 'text-white'}`}>
               {formatTime(timeLeft)}
             </div>
             <div className="text-xs text-white opacity-80">Sisa Waktu</div>
@@ -112,12 +112,12 @@ export default function TesDeret({ initialQuestions = [] }) {
 
         {!testStarted ? (
           <div className="mb-6 bg-white dark:text-white dark:bg-gray-800 rounded-xl shadow-md p-6 text-center">
-            <h3 className="text-xl font-bold mb-4">Selamat Datang di Tes Deret Angka</h3>
-            <p className="mb-4">Tes ini akan menguji kemampuan Anda dalam mengenali pola deret angka.</p>
+            <h3 className="text-xl font-bold mb-4">Selamat Datang di Tes Numerik Tabel</h3>
+            <p className="mb-4">Tes ini akan menguji kemampuan Anda dalam menganalisis tabel numerik.</p>
             <ul className="text-left list-disc pl-5 mb-6 mx-auto max-w-md">
               <li>Terdapat 5 soal yang harus diselesaikan</li>
-              <li>Waktu pengerjaan: 1 menit</li>
-              <li>Isi angka yang hilang pada setiap deret</li>
+              <li>Waktu pengerjaan: 2 menit</li>
+              <li>Isi angka yang sesuai pada setiap tabel</li>
               <li>Klik "Mulai Tes" ketika Anda siap</li>
             </ul>
             <button 
@@ -140,7 +140,7 @@ export default function TesDeret({ initialQuestions = [] }) {
               </div>
             </div>
 
-            {/* Soal sekarang - Ditempatkan di atas tombol navigasi */}
+            {/* Soal sekarang */}
             {currentQuestion && (
               <div className="mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 md:p-6">
                 <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-3">
@@ -155,50 +155,53 @@ export default function TesDeret({ initialQuestions = [] }) {
                       </span>
                     )}
                   </div>
-                  
-                  {/* Counter di bawah header */}
-                  <div className="bg-blue-50 dark:bg-blue-900/30 px-3 py-2 rounded-lg">
-                    <span className="text-sm text-blue-700 dark:text-blue-300">Angka ke-{currentQuestion.sequence.findIndex(num => num === null) + 1} dari {currentQuestion.sequence.length}</span>
-                  </div>
                 </div>
                 
-                <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6 mb-6 dark:text-white">
-                  {currentQuestion.sequence.map((num, idx) => (
-                    <div key={idx} className="flex flex-col items-center">
-                      <div className={`w-12 h-12 md:w-14 md:h-14 rounded-lg flex items-center justify-center text-lg md:text-xl font-semibold transition-all duration-300
-                        ${num === null ? 
-                          'border-2 border-dashed border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 shadow-inner' : 
-                          'bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 shadow-md'
-                        }`}
-                      >
-                        {num === null ? '?' : num}
-                      </div>
-                      {num === null && (
-                        <div className="mt-3">
-                          <input 
-                            type="number" 
-                            value={userAnswers[currentIndex]} 
-                            onChange={handleChange}
-                            className="w-16 md:w-20 border border-gray-300 rounded-lg px-3 py-2 text-center font-medium text-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                            placeholder="0"
-                            min="0"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                {/* Tabel numerik */}
+                <div className="overflow-x-auto mb-6">
+                  <table className="min-w-full border-collapse border border-gray-300 dark:border-gray-600 mx-auto">
+                    <tbody>
+                      {currentQuestion.table.map((row, rowIndex) => (
+                        <tr key={rowIndex}>
+                          {row.map((cell, cellIndex) => (
+                            <td 
+                              key={cellIndex} 
+                              className={`border border-gray-300 dark:border-gray-600 p-3 text-center text-lg font-medium
+                                ${cell === null ? 
+                                  'bg-indigo-50 dark:bg-indigo-900/20 border-dashed border-2 border-indigo-400' : 
+                                  'bg-white dark:bg-gray-700'
+                                }`}
+                            >
+                              {cell === null ? (
+                                <input 
+                                  type="number" 
+                                  value={userAnswers[currentIndex]} 
+                                  onChange={handleChange}
+                                  className="w-16 border border-gray-300 rounded px-2 py-1 text-center font-medium text-lg dark:bg-gray-600 dark:border-gray-500 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                  placeholder="?"
+                                  min="0"
+                                />
+                              ) : (
+                                cell
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
                 
                 <div className="text-center text-sm text-gray-600 dark:text-gray-400 mt-4 bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg">
                   <svg className="w-5 h-5 inline-block mr-2 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  Temukan pola dan isi angka yang hilang (ditandai dengan ?)
+                  Temukan pola dalam tabel dan isi angka yang sesuai (ditandai dengan input)
                 </div>
               </div>
             )}
 
-            {/* Navigasi - Tepat di bawah soal */}
+            {/* Navigasi */}
             <div className="flex flex-col-reverse sm:flex-row justify-between gap-4 mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 md:p-6">
               <button onClick={handlePrev} disabled={currentIndex===0}
                 className="px-5 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center">
@@ -225,7 +228,7 @@ export default function TesDeret({ initialQuestions = [] }) {
               )}
             </div>
 
-            {/* Grid soal - Ditempatkan di bawah tombol navigasi */}
+            {/* Grid soal */}
             <div className="mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 md:p-6">
               <h3 className="font-medium text-gray-700 dark:text-gray-300 mb-2">Daftar Soal:</h3>
               <div className="grid grid-cols-5 gap-2">
@@ -248,7 +251,7 @@ export default function TesDeret({ initialQuestions = [] }) {
           <div className="fixed inset-0 overflow-y-auto z-50 flex items-center justify-center p-4">
             <div className="fixed inset-0 bg-black bg-opacity-50" onClick={closeModal}></div>
             <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-auto p-6">
-              <h3 className="text-xl md:text-2xl font-bold text-center mb-4 text-gray-800 dark:text-white">Hasil Tes Deret Angka</h3>
+              <h3 className="text-xl md:text-2xl font-bold text-center mb-4 text-gray-800 dark:text-white">Hasil Tes Numerik Tabel</h3>
               <div className="flex justify-center items-center mb-6">
                 <div className="relative">
                   <div className="rounded-full w-40 h-40 bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center border-4 border-indigo-100 dark:border-indigo-900/30">
@@ -291,7 +294,7 @@ export default function TesDeret({ initialQuestions = [] }) {
         )}
 
         {/* Peringatan waktu hampir habis */}
-        {testStarted && timeLeft > 0 && timeLeft <= 10 && !isSubmitted && (
+        {testStarted && timeLeft > 0 && timeLeft <= 30 && !isSubmitted && (
           <div className="fixed bottom-4 right-4 bg-red-500 text-white p-4 rounded-lg shadow-lg animate-pulse">
             <div className="font-semibold flex items-center">
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
