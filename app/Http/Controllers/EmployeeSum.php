@@ -453,4 +453,94 @@ public function edit(Employee $employee)
             ] : null
         ]);
     }
+
+    public function sectionView(Request $request): Response
+{
+    $query = Employee::with(['subSections.section'])
+        ->where('status', '!=', 'deactivated')
+        ->whereNull('deactivated_at');
+
+    // Apply section filter
+    if ($request->has('section') && $request->input('section') !== 'All') {
+        $sectionName = $request->input('section');
+        $query->whereHas('subSections.section', function ($q) use ($sectionName) {
+            $q->where('name', $sectionName);
+        });
+    }
+
+    // Apply subsection filter
+    if ($request->has('sub_section') && $request->input('sub_section') !== 'All') {
+        $subSectionName = $request->input('sub_section');
+        $query->whereHas('subSections', function ($q) use ($subSectionName) {
+            $q->where('name', $subSectionName);
+        });
+    }
+
+    $employees = $query->orderBy('name')
+        ->paginate(12);
+
+    // Get unique sections and subsections for filters
+    $allSections = Section::select('name')->distinct()->pluck('name')->toArray();
+    $allSubSections = SubSection::select('name')->distinct()->pluck('name')->toArray();
+
+    return Inertia::render('EmployeeAttendance/SectionView', [
+        'employees' => $employees,
+        'filters' => $request->only(['section', 'sub_section']),
+        'uniqueSections' => array_merge(['All'], $allSections),
+        'uniqueSubSections' => array_merge(['All'], $allSubSections),
+    ]);
+}
+
+   public function incompleteProfiles(Request $request): Response
+{
+    $query = Employee::with(['subSections.section'])
+        ->where(function($q) {
+            $q->whereNull('kecamatan')
+              ->orWhereNull('kelurahan')
+              ->orWhere('kecamatan', '')
+              ->orWhere('kelurahan', '');
+        })
+        ->where('status', '!=', 'deactivated')
+        ->whereNull('deactivated_at');
+
+    // Apply section filter
+    if ($request->has('section') && $request->input('section') !== 'All' && $request->input('section') !== null) {
+        $sectionName = $request->input('section');
+        $query->whereHas('subSections.section', function ($q) use ($sectionName) {
+            $q->where('name', $sectionName);
+        });
+    }
+
+    // Apply subsection filter
+    if ($request->has('sub_section') && $request->input('sub_section') !== 'All' && $request->input('sub_section') !== null) {
+        $subSectionName = $request->input('sub_section');
+        $query->whereHas('subSections', function ($q) use ($subSectionName) {
+            $q->where('name', $subSectionName);
+        });
+    }
+
+    // Search by Name or NIK
+    if ($request->has('search') && $request->input('search') !== null && $request->input('search') !== '') {
+        $searchTerm = $request->input('search');
+        $query->where(function ($q) use ($searchTerm) {
+            $q->where('name', 'like', '%' . $searchTerm . '%')
+                ->orWhere('nik', 'like', '%' . $searchTerm . '%');
+        });
+    }
+
+    $employees = $query->orderBy('name')
+        ->paginate(10)
+        ->withQueryString(); // This preserves query parameters in pagination links
+
+    // Get unique sections and subsections for filters
+    $allSections = Section::select('name')->distinct()->pluck('name')->toArray();
+    $allSubSections = SubSection::select('name')->distinct()->pluck('name')->toArray();
+
+    return Inertia::render('EmployeeAttendance/IncompleteProfiles', [
+        'employees' => $employees,
+        'filters' => $request->only(['search', 'section', 'sub_section']),
+        'uniqueSections' => array_merge(['All'], $allSections),
+        'uniqueSubSections' => array_merge(['All'], $allSubSections),
+    ]);
+}
 }

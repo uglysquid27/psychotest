@@ -137,6 +137,9 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     Route::get('/inactive', [EmployeeSum::class, 'inactive'])->name('employee-attendance.inactive');
+    Route::get('/employee-attendance/section-view', [EmployeeSum::class, 'sectionView'])->name('employee-attendance.section-view');
+    Route::get('/employee-attendance/incomplete-profiles', [EmployeeSum::class, 'incompleteProfiles'])
+    ->name('employee-attendance.incomplete-profiles');
 
     // Employee Attendance routes
     Route::prefix('employee-attendance')->group(function () {
