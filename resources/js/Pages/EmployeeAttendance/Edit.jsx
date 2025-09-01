@@ -1,12 +1,20 @@
 import React, { useState } from 'react';
 import { useForm, usePage, Link } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { format, parseISO } from 'date-fns';
 
 export default function Edit() {
     const { employee, sections: allSections } = usePage().props;
     const [selectedSection, setSelectedSection] = useState(null);
     const [showSubSectionModal, setShowSubSectionModal] = useState(false);
     const [tempSelectedSubSections, setTempSelectedSubSections] = useState([]);
+    const [photoPreview, setPhotoPreview] = useState(employee.photo || null);
+    const [showSuccessToast, setShowSuccessToast] = useState(false);
+
+    // Format birth date
+    const formattedBirthDate = employee.birth_date
+        ? format(parseISO(employee.birth_date), 'yyyy-MM-dd')
+        : '';
 
     // Prepare sections data with sub_sections
     const sections = allSections.map(section => ({
@@ -14,7 +22,25 @@ export default function Edit() {
         sub_sections: section.sub_sections || []
     }));
 
+    // Function to capitalize first letter of each word
+    const toTitleCase = (str) => {
+        if (!str) return '';
+        return str.replace(/\w\S*/g, (txt) =>
+            txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
+        );
+    };
+
+    // Function to format RT/RW to 3 digits
+    const formatRtRw = (value) => {
+        if (!value) return '';
+        const numOnly = value.replace(/\D/g, '');
+        if (numOnly === '') return '';
+        const num = parseInt(numOnly);
+        return num.toString().padStart(3, '0');
+    };
+
     const { data, setData, put, processing, errors } = useForm({
+        // Basic employee data
         name: employee.name || '',
         nik: employee.nik || '',
         password: '',
@@ -24,6 +50,24 @@ export default function Edit() {
         cuti: employee.cuti || 'no',
         gender: employee.gender || 'male',
         sub_sections: employee.sub_sections || [],
+        
+        // Profile information
+        ktp: employee.ktp || '',
+        email: employee.email || '',
+        group: employee.group || '',
+        marital: employee.marital || '',
+        birth_date: formattedBirthDate,
+        religion: employee.religion || '',
+        phone: employee.phone || '',
+        street: employee.street || '',
+        rt: employee.rt ? formatRtRw(employee.rt) : '',
+        rw: employee.rw ? formatRtRw(employee.rw) : '',
+        kelurahan: employee.kelurahan || '',
+        kecamatan: employee.kecamatan || '',
+        kabupaten_kota: employee.kabupaten_kota || '',
+        provinsi: employee.provinsi || 'Jawa Timur',
+        kode_pos: employee.kode_pos || '',
+        photo: null,
     });
 
     const handleSectionSelect = (section) => {
@@ -75,14 +119,46 @@ export default function Edit() {
         setData('sub_sections', updated);
     };
 
+    const handlePhotoChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setData('photo', file);
+            
+            // Create preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setPhotoPreview(e.target.result);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const removePhoto = () => {
+        setData('photo', null);
+        setPhotoPreview(null);
+    };
+
     const handleSubmit = (e) => {
         e.preventDefault();
+        
+        // Format RT/RW before submitting
+        const formattedData = {
+            ...data,
+            rt: data.rt ? formatRtRw(data.rt) : '',
+            rw: data.rw ? formatRtRw(data.rw) : ''
+        };
+        
         put(route('employee-attendance.update', employee.id), {
+            data: formattedData,
             onError: (errors) => {
                 if (errors.password) {
                     setData('password', '');
                     setData('password_confirmation', '');
                 }
+            },
+            onSuccess: () => {
+                setShowSuccessToast(true);
+                setTimeout(() => setShowSuccessToast(false), 3000);
             }
         });
     };
@@ -99,6 +175,13 @@ export default function Edit() {
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
                     <div className="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                         <div className="p-6 text-gray-900 dark:text-gray-100">
+                            {/* Success Toast */}
+                            {showSuccessToast && (
+                                <div className="mb-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative">
+                                    <span className="block sm:inline">Employee updated successfully.</span>
+                                </div>
+                            )}
+
                             <div className="flex justify-between items-center mb-6">
                                 <h1 className="text-2xl font-bold">Edit Employee Data</h1>
                                 <Link
@@ -110,6 +193,47 @@ export default function Edit() {
                             </div>
 
                             <form onSubmit={handleSubmit} className="space-y-6">
+                                {/* Photo Upload Section */}
+                                <div className="bg-gray-50 dark:bg-gray-700 p-4 sm:p-6 rounded-lg">
+                                    <h3 className="font-medium text-gray-700 dark:text-gray-300 text-lg mb-4">
+                                        Profile Photo
+                                    </h3>
+                                    
+                                    <div className="flex items-center space-x-6">
+                                        <div className="shrink-0">
+                                            <img 
+                                                className="h-24 w-24 object-cover rounded-full border-2 border-gray-300 dark:border-gray-600" 
+                                                src={photoPreview || (employee.photo ? `/storage/${employee.photo}` : '/images/default-avatar.png')} 
+                                                alt="Current profile" 
+                                            />
+                                        </div>
+                                        <label className="block">
+                                            <span className="sr-only">Choose profile photo</span>
+                                            <input 
+                                                type="file" 
+                                                accept="image/*"
+                                                onChange={handlePhotoChange}
+                                                className="block w-full text-sm text-gray-500 dark:text-gray-400
+                                                    file:mr-4 file:py-2 file:px-4
+                                                    file:rounded-md file:border-0
+                                                    file:text-sm file:font-semibold
+                                                    file:bg-indigo-50 dark:file:bg-indigo-900/20 file:text-indigo-700 dark:file:text-indigo-300
+                                                    hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900/30" 
+                                            />
+                                        </label>
+                                        {photoPreview && (
+                                            <button
+                                                type="button"
+                                                onClick={removePhoto}
+                                                className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm"
+                                            >
+                                                Remove Photo
+                                            </button>
+                                        )}
+                                    </div>
+                                    {errors.photo && <p className="mt-2 text-red-500 text-sm">{errors.photo}</p>}
+                                </div>
+
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     {/* Basic Information */}
                                     <div className="space-y-4">
@@ -123,7 +247,7 @@ export default function Edit() {
                                                 type="text"
                                                 id="name"
                                                 value={data.name}
-                                                onChange={(e) => setData('name', e.target.value)}
+                                                onChange={(e) => setData('name', toTitleCase(e.target.value))}
                                                 className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                                 required
                                             />
@@ -143,6 +267,35 @@ export default function Edit() {
                                                 required
                                             />
                                             {errors.nik && <p className="text-red-500 text-sm mt-1">{errors.nik}</p>}
+                                        </div>
+
+                                        <div>
+                                            <label htmlFor="ktp" className="block text-sm font-medium mb-1">
+                                                KTP Number
+                                            </label>
+                                            <input
+                                                type="text"
+                                                id="ktp"
+                                                value={data.ktp}
+                                                onChange={(e) => setData('ktp', e.target.value.replace(/\D/g, '').slice(0, 16))}
+                                                className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                                maxLength={16}
+                                            />
+                                            {errors.ktp && <p className="text-red-500 text-sm mt-1">{errors.ktp}</p>}
+                                        </div>
+
+                                        <div>
+                                            <label htmlFor="email" className="block text-sm font-medium mb-1">
+                                                Email
+                                            </label>
+                                            <input
+                                                type="email"
+                                                id="email"
+                                                value={data.email}
+                                                onChange={(e) => setData('email', e.target.value.toLowerCase())}
+                                                className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                            />
+                                            {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
                                         </div>
 
                                         <div>
@@ -178,9 +331,9 @@ export default function Edit() {
                                         </div>
                                     </div>
 
-                                    {/* Status & Security */}
+                                    {/* Status & Personal Details */}
                                     <div className="space-y-4">
-                                        <h3 className="text-lg font-medium border-b pb-2">Status & Security</h3>
+                                        <h3 className="text-lg font-medium border-b pb-2">Status & Personal Details</h3>
 
                                         <div>
                                             <label htmlFor="status" className="block text-sm font-medium mb-1">
@@ -216,45 +369,223 @@ export default function Edit() {
                                         </div>
 
                                         <div>
-                                            <label htmlFor="password" className="block text-sm font-medium mb-1">
-                                                New Password (leave blank to keep current)
+                                            <label htmlFor="marital" className="block text-sm font-medium mb-1">
+                                                Marital Status
                                             </label>
-                                            <input
-                                                type="password"
-                                                id="password"
-                                                value={data.password}
-                                                onChange={(e) => setData('password', e.target.value)}
+                                            <select
+                                                id="marital"
+                                                value={data.marital}
+                                                onChange={(e) => setData('marital', e.target.value)}
                                                 className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                                            />
-                                            {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
+                                            >
+                                                <option value="">Select Status</option>
+                                                <option value="K0">K/O - Married, No Children</option>
+                                                <option value="K1">K/1 - Married, 1 Child</option>
+                                                <option value="K2">K/2 - Married, 2 Children</option>
+                                                <option value="K3">K/3 - Married, 3 Children</option>
+                                                <option value="BM">Not Married</option>
+                                                <option value="TK1">TK/1 - Single, 1 Dependent</option>
+                                                <option value="TK2">TK/2 - Single, 2 Dependents</option>
+                                                <option value="TK3">TK/3 - Single, 3 Dependents</option>
+                                            </select>
                                         </div>
 
                                         <div>
-                                            <label htmlFor="password_confirmation" className="block text-sm font-medium mb-1">
-                                                Confirm New Password
+                                            <label htmlFor="birth_date" className="block text-sm font-medium mb-1">
+                                                Birth Date
                                             </label>
                                             <input
-                                                type="password"
-                                                id="password_confirmation"
-                                                value={data.password_confirmation}
-                                                onChange={(e) => setData('password_confirmation', e.target.value)}
+                                                type="date"
+                                                id="birth_date"
+                                                value={data.birth_date}
+                                                onChange={(e) => setData('birth_date', e.target.value)}
                                                 className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                             />
+                                            {errors.birth_date && <p className="text-red-500 text-sm mt-1">{errors.birth_date}</p>}
                                         </div>
 
-                                        {/* License Button */}
-                                        <div className="pt-2">
-                                            {route().has('employee-license.show') && (
-                                                <Link
-                                                    href={route('employee-license.show', employee.id)}
-                                                    className="inline-flex items-center px-3 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150"
-                                                >
-                                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                                                    </svg>
-                                                    View/Edit License
-                                                </Link>
-                                            )}
+                                        <div>
+                                            <label htmlFor="religion" className="block text-sm font-medium mb-1">
+                                                Religion
+                                            </label>
+                                            <select
+                                                id="religion"
+                                                value={data.religion}
+                                                onChange={(e) => setData('religion', e.target.value)}
+                                                className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                            >
+                                                <option value="">Select Religion</option>
+                                                <option value="Islam">Islam</option>
+                                                <option value="Protestan">Protestan</option>
+                                                <option value="Katolik">Katolik</option>
+                                                <option value="Hindu">Hindu</option>
+                                                <option value="Buddha">Buddha</option>
+                                                <option value="Konghucu">Konghucu</option>
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label htmlFor="phone" className="block text-sm font-medium mb-1">
+                                                Phone Number
+                                            </label>
+                                            <input
+                                                type="tel"
+                                                id="phone"
+                                                value={data.phone}
+                                                onChange={(e) => setData('phone', e.target.value)}
+                                                className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                            />
+                                            {errors.phone && <p className="text-red-500 text-sm mt-1">{errors.phone}</p>}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Address Information */}
+                                <div className="bg-gray-50 dark:bg-gray-700 p-4 sm:p-6 rounded-lg">
+                                    <h3 className="font-medium text-gray-700 dark:text-gray-300 text-lg mb-4">
+                                        Address Information
+                                    </h3>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label htmlFor="street" className="block text-sm font-medium mb-1">
+                                                Street
+                                            </label>
+                                            <input
+                                                type="text"
+                                                id="street"
+                                                value={data.street}
+                                                onChange={(e) => setData('street', toTitleCase(e.target.value))}
+                                                className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                            />
+                                            {errors.street && <p className="text-red-500 text-sm mt-1">{errors.street}</p>}
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label htmlFor="rt" className="block text-sm font-medium mb-1">
+                                                    RT
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    id="rt"
+                                                    value={data.rt}
+                                                    onChange={(e) => {
+                                                        const value = e.target.value;
+                                                        if (value === '' || /^\d+$/.test(value)) {
+                                                            setData('rt', value.slice(0, 3));
+                                                        }
+                                                    }}
+                                                    onBlur={(e) => {
+                                                        if (e.target.value.length > 0) {
+                                                            setData('rt', e.target.value.padStart(3, '0'));
+                                                        }
+                                                    }}
+                                                    className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                                    maxLength={3}
+                                                />
+                                                {errors.rt && <p className="text-red-500 text-sm mt-1">{errors.rt}</p>}
+                                            </div>
+
+                                            <div>
+                                                <label htmlFor="rw" className="block text-sm font-medium mb-1">
+                                                    RW
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    id="rw"
+                                                    value={data.rw}
+                                                    onChange={(e) => {
+                                                        const value = e.target.value;
+                                                        if (value === '' || /^\d+$/.test(value)) {
+                                                            setData('rw', value.slice(0, 3));
+                                                        }
+                                                    }}
+                                                    onBlur={(e) => {
+                                                        if (e.target.value.length > 0) {
+                                                            setData('rw', e.target.value.padStart(3, '0'));
+                                                        }
+                                                    }}
+                                                    className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                                    maxLength={3}
+                                                />
+                                                {errors.rw && <p className="text-red-500 text-sm mt-1">{errors.rw}</p>}
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label htmlFor="kelurahan" className="block text-sm font-medium mb-1">
+                                                Kelurahan/Desa
+                                            </label>
+                                            <input
+                                                type="text"
+                                                id="kelurahan"
+                                                value={data.kelurahan}
+                                                onChange={(e) => setData('kelurahan', toTitleCase(e.target.value))}
+                                                className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                            />
+                                            {errors.kelurahan && <p className="text-red-500 text-sm mt-1">{errors.kelurahan}</p>}
+                                        </div>
+
+                                        <div>
+                                            <label htmlFor="kecamatan" className="block text-sm font-medium mb-1">
+                                                Kecamatan
+                                            </label>
+                                            <input
+                                                type="text"
+                                                id="kecamatan"
+                                                value={data.kecamatan}
+                                                onChange={(e) => setData('kecamatan', toTitleCase(e.target.value))}
+                                                className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                            />
+                                            {errors.kecamatan && <p className="text-red-500 text-sm mt-1">{errors.kecamatan}</p>}
+                                        </div>
+
+                                        <div>
+                                            <label htmlFor="kabupaten_kota" className="block text-sm font-medium mb-1">
+                                                Kabupaten/Kota
+                                            </label>
+                                            <input
+                                                type="text"
+                                                id="kabupaten_kota"
+                                                value={data.kabupaten_kota}
+                                                onChange={(e) => setData('kabupaten_kota', toTitleCase(e.target.value))}
+                                                className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                            />
+                                            {errors.kabupaten_kota && <p className="text-red-500 text-sm mt-1">{errors.kabupaten_kota}</p>}
+                                        </div>
+
+                                        <div>
+                                            <label htmlFor="provinsi" className="block text-sm font-medium mb-1">
+                                                Provinsi
+                                            </label>
+                                            <input
+                                                type="text"
+                                                id="provinsi"
+                                                value={data.provinsi}
+                                                onChange={(e) => setData('provinsi', toTitleCase(e.target.value))}
+                                                className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                            />
+                                            {errors.provinsi && <p className="text-red-500 text-sm mt-1">{errors.provinsi}</p>}
+                                        </div>
+
+                                        <div>
+                                            <label htmlFor="kode_pos" className="block text-sm font-medium mb-1">
+                                                Postal Code
+                                            </label>
+                                            <input
+                                                type="text"
+                                                id="kode_pos"
+                                                value={data.kode_pos}
+                                                onChange={(e) => {
+                                                    const numOnly = e.target.value.replace(/\D/g, '').slice(0, 5);
+                                                    setData('kode_pos', numOnly);
+                                                }}
+                                                className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                                placeholder="12345"
+                                                maxLength={5}
+                                            />
+                                            {errors.kode_pos && <p className="text-red-500 text-sm mt-1">{errors.kode_pos}</p>}
                                         </div>
                                     </div>
                                 </div>
@@ -314,6 +645,43 @@ export default function Edit() {
                                         </div>
                                     </div>
                                     {errors.sub_sections && <p className="mt-2 text-red-500 text-sm">{errors.sub_sections}</p>}
+                                </div>
+
+                                {/* Password Section */}
+                                <div className="bg-gray-50 dark:bg-gray-700 p-4 sm:p-6 rounded-lg">
+                                    <h3 className="font-medium text-gray-700 dark:text-gray-300 text-lg mb-4">
+                                        Change Password
+                                    </h3>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label htmlFor="password" className="block text-sm font-medium mb-1">
+                                                New Password (leave blank to keep current)
+                                            </label>
+                                            <input
+                                                type="password"
+                                                id="password"
+                                                value={data.password}
+                                                onChange={(e) => setData('password', e.target.value)}
+                                                className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                            />
+                                            {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
+                                        </div>
+
+                                        <div>
+                                            <label htmlFor="password_confirmation" className="block text-sm font-medium mb-1">
+                                                Confirm New Password
+                                            </label>
+                                            <input
+                                                type="password"
+                                                id="password_confirmation"
+                                                value={data.password_confirmation}
+                                             onChange={(e) => setData('password_confirmation', e.target.value)}
+
+                                                className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div className="flex justify-end pt-6 border-t border-gray-200 dark:border-gray-700">

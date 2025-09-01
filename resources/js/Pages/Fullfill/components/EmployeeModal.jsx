@@ -62,19 +62,49 @@ export default function EmployeeModal({
     }, [allSortedEligibleEmployees, searchTerm, selectedSubSection]);
 
     // FIXED: More robust sub-section filtering
-    const sameSubSectionEmployees = useMemo(() => {
-        const reqSubId = Number(request.sub_section_id);
-        return filteredEmployees.filter(emp =>
-            emp.subSections && emp.subSections.some(ss => Number(ss.id) === reqSubId)
-        );
-    }, [filteredEmployees, request.sub_section_id]);
+   // FIXED: Comprehensive sub-section filtering with better type handling
+const sameSubSectionEmployees = useMemo(() => {
+    const reqSubId = request.sub_section_id;
+    if (!reqSubId) return [];
     
-    const otherSubSectionEmployees = useMemo(() => {
-        const reqSubId = Number(request.sub_section_id);
-        return filteredEmployees.filter(emp =>
-            !emp.subSections || !emp.subSections.some(ss => Number(ss.id) === reqSubId)
-        );
-    }, [filteredEmployees, request.sub_section_id]);
+    return filteredEmployees.filter(emp => {
+        if (!emp.subSections || !Array.isArray(emp.subSections)) return false;
+        
+        return emp.subSections.some(ss => {
+            if (!ss || !ss.id) return false;
+            
+            // Try multiple comparison methods
+            const ssId = ss.id;
+            const matches = 
+                ssId == reqSubId || // Loose equality
+                String(ssId) === String(reqSubId) || // String comparison
+                Number(ssId) === Number(reqSubId); // Number comparison
+                
+            return matches;
+        });
+    });
+}, [filteredEmployees, request.sub_section_id]);
+
+const otherSubSectionEmployees = useMemo(() => {
+    const reqSubId = request.sub_section_id;
+    if (!reqSubId) return filteredEmployees;
+    
+    return filteredEmployees.filter(emp => {
+        if (!emp.subSections || !Array.isArray(emp.subSections)) return true;
+        
+        return !emp.subSections.some(ss => {
+            if (!ss || !ss.id) return false;
+            
+            const ssId = ss.id;
+            const matches = 
+                ssId == reqSubId ||
+                String(ssId) === String(reqSubId) ||
+                Number(ssId) === Number(reqSubId);
+                
+            return matches;
+        });
+    });
+}, [filteredEmployees, request.sub_section_id]);
     
 
     // Rest of the component remains the same...

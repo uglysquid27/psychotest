@@ -6,7 +6,7 @@ export default function IncompleteProfiles() {
     const { employees: paginationData, filters, auth, uniqueSections, uniqueSubSections } = usePage().props;
     const employees = paginationData.data;
     const paginationLinks = paginationData.links;
-    
+
     // State for filters
     const [selectedSection, setSelectedSection] = useState(filters.section || 'All');
     const [selectedSubSection, setSelectedSubSection] = useState(filters.sub_section || 'All');
@@ -30,7 +30,7 @@ export default function IncompleteProfiles() {
                 delete params[key];
             }
         });
-        
+
         // Use Inertia's router to fetch new data from server
         router.get(route('employee-attendance.incomplete-profiles'), params, {
             preserveState: false, // Don't preserve state to get fresh data
@@ -43,7 +43,7 @@ export default function IncompleteProfiles() {
         const section = e.target.value;
         setSelectedSection(section);
         setSelectedSubSection('All'); // Reset subsection when section changes
-        updateFilters({ 
+        updateFilters({
             section: section,
             sub_section: 'All'
         });
@@ -53,8 +53,8 @@ export default function IncompleteProfiles() {
     const handleSubSectionChange = (e) => {
         const subSection = e.target.value;
         setSelectedSubSection(subSection);
-        updateFilters({ 
-            sub_section: subSection 
+        updateFilters({
+            sub_section: subSection
         });
     };
 
@@ -77,11 +77,11 @@ export default function IncompleteProfiles() {
     // Handle pagination
     const handlePagination = (url) => {
         if (!url) return;
-        
+
         // Extract page parameter from URL
         const urlObj = new URL(url);
         const page = urlObj.searchParams.get('page');
-        
+
         // Preserve current filters and add page parameter
         const params = {
             page: page,
@@ -92,7 +92,7 @@ export default function IncompleteProfiles() {
 
         // Remove undefined values
         Object.keys(params).forEach(key => params[key] === undefined && delete params[key]);
-        
+
         router.get(route('employee-attendance.incomplete-profiles'), params, {
             preserveState: false,
             replace: true,
@@ -157,6 +157,22 @@ export default function IncompleteProfiles() {
                                             </svg>
                                             <span className="whitespace-nowrap">Kembali ke Daftar Utama</span>
                                         </Link>
+                                        {/* <button
+    onClick={() => {
+        const params = new URLSearchParams();
+        if (selectedSection !== 'All') params.append('section', selectedSection);
+        if (selectedSubSection !== 'All') params.append('sub_section', selectedSubSection);
+        if (searchTerm) params.append('search', searchTerm);
+        
+        window.location.href = `${route('employee-attendance.incomplete-profiles.export')}?${params.toString()}`;
+    }}
+    className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 px-3 py-2 sm:px-4 rounded-md font-medium text-white text-sm transition-colors duration-200 w-full sm:w-auto"
+>
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+    <span className="whitespace-nowrap">Export Excel</span>
+</button> */}
                                     </div>
                                 </div>
                             </div>
@@ -293,7 +309,7 @@ export default function IncompleteProfiles() {
                                                                 NIK: {employee.nik}
                                                             </p>
                                                         </div>
-                                                        
+
                                                         <div className="text-sm space-y-1">
                                                             <p className="text-gray-700 dark:text-gray-300">
                                                                 <span className="font-medium">Section:</span> {getSectionNames(employee)}
@@ -302,19 +318,19 @@ export default function IncompleteProfiles() {
                                                                 <span className="font-medium">Subsection:</span> {getSubSectionNames(employee)}
                                                             </p>
                                                         </div>
-                                                        
-                                                       
+
+
                                                     </div>
-                                                     <div className="text-sm text-right">
-                                                            <p className="text-red-600 dark:text-red-400 font-medium">
-                                                                Data belum lengkap
-                                                            </p>
-                                                            {/* <p className="text-red-500 dark:text-red-300">
+                                                    <div className="text-sm text-right">
+                                                        <p className="text-red-600 dark:text-red-400 font-medium">
+                                                            Data belum lengkap
+                                                        </p>
+                                                        {/* <p className="text-red-500 dark:text-red-300">
                                                                 {getMissingFields(employee).join(', ')}
                                                             </p> */}
-                                                        </div>
+                                                    </div>
                                                 </div>
-                                                
+
                                                 <div className="flex gap-2">
                                                     {/* <Link
                                                         href={route('employee.employees.edit', employee.id)}

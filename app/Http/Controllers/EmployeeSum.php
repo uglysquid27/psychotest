@@ -19,6 +19,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Validation\Rules;
 use App\Http\Requests\DeactivateEmployeeRequest;
+use App\Exports\IncompleteProfilesExport;
+use App\Services\ExcelExportService;
 
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
@@ -219,13 +221,13 @@ class EmployeeSum extends Controller
     }
 
     public function create(): Response
-{
-    $sections = Section::with('subSections')->get();
+    {
+        $sections = Section::with('subSections')->get();
 
-    return Inertia::render('EmployeeAttendance/Create', [
-        'sections' => $sections,
-    ]);
-}
+        return Inertia::render('EmployeeAttendance/Create', [
+            'sections' => $sections,
+        ]);
+    }
 
 
 
@@ -271,65 +273,81 @@ class EmployeeSum extends Controller
         ]);
     }
 
-public function edit(Employee $employee)
-{
-    $sections = Section::with('subSections')->get();
+    public function edit(Employee $employee)
+    {
+        $sections = Section::with('subSections')->get();
 
-    return Inertia::render('EmployeeAttendance/Edit', [
-        'employee' => [
-            'id' => $employee->id,
-            'name' => $employee->name,
-            'nik' => $employee->nik,
-            'type' => $employee->type,
-            'status' => $employee->status,
-            'cuti' => $employee->cuti,
-            'gender' => $employee->gender,
-            'sub_sections' => $employee->subSections->pluck('name')->toArray(),
-        ],
-        'sections' => $sections,
-    ]);
-}
+        return Inertia::render('EmployeeAttendance/Edit', [
+            'employee' => [
+                'id' => $employee->id,
+                'name' => $employee->name,
+                'nik' => $employee->nik,
+                'type' => $employee->type,
+                'status' => $employee->status,
+                'cuti' => $employee->cuti,
+                'gender' => $employee->gender,
+                'email'=>  $employee->email,
+                'ktp'=>  $employee->ktp,
+                'marital'=>  $employee->marital,
+                'birth_date'=>  $employee->birth_date,
+                'religion'=>  $employee->religion,
+                'phone'=>  $employee->phone,
+                'street'=>  $employee->street,
+                'rt'=>  $employee->rt,
+                'rw'=>  $employee->rw,
+                'kelurahan'=>  $employee->kelurahan,
+                'kecamatan'=>  $employee->kecamatan,
+                'kabupaten_kota'=>  $employee->kabupaten_kota,
+                'provinsi'=>  $employee->provinsi,
+                'kode_pos'=>  $employee->kode_pos,
+                'group'=>  $employee->group,
+                'photo'=>  $employee->photo,
+                'sub_sections' => $employee->subSections->pluck('name')->toArray(),
+            ],
+            'sections' => $sections,
+        ]);
+    }
 
-   public function update(Request $request, Employee $employee)
-{
-    $validated = $request->validate([
-        'name' => 'required|string|max:255',
-        'nik' => 'required|string|max:255|unique:employees,nik,' . $employee->id,
-        'password' => ['nullable', 'confirmed', Rules\Password::defaults()],
-        'type' => 'required|in:harian,bulanan',
-        'status' => 'required|in:available,assigned,on leave',
-        'cuti' => 'required|in:yes,no',
-        'gender' => 'required|in:male,female',
-        'sub_sections' => 'required|array|min:1',
-        'sub_sections.*' => 'string|exists:sub_sections,name',
-    ]);
+    public function update(Request $request, Employee $employee)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'nik' => 'required|string|max:255|unique:employees,nik,' . $employee->id,
+            'password' => ['nullable', 'confirmed', Rules\Password::defaults()],
+            'type' => 'required|in:harian,bulanan',
+            'status' => 'required|in:available,assigned,on leave',
+            'cuti' => 'required|in:yes,no',
+            'gender' => 'required|in:male,female',
+            'sub_sections' => 'required|array|min:1',
+            'sub_sections.*' => 'string|exists:sub_sections,name',
+        ]);
 
-    // Get sub-section IDs from names
-    $subSectionIds = SubSection::whereIn('name', $validated['sub_sections'])
-        ->pluck('id')
-        ->toArray();
+        // Get sub-section IDs from names
+        $subSectionIds = SubSection::whereIn('name', $validated['sub_sections'])
+            ->pluck('id')
+            ->toArray();
 
-    DB::transaction(function () use ($employee, $validated, $subSectionIds) {
-        $updateData = [
-            'name' => $validated['name'],
-            'nik' => $validated['nik'],
-            'type' => $validated['type'],
-            'status' => $validated['status'],
-            'cuti' => $validated['cuti'],
-            'gender' => $validated['gender'],
-        ];
+        DB::transaction(function () use ($employee, $validated, $subSectionIds) {
+            $updateData = [
+                'name' => $validated['name'],
+                'nik' => $validated['nik'],
+                'type' => $validated['type'],
+                'status' => $validated['status'],
+                'cuti' => $validated['cuti'],
+                'gender' => $validated['gender'],
+            ];
 
-        if (!empty($validated['password'])) {
-            $updateData['password'] = Hash::make($validated['password']);
-        }
+            if (!empty($validated['password'])) {
+                $updateData['password'] = Hash::make($validated['password']);
+            }
 
-        $employee->update($updateData);
-        $employee->subSections()->sync($subSectionIds);
-    });
+            $employee->update($updateData);
+            $employee->subSections()->sync($subSectionIds);
+        });
 
-    return redirect()->route('employee-attendance.index')
-        ->with('success', 'Employee updated successfully.');
-}
+        return redirect()->route('employee-attendance.index')
+            ->with('success', 'Employee updated successfully.');
+    }
 
     public function inactive(Request $request)
     {
@@ -455,92 +473,190 @@ public function edit(Employee $employee)
     }
 
     public function sectionView(Request $request): Response
-{
-    $query = Employee::with(['subSections.section'])
-        ->where('status', '!=', 'deactivated')
-        ->whereNull('deactivated_at');
+    {
+        $query = Employee::with(['subSections.section'])
+            ->where('status', '!=', 'deactivated')
+            ->whereNull('deactivated_at');
 
-    // Apply section filter
-    if ($request->has('section') && $request->input('section') !== 'All') {
-        $sectionName = $request->input('section');
-        $query->whereHas('subSections.section', function ($q) use ($sectionName) {
-            $q->where('name', $sectionName);
-        });
+        // Apply section filter
+        if ($request->has('section') && $request->input('section') !== 'All') {
+            $sectionName = $request->input('section');
+            $query->whereHas('subSections.section', function ($q) use ($sectionName) {
+                $q->where('name', $sectionName);
+            });
+        }
+
+        // Apply subsection filter
+        if ($request->has('sub_section') && $request->input('sub_section') !== 'All') {
+            $subSectionName = $request->input('sub_section');
+            $query->whereHas('subSections', function ($q) use ($subSectionName) {
+                $q->where('name', $subSectionName);
+            });
+        }
+
+        $employees = $query->orderBy('name')
+            ->paginate(12);
+
+        // Get unique sections and subsections for filters
+        $allSections = Section::select('name')->distinct()->pluck('name')->toArray();
+        $allSubSections = SubSection::select('name')->distinct()->pluck('name')->toArray();
+
+        return Inertia::render('EmployeeAttendance/SectionView', [
+            'employees' => $employees,
+            'filters' => $request->only(['section', 'sub_section']),
+            'uniqueSections' => array_merge(['All'], $allSections),
+            'uniqueSubSections' => array_merge(['All'], $allSubSections),
+        ]);
     }
 
-    // Apply subsection filter
-    if ($request->has('sub_section') && $request->input('sub_section') !== 'All') {
-        $subSectionName = $request->input('sub_section');
-        $query->whereHas('subSections', function ($q) use ($subSectionName) {
-            $q->where('name', $subSectionName);
-        });
+    public function exportIncompleteProfiles(Request $request)
+    {
+        try {
+            $filters = $request->only(['section', 'sub_section', 'search']);
+
+            // Query data yang sama dengan incompleteProfiles
+            $query = Employee::with(['subSections.section'])
+                ->where(function ($q) {
+                    $q->whereNull('kecamatan')
+                        ->orWhereNull('kelurahan')
+                        ->orWhere('kecamatan', '')
+                        ->orWhere('kelurahan', '');
+                })
+                ->where('status', '!=', 'deactivated')
+                ->whereNull('deactivated_at');
+
+            // Apply filters
+            if (!empty($filters['section']) && $filters['section'] !== 'All') {
+                $sectionName = $filters['section'];
+                $query->whereHas('subSections.section', function ($q) use ($sectionName) {
+                    $q->where('name', $sectionName);
+                });
+            }
+
+            if (!empty($filters['sub_section']) && $filters['sub_section'] !== 'All') {
+                $subSectionName = $filters['sub_section'];
+                $query->whereHas('subSections', function ($q) use ($subSectionName) {
+                    $q->where('name', $subSectionName);
+                });
+            }
+
+            if (!empty($filters['search'])) {
+                $searchTerm = $filters['search'];
+                $query->where(function ($q) use ($searchTerm) {
+                    $q->where('name', 'like', '%' . $searchTerm . '%')
+                        ->orWhere('nik', 'like', '%' . $searchTerm . '%');
+                });
+            }
+
+            $employees = $query->orderBy('name')->get();
+
+            // Prepare data for export
+            $exportData = [];
+            foreach ($employees as $employee) {
+                // Get section names
+                $sectionNames = 'Tidak ada section';
+                if ($employee->subSections && $employee->subSections->count() > 0) {
+                    $sections = collect();
+                    $employee->subSections->each(function ($subSection) use ($sections) {
+                        if ($subSection->section && $subSection->section->name) {
+                            $sections->push($subSection->section->name);
+                        }
+                    });
+                    $sectionNames = $sections->unique()->implode(', ');
+                }
+
+                // Get subsection names
+                $subSectionNames = 'Tidak ada subsection';
+                if ($employee->subSections && $employee->subSections->count() > 0) {
+                    $subSectionNames = $employee->subSections->pluck('name')->implode(', ');
+                }
+
+                // Check missing fields
+                $missingFields = [];
+                if (!$employee->kecamatan || $employee->kecamatan === '') {
+                    $missingFields[] = 'Kecamatan';
+                }
+                if (!$employee->kelurahan || $employee->kelurahan === '') {
+                    $missingFields[] = 'Kelurahan';
+                }
+
+                $completionStatus = empty($missingFields)
+                    ? 'Lengkap'
+                    : 'Tidak Lengkap: ' . implode(', ', $missingFields);
+
+                $exportData[] = [
+                    $employee->nik,
+                    $employee->name,
+                    $sectionNames,
+                    $subSectionNames,
+                    $employee->kecamatan ?? 'Tidak diisi',
+                    $employee->kelurahan ?? 'Tidak diisi',
+                    $completionStatus
+                ];
+            }
+
+            $fileName = 'karyawan-profil-tidak-lengkap-' . date('Y-m-d') . '.xlsx';
+
+            $excelService = new ExcelExportService();
+            return $excelService->exportIncompleteProfiles($exportData, $fileName);
+
+        } catch (\Exception $e) {
+            \Log::error('Export failed: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+            return redirect()->back()->with('error', 'Gagal mengekspor data: ' . $e->getMessage());
+        }
     }
 
-    $employees = $query->orderBy('name')
-        ->paginate(12);
+    public function incompleteProfiles(Request $request): Response
+    {
+        $query = Employee::with(['subSections.section'])
+            ->where(function ($q) {
+                $q->whereNull('kecamatan')
+                    ->orWhereNull('kelurahan')
+                    ->orWhere('kecamatan', '')
+                    ->orWhere('kelurahan', '');
+            })
+            ->where('status', '!=', 'deactivated')
+            ->whereNull('deactivated_at');
 
-    // Get unique sections and subsections for filters
-    $allSections = Section::select('name')->distinct()->pluck('name')->toArray();
-    $allSubSections = SubSection::select('name')->distinct()->pluck('name')->toArray();
+        // Apply section filter
+        if ($request->has('section') && $request->input('section') !== 'All' && $request->input('section') !== null) {
+            $sectionName = $request->input('section');
+            $query->whereHas('subSections.section', function ($q) use ($sectionName) {
+                $q->where('name', $sectionName);
+            });
+        }
 
-    return Inertia::render('EmployeeAttendance/SectionView', [
-        'employees' => $employees,
-        'filters' => $request->only(['section', 'sub_section']),
-        'uniqueSections' => array_merge(['All'], $allSections),
-        'uniqueSubSections' => array_merge(['All'], $allSubSections),
-    ]);
-}
+        // Apply subsection filter
+        if ($request->has('sub_section') && $request->input('sub_section') !== 'All' && $request->input('sub_section') !== null) {
+            $subSectionName = $request->input('sub_section');
+            $query->whereHas('subSections', function ($q) use ($subSectionName) {
+                $q->where('name', $subSectionName);
+            });
+        }
 
-   public function incompleteProfiles(Request $request): Response
-{
-    $query = Employee::with(['subSections.section'])
-        ->where(function($q) {
-            $q->whereNull('kecamatan')
-              ->orWhereNull('kelurahan')
-              ->orWhere('kecamatan', '')
-              ->orWhere('kelurahan', '');
-        })
-        ->where('status', '!=', 'deactivated')
-        ->whereNull('deactivated_at');
+        // Search by Name or NIK
+        if ($request->has('search') && $request->input('search') !== null && $request->input('search') !== '') {
+            $searchTerm = $request->input('search');
+            $query->where(function ($q) use ($searchTerm) {
+                $q->where('name', 'like', '%' . $searchTerm . '%')
+                    ->orWhere('nik', 'like', '%' . $searchTerm . '%');
+            });
+        }
 
-    // Apply section filter
-    if ($request->has('section') && $request->input('section') !== 'All' && $request->input('section') !== null) {
-        $sectionName = $request->input('section');
-        $query->whereHas('subSections.section', function ($q) use ($sectionName) {
-            $q->where('name', $sectionName);
-        });
+        $employees = $query->orderBy('name')
+            ->paginate(10)
+            ->withQueryString(); // This preserves query parameters in pagination links
+
+        // Get unique sections and subsections for filters
+        $allSections = Section::select('name')->distinct()->pluck('name')->toArray();
+        $allSubSections = SubSection::select('name')->distinct()->pluck('name')->toArray();
+
+        return Inertia::render('EmployeeAttendance/IncompleteProfiles', [
+            'employees' => $employees,
+            'filters' => $request->only(['search', 'section', 'sub_section']),
+            'uniqueSections' => array_merge(['All'], $allSections),
+            'uniqueSubSections' => array_merge(['All'], $allSubSections),
+        ]);
     }
-
-    // Apply subsection filter
-    if ($request->has('sub_section') && $request->input('sub_section') !== 'All' && $request->input('sub_section') !== null) {
-        $subSectionName = $request->input('sub_section');
-        $query->whereHas('subSections', function ($q) use ($subSectionName) {
-            $q->where('name', $subSectionName);
-        });
-    }
-
-    // Search by Name or NIK
-    if ($request->has('search') && $request->input('search') !== null && $request->input('search') !== '') {
-        $searchTerm = $request->input('search');
-        $query->where(function ($q) use ($searchTerm) {
-            $q->where('name', 'like', '%' . $searchTerm . '%')
-                ->orWhere('nik', 'like', '%' . $searchTerm . '%');
-        });
-    }
-
-    $employees = $query->orderBy('name')
-        ->paginate(10)
-        ->withQueryString(); // This preserves query parameters in pagination links
-
-    // Get unique sections and subsections for filters
-    $allSections = Section::select('name')->distinct()->pluck('name')->toArray();
-    $allSubSections = SubSection::select('name')->distinct()->pluck('name')->toArray();
-
-    return Inertia::render('EmployeeAttendance/IncompleteProfiles', [
-        'employees' => $employees,
-        'filters' => $request->only(['search', 'section', 'sub_section']),
-        'uniqueSections' => array_merge(['All'], $allSections),
-        'uniqueSubSections' => array_merge(['All'], $allSubSections),
-    ]);
-}
 }

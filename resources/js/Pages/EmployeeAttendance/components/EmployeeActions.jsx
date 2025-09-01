@@ -23,7 +23,7 @@ const EmployeeActions = ({ employee, isUser, isMobile = false }) => {
                         </Link>
                         <Link
                             href={route('employee-attendance.deactivate', employee.id)}
-                            className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-sm"
+                            className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 t2ext-sm"
                         >
                             Deactivate
                         </Link>

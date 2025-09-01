@@ -16,14 +16,14 @@ use Illuminate\Support\Facades\Log;
 
 class ManPowerRequestFulfillmentController extends Controller
 {
-   public function create($id)
+public function create($id)
 {
-    $request = ManPowerRequest::with([
-        'subSection.section',
-        'shift',
-        'fulfilledBy',
-        'schedules.employee.subSections.section'
-    ])->findOrFail($id);
+$request = ManPowerRequest::with([
+    'subSection.section',
+    'shift',
+    'fulfilledBy',
+    'schedules.employee.subSections.section'
+])->findOrFail($id);
 
     if ($request->status === 'fulfilled' && !$request->schedules->count()) {
         return Inertia::render('Fullfill/Index', [
@@ -45,13 +45,21 @@ class ManPowerRequestFulfillmentController extends Controller
 
     $currentScheduledIds = $request->schedules->pluck('employee_id')->toArray();
 
+    // FIX: Properly eager load subSections with section relationship
     $eligibleEmployees = Employee::where(function ($query) use ($currentScheduledIds) {
         $query->where('status', 'available')
             ->orWhereIn('id', $currentScheduledIds);
     })
         ->where('cuti', 'no')
         ->whereNotIn('id', array_diff($scheduledEmployeeIdsOnRequestDate, $currentScheduledIds))
-        ->with(['subSections.section', 'workloads', 'blindTests', 'ratings'])
+        ->with([
+            'subSections' => function ($query) {
+                $query->with('section'); // Ensure section is loaded with each subsection
+            },
+            'workloads', 
+            'blindTests', 
+            'ratings'
+        ])
         ->withCount([
             'schedules' => function ($query) use ($startDate, $endDate) {
                 $query->whereBetween('date', [$startDate, $endDate]);
@@ -97,14 +105,19 @@ class ManPowerRequestFulfillmentController extends Controller
 
             $totalScore = ($workloadPoints * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
 
+            // FIX: Properly include section data in subSectionsData
             $subSectionsData = $employee->subSections->map(function ($subSection) {
                 return [
                     'id' => $subSection->id,
                     'name' => $subSection->name,
                     'section_id' => $subSection->section_id,
-                    'section' => $subSection->section ? $subSection->section->toArray() : null,
+                    'section' => $subSection->section ? [
+                        'id' => $subSection->section->id,
+                        'name' => $subSection->section->name,
+                    ] : null,
                 ];
             })->toArray();
+            
 
             return [
                 'id' => $employee->id,
@@ -129,31 +142,37 @@ class ManPowerRequestFulfillmentController extends Controller
             ];
         });
 
-    // helper untuk split same/other sub-section
-    $splitEmployeesBySubSection = function ($employees, $request) {
-        $requestSubSectionId = $request->sub_section_id;
-        $requestSectionId = $request->subSection->section_id ?? null;
+    // FIX: Updated helper function to properly check section matching
+  $splitEmployeesBySubSection = function ($employees, $request) {
+    $requestSubSectionId = $request->sub_section_id;
+    $requestSectionId = $request->subSection->section_id ?? null;
 
-        $same = collect();
-        $other = collect();
+    $same = collect();
+    $other = collect();
 
-        foreach ($employees as $employee) {
-            $subSections = collect($employee['sub_sections_data']);
+    foreach ($employees as $employee) {
+        $subSections = collect($employee['sub_sections_data']);
 
-            $hasExactSubSection = $subSections->contains('id', $requestSubSectionId);
-            $hasSameSection = $requestSectionId
-                ? $subSections->contains('section_id', $requestSectionId)
-                : false;
+        $hasExactSubSection = $subSections->contains('id', $requestSubSectionId);
 
-            if ($hasExactSubSection || $hasSameSection) {
-                $same->push($employee);
-            } else {
-                $other->push($employee);
-            }
+        $hasSameSection = false;
+        if ($requestSectionId) {
+            $hasSameSection = $subSections->contains(function ($ss) use ($requestSectionId) {
+                return isset($ss['section']['id']) && $ss['section']['id'] == $requestSectionId;
+            });
         }
 
-        return [$same, $other];
-    };
+        if ($hasExactSubSection || $hasSameSection) {
+            $same->push($employee);
+        } else {
+            $other->push($employee);
+        }
+    }
+
+    return [$same, $other];
+};
+
+
 
     $sortEmployees = function ($employees) {
         return $employees->sortByDesc('total_score')
@@ -167,6 +186,16 @@ class ManPowerRequestFulfillmentController extends Controller
     $sortedSameSubSectionEmployees = $sortEmployees($sameSubSectionEligible);
     $sortedOtherSubSectionEmployees = $sortEmployees($otherSubSectionEligible);
 
+    // Debug logging to help identify issues
+    Log::info('Fulfillment Request Details', [
+        'request_id' => $request->id,
+        'request_sub_section_id' => $request->sub_section_id,
+        'request_section_id' => $request->subSection->section_id ?? null,
+        'total_employees' => $eligibleEmployees->count(),
+        'same_subsection_count' => $sameSubSectionEligible->count(),
+        'other_subsection_count' => $otherSubSectionEligible->count(),
+    ]);
+
     return Inertia::render('Fullfill/Fulfill', [
         'request' => $request,
         'sameSubSectionEmployees' => $sortedSameSubSectionEmployees,
@@ -177,7 +206,7 @@ class ManPowerRequestFulfillmentController extends Controller
 }
 
 
-    private function splitEmployeesBySubSection($employees, $request)
+  private function splitEmployeesBySubSection($employees, $request)
 {
     $requestSubSectionId = $request->sub_section_id;
     $requestSectionId = $request->subSection->section_id ?? null;
@@ -188,13 +217,16 @@ class ManPowerRequestFulfillmentController extends Controller
     foreach ($employees as $employee) {
         $subSections = collect($employee['sub_sections_data']);
 
-        // Cek apakah ada sub_section persis sama
+        // Check for exact subsection match
         $hasExactSubSection = $subSections->contains('id', $requestSubSectionId);
-
-        // Cek apakah ada section yg sama (fallback)
-        $hasSameSection = $requestSectionId
-            ? $subSections->contains('section_id', $requestSectionId)
-            : false;
+        
+        // Check for same section (fallback) - ensure section data exists
+        $hasSameSection = false;
+        if ($requestSectionId) {
+            $hasSameSection = $subSections->contains(function ($ss) use ($requestSectionId) {
+                return isset($ss['section']['id']) && $ss['section']['id'] == $requestSectionId;
+            });
+        }
 
         if ($hasExactSubSection || $hasSameSection) {
             $same->push($employee);

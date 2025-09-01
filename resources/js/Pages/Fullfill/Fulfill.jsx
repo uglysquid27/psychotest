@@ -26,20 +26,7 @@ export default function Fulfill({
         return false;
     });
 
-    const toggleDarkMode = () => {
-        setIsDarkMode(prev => {
-            const newMode = !prev;
-            if (typeof window !== 'undefined') {
-                localStorage.setItem('darkMode', newMode.toString());
-                if (newMode) {
-                    document.documentElement.classList.add('dark');
-                } else {
-                    document.documentElement.classList.remove('dark');
-                }
-            }
-            return newMode;
-        });
-    };
+    
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
@@ -436,12 +423,12 @@ useEffect(() => {
                 header={
                     <div className="flex items-center justify-between">
                         <h2 className="font-semibold text-gray-800 dark:text-gray-200 text-xl">Penuhi Request Man Power</h2>
-                        <button
+                        {/* <button
                             onClick={toggleDarkMode}
                             className="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600"
                         >
                             {isDarkMode ? '☀️' : '🌙'}
-                        </button>
+                        </button> */}
                     </div>
                 }
                 user={auth.user}
@@ -471,12 +458,12 @@ useEffect(() => {
             header={
                 <div className="flex items-center justify-between">
                     <h2 className="font-semibold text-gray-800 dark:text-gray-200 text-xl">Penuhi Request Man Power</h2>
-                    <button
+                    {/* <button
                         onClick={toggleDarkMode}
                         className="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-600"
                     >
                         {isDarkMode ? '☀️' : '🌙'}
-                    </button>
+                    </button> */}
                 </div>
             }
             user={auth.user}

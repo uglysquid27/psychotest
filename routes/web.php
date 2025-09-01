@@ -140,6 +140,9 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     Route::get('/employee-attendance/section-view', [EmployeeSum::class, 'sectionView'])->name('employee-attendance.section-view');
     Route::get('/employee-attendance/incomplete-profiles', [EmployeeSum::class, 'incompleteProfiles'])
     ->name('employee-attendance.incomplete-profiles');
+    // Route::get('/employee-attendance/incomplete-profiles/export', [EmployeeSum::class, 'exportIncompleteProfiles'])
+    // ->name('employee-attendance.incomplete-profiles.export')
+    // ->middleware('auth');
 
     // Employee Attendance routes
     Route::prefix('employee-attendance')->group(function () {
