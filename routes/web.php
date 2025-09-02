@@ -143,6 +143,8 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     // routes/web.php
     Route::get('/employee-attendance/incomplete-profiles/export', [EmployeeSum::class, 'exportXls'])
         ->name('employee-attendance.incomplete-profiles.exports');
+    Route::get('/employee-attendance/export-filtered', [EmployeeSum::class, 'exportFilteredXls'])
+    ->name('employee-attendance.exports');
     Route::get('/employee-attendance/incomplete-profiles/exportIncomplete', [EmployeeSum::class, 'exportIncompleteXls'])
         ->name('employee-attendance.incomplete-profiles.exportIncomplete');
 

@@ -218,13 +218,19 @@ export default function Index() {
                         <span className="hidden sm:inline">Incomplete</span>
                       </Link>
                       <a
-                        href={route('employee-attendance.incomplete-profiles.exports', {
-                          section: filters.section,
-                          subsection: filters.subsection,
+                        href={route('employee-attendance.exports', {
+                          status: filterStatus !== 'All' ? filterStatus : undefined,
+                          section: filterSection !== 'All' ? filterSection : undefined,
+                          sub_section: filterSubSection !== 'All' ? filterSubSection : undefined,
+                          search: searchTerm || undefined,
                         })}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg shadow hover:bg-green-700"
+                        className="flex items-center justify-center gap-1 bg-green-600 hover:bg-green-700 px-2 py-1.5 sm:px-3 sm:py-2 rounded-md font-medium text-white text-xs sm:text-sm transition-colors duration-200"
+                        title="Export Filtered Data"
                       >
-                        Export
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span className="hidden sm:inline">Export</span>
                       </a>
                     </div>
                   )}
