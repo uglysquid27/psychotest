@@ -250,7 +250,7 @@ const ScheduleSection = ({ title, schedulesByShift, openManPowerRequestModal }) 
     };
 
     return (
-        <div className="flex-1 min-w-[300px] rounded-lg bg-white p-4 shadow-md dark:bg-gray-800">
+        <div className="flex-1 min-w-0 rounded-lg bg-white p-4 shadow-md dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 sm:text-xl mb-4">{title}</h2>
             
             {Object.keys(schedulesByShift).length === 0 ? (
@@ -467,6 +467,19 @@ const Index = () => {
 
     const shiftOrder = { 'Pagi': 1, 'Siang': 2, 'Malam': 3 };
 
+    // Function to get responsive grid classes based on number of divisions
+    const getGridClasses = (divisionCount) => {
+        switch (divisionCount) {
+            case 1:
+                return 'grid grid-cols-1 gap-6';
+            case 2:
+                return 'grid grid-cols-1 md:grid-cols-2 gap-6';
+            case 3:
+            default:
+                return 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6';
+        }
+    };
+
     return (
         <AuthenticatedLayout
             header={
@@ -542,13 +555,14 @@ const Index = () => {
                         {paginatedDates.map(dateKey => {
                             const dateData = groupedSchedulesByDateDivisionShift[dateKey];
                             const divisionsForDate = dateData.divisions;
+                            const divisionCount = Object.keys(divisionsForDate).length;
 
                             return (
                                 <div key={dateKey} className="mb-8">
                                     <h2 className="mb-4 rounded-lg bg-gray-100 p-3 text-xl font-bold text-gray-800 shadow-sm dark:bg-gray-700 dark:text-gray-100 sm:p-4 sm:text-2xl">
                                         {dateData.displayDate}
                                     </h2>
-                                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                                    <div className={getGridClasses(divisionCount)}>
                                         {Object.entries(divisionsForDate).map(([divisionName, divisionData]) => (
                                             <ScheduleSection
                                                 key={divisionName}

@@ -139,7 +139,14 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     Route::get('/inactive', [EmployeeSum::class, 'inactive'])->name('employee-attendance.inactive');
     Route::get('/employee-attendance/section-view', [EmployeeSum::class, 'sectionView'])->name('employee-attendance.section-view');
     Route::get('/employee-attendance/incomplete-profiles', [EmployeeSum::class, 'incompleteProfiles'])
-    ->name('employee-attendance.incomplete-profiles');
+        ->name('employee-attendance.incomplete-profiles');
+    // routes/web.php
+    Route::get('/employee-attendance/incomplete-profiles/export', [EmployeeSum::class, 'exportXls'])
+        ->name('employee-attendance.incomplete-profiles.exports');
+    Route::get('/employee-attendance/incomplete-profiles/exportIncomplete', [EmployeeSum::class, 'exportIncompleteXls'])
+        ->name('employee-attendance.incomplete-profiles.exportIncomplete');
+
+
     // Route::get('/employee-attendance/incomplete-profiles/export', [EmployeeSum::class, 'exportIncompleteProfiles'])
     // ->name('employee-attendance.incomplete-profiles.export')
     // ->middleware('auth');
@@ -284,42 +291,42 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
 
     Route::prefix('analogi')->name('analogi.')->group(function () {
         Route::get('/', [AnalogiController::class, 'index'])->name('index');
-            Route::post('/submit', [AnalogiController::class, 'submit'])->name('submit'); // tambah route submit
+        Route::post('/submit', [AnalogiController::class, 'submit'])->name('submit'); // tambah route submit
 
     });
     Route::prefix('ketelitian')->name('ketelitian.')->group(function () {
         Route::get('/', [KetelitianController::class, 'index'])->name('index');
-            Route::post('/submit', [KetelitianController::class, 'submit'])->name('submit'); // tambah route submit
+        Route::post('/submit', [KetelitianController::class, 'submit'])->name('submit'); // tambah route submit
 
     });
     Route::prefix('hitungan')->name('hitungan.')->group(function () {
         Route::get('/', [HitunganController::class, 'index'])->name('index');
-            Route::post('/submit', [HitunganController::class, 'submit'])->name('submit'); // tambah route submit
+        Route::post('/submit', [HitunganController::class, 'submit'])->name('submit'); // tambah route submit
 
     });
     Route::prefix('deret')->name('deret.')->group(function () {
         Route::get('/', [TesDeretController::class, 'index'])->name('index');
-            Route::post('/submit', [TesDeretController::class, 'submit'])->name('submit'); // tambah route submit
+        Route::post('/submit', [TesDeretController::class, 'submit'])->name('submit'); // tambah route submit
 
     });
     Route::prefix('spasial')->name('spasial.')->group(function () {
         Route::get('/', [SpasialController::class, 'index'])->name('index');
-            Route::post('/submit', [SpasialController::class, 'submit'])->name('submit'); // tambah route submit
+        Route::post('/submit', [SpasialController::class, 'submit'])->name('submit'); // tambah route submit
 
     });
     Route::prefix('numerik')->name('numerik.')->group(function () {
         Route::get('/', [TesNumerikController::class, 'index'])->name('index');
-            Route::post('/submit', [TesNumerikController::class, 'submit'])->name('submit'); // tambah route submit
+        Route::post('/submit', [TesNumerikController::class, 'submit'])->name('submit'); // tambah route submit
 
     });
     Route::prefix('disc')->name('disc.')->group(function () {
         Route::get('/', [DiscTestController::class, 'index'])->name('index');
-            Route::post('/submit', [DiscTestController::class, 'submit'])->name('submit'); // tambah route submit
+        Route::post('/submit', [DiscTestController::class, 'submit'])->name('submit'); // tambah route submit
 
     });
     Route::prefix('personality')->name('personality.')->group(function () {
         Route::get('/', [PersonalityTestController::class, 'index'])->name('index');
-            Route::post('/submit', [PersonalityTestController::class, 'submit'])->name('submit'); // tambah route submit
+        Route::post('/submit', [PersonalityTestController::class, 'submit'])->name('submit'); // tambah route submit
 
     });
 

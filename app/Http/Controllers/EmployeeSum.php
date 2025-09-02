@@ -286,22 +286,22 @@ class EmployeeSum extends Controller
                 'status' => $employee->status,
                 'cuti' => $employee->cuti,
                 'gender' => $employee->gender,
-                'email'=>  $employee->email,
-                'ktp'=>  $employee->ktp,
-                'marital'=>  $employee->marital,
-                'birth_date'=>  $employee->birth_date,
-                'religion'=>  $employee->religion,
-                'phone'=>  $employee->phone,
-                'street'=>  $employee->street,
-                'rt'=>  $employee->rt,
-                'rw'=>  $employee->rw,
-                'kelurahan'=>  $employee->kelurahan,
-                'kecamatan'=>  $employee->kecamatan,
-                'kabupaten_kota'=>  $employee->kabupaten_kota,
-                'provinsi'=>  $employee->provinsi,
-                'kode_pos'=>  $employee->kode_pos,
-                'group'=>  $employee->group,
-                'photo'=>  $employee->photo,
+                'email' => $employee->email,
+                'ktp' => $employee->ktp,
+                'marital' => $employee->marital,
+                'birth_date' => $employee->birth_date,
+                'religion' => $employee->religion,
+                'phone' => $employee->phone,
+                'street' => $employee->street,
+                'rt' => $employee->rt,
+                'rw' => $employee->rw,
+                'kelurahan' => $employee->kelurahan,
+                'kecamatan' => $employee->kecamatan,
+                'kabupaten_kota' => $employee->kabupaten_kota,
+                'provinsi' => $employee->provinsi,
+                'kode_pos' => $employee->kode_pos,
+                'group' => $employee->group,
+                'photo' => $employee->photo,
                 'sub_sections' => $employee->subSections->pluck('name')->toArray(),
             ],
             'sections' => $sections,
@@ -387,6 +387,202 @@ class EmployeeSum extends Controller
             return back()->with('error', 'Failed to load inactive employees. Please try again.');
         }
     }
+
+public function exportXls(Request $request)
+{
+    $employees = \DB::table('employees')
+        ->leftJoin('employee_sub_section', 'employees.id', '=', 'employee_sub_section.employee_id')
+        ->leftJoin('sub_sections', 'employee_sub_section.sub_section_id', '=', 'sub_sections.id')
+        ->leftJoin('sections', 'sub_sections.section_id', '=', 'sections.id')
+        ->when($request->section, fn($q) => $q->where('sections.name', $request->section))
+        ->when($request->subsection, fn($q) => $q->where('sub_sections.name', $request->subsection))
+        ->select(
+            'employees.id',
+            'employees.nik',
+            'employees.name',
+            'employees.type',
+            'employees.status',
+            'employees.cuti',
+            'employees.gender',
+            'employees.email',
+            'employees.ktp',
+            'employees.marital',
+            'employees.birth_date',
+            'employees.religion',
+            'employees.phone',
+            'employees.street',
+            'employees.rt',
+            'employees.rw',
+            'employees.kelurahan',
+            'employees.kecamatan',
+            'employees.kabupaten_kota',
+            'employees.provinsi',
+            'employees.kode_pos',
+            'employees.group',
+            'employees.photo',
+            'sections.name as section',
+            \DB::raw("GROUP_CONCAT(DISTINCT sub_sections.name ORDER BY sub_sections.name SEPARATOR ', ') as subsections")
+        )
+        ->groupBy(
+            'employees.id',
+            'employees.nik',
+            'employees.name',
+            'employees.type',
+            'employees.status',
+            'employees.cuti',
+            'employees.gender',
+            'employees.email',
+            'employees.ktp',
+            'employees.marital',
+            'employees.birth_date',
+            'employees.religion',
+            'employees.phone',
+            'employees.street',
+            'employees.rt',
+            'employees.rw',
+            'employees.kelurahan',
+            'employees.kecamatan',
+            'employees.kabupaten_kota',
+            'employees.provinsi',
+            'employees.kode_pos',
+            'employees.group',
+            'employees.photo',
+            'sections.name'
+        )
+        ->get();
+
+    $filename = 'employees_' . date('Ymd_His') . '.xls';
+
+    $html = '<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />';
+    $html .= '<table border="1" cellspacing="0" cellpadding="4">';
+    $html .= '<tr style="background:#e2e2e2;font-weight:bold;">
+                <th>ID</th>
+                <th>NIK</th>
+                <th>Nama</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Cuti</th>
+                <th>Gender</th>
+                <th>Email</th>
+                <th>KTP</th>
+                <th>Marital</th>
+                <th>Birth Date</th>
+                <th>Religion</th>
+                <th>Phone</th>
+                <th>Street</th>
+                <th>RT</th>
+                <th>RW</th>
+                <th>Kelurahan</th>
+                <th>Kecamatan</th>
+                <th>Kabupaten/Kota</th>
+                <th>Provinsi</th>
+                <th>Kode Pos</th>
+                <th>Section</th>
+                <th>Subsections</th>
+              </tr>';
+
+    foreach ($employees as $e) {
+        $html .= '<tr>';
+        $html .= '<td>' . htmlentities($e->id) . '</td>';
+        $html .= '<td>' . htmlentities($e->nik) . '</td>';
+        $html .= '<td>' . htmlentities($e->name) . '</td>';
+        $html .= '<td>' . htmlentities($e->type) . '</td>';
+        $html .= '<td>' . htmlentities($e->status) . '</td>';
+        $html .= '<td>' . htmlentities($e->cuti) . '</td>';
+        $html .= '<td>' . htmlentities($e->gender) . '</td>';
+        $html .= '<td>' . htmlentities($e->email) . '</td>';
+        $html .= '<td>' . htmlentities($e->ktp) . '</td>';
+        $html .= '<td>' . htmlentities($e->marital) . '</td>';
+        $html .= '<td>' . htmlentities($e->birth_date) . '</td>';
+        $html .= '<td>' . htmlentities($e->religion) . '</td>';
+        $html .= '<td>' . htmlentities($e->phone) . '</td>';
+        $html .= '<td>' . htmlentities($e->street) . '</td>';
+        $html .= '<td>' . htmlentities($e->rt) . '</td>';
+        $html .= '<td>' . htmlentities($e->rw) . '</td>';
+        $html .= '<td>' . htmlentities($e->kelurahan) . '</td>';
+        $html .= '<td>' . htmlentities($e->kecamatan) . '</td>';
+        $html .= '<td>' . htmlentities($e->kabupaten_kota) . '</td>';
+        $html .= '<td>' . htmlentities($e->provinsi) . '</td>';
+        $html .= '<td>' . htmlentities($e->kode_pos) . '</td>';
+        $html .= '<td>' . htmlentities($e->section ?? '-') . '</td>';
+        $html .= '<td>' . htmlentities($e->subsections ?? '-') . '</td>';
+        $html .= '</tr>';
+    }
+
+    $html .= '</table>';
+
+    return response()->streamDownload(function () use ($html) {
+        echo $html;
+    }, $filename, [
+        'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
+    ]);
+}
+
+
+
+    public function exportIncompleteXls(Request $request)
+{
+    $employees = \DB::table('employees')
+        ->leftJoin('employee_sub_section', 'employees.id', '=', 'employee_sub_section.employee_id')
+        ->leftJoin('sub_sections', 'employee_sub_section.sub_section_id', '=', 'sub_sections.id')
+        ->leftJoin('sections', 'sub_sections.section_id', '=', 'sections.id')
+        ->when($request->section, fn($q) => $q->where('sections.name', $request->section))
+        ->when($request->subsection, fn($q) => $q->where('sub_sections.name', $request->subsection))
+        ->where(function ($q) {
+            $q->whereNull('employees.kecamatan')
+              ->orWhereNull('employees.kelurahan');
+        })
+        ->select([
+            'employees.nik',
+            'employees.name',
+            'sections.name as section',
+            \DB::raw("GROUP_CONCAT(DISTINCT sub_sections.name ORDER BY sub_sections.name SEPARATOR ', ') as subsections"),
+            'employees.kecamatan',
+            'employees.kelurahan',
+        ])
+        ->groupBy(
+            'employees.nik',
+            'employees.name',
+            'sections.name',
+            'employees.kecamatan',
+            'employees.kelurahan'
+        )
+        ->get();
+
+    $filename = 'employees_incomplete_' . date('Ymd_His') . '.xls';
+
+    $html = '<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />';
+    $html .= '<table border="1" cellspacing="0" cellpadding="4">';
+    $html .= '<tr style="background:#e2e2e2;font-weight:bold;">
+                <th>NIK</th>
+                <th>Nama</th>
+                <th>Bagian</th>
+                <th>Sub bagian</th>
+                
+              </tr>';
+
+    foreach ($employees as $e) {
+        $html .= '<tr>';
+        $html .= '<td>' . htmlentities($e->nik) . '</td>';
+        $html .= '<td>' . htmlentities($e->name) . '</td>';
+        $html .= '<td>' . htmlentities($e->section ?? '-') . '</td>';
+        $html .= '<td>' . htmlentities($e->subsections ?? '-') . '</td>';
+        // $html .= '<td>' . htmlentities($e->kecamatan ?? '-') . '</td>';
+        // $html .= '<td>' . htmlentities($e->kelurahan ?? '-') . '</td>';
+        $html .= '</tr>';
+    }
+
+    $html .= '</table>';
+
+    return response()->streamDownload(function () use ($html) {
+        echo $html;
+    }, $filename, [
+        'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
+    ]);
+}
+
+
+
 
     public function deactivate(Employee $employee)
     {
