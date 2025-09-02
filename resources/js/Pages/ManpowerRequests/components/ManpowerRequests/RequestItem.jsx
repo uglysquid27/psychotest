@@ -1,10 +1,11 @@
-import { Link, usePage } from '@inertiajs/react';
+import { Link, usePage, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 
 export default function RequestItem({ request, formatDate, getStatusClasses, onDelete, onRevision }) {
   const { auth } = usePage().props;
   const isUser = auth.user.role === 'user';
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const { delete: destroy, processing } = useForm();
 
   const getShiftLabel = (req) => {
     if (req?.shift && (req.shift.name || typeof req.shift === 'string')) {
@@ -13,6 +14,27 @@ export default function RequestItem({ request, formatDate, getStatusClasses, onD
     if (req?.shift_id) return `Shift ${req.shift_id}`;
     if (typeof req?.shift === 'number') return `Shift ${req.shift}`;
     return 'N/A';
+  };
+
+  const confirmDelete = () => {
+    destroy(route('manpower-requests.destroy', request.id), {
+      preserveScroll: true,
+      onSuccess: () => {
+        
+        // Call the parent's onDelete to update local state
+        if (onDelete) {
+          onDelete(request.id);
+        }
+
+        // Show success message
+        // toast.success('Request deleted'); // You'll need to implement toast
+        setShowDeleteModal(false);
+      },
+      onError: () => {
+        // toast.error('Failed to delete'); // You'll need to implement toast
+        setShowDeleteModal(false);
+      },
+    });
   };
 
   return (
@@ -59,6 +81,7 @@ export default function RequestItem({ request, formatDate, getStatusClasses, onD
               onClick={() => setShowDeleteModal(true)}
               className="p-1.5 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
               title="Delete"
+              disabled={processing}
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -93,17 +116,16 @@ export default function RequestItem({ request, formatDate, getStatusClasses, onD
               <button
                 onClick={() => setShowDeleteModal(false)}
                 className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                disabled={processing}
               >
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  onDelete(request.id);
-                  setShowDeleteModal(false);
-                }}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 transition-colors"
+                onClick={confirmDelete}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 transition-colors disabled:opacity-50"
+                disabled={processing}
               >
-                Delete
+                {processing ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>

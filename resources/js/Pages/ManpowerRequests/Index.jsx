@@ -1,4 +1,4 @@
-import { Link, useForm } from '@inertiajs/react';
+import { Link, useForm, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -9,6 +9,7 @@ import FulfillModal from './FulfillModal';
 import BulkFulfillReviewModal from './BulkFulfillReviewModal';
 
 export default function Index({ sections: initialSections, auth }) {
+  const { reload } = usePage();
   const { delete: destroy } = useForm({});
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -166,7 +167,7 @@ export default function Index({ sections: initialSections, auth }) {
   const quickFulfill = async (requestId) => {
     try {
       setProcessingRequests(prev => [...prev, requestId]);
-      
+
       const response = await axios.post(
         route('manpower-requests.quick-fulfill', { manpower_request: requestId }),
         { strategy: fulfillStrategy }
@@ -193,7 +194,7 @@ export default function Index({ sections: initialSections, auth }) {
     try {
       setProcessingRequests(prev => [...prev, ...selectedRequests]);
       setShowReviewModal(false);
-      
+
       const response = await axios.post(route('manpower-requests.bulk-fulfill'), {
         request_ids: selectedRequests,
         strategy: fulfillStrategy
@@ -203,7 +204,7 @@ export default function Index({ sections: initialSections, auth }) {
       setSelectedRequests([]);
       setBulkMode(false);
       setRefreshTrigger(prev => prev + 1); // Refresh data
-      
+
     } catch (error) {
       console.error('Bulk fulfill error:', error);
       toast.error(error.response?.data?.message || 'Failed to fulfill some requests');
@@ -252,32 +253,32 @@ export default function Index({ sections: initialSections, auth }) {
   // Delete request function
   const requestDelete = (id) => {
     setRequestToDelete(id);
-    setShowDeleteModal(true);
+    // setShowDeleteModal(true);
   };
 
   const confirmDelete = () => {
     if (!requestToDelete) return;
     destroy(route('manpower-requests.destroy', requestToDelete), {
       preserveScroll: true,
-  onSuccess: () => {
-  setLocalSections(prev => {
-    const updated = { ...prev };
-    updated.data = updated.data.map(section => ({
-      ...section,
-      sub_sections: section.sub_sections.map(sub => ({
-        ...sub,
-        man_power_requests: sub.man_power_requests.filter(req => req.id !== requestToDelete)
-      }))
-    }));
-    return updated;
-  });
+      onSuccess: () => {
+        setLocalSections(prev => {
+          const updated = { ...prev };
+          updated.data = updated.data.map(section => ({
+            ...section,
+            sub_sections: section.sub_sections.map(sub => ({
+              ...sub,
+              man_power_requests: sub.man_power_requests.filter(req => req.id !== requestToDelete)
+            }))
+          }));
+          return updated;
+        });
 
-  setRefreshTrigger(prev => prev + 1); // Refresh memoized groups
+        setRefreshTrigger(prev => prev + 1); // Refresh memoized groups
 
-  toast.success('Request deleted');
-  setShowDeleteModal(false);
-  setRequestToDelete(null);
-},
+        toast.success('Request deleted');
+        setShowDeleteModal(false);
+        setRequestToDelete(null);
+      },
 
       onError: () => {
         toast.error('Failed to delete');
@@ -320,7 +321,7 @@ export default function Index({ sections: initialSections, auth }) {
       <div className="py-4 sm:py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-white dark:bg-gray-800 overflow-hidden shadow-lg sm:rounded-lg">
-            
+
             {/* Header with bulk mode controls */}
             <div className="p-4 sm:p-6 md:p-8 text-gray-900 dark:text-gray-100">
               <div className="flex flex-col space-y-4 mb-6">
@@ -331,15 +332,14 @@ export default function Index({ sections: initialSections, auth }) {
                   <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
                     <button
                       onClick={() => setBulkMode(!bulkMode)}
-                      className={`px-4 py-2 rounded-md font-medium transition-all ${
-                        bulkMode 
-                          ? 'bg-green-600 dark:bg-green-500 text-white shadow-lg' 
-                          : 'bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600'
-                      }`}
+                      className={`px-4 py-2 rounded-md font-medium transition-all ${bulkMode
+                        ? 'bg-green-600 dark:bg-green-500 text-white shadow-lg'
+                        : 'bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600'
+                        }`}
                     >
                       {bulkMode ? 'Exit Bulk Mode' : 'Enable Bulk Fulfill'}
                     </button>
-                    
+
                     {/* Show bulk fulfill button when requests are selected */}
                     {selectedRequests.length > 0 && (
                       <button
@@ -349,7 +349,7 @@ export default function Index({ sections: initialSections, auth }) {
                         Bulk Fulfill ({selectedRequests.length})
                       </button>
                     )}
-                    
+
                     <Link
                       href={route('manpower-requests.create')}
                       className="inline-flex items-center bg-indigo-600 dark:bg-indigo-500 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-md shadow-sm hover:bg-indigo-700 dark:hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 text-sm sm:text-base"
@@ -377,7 +377,7 @@ export default function Index({ sections: initialSections, auth }) {
                           {selectedRequests.length} of {unfulfilledRequests.length} requests selected
                         </span>
                       </div>
-                      
+
                       <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
                         <div className="flex items-center space-x-2">
                           <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Strategy:</label>
@@ -391,7 +391,7 @@ export default function Index({ sections: initialSections, auth }) {
                             <option value="balanced">Balanced Distribution</option>
                           </select>
                         </div>
-                        
+
                         {selectedRequests.length > 0 && (
                           <div className="flex space-x-2">
                             <button
@@ -620,7 +620,12 @@ export default function Index({ sections: initialSections, auth }) {
                   <button
                     type="button"
                     className="bg-white dark:bg-gray-700 rounded-md text-gray-400 dark:text-gray-300 hover:text-gray-500 dark:hover:text-gray-200 focus:outline-none"
-                    onClick={() => setShowDetailsModal(false)}
+                    onClick={() => {
+                      setShowDetailsModal(false);
+                      setTimeout(() => {
+                        window.location.reload();
+                      }, 100); // Small delay to ensure modal closes first
+                    }}
                   >
                     <span className="sr-only">Close</span>
                     <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -650,7 +655,12 @@ export default function Index({ sections: initialSections, auth }) {
                 <button
                   type="button"
                   className="inline-flex justify-center w-full rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:text-sm"
-                  onClick={() => setShowDetailsModal(false)}
+                  onClick={() => {
+                    setShowDetailsModal(false);
+                    setTimeout(() => {
+                      window.location.reload();
+                    }, 100); // Small delay to ensure modal closes first
+                  }}
                 >
                   Close
                 </button>
