@@ -6,6 +6,7 @@ import { useState, useMemo, useEffect } from 'react';
 import SectionGroup from './Components/ManpowerRequests/SectionGroup';
 import axios from 'axios';
 import FulfillModal from './FulfillModal'; // Import the modal component
+import BulkFulfillReviewModal from './BulkFulfillReviewModal';
 
 export default function Index({ sections, auth }) {
   const { delete: destroy } = useForm({});
@@ -15,6 +16,7 @@ export default function Index({ sections, auth }) {
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
   const [currentPage, setCurrentPage] = useState(1);
+  const [showReviewModal, setShowReviewModal] = useState(false);
   const itemsPerPage = 10;
 
   // Bulk fulfillment states
@@ -23,6 +25,11 @@ export default function Index({ sections, auth }) {
   const [fulfillStrategy, setFulfillStrategy] = useState('optimal');
   const [processingRequests, setProcessingRequests] = useState([]);
   const [showBulkModal, setShowBulkModal] = useState(false); // New state for bulk modal
+
+  const handleBulkFulfillInit = () => {
+  setShowBulkModal(false);
+  setShowReviewModal(true);
+};
 
   useEffect(() => {
     if (showDetailsModal || showBulkModal) {
@@ -173,35 +180,35 @@ export default function Index({ sections, auth }) {
   };
 
   // Bulk fulfill selected requests
-  const bulkFulfill = async () => {
-    if (selectedRequests.length === 0) {
-      toast.warning('Please select requests to fulfill');
-      return;
-    }
+const bulkFulfill = async () => {
+  if (selectedRequests.length === 0) {
+    toast.warning('Please select requests to fulfill');
+    return;
+  }
 
-    try {
-      setProcessingRequests(prev => [...prev, ...selectedRequests]);
-      
-      const response = await axios.post(route('manpower-requests.bulk-fulfill'), {
-        request_ids: selectedRequests,
-        strategy: fulfillStrategy
-      });
+  try {
+    setProcessingRequests(prev => [...prev, ...selectedRequests]);
+    setShowReviewModal(false);
+    
+    const response = await axios.post(route('manpower-requests.bulk-fulfill'), {
+      request_ids: selectedRequests,
+      strategy: fulfillStrategy
+    });
 
-      toast.success(`Successfully fulfilled ${selectedRequests.length} requests`);
-      setSelectedRequests([]);
-      setBulkMode(false);
-      setShowBulkModal(false);
-      
-      // Refresh the page data
-      window.location.reload();
-      
-    } catch (error) {
-      console.error('Bulk fulfill error:', error);
-      toast.error(error.response?.data?.message || 'Failed to fulfill some requests');
-    } finally {
-      setProcessingRequests([]);
-    }
-  };
+    toast.success(`Successfully fulfilled ${selectedRequests.length} requests`);
+    setSelectedRequests([]);
+    setBulkMode(false);
+    
+    // Refresh the page data
+    window.location.reload();
+    
+  } catch (error) {
+    console.error('Bulk fulfill error:', error);
+    toast.error(error.response?.data?.message || 'Failed to fulfill some requests');
+  } finally {
+    setProcessingRequests([]);
+  }
+};
 
   // Handle request selection for bulk operations
   const handleRequestSelect = (requestId, checked) => {
@@ -649,17 +656,28 @@ export default function Index({ sections, auth }) {
       )}
 
       {/* Bulk Fulfill Modal */}
-      {showBulkModal && (
-        <FulfillModal
-          open={showBulkModal}
-          onClose={() => setShowBulkModal(false)}
-          strategy={fulfillStrategy}
-          setStrategy={setFulfillStrategy}
-          onConfirm={bulkFulfill}
-          loading={processingRequests.length > 0}
-          selectedRequests={selectedRequests}
-        />
-      )}
+    {showBulkModal && (
+  <FulfillModal
+    open={showBulkModal}
+    onClose={() => setShowBulkModal(false)}
+    strategy={fulfillStrategy}
+    setStrategy={setFulfillStrategy}
+    onConfirm={handleBulkFulfillInit} // Changed to show review instead of direct fulfill
+    loading={processingRequests.length > 0}
+    selectedRequests={selectedRequests}
+  />
+)}
+
+{showReviewModal && (
+  <BulkFulfillReviewModal
+    open={showReviewModal}
+    onClose={() => setShowReviewModal(false)}
+    strategy={fulfillStrategy}
+    selectedRequests={selectedRequests}
+    onConfirm={bulkFulfill}
+    loading={processingRequests.length > 0}
+  />
+)}
 
       {/* Delete Confirmation Modal - keeping existing implementation */}
       {showDeleteModal && (

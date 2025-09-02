@@ -570,4 +570,433 @@ class ManPowerRequestController extends Controller
             return response()->json(['message' => 'Failed to initiate revision.', 'error' => $e->getMessage()], 500);
         }
     }
+
+public function quickFulfill(Request $request, ManpowerRequest $manpowerRequest)
+{
+    $request->validate([
+        'strategy' => 'required|in:optimal,same_section,balanced'
+    ]);
+
+    try {
+        DB::beginTransaction();
+
+        // Check if already fulfilled
+        if ($manpowerRequest->status === 'fulfilled') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Request is already fulfilled'
+            ], 400);
+        }
+
+        // Auto-select employees based on strategy
+        $selectedEmployees = $this->autoSelectEmployees($manpowerRequest, $request->strategy);
+
+        if (empty($selectedEmployees)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No eligible employees found for this request'
+            ], 400);
+        }
+
+        // Validate gender requirements
+        $validationResult = $this->validateGenderRequirements($manpowerRequest, $selectedEmployees);
+        if (!$validationResult['valid']) {
+            return response()->json([
+                'success' => false,
+                'message' => $validationResult['message']
+            ], 400);
+        }
+
+        // Create employee assignments or schedules
+        $this->createEmployeeAssignments($manpowerRequest, $selectedEmployees);
+
+        // Update request status
+        $manpowerRequest->update([
+            'status' => 'fulfilled',
+            'fulfilled_by' => auth()->id(),
+            'fulfilled_at' => now()
+        ]);
+
+        DB::commit();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Request fulfilled successfully',
+            'assigned_employees' => $selectedEmployees->count()
+        ]);
+
+    } catch (\Exception $e) {
+        DB::rollback();
+        Log::error('Quick fulfill error: ' . $e->getMessage());
+
+        return response()->json([
+            'success' => false,
+            'message' => 'An error occurred while fulfilling the request'
+        ], 500);
+    }
+}
+
+/**
+ * Bulk fulfill multiple manpower requests
+ */
+public function bulkFulfill(Request $request)
+{
+    $request->validate([
+        'request_ids'   => 'required|array',
+        'request_ids.*' => 'exists:man_power_requests,id',
+        'strategy'      => 'required|in:optimal,same_section,balanced'
+    ]);
+
+    try {
+        DB::beginTransaction();
+
+        $requestIds = $request->request_ids;
+        $strategy   = $request->strategy;
+        
+        $manpowerRequests = ManpowerRequest::whereIn('id', $requestIds)
+            ->where('status', '!=', 'fulfilled')
+            ->get();
+
+        if ($manpowerRequests->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No eligible requests found for bulk fulfillment'
+            ], 400);
+        }
+
+        $results = [
+            'fulfilled' => 0,
+            'failed'    => 0,
+            'errors'    => []
+        ];
+
+        // Tandai semua request dulu supaya tidak bentrok
+        $manpowerRequests->each(function ($req) {
+            $req->update(['status' => 'fulfilling']);
+        });
+
+        foreach ($manpowerRequests as $manpowerRequest) {
+            try {
+                // Cari employee yg sudah assigned di request lain supaya tidak double
+                $currentlyAssigned = $this->getCurrentlyAssignedEmployees($manpowerRequests, $manpowerRequest);
+
+                // Pilih karyawan otomatis
+                $selectedEmployees = $this->autoSelectEmployees(
+                    $manpowerRequest, 
+                    $strategy,
+                    $currentlyAssigned
+                );
+
+                if ($selectedEmployees->isEmpty()) {
+                    $results['failed']++;
+                    $results['errors'][] = "No eligible employees found for request ID {$manpowerRequest->id}";
+                    $manpowerRequest->update(['status' => 'pending']);
+                    continue;
+                }
+
+                // Validasi gender
+                $validationResult = $this->validateGenderRequirements($manpowerRequest, $selectedEmployees);
+                if (!$validationResult['valid']) {
+                    $results['failed']++;
+                    $results['errors'][] = "Gender requirements not met for request ID {$manpowerRequest->id}: {$validationResult['message']}";
+                    $manpowerRequest->update(['status' => 'pending']);
+                    continue;
+                }
+
+                // Buat schedule assignment
+                $this->createEmployeeAssignments($manpowerRequest, $selectedEmployees);
+
+                // Update status
+                $manpowerRequest->update([
+                    'status'       => 'fulfilled',
+                    'fulfilled_by' => auth()->id(),
+                    'fulfilled_at' => now()
+                ]);
+
+                $results['fulfilled']++;
+
+            } catch (\Exception $e) {
+                $results['failed']++;
+                $results['errors'][] = "Error fulfilling request ID {$manpowerRequest->id}: " . $e->getMessage();
+                $manpowerRequest->update(['status' => 'pending']);
+                Log::error("Bulk fulfill error for request {$manpowerRequest->id}: " . $e->getMessage());
+            }
+        }
+
+        DB::commit();
+
+        $message = "Bulk fulfillment completed: {$results['fulfilled']} successful, {$results['failed']} failed";
+        if (!empty($results['errors'])) {
+            $message .= ". Errors: " . implode('; ', $results['errors']);
+        }
+
+        return response()->json([
+            'success' => $results['fulfilled'] > 0,
+            'message' => $message,
+            'results' => $results
+        ]);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Bulk fulfill error: ' . $e->getMessage());
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'An error occurred during bulk fulfillment'
+        ], 500);
+    }
+}
+
+/**
+ * Buat schedule assignment untuk employees terpilih
+ */
+private function createEmployeeAssignments(ManpowerRequest $request, $employees)
+{
+    foreach ($employees as $employee) {
+        $request->schedules()->create([
+            'employee_id'        => $employee->id,
+            'sub_section_id'     => $request->sub_section_id,
+            'man_power_request_id' => $request->id,
+            'date'               => $request->date,
+            'status'             => 'assigned',
+        ]);
+    }
+}
+
+
+private function getEligibleEmployeesForRequest($request)
+{
+    $startDate = Carbon::now()->subDays(6)->startOfDay();
+    $endDate = Carbon::now()->endOfDay();
+
+    $scheduledIds = Schedule::where('date', $request->date)
+        ->where('man_power_request_id', '!=', $request->id)
+        ->pluck('employee_id')->toArray();
+
+    $currentScheduledIds = $request->schedules->pluck('employee_id')->toArray();
+
+    return Employee::where(function ($q) use ($currentScheduledIds) {
+            $q->where('status', 'available')
+              ->orWhereIn('id', $currentScheduledIds);
+        })
+        ->where('cuti', 'no')
+        ->whereNotIn('id', array_diff($scheduledIds, $currentScheduledIds))
+        ->with(['subSections.section', 'workloads', 'blindTests', 'ratings'])
+        ->withCount(['schedules' => function ($q) use ($startDate, $endDate) {
+            $q->whereBetween('date', [$startDate, $endDate]);
+        }])
+        ->get()
+        ->map(fn($e) => $this->normalizeEmployeeFromCreate($e));
+}
+
+
+
+
+    /**
+     * Auto-select employees based on the specified strategy
+     */
+    private function autoSelectEmployees(ManpowerRequest $manpowerRequest, string $strategy, array $excludeIds = [])
+    {
+        // Get employees from same sub-section
+        $sameSubSectionEmployees = Employee::whereHas('subSections', function ($query) use ($manpowerRequest) {
+            $query->where('sub_section_id', $manpowerRequest->sub_section_id);
+        })->whereNotIn('id', $excludeIds)->get();
+
+        // Get employees from other sub-sections in the same section
+        $otherSubSectionEmployees = Employee::whereHas('subSections.section', function ($query) use ($manpowerRequest) {
+            $query->where('section_id', $manpowerRequest->subSection->section_id);
+        })->whereNotIn('id', $excludeIds)
+        ->whereDoesntHave('subSections', function ($query) use ($manpowerRequest) {
+            $query->where('sub_section_id', $manpowerRequest->sub_section_id);
+        })->get();
+
+        // Combine and normalize employees (reuse logic from your Fulfill.jsx)
+        $combinedEmployees = collect([
+            ...$sameSubSectionEmployees->map(function ($emp) {
+                return $this->normalizeEmployee($emp, true);
+            }),
+            ...$otherSubSectionEmployees->map(function ($emp) {
+                return $this->normalizeEmployee($emp, false);
+            })
+        ]);
+
+        // Sort employees based on strategy
+        $sortedEmployees = $this->sortEmployeesByStrategy($combinedEmployees, $manpowerRequest, $strategy);
+
+        // Select employees based on requirements
+        return $this->selectOptimalEmployees($sortedEmployees, $manpowerRequest);
+    }
+
+    /**
+     * Normalize employee data for selection algorithm
+     */
+    private function normalizeEmployee($employee, $isSameSubSection)
+    {
+        $gender = strtolower(trim($employee->gender ?? 'male'));
+        if (!in_array($gender, ['male', 'female'])) {
+            $gender = 'male';
+        }
+
+        return (object) [
+            'id' => $employee->id,
+            'name' => $employee->name,
+            'gender' => $gender,
+            'type' => $employee->type,
+            'workload_points' => $employee->workload_points ?? 0,
+            'blind_test_points' => $employee->blind_test_points ?? 0,
+            'average_rating' => $employee->average_rating ?? 0,
+            'working_day_weight' => $employee->working_day_weight ?? 0,
+            'total_score' => ($employee->workload_points ?? 0) + ($employee->blind_test_points ?? 0) + ($employee->average_rating ?? 0),
+            'is_same_subsection' => $isSameSubSection,
+            'subSections' => $employee->subSections ?? collect()
+        ];
+    }
+
+    /**
+     * Sort employees based on the selected strategy
+     */
+    private function sortEmployeesByStrategy($employees, ManpowerRequest $request, string $strategy)
+    {
+        return $employees->sort(function ($a, $b) use ($request, $strategy) {
+            switch ($strategy) {
+                case 'same_section':
+                    // Prioritize same subsection first
+                    if ($a->is_same_subsection !== $b->is_same_subsection) {
+                        return $a->is_same_subsection ? -1 : 1;
+                    }
+                    break;
+                    
+                case 'balanced':
+                    // Balance workload distribution
+                    if ($a->workload_points !== $b->workload_points) {
+                        return $a->workload_points - $b->workload_points; // Lower workload first
+                    }
+                    break;
+                    
+                case 'optimal':
+                default:
+                    // Optimal scoring first
+                    if ($a->total_score !== $b->total_score) {
+                        return $b->total_score - $a->total_score; // Higher score first
+                    }
+                    break;
+            }
+
+            // Secondary sort: gender matching
+            $aGenderMatch = $this->getGenderMatchScore($a, $request);
+            $bGenderMatch = $this->getGenderMatchScore($b, $request);
+            if ($aGenderMatch !== $bGenderMatch) {
+                return $aGenderMatch - $bGenderMatch;
+            }
+
+            // Tertiary sort: employee type preference (bulanan first)
+            if ($a->type === 'bulanan' && $b->type === 'harian') return -1;
+            if ($a->type === 'harian' && $b->type === 'bulanan') return 1;
+
+            // Final sort: working day weight for harian employees
+            if ($a->type === 'harian' && $b->type === 'harian') {
+                return $b->working_day_weight - $a->working_day_weight;
+            }
+
+            return $a->id - $b->id;
+        });
+    }
+
+    /**
+     * Get gender matching score (lower is better)
+     */
+    private function getGenderMatchScore($employee, ManpowerRequest $request)
+    {
+        $maleNeeded = $request->male_count > 0;
+        $femaleNeeded = $request->female_count > 0;
+        
+        if ($maleNeeded && $employee->gender === 'male') return 0;
+        if ($femaleNeeded && $employee->gender === 'female') return 0;
+        
+        return 1; // No match
+    }
+
+    /**
+     * Select optimal employees based on request requirements
+     */
+    private function selectOptimalEmployees($sortedEmployees, ManpowerRequest $request)
+    {
+        $selected = collect();
+        $requiredMale = $request->male_count ?? 0;
+        $requiredFemale = $request->female_count ?? 0;
+        $totalRequired = $request->requested_amount;
+
+        // First, select required gender counts
+        if ($requiredMale > 0) {
+            $males = $sortedEmployees->filter(fn($emp) => $emp->gender === 'male')
+                ->take($requiredMale);
+            $selected = $selected->merge($males);
+        }
+
+        if ($requiredFemale > 0) {
+            $females = $sortedEmployees->filter(fn($emp) => $emp->gender === 'female')
+                ->take($requiredFemale);
+            $selected = $selected->merge($females);
+        }
+
+        // Fill remaining slots with any available employees
+        $remaining = $totalRequired - $selected->count();
+        if ($remaining > 0) {
+            $alreadySelectedIds = $selected->pluck('id')->toArray();
+            $additionalEmployees = $sortedEmployees
+                ->filter(fn($emp) => !in_array($emp->id, $alreadySelectedIds))
+                ->take($remaining);
+            
+            $selected = $selected->merge($additionalEmployees);
+        }
+
+        return $selected->take($totalRequired);
+    }
+
+    /**
+     * Validate if selected employees meet gender requirements
+     */
+    private function validateGenderRequirements(ManpowerRequest $request, $employees)
+    {
+        $maleCount = $employees->filter(fn($emp) => $emp->gender === 'male')->count();
+        $femaleCount = $employees->filter(fn($emp) => $emp->gender === 'female')->count();
+        
+        $requiredMale = $request->male_count ?? 0;
+        $requiredFemale = $request->female_count ?? 0;
+
+        if ($requiredMale > 0 && $maleCount < $requiredMale) {
+            return [
+                'valid' => false,
+                'message' => "Required {$requiredMale} male employees, but only {$maleCount} available"
+            ];
+        }
+
+        if ($requiredFemale > 0 && $femaleCount < $requiredFemale) {
+            return [
+                'valid' => false,
+                'message' => "Required {$requiredFemale} female employees, but only {$femaleCount} available"
+            ];
+        }
+
+        return ['valid' => true];
+    }
+
+
+    /**
+     * Get currently assigned employees to avoid conflicts in bulk operations
+     */
+    private function getCurrentlyAssignedEmployees($allRequests, $currentRequest)
+    {
+        $assignedIds = [];
+        
+        foreach ($allRequests as $request) {
+            if ($request->id !== $currentRequest->id && $request->status === 'fulfilled') {
+                // Get employee IDs from existing assignments
+                $existingAssignments = $request->schedules()->pluck('employee_id')->toArray();
+                $assignedIds = array_merge($assignedIds, $existingAssignments);
+            }
+        }
+        
+        return array_unique($assignedIds);
+    }
 }
