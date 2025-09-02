@@ -208,6 +208,8 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     Route::resource('manpower-requests', ManPowerRequestController::class);
     Route::get('/manpower-requests/{id}/fulfill', [ManPowerRequestFulfillmentController::class, 'create'])
         ->name('manpower-requests.fulfill');
+    Route::post('/manpower-requests/bulk-fulfill', [ManPowerRequestFulfillmentController::class, 'bulkStore'])
+    ->name('manpower-requests.bulk-fulfill');
     Route::get('/manpower-requests/create', [ManPowerRequestController::class, 'create'])
         ->name('manpower-requests.create');
     Route::post('/manpower-requests/{id}/fulfill', [ManPowerRequestFulfillmentController::class, 'store'])

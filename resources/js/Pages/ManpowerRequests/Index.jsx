@@ -2,48 +2,52 @@ import { Link, useForm } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import SectionGroup from './Components/ManpowerRequests/SectionGroup';
-import { useEffect } from 'react';
+import axios from 'axios';
+import FulfillModal from './FulfillModal'; // Import the modal component
 
 export default function Index({ sections, auth }) {
   const { delete: destroy } = useForm({});
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [requestToDelete, setRequestToDelete] = useState(null);
-  const [selectedGroup, setSelectedGroup] = useState(null); // {section, date, requests}
+  const [selectedGroup, setSelectedGroup] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Inside your component
+  // Bulk fulfillment states
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedRequests, setSelectedRequests] = useState([]);
+  const [fulfillStrategy, setFulfillStrategy] = useState('optimal');
+  const [processingRequests, setProcessingRequests] = useState([]);
+  const [showBulkModal, setShowBulkModal] = useState(false); // New state for bulk modal
+
   useEffect(() => {
-    if (showDetailsModal) {
+    if (showDetailsModal || showBulkModal) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'auto';
     }
-
-    // Cleanup function
     return () => {
       document.body.style.overflow = 'auto';
     };
-  }, [showDetailsModal]);
-  // Modal pagination
-  const [modalPage, setModalPage] = useState(1);
-  const modalItemsPerPage = 6;
+  }, [showDetailsModal, showBulkModal]);
 
   const user = auth?.user || null;
 
   const statusClasses = {
-    pending: 'bg-yellow-100 text-yellow-700',
-    approved: 'bg-green-100 text-green-700',
-    rejected: 'bg-red-100 text-red-700',
-    fulfilled: 'bg-indigo-100 text-indigo-700',
-    revision_requested: 'bg-purple-100 text-purple-700',
+    pending: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300',
+    approved: 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300',
+    rejected: 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-300',
+    fulfilled: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300',
+    revision_requested: 'bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300',
+    fulfilling: 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300',
   };
+
   const getStatusClasses = (status) =>
-    statusClasses[status?.toLowerCase()] || 'bg-blue-100 text-blue-700';
+    statusClasses[status?.toLowerCase()] || 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300';
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -58,7 +62,30 @@ export default function Index({ sections, auth }) {
     }
   };
 
-  // 🔹 Group by section + date
+  // Get all requests for bulk operations
+  const allRequests = useMemo(() => {
+    if (!sections?.data) return [];
+    const requests = [];
+    sections.data.forEach((section) => {
+      (section.sub_sections || []).forEach((sub) => {
+        (sub.man_power_requests || []).forEach((req) => {
+          requests.push({
+            ...req,
+            sub_section: { id: sub.id, name: sub.name },
+            section: { id: section.id, name: section.name }
+          });
+        });
+      });
+    });
+    return requests;
+  }, [sections]);
+
+  // Filter unfulfilled requests for bulk operations
+  const unfulfilledRequests = useMemo(() => {
+    return allRequests.filter(req => req.status !== 'fulfilled' && req.status !== 'fulfilling');
+  }, [allRequests]);
+
+  // Group by section + date (existing logic)
   const sectionDateGroups = useMemo(() => {
     if (!sections?.data) return [];
     const groups = [];
@@ -92,7 +119,7 @@ export default function Index({ sections, auth }) {
     return groups;
   }, [sections]);
 
-  // 🔹 Sorting
+  // Sorting (existing logic)
   const sortedGroups = useMemo(() => {
     const items = [...sectionDateGroups];
     if (sortConfig.key === 'name') {
@@ -117,17 +144,108 @@ export default function Index({ sections, auth }) {
     return items;
   }, [sectionDateGroups, sortConfig]);
 
-  // 🔹 Pagination table utama
+  // Pagination (existing logic)
   const totalPages = Math.ceil(sortedGroups.length / itemsPerPage);
   const paginatedGroups = sortedGroups.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
 
+  // Quick fulfill single request
+  const quickFulfill = async (requestId) => {
+    try {
+      setProcessingRequests(prev => [...prev, requestId]);
+      
+      const response = await axios.post(
+        route('manpower-requests.quick-fulfill', { manpower_request: requestId }),
+        { strategy: fulfillStrategy }
+      );
+
+      toast.success('Request fulfilled successfully');
+      window.location.reload();
+
+    } catch (error) {
+      console.error('Quick fulfill error:', error);
+      toast.error(error.response?.data?.message || 'Failed to fulfill request');
+    } finally {
+      setProcessingRequests(prev => prev.filter(id => id !== requestId));
+    }
+  };
+
+  // Bulk fulfill selected requests
+  const bulkFulfill = async () => {
+    if (selectedRequests.length === 0) {
+      toast.warning('Please select requests to fulfill');
+      return;
+    }
+
+    try {
+      setProcessingRequests(prev => [...prev, ...selectedRequests]);
+      
+      const response = await axios.post(route('manpower-requests.bulk-fulfill'), {
+        request_ids: selectedRequests,
+        strategy: fulfillStrategy
+      });
+
+      toast.success(`Successfully fulfilled ${selectedRequests.length} requests`);
+      setSelectedRequests([]);
+      setBulkMode(false);
+      setShowBulkModal(false);
+      
+      // Refresh the page data
+      window.location.reload();
+      
+    } catch (error) {
+      console.error('Bulk fulfill error:', error);
+      toast.error(error.response?.data?.message || 'Failed to fulfill some requests');
+    } finally {
+      setProcessingRequests([]);
+    }
+  };
+
+  // Handle request selection for bulk operations
+  const handleRequestSelect = (requestId, checked) => {
+    if (checked) {
+      setSelectedRequests(prev => [...prev, requestId]);
+    } else {
+      setSelectedRequests(prev => prev.filter(id => id !== requestId));
+    }
+  };
+
+  // Select all requests for a date
+  const handleSelectAllForDate = (requests, checked) => {
+    const requestIds = requests.map(req => req.id);
+    if (checked) {
+      setSelectedRequests(prev => [...new Set([...prev, ...requestIds])]);
+    } else {
+      setSelectedRequests(prev => prev.filter(id => !requestIds.includes(id)));
+    }
+  };
+
+  // Toggle individual request selection
+  const toggleSelect = (id) => {
+    setSelectedRequests(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  // Calculate selected requirements
+  const selectedRequirements = useMemo(() => {
+    const selected = allRequests.filter(req => selectedRequests.includes(req.id));
+    return {
+      totalRequests: selected.length,
+      totalWorkers: selected.reduce((sum, req) => sum + (req.requested_amount || 0), 0),
+      totalMale: selected.reduce((sum, req) => sum + (req.male_count || 0), 0),
+      totalFemale: selected.reduce((sum, req) => sum + (req.female_count || 0), 0)
+    };
+  }, [selectedRequests, allRequests]);
+
+  // Existing functions
   const requestDelete = (id) => {
     setRequestToDelete(id);
     setShowDeleteModal(true);
   };
+
   const confirmDelete = () => {
     if (!requestToDelete) return;
     destroy(route('manpower-requests.destroy', requestToDelete), {
@@ -147,7 +265,6 @@ export default function Index({ sections, auth }) {
 
   const openDetails = (group) => {
     setSelectedGroup(group);
-    setModalPage(1); // reset modal pagination
     setShowDetailsModal(true);
   };
 
@@ -157,15 +274,6 @@ export default function Index({ sections, auth }) {
         ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
         : { key, direction: 'asc' }
     );
-  };
-
-  const getShiftLabel = (req) => {
-    if (req?.shift && (req.shift.name || typeof req.shift === 'string')) {
-      return req.shift.name || String(req.shift);
-    }
-    if (req?.shift_id) return `Shift ${req.shift_id}`;
-    if (typeof req?.shift === 'number') return `Shift ${req.shift}`;
-    return 'N/A';
   };
 
   return (
@@ -188,20 +296,122 @@ export default function Index({ sections, auth }) {
       <div className="py-4 sm:py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="bg-white dark:bg-gray-800 overflow-hidden shadow-lg sm:rounded-lg">
+            
+            {/* Header with bulk mode controls */}
             <div className="p-4 sm:p-6 md:p-8 text-gray-900 dark:text-gray-100">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-                <h1 className="text-xl sm:text-2xl font-bold text-gray-700 dark:text-gray-300 mb-4 sm:mb-0">
-                  Manpower Requests
-                </h1>
-                <Link
-                  href={route('manpower-requests.create')}
-                  className="inline-flex items-center bg-indigo-600 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 text-sm sm:text-base"
-                >
-                  <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2 -ml-1" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-                  </svg>
-                  New Request
-                </Link>
+              <div className="flex flex-col space-y-4 mb-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                  <h1 className="text-xl sm:text-2xl font-bold text-gray-700 dark:text-gray-300 mb-4 sm:mb-0">
+                    Manpower Requests
+                  </h1>
+                  <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
+                    <button
+                      onClick={() => setBulkMode(!bulkMode)}
+                      className={`px-4 py-2 rounded-md font-medium transition-all ${
+                        bulkMode 
+                          ? 'bg-green-600 dark:bg-green-500 text-white shadow-lg' 
+                          : 'bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600'
+                      }`}
+                    >
+                      {bulkMode ? 'Exit Bulk Mode' : 'Enable Bulk Fulfill'}
+                    </button>
+                    
+                    {/* Show bulk fulfill button when requests are selected */}
+                    {selectedRequests.length > 0 && (
+                      <button
+                        onClick={() => setShowBulkModal(true)}
+                        className="px-4 py-2 bg-green-600 dark:bg-green-500 text-white rounded-md hover:bg-green-700 dark:hover:bg-green-600"
+                      >
+                        Bulk Fulfill ({selectedRequests.length})
+                      </button>
+                    )}
+                    
+                    <Link
+                      href={route('manpower-requests.create')}
+                      className="inline-flex items-center bg-indigo-600 dark:bg-indigo-500 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-md shadow-sm hover:bg-indigo-700 dark:hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 text-sm sm:text-base"
+                    >
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2 -ml-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
+                      </svg>
+                      New Request
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Bulk mode controls */}
+                {bulkMode && (
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+                      <div className="flex items-center space-x-4">
+                        <div className="flex items-center space-x-2">
+                          <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          <span className="font-medium text-blue-800 dark:text-blue-300">Bulk Fulfillment Mode</span>
+                        </div>
+                        <span className="text-sm text-blue-700 dark:text-blue-400">
+                          {selectedRequests.length} of {unfulfilledRequests.length} requests selected
+                        </span>
+                      </div>
+                      
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                        <div className="flex items-center space-x-2">
+                          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Strategy:</label>
+                          <select
+                            value={fulfillStrategy}
+                            onChange={(e) => setFulfillStrategy(e.target.value)}
+                            className="text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                          >
+                            <option value="optimal">Optimal Match</option>
+                            <option value="same_section">Same Section First</option>
+                            <option value="balanced">Balanced Distribution</option>
+                          </select>
+                        </div>
+                        
+                        {selectedRequests.length > 0 && (
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => setSelectedRequests([])}
+                              className="px-3 py-1 text-sm bg-gray-500 dark:bg-gray-600 text-white rounded-md hover:bg-gray-600 dark:hover:bg-gray-700"
+                            >
+                              Clear
+                            </button>
+                            <button
+                              onClick={() => setShowBulkModal(true)}
+                              className="px-4 py-1 text-sm bg-green-600 dark:bg-green-500 text-white rounded-md hover:bg-green-700 dark:hover:bg-green-600"
+                            >
+                              Fulfill Selected ({selectedRequests.length})
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Selected requirements summary */}
+                    {selectedRequests.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-700">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                          <div>
+                            <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{selectedRequirements.totalRequests}</div>
+                            <div className="text-xs text-blue-700 dark:text-blue-400">Requests</div>
+                          </div>
+                          <div>
+                            <div className="text-lg font-bold text-green-600 dark:text-green-400">{selectedRequirements.totalWorkers}</div>
+                            <div className="text-xs text-green-700 dark:text-green-400">Workers</div>
+                          </div>
+                          <div>
+                            <div className="text-lg font-bold text-blue-500">{selectedRequirements.totalMale}</div>
+                            <div className="text-xs text-blue-700 dark:text-blue-400">Male</div>
+                          </div>
+                          <div>
+                            <div className="text-lg font-bold text-pink-500">{selectedRequirements.totalFemale}</div>
+                            <div className="text-xs text-pink-700 dark:text-pink-400">Female</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {paginatedGroups.length === 0 ? (
@@ -226,6 +436,11 @@ export default function Index({ sections, auth }) {
                   <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                     <thead className="bg-gray-50 dark:bg-gray-700">
                       <tr>
+                        {bulkMode && (
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            Select
+                          </th>
+                        )}
                         <th
                           scope="col"
                           className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
@@ -285,6 +500,16 @@ export default function Index({ sections, auth }) {
                           key={`${group.sectionId}-${group.date}-${idx}`}
                           className="hover:bg-gray-50 dark:hover:bg-gray-700"
                         >
+                          {bulkMode && (
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <input
+                                type="checkbox"
+                                checked={group.requests.every(req => selectedRequests.includes(req.id)) && group.requests.some(req => req.status !== 'fulfilled')}
+                                onChange={(e) => handleSelectAllForDate(group.requests.filter(req => req.status !== 'fulfilled'), e.target.checked)}
+                                className="rounded text-blue-600 dark:text-blue-500 focus:ring-blue-500 dark:focus:ring-blue-400"
+                              />
+                            </td>
+                          )}
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                             {group.sectionName}
                           </td>
@@ -310,12 +535,26 @@ export default function Index({ sections, auth }) {
                             {group.totalWorkers}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                            <button
-                              onClick={() => openDetails(group)}
-                              className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
-                            >
-                              View Details
-                            </button>
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={() => openDetails(group)}
+                                className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
+                              >
+                                View Details
+                              </button>
+                              {/* {!bulkMode && group.requests.some(req => req.status !== 'fulfilled') && (
+                                <button
+                                  onClick={() => {
+                                    const firstUnfulfilled = group.requests.find(req => req.status !== 'fulfilled');
+                                    if (firstUnfulfilled) quickFulfill(firstUnfulfilled.id);
+                                  }}
+                                  disabled={group.requests.some(req => processingRequests.includes(req.id))}
+                                  className="text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {group.requests.some(req => processingRequests.includes(req.id)) ? 'Processing...' : 'Quick Fulfill'}
+                                </button>
+                              )} */}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -346,7 +585,7 @@ export default function Index({ sections, auth }) {
         </div>
       </div>
 
-      {/* Details Modal */}
+      {/* Details Modal - keeping existing implementation */}
       {showDetailsModal && selectedGroup && (
         <div className="fixed inset-0 z-40 overflow-y-auto">
           <div
@@ -387,6 +626,11 @@ export default function Index({ sections, auth }) {
                     onRevision={() => { }}
                     isUser={!!user}
                     initialOpen
+                    quickFulfill={quickFulfill}
+                    processingRequests={processingRequests}
+                    bulkMode={bulkMode}
+                    selectedRequests={selectedRequests}
+                    handleRequestSelect={handleRequestSelect}
                   />
                 </div>
               </div>
@@ -404,13 +648,26 @@ export default function Index({ sections, auth }) {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Bulk Fulfill Modal */}
+      {showBulkModal && (
+        <FulfillModal
+          open={showBulkModal}
+          onClose={() => setShowBulkModal(false)}
+          strategy={fulfillStrategy}
+          setStrategy={setFulfillStrategy}
+          onConfirm={bulkFulfill}
+          loading={processingRequests.length > 0}
+          selectedRequests={selectedRequests}
+        />
+      )}
+
+      {/* Delete Confirmation Modal - keeping existing implementation */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 transition-opacity"></div>
           <div
             className="relative z-40"
-            onClick={(e) => e.stopPropagation()} // Prevent click inside modal from closing it
+            onClick={(e) => e.stopPropagation()}
           ></div>
           <div className="inline-block w-full max-w-md p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white dark:bg-gray-800 shadow-xl rounded-lg">
             <div className="flex items-center">
