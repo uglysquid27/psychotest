@@ -3,17 +3,18 @@ import DateGroup from './DateGroup';
 
 export default function SectionGroup({ section, requests, formatDate, getStatusClasses, onDelete, onRevision, isUser, initialOpen = false }) {
   const [isOpen, setIsOpen] = useState(!!initialOpen);
+  const [localRequests, setLocalRequests] = useState(requests); // state lokal
 
   const requestsByDate = useMemo(() => {
     const map = {};
-    (requests || []).forEach((req) => {
+    (localRequests || []).forEach((req) => {
       const d = new Date(req.date);
       const key = isNaN(d) ? String(req.date) : d.toISOString().slice(0, 10);
       if (!map[key]) map[key] = [];
       map[key].push(req);
     });
     return map;
-  }, [requests]);
+  }, [localRequests]);
 
   const sortedDateKeys = useMemo(() => {
     return Object.keys(requestsByDate).sort((a, b) => {
@@ -22,6 +23,12 @@ export default function SectionGroup({ section, requests, formatDate, getStatusC
       return da - db;
     });
   }, [requestsByDate]);
+
+  // handler delete lokal
+  const handleLocalDelete = (id) => {
+    setLocalRequests(prev => prev.filter(r => r.id !== id));
+    if (onDelete) onDelete(id);
+  };
 
   return (
     <div className="mb-6">
@@ -49,7 +56,7 @@ export default function SectionGroup({ section, requests, formatDate, getStatusC
               requests={requestsByDate[dateKey]}
               formatDate={formatDate}
               getStatusClasses={getStatusClasses}
-              onDelete={onDelete}
+              onDelete={handleLocalDelete} // gunakan handler lokal
               onRevision={onRevision}
               isUser={isUser}
             />

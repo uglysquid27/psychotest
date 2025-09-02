@@ -5,10 +5,10 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useState, useMemo, useEffect } from 'react';
 import SectionGroup from './Components/ManpowerRequests/SectionGroup';
 import axios from 'axios';
-import FulfillModal from './FulfillModal'; // Import the modal component
+import FulfillModal from './FulfillModal';
 import BulkFulfillReviewModal from './BulkFulfillReviewModal';
 
-export default function Index({ sections, auth }) {
+export default function Index({ sections: initialSections, auth }) {
   const { delete: destroy } = useForm({});
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -19,17 +19,21 @@ export default function Index({ sections, auth }) {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const itemsPerPage = 10;
 
+  // Manage sections in local state for dynamic updates
+  const [localSections, setLocalSections] = useState(initialSections);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
   // Bulk fulfillment states
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedRequests, setSelectedRequests] = useState([]);
   const [fulfillStrategy, setFulfillStrategy] = useState('optimal');
   const [processingRequests, setProcessingRequests] = useState([]);
-  const [showBulkModal, setShowBulkModal] = useState(false); // New state for bulk modal
+  const [showBulkModal, setShowBulkModal] = useState(false);
 
   const handleBulkFulfillInit = () => {
-  setShowBulkModal(false);
-  setShowReviewModal(true);
-};
+    setShowBulkModal(false);
+    setShowReviewModal(true);
+  };
 
   useEffect(() => {
     if (showDetailsModal || showBulkModal) {
@@ -69,11 +73,11 @@ export default function Index({ sections, auth }) {
     }
   };
 
-  // Get all requests for bulk operations
+  // Get all requests for bulk operations - using localSections
   const allRequests = useMemo(() => {
-    if (!sections?.data) return [];
+    if (!localSections?.data) return [];
     const requests = [];
-    sections.data.forEach((section) => {
+    localSections.data.forEach((section) => {
       (section.sub_sections || []).forEach((sub) => {
         (sub.man_power_requests || []).forEach((req) => {
           requests.push({
@@ -85,19 +89,19 @@ export default function Index({ sections, auth }) {
       });
     });
     return requests;
-  }, [sections]);
+  }, [localSections, refreshTrigger]);
 
   // Filter unfulfilled requests for bulk operations
   const unfulfilledRequests = useMemo(() => {
     return allRequests.filter(req => req.status !== 'fulfilled' && req.status !== 'fulfilling');
   }, [allRequests]);
 
-  // Group by section + date (existing logic)
+  // Group by section + date (using localSections)
   const sectionDateGroups = useMemo(() => {
-    if (!sections?.data) return [];
+    if (!localSections?.data) return [];
     const groups = [];
 
-    sections.data.forEach((section) => {
+    localSections.data.forEach((section) => {
       const dateMap = {};
       (section.sub_sections || []).forEach((sub) => {
         (sub.man_power_requests || []).forEach((req) => {
@@ -124,9 +128,9 @@ export default function Index({ sections, auth }) {
     });
 
     return groups;
-  }, [sections]);
+  }, [localSections, refreshTrigger]);
 
-  // Sorting (existing logic)
+  // Sorting
   const sortedGroups = useMemo(() => {
     const items = [...sectionDateGroups];
     if (sortConfig.key === 'name') {
@@ -151,7 +155,7 @@ export default function Index({ sections, auth }) {
     return items;
   }, [sectionDateGroups, sortConfig]);
 
-  // Pagination (existing logic)
+  // Pagination
   const totalPages = Math.ceil(sortedGroups.length / itemsPerPage);
   const paginatedGroups = sortedGroups.slice(
     (currentPage - 1) * itemsPerPage,
@@ -169,7 +173,7 @@ export default function Index({ sections, auth }) {
       );
 
       toast.success('Request fulfilled successfully');
-      window.location.reload();
+      setRefreshTrigger(prev => prev + 1); // Refresh data
 
     } catch (error) {
       console.error('Quick fulfill error:', error);
@@ -180,35 +184,33 @@ export default function Index({ sections, auth }) {
   };
 
   // Bulk fulfill selected requests
-const bulkFulfill = async () => {
-  if (selectedRequests.length === 0) {
-    toast.warning('Please select requests to fulfill');
-    return;
-  }
+  const bulkFulfill = async () => {
+    if (selectedRequests.length === 0) {
+      toast.warning('Please select requests to fulfill');
+      return;
+    }
 
-  try {
-    setProcessingRequests(prev => [...prev, ...selectedRequests]);
-    setShowReviewModal(false);
-    
-    const response = await axios.post(route('manpower-requests.bulk-fulfill'), {
-      request_ids: selectedRequests,
-      strategy: fulfillStrategy
-    });
+    try {
+      setProcessingRequests(prev => [...prev, ...selectedRequests]);
+      setShowReviewModal(false);
+      
+      const response = await axios.post(route('manpower-requests.bulk-fulfill'), {
+        request_ids: selectedRequests,
+        strategy: fulfillStrategy
+      });
 
-    toast.success(`Successfully fulfilled ${selectedRequests.length} requests`);
-    setSelectedRequests([]);
-    setBulkMode(false);
-    
-    // Refresh the page data
-    window.location.reload();
-    
-  } catch (error) {
-    console.error('Bulk fulfill error:', error);
-    toast.error(error.response?.data?.message || 'Failed to fulfill some requests');
-  } finally {
-    setProcessingRequests([]);
-  }
-};
+      toast.success(`Successfully fulfilled ${selectedRequests.length} requests`);
+      setSelectedRequests([]);
+      setBulkMode(false);
+      setRefreshTrigger(prev => prev + 1); // Refresh data
+      
+    } catch (error) {
+      console.error('Bulk fulfill error:', error);
+      toast.error(error.response?.data?.message || 'Failed to fulfill some requests');
+    } finally {
+      setProcessingRequests([]);
+    }
+  };
 
   // Handle request selection for bulk operations
   const handleRequestSelect = (requestId, checked) => {
@@ -247,7 +249,7 @@ const bulkFulfill = async () => {
     };
   }, [selectedRequests, allRequests]);
 
-  // Existing functions
+  // Delete request function
   const requestDelete = (id) => {
     setRequestToDelete(id);
     setShowDeleteModal(true);
@@ -257,11 +259,26 @@ const bulkFulfill = async () => {
     if (!requestToDelete) return;
     destroy(route('manpower-requests.destroy', requestToDelete), {
       preserveScroll: true,
-      onSuccess: () => {
-        toast.success('Request deleted');
-        setShowDeleteModal(false);
-        setRequestToDelete(null);
-      },
+  onSuccess: () => {
+  setLocalSections(prev => {
+    const updated = { ...prev };
+    updated.data = updated.data.map(section => ({
+      ...section,
+      sub_sections: section.sub_sections.map(sub => ({
+        ...sub,
+        man_power_requests: sub.man_power_requests.filter(req => req.id !== requestToDelete)
+      }))
+    }));
+    return updated;
+  });
+
+  setRefreshTrigger(prev => prev + 1); // Refresh memoized groups
+
+  toast.success('Request deleted');
+  setShowDeleteModal(false);
+  setRequestToDelete(null);
+},
+
       onError: () => {
         toast.error('Failed to delete');
         setShowDeleteModal(false);
@@ -549,18 +566,6 @@ const bulkFulfill = async () => {
                               >
                                 View Details
                               </button>
-                              {/* {!bulkMode && group.requests.some(req => req.status !== 'fulfilled') && (
-                                <button
-                                  onClick={() => {
-                                    const firstUnfulfilled = group.requests.find(req => req.status !== 'fulfilled');
-                                    if (firstUnfulfilled) quickFulfill(firstUnfulfilled.id);
-                                  }}
-                                  disabled={group.requests.some(req => processingRequests.includes(req.id))}
-                                  className="text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  {group.requests.some(req => processingRequests.includes(req.id)) ? 'Processing...' : 'Quick Fulfill'}
-                                </button>
-                              )} */}
                             </div>
                           </td>
                         </tr>
@@ -592,7 +597,7 @@ const bulkFulfill = async () => {
         </div>
       </div>
 
-      {/* Details Modal - keeping existing implementation */}
+      {/* Details Modal */}
       {showDetailsModal && selectedGroup && (
         <div className="fixed inset-0 z-40 overflow-y-auto">
           <div
@@ -656,31 +661,31 @@ const bulkFulfill = async () => {
       )}
 
       {/* Bulk Fulfill Modal */}
-    {showBulkModal && (
-  <FulfillModal
-    open={showBulkModal}
-    onClose={() => setShowBulkModal(false)}
-    strategy={fulfillStrategy}
-    setStrategy={setFulfillStrategy}
-    onConfirm={handleBulkFulfillInit} // Changed to show review instead of direct fulfill
-    loading={processingRequests.length > 0}
-    selectedRequests={selectedRequests}
-  />
-)}
+      {showBulkModal && (
+        <FulfillModal
+          open={showBulkModal}
+          onClose={() => setShowBulkModal(false)}
+          strategy={fulfillStrategy}
+          setStrategy={setFulfillStrategy}
+          onConfirm={handleBulkFulfillInit}
+          loading={processingRequests.length > 0}
+          selectedRequests={selectedRequests}
+        />
+      )}
 
-{showReviewModal && (
-  <BulkFulfillReviewModal
-    open={showReviewModal}
-    onClose={() => setShowReviewModal(false)}
-    strategy={fulfillStrategy}
-    selectedRequests={selectedRequests}
-    onConfirm={bulkFulfill}
-    loading={processingRequests.length > 0}
-  />
-)}
+      {showReviewModal && (
+        <BulkFulfillReviewModal
+          open={showReviewModal}
+          onClose={() => setShowReviewModal(false)}
+          strategy={fulfillStrategy}
+          selectedRequests={selectedRequests}
+          onConfirm={bulkFulfill}
+          loading={processingRequests.length > 0}
+        />
+      )}
 
-      {/* Delete Confirmation Modal - keeping existing implementation */}
-      {showDeleteModal && (
+      {/* Delete Confirmation Modal */}
+      {/* {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 transition-opacity"></div>
           <div
@@ -723,7 +728,7 @@ const bulkFulfill = async () => {
             </div>
           </div>
         </div>
-      )}
+      )} */}
     </AuthenticatedLayout>
   );
 }

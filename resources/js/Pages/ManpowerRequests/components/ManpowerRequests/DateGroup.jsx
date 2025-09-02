@@ -4,8 +4,10 @@ import RequestItem from './RequestItem';
 export default function DateGroup({ date, requests, formatDate, getStatusClasses, onDelete, onRevision, isUser }) {
   const [isOpen, setIsOpen] = useState(false);
 
+  const [localRequests, setLocalRequests] = useState(requests); // state lokal
+
   const groupedBySubSection = useMemo(() => {
-    const groups = requests.reduce((acc, req) => {
+    const groups = localRequests.reduce((acc, req) => {
       const key = req.sub_section?.name || 'N/A';
       if (!acc[key]) acc[key] = [];
       acc[key].push(req);
@@ -24,7 +26,13 @@ export default function DateGroup({ date, requests, formatDate, getStatusClasses
     });
 
     return Object.entries(groups).sort(([aName], [bName]) => aName.localeCompare(bName));
-  }, [requests]);
+  }, [localRequests]);
+
+  // delete lokal
+  const handleDelete = (id) => {
+    setLocalRequests(prev => prev.filter(r => r.id !== id));
+    if (onDelete) onDelete(id);
+  };
 
   return (
     <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
@@ -34,7 +42,7 @@ export default function DateGroup({ date, requests, formatDate, getStatusClasses
       >
         <span className="font-medium text-gray-700 dark:text-gray-300 truncate">{formatDate(date)}</span>
         <span className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap ml-2">
-          {requests.length} request{requests.length !== 1 ? 's' : ''}
+          {localRequests.length} request{localRequests.length !== 1 ? 's' : ''}
         </span>
       </button>
 
@@ -52,9 +60,8 @@ export default function DateGroup({ date, requests, formatDate, getStatusClasses
                     request={request}
                     formatDate={formatDate}
                     getStatusClasses={getStatusClasses}
-                    onDelete={onDelete}
-                    onRevision={onRevision}
-                    isUser={isUser}
+                    onDelete={() => handleDelete(request.id)}
+                    onRevision={() => onRevision?.(request.id)}
                   />
                 ))}
               </div>
