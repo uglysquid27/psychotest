@@ -147,6 +147,9 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     ->name('employee-attendance.exports');
     Route::get('/employee-attendance/incomplete-profiles/exportIncomplete', [EmployeeSum::class, 'exportIncompleteXls'])
         ->name('employee-attendance.incomplete-profiles.exportIncomplete');
+    // Add this route to your web.php file
+Route::post('/employee-attendance/bulk-deactivate', [EmployeeSum::class, 'bulkDeactivate'])
+    ->name('employee-attendance.bulk-deactivate');
 
 
     // Route::get('/employee-attendance/incomplete-profiles/export', [EmployeeSum::class, 'exportIncompleteProfiles'])

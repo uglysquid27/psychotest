@@ -25,7 +25,6 @@ export default function Index({ sections: initialSections, auth }) {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Bulk fulfillment states
-  const [bulkMode, setBulkMode] = useState(false);
   const [selectedRequests, setSelectedRequests] = useState([]);
   const [fulfillStrategy, setFulfillStrategy] = useState('optimal');
   const [processingRequests, setProcessingRequests] = useState([]);
@@ -202,7 +201,6 @@ export default function Index({ sections: initialSections, auth }) {
 
       toast.success(`Successfully fulfilled ${selectedRequests.length} requests`);
       setSelectedRequests([]);
-      setBulkMode(false);
       setRefreshTrigger(prev => prev + 1); // Refresh data
 
     } catch (error) {
@@ -330,16 +328,6 @@ export default function Index({ sections: initialSections, auth }) {
                     Manpower Requests
                   </h1>
                   <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
-                    <button
-                      onClick={() => setBulkMode(!bulkMode)}
-                      className={`px-4 py-2 rounded-md font-medium transition-all ${bulkMode
-                        ? 'bg-green-600 dark:bg-green-500 text-white shadow-lg'
-                        : 'bg-blue-600 dark:bg-blue-500 text-white hover:bg-blue-700 dark:hover:bg-blue-600'
-                        }`}
-                    >
-                      {bulkMode ? 'Exit Bulk Mode' : 'Enable Bulk Fulfill'}
-                    </button>
-
                     {/* Show bulk fulfill button when requests are selected */}
                     {selectedRequests.length > 0 && (
                       <button
@@ -362,8 +350,8 @@ export default function Index({ sections: initialSections, auth }) {
                   </div>
                 </div>
 
-                {/* Bulk mode controls */}
-                {bulkMode && (
+                {/* Bulk mode controls - Always show when requests are selected */}
+                {selectedRequests.length > 0 && (
                   <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
                     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
                       <div className="flex items-center space-x-4">
@@ -371,7 +359,7 @@ export default function Index({ sections: initialSections, auth }) {
                           <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                           </svg>
-                          <span className="font-medium text-blue-800 dark:text-blue-300">Bulk Fulfillment Mode</span>
+                          <span className="font-medium text-blue-800 dark:text-blue-300">Bulk Fulfillment</span>
                         </div>
                         <span className="text-sm text-blue-700 dark:text-blue-400">
                           {selectedRequests.length} of {unfulfilledRequests.length} requests selected
@@ -392,48 +380,44 @@ export default function Index({ sections: initialSections, auth }) {
                           </select>
                         </div>
 
-                        {selectedRequests.length > 0 && (
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => setSelectedRequests([])}
-                              className="px-3 py-1 text-sm bg-gray-500 dark:bg-gray-600 text-white rounded-md hover:bg-gray-600 dark:hover:bg-gray-700"
-                            >
-                              Clear
-                            </button>
-                            <button
-                              onClick={() => setShowBulkModal(true)}
-                              className="px-4 py-1 text-sm bg-green-600 dark:bg-green-500 text-white rounded-md hover:bg-green-700 dark:hover:bg-green-600"
-                            >
-                              Fulfill Selected ({selectedRequests.length})
-                            </button>
-                          </div>
-                        )}
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => setSelectedRequests([])}
+                            className="px-3 py-1 text-sm bg-gray-500 dark:bg-gray-600 text-white rounded-md hover:bg-gray-600 dark:hover:bg-gray-700"
+                          >
+                            Clear
+                          </button>
+                          <button
+                            onClick={() => setShowBulkModal(true)}
+                            className="px-4 py-1 text-sm bg-green-600 dark:bg-green-500 text-white rounded-md hover:bg-green-700 dark:hover:bg-green-600"
+                          >
+                            Fulfill Selected ({selectedRequests.length})
+                          </button>
+                        </div>
                       </div>
                     </div>
 
                     {/* Selected requirements summary */}
-                    {selectedRequests.length > 0 && (
-                      <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-700">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                          <div>
-                            <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{selectedRequirements.totalRequests}</div>
-                            <div className="text-xs text-blue-700 dark:text-blue-400">Requests</div>
-                          </div>
-                          <div>
-                            <div className="text-lg font-bold text-green-600 dark:text-green-400">{selectedRequirements.totalWorkers}</div>
-                            <div className="text-xs text-green-700 dark:text-green-400">Workers</div>
-                          </div>
-                          <div>
-                            <div className="text-lg font-bold text-blue-500">{selectedRequirements.totalMale}</div>
-                            <div className="text-xs text-blue-700 dark:text-blue-400">Male</div>
-                          </div>
-                          <div>
-                            <div className="text-lg font-bold text-pink-500">{selectedRequirements.totalFemale}</div>
-                            <div className="text-xs text-pink-700 dark:text-pink-400">Female</div>
-                          </div>
+                    <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-700">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                        <div>
+                          <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{selectedRequirements.totalRequests}</div>
+                          <div className="text-xs text-blue-700 dark:text-blue-400">Requests</div>
+                        </div>
+                        <div>
+                          <div className="text-lg font-bold text-green-600 dark:text-green-400">{selectedRequirements.totalWorkers}</div>
+                          <div className="text-xs text-green-700 dark:text-green-400">Workers</div>
+                        </div>
+                        <div>
+                          <div className="text-lg font-bold text-blue-500">{selectedRequirements.totalMale}</div>
+                          <div className="text-xs text-blue-700 dark:text-blue-400">Male</div>
+                        </div>
+                        <div>
+                          <div className="text-lg font-bold text-pink-500">{selectedRequirements.totalFemale}</div>
+                          <div className="text-xs text-pink-700 dark:text-pink-400">Female</div>
                         </div>
                       </div>
-                    )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -460,11 +444,10 @@ export default function Index({ sections: initialSections, auth }) {
                   <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                     <thead className="bg-gray-50 dark:bg-gray-700">
                       <tr>
-                        {bulkMode && (
-                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                            Select
-                          </th>
-                        )}
+                        {/* Always show the select column */}
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Select
+                        </th>
                         <th
                           scope="col"
                           className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
@@ -524,16 +507,15 @@ export default function Index({ sections: initialSections, auth }) {
                           key={`${group.sectionId}-${group.date}-${idx}`}
                           className="hover:bg-gray-50 dark:hover:bg-gray-700"
                         >
-                          {bulkMode && (
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <input
-                                type="checkbox"
-                                checked={group.requests.every(req => selectedRequests.includes(req.id)) && group.requests.some(req => req.status !== 'fulfilled')}
-                                onChange={(e) => handleSelectAllForDate(group.requests.filter(req => req.status !== 'fulfilled'), e.target.checked)}
-                                className="rounded text-blue-600 dark:text-blue-500 focus:ring-blue-500 dark:focus:ring-blue-400"
-                              />
-                            </td>
-                          )}
+                          {/* Always show the checkbox */}
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <input
+                              type="checkbox"
+                              checked={group.requests.every(req => selectedRequests.includes(req.id)) && group.requests.some(req => req.status !== 'fulfilled')}
+                              onChange={(e) => handleSelectAllForDate(group.requests.filter(req => req.status !== 'fulfilled'), e.target.checked)}
+                              className="rounded text-blue-600 dark:text-blue-500 focus:ring-blue-500 dark:focus:ring-blue-400"
+                            />
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                             {group.sectionName}
                           </td>
@@ -645,7 +627,7 @@ export default function Index({ sections: initialSections, auth }) {
                     initialOpen
                     quickFulfill={quickFulfill}
                     processingRequests={processingRequests}
-                    bulkMode={bulkMode}
+                    bulkMode={true} // Always show checkboxes in details modal
                     selectedRequests={selectedRequests}
                     handleRequestSelect={handleRequestSelect}
                   />
@@ -693,52 +675,6 @@ export default function Index({ sections: initialSections, auth }) {
           loading={processingRequests.length > 0}
         />
       )}
-
-      {/* Delete Confirmation Modal */}
-      {/* {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 transition-opacity"></div>
-          <div
-            className="relative z-40"
-            onClick={(e) => e.stopPropagation()}
-          ></div>
-          <div className="inline-block w-full max-w-md p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white dark:bg-gray-800 shadow-xl rounded-lg">
-            <div className="flex items-center">
-              <div className="flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/50">
-                <svg className="h-6 w-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                  Delete Request
-                </h3>
-                <div className="mt-2">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Are you sure you want to delete this request? This action cannot be undone.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse justify-center sm:justify-start">
-              <button
-                type="button"
-                className="w-full sm:w-auto inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:text-sm"
-                onClick={confirmDelete}
-              >
-                Delete
-              </button>
-              <button
-                type="button"
-                className="mt-3 sm:mt-0 w-full sm:w-auto inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-600 text-base font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:text-sm"
-                onClick={() => setShowDeleteModal(false)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )} */}
     </AuthenticatedLayout>
   );
 }

@@ -3,7 +3,14 @@ import { Link } from '@inertiajs/react';
 import EmployeeStatusBadge from './EmployeeStatusBadge';
 import EmployeeActions from './EmployeeActions';
 
-const EmployeeTable = ({ employees, totalWorkCount, totalWeeklyWorkCount, isUser }) => {
+const EmployeeTable = ({ 
+  employees, 
+  totalWorkCount, 
+  totalWeeklyWorkCount, 
+  isUser,
+  selectedEmployees,
+  toggleEmployeeSelection 
+}) => {
   const [expandedEmployees, setExpandedEmployees] = useState(new Set());
 
   const toggleExpand = (employeeId) => {
@@ -50,6 +57,11 @@ const EmployeeTable = ({ employees, totalWorkCount, totalWeeklyWorkCount, isUser
       <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
         <thead className="bg-gray-50 dark:bg-gray-700">
           <tr>
+            {!isUser && (
+              <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                <span className="sr-only">Select</span>
+              </th>
+            )}
             <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nama</th>
             <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Gender</th>
             <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">NIK</th>
@@ -74,8 +86,19 @@ const EmployeeTable = ({ employees, totalWorkCount, totalWeeklyWorkCount, isUser
             </tr>
           ) : (
             employees.map((employee) => {
+              const isSelected = selectedEmployees.includes(employee.id);
               return (
-                <tr key={employee.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                <tr key={employee.id} className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+                  {!isUser && (
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleEmployeeSelection(employee.id)}
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                    </td>
+                  )}
                   <td className="px-4 py-4 text-sm font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">{employee.name}</td>
                   <td className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">{employee.gender}</td>
                   <td className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">{employee.nik}</td>
@@ -123,7 +146,7 @@ const EmployeeTable = ({ employees, totalWorkCount, totalWeeklyWorkCount, isUser
             })
           )}
           <tr className="bg-gray-100 dark:bg-gray-700 font-semibold text-gray-700 dark:text-gray-300">
-            <td colSpan="6" className="px-4 py-3 text-right">Total Penugasan:</td>
+            <td colSpan={isUser ? 6 : 7} className="px-4 py-3 text-right">Total Penugasan:</td>
             <td className="px-4 py-3 text-center">{totalWorkCount}</td>
             <td className="px-4 py-3 text-center">{totalWeeklyWorkCount}</td>
             <td colSpan={isUser ? 4 : 5} className="px-4 py-3 text-center"></td>

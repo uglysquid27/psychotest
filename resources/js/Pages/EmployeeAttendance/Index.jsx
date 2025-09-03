@@ -7,6 +7,7 @@ import EmployeeTable from './components/EmployeeTable';
 import EmployeeCards from './components/EmployeeCards';
 import ResetStatusModal from './components/ResetStatusModal';
 import UpdateWorkloadModal from './components/UpdateWorkloadModal';
+import BulkDeactivateModal from './components/BulkDeactivateModal'; // Add this import
 
 export default function Index() {
   const { employees: paginationData, filters, uniqueStatuses, uniqueSections, uniqueSubSections, auth } = usePage().props;
@@ -22,6 +23,8 @@ export default function Index() {
   const [processing, setProcessing] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [showWorkloadModal, setShowWorkloadModal] = useState(false);
+  const [selectedEmployees, setSelectedEmployees] = useState([]); // Add this for bulk selection
+  const [showBulkDeactivateModal, setShowBulkDeactivateModal] = useState(false); // Add this for bulk deactivate modal
 
   // Apply filters
   const applyFilters = (newFilters) => {
@@ -105,6 +108,31 @@ export default function Index() {
     });
   };
 
+  // Add this function to handle employee selection
+  const toggleEmployeeSelection = (employeeId) => {
+    const newSelected = new Set(selectedEmployees);
+    if (newSelected.has(employeeId)) {
+      newSelected.delete(employeeId);
+    } else {
+      newSelected.add(employeeId);
+    }
+    setSelectedEmployees(Array.from(newSelected));
+  };
+
+  // Add this function to select all employees
+  const selectAllEmployees = () => {
+    if (selectedEmployees.length === employees.length) {
+      setSelectedEmployees([]);
+    } else {
+      setSelectedEmployees(employees.map(emp => emp.id));
+    }
+  };
+
+  // Add this function to handle bulk deactivation
+  const handleBulkDeactivate = () => {
+    setShowBulkDeactivateModal(true);
+  };
+
   return (
     <AuthenticatedLayout
       header={
@@ -128,6 +156,16 @@ export default function Index() {
           onConfirm={handleUpdateWorkloads}
           processing={processing}
         />
+      </Modal>
+
+      {/* Add Bulk Deactivate Modal */}
+      <Modal show={showBulkDeactivateModal} onClose={() => setShowBulkDeactivateModal(false)}>
+        <BulkDeactivateModal
+    show={showBulkDeactivateModal}
+    onClose={() => setShowBulkDeactivateModal(false)}
+    employeeIds={selectedEmployees}
+    employeeCount={selectedEmployees.length}
+  />
       </Modal>
 
       <div className="py-4 sm:py-8">
@@ -232,6 +270,21 @@ export default function Index() {
                         </svg>
                         <span className="hidden sm:inline">Export</span>
                       </a>
+
+                      {/* Bulk Deactivate Button */}
+                      {selectedEmployees.length > 0 && (
+                        <button
+                          onClick={handleBulkDeactivate}
+                          className="flex items-center justify-center gap-1 bg-red-700 hover:bg-red-800 px-2 py-1.5 sm:px-3 sm:py-2 rounded-md font-medium text-white text-xs sm:text-sm transition-colors duration-200"
+                          title="Bulk Deactivate Selected Employees"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4m10 6l6-6m-6-6l6 6" />
+                          </svg>
+                          <span className="hidden sm:inline">Deactivate ({selectedEmployees.length})</span>
+                          <span className="sm:hidden">Deactivate ({selectedEmployees.length})</span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -266,8 +319,41 @@ export default function Index() {
                 handleSearchChange={handleSearchChange}
               />
 
-              <EmployeeCards employees={employees} isUser={isUser} />
-              <EmployeeTable employees={employees} totalWorkCount={totalWorkCount} totalWeeklyWorkCount={totalWeeklyWorkCount} isUser={isUser} />
+              {/* Add select all checkbox */}
+              {!isUser && employees.length > 0 && (
+                <div className="mb-4 flex items-center">
+                  <input
+                    type="checkbox"
+                    id="select-all"
+                    checked={selectedEmployees.length === employees.length}
+                    onChange={selectAllEmployees}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="select-all" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                    Select all {employees.length} employees
+                  </label>
+                  {selectedEmployees.length > 0 && (
+                    <span className="ml-4 text-sm text-gray-700 dark:text-gray-300">
+                      {selectedEmployees.length} selected
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <EmployeeCards 
+                employees={employees} 
+                isUser={isUser} 
+                selectedEmployees={selectedEmployees}
+                toggleEmployeeSelection={toggleEmployeeSelection}
+              />
+              <EmployeeTable 
+                employees={employees} 
+                totalWorkCount={totalWorkCount} 
+                totalWeeklyWorkCount={totalWeeklyWorkCount} 
+                isUser={isUser}
+                selectedEmployees={selectedEmployees}
+                toggleEmployeeSelection={toggleEmployeeSelection}
+              />
 
               {paginationLinks.length > 3 && (
                 <div className="flex flex-wrap justify-center sm:justify-end gap-2 mt-6">

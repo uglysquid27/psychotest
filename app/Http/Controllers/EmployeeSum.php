@@ -984,4 +984,43 @@ class EmployeeSum extends Controller
             'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
         ]);
     }
+
+    public function bulkDeactivate(Request $request)
+    {
+        $validated = $request->validate([
+            'employee_ids' => 'required|array',
+            'employee_ids.*' => 'exists:employees,id',
+            'deactivation_reason' => 'required|string|max:255',
+            'deactivation_notes' => 'nullable|string'
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $employeeIds = $validated['employee_ids'];
+            $reason = $validated['deactivation_reason'];
+            $notes = $validated['deactivation_notes'] ?? null;
+            $userId = auth()->id();
+
+            Employee::whereIn('id', $employeeIds)
+                ->update([
+                    'status' => 'deactivated',
+                    'deactivation_reason' => $reason,
+                    'deactivation_notes' => $notes,
+                    'deactivated_at' => now(),
+                    'deactivated_by' => $userId
+                ]);
+
+            DB::commit();
+
+            return redirect()->route('employee-attendance.index')
+                ->with('success', count($employeeIds) . ' employees deactivated successfully');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Bulk deactivation failed: ' . $e->getMessage());
+            
+            return redirect()->back()
+                ->with('error', 'Failed to deactivate employees. Please try again.');
+        }
+    }
 }

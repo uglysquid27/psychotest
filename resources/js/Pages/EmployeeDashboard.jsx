@@ -284,14 +284,14 @@ export default function EmployeeDashboard() {
                                                                                                         'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
                                                                                                     }`}>
                                                                                                         {emp.status === 'accepted' ? 'Diterima' :
-                                                                                                         emp.status === 'rejected' ? 'Ditolak' : 'Menunggu'}
+                                                                                                         emp.status === 'rejected' ? 'Ijin' : 'Menunggu'}
                                                                                                     </span>
                                                                                                 </div>
-                                                                                                {emp.rejection_reason && (
+                                                                                                {/* {emp.rejection_reason && (
                                                                                                     <div className="mt-1 text-xs text-red-500 italic">
                                                                                                         "{emp.rejection_reason}"
                                                                                                     </div>
-                                                                                                )}
+                                                                                                )} */}
                                                                                             </div>
                                                                                         ))}
                                                                                     </div>
