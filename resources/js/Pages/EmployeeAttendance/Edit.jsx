@@ -8,7 +8,9 @@ export default function Edit() {
     const [selectedSection, setSelectedSection] = useState(null);
     const [showSubSectionModal, setShowSubSectionModal] = useState(false);
     const [tempSelectedSubSections, setTempSelectedSubSections] = useState([]);
-    const [photoPreview, setPhotoPreview] = useState(employee.photo || null);
+    const [photoPreview, setPhotoPreview] = useState(
+        employee.photo ? `/storage/${employee.photo}` : null
+    );
     const [showSuccessToast, setShowSuccessToast] = useState(false);
 
     // Format birth date
@@ -50,7 +52,7 @@ export default function Edit() {
         cuti: employee.cuti || 'no',
         gender: employee.gender || 'male',
         sub_sections: employee.sub_sections || [],
-        
+
         // Profile information
         ktp: employee.ktp || '',
         email: employee.email || '',
@@ -73,7 +75,7 @@ export default function Edit() {
     const handleSectionSelect = (section) => {
         setSelectedSection(section);
         // Pre-select any subsections that are already selected for this section
-        const currentSectionSubs = data.sub_sections.filter(subName => 
+        const currentSectionSubs = data.sub_sections.filter(subName =>
             section.sub_sections.some(sub => sub.name === subName)
         );
         setTempSelectedSubSections(currentSectionSubs);
@@ -92,7 +94,7 @@ export default function Edit() {
 
     const handleSelectAll = () => {
         if (!selectedSection) return;
-        
+
         if (tempSelectedSubSections.length === selectedSection.sub_sections.length) {
             // If all are selected, deselect all
             setTempSelectedSubSections([]);
@@ -104,7 +106,7 @@ export default function Edit() {
 
     const applySubSectionSelection = () => {
         if (!selectedSection) return;
-        
+
         // Merge with existing selections from other sections
         const otherSectionsSubs = data.sub_sections.filter(
             name => !selectedSection.sub_sections.some(sub => sub.name === name)
@@ -123,7 +125,7 @@ export default function Edit() {
         const file = e.target.files[0];
         if (file) {
             setData('photo', file);
-            
+
             // Create preview
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -135,19 +137,20 @@ export default function Edit() {
 
     const removePhoto = () => {
         setData('photo', null);
-        setPhotoPreview(null);
+        // Revert to original photo if it exists, otherwise null
+        setPhotoPreview(employee.photo ? `/storage/${employee.photo}` : null);
     };
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        
+
         // Format RT/RW before submitting
         const formattedData = {
             ...data,
             rt: data.rt ? formatRtRw(data.rt) : '',
             rw: data.rw ? formatRtRw(data.rw) : ''
         };
-        
+
         put(route('employee-attendance.update', employee.id), {
             data: formattedData,
             onError: (errors) => {
@@ -194,42 +197,53 @@ export default function Edit() {
 
                             <form onSubmit={handleSubmit} className="space-y-6">
                                 {/* Photo Upload Section */}
+                                {/* Photo Upload Section */}
                                 <div className="bg-gray-50 dark:bg-gray-700 p-4 sm:p-6 rounded-lg">
                                     <h3 className="font-medium text-gray-700 dark:text-gray-300 text-lg mb-4">
                                         Profile Photo
                                     </h3>
-                                    
+
                                     <div className="flex items-center space-x-6">
                                         <div className="shrink-0">
-                                            <img 
-                                                className="h-24 w-24 object-cover rounded-full border-2 border-gray-300 dark:border-gray-600" 
-                                                src={photoPreview || (employee.photo ? `/storage/${employee.photo}` : '/images/default-avatar.png')} 
-                                                alt="Current profile" 
+                                            <img
+                                                className="h-24 w-24 object-cover rounded-full border-2 border-gray-300 dark:border-gray-600 cursor-pointer hover:opacity-80 transition-opacity"
+                                                src={photoPreview || (employee.photo ? `/storage/${employee.photo}` : '/images/default-avatar.png')}
+                                                alt={`Profile of ${employee.name}`}
+                                                onError={(e) => {
+                                                    // If the image fails to load, show default avatar
+                                                    e.target.src = '/images/default-avatar.png';
+                                                }}
+                                                onClick={() => {
+                                                    // Create a modal for enlarged image
+                                                    const modal = document.createElement('div');
+                                                    modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75';
+                                                    modal.innerHTML = `
+                        <div class="relative max-w-4xl max-h-full">
+                            <img 
+                                src="${photoPreview || (employee.photo ? `/storage/${employee.photo}` : '/images/default-avatar.png')}" 
+                                alt="Enlarged profile of ${employee.name}"
+                                class="max-w-full max-h-screen object-contain"
+                            />
+                            <button 
+                                class="absolute top-4 right-4 text-white bg-red-600 hover:bg-red-700 rounded-full p-2 transition-all ease-in-out "
+                                onclick="this.parentElement.parentElement.remove()"
+                            >
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    `;
+                                                    modal.addEventListener('click', (e) => {
+                                                        if (e.target === modal) {
+                                                            modal.remove();
+                                                        }
+                                                    });
+                                                    document.body.appendChild(modal);
+                                                }}
                                             />
                                         </div>
-                                        <label className="block">
-                                            <span className="sr-only">Choose profile photo</span>
-                                            <input 
-                                                type="file" 
-                                                accept="image/*"
-                                                onChange={handlePhotoChange}
-                                                className="block w-full text-sm text-gray-500 dark:text-gray-400
-                                                    file:mr-4 file:py-2 file:px-4
-                                                    file:rounded-md file:border-0
-                                                    file:text-sm file:font-semibold
-                                                    file:bg-indigo-50 dark:file:bg-indigo-900/20 file:text-indigo-700 dark:file:text-indigo-300
-                                                    hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900/30" 
-                                            />
-                                        </label>
-                                        {photoPreview && (
-                                            <button
-                                                type="button"
-                                                onClick={removePhoto}
-                                                className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm"
-                                            >
-                                                Remove Photo
-                                            </button>
-                                        )}
+
                                     </div>
                                     {errors.photo && <p className="mt-2 text-red-500 text-sm">{errors.photo}</p>}
                                 </div>
@@ -612,7 +626,7 @@ export default function Edit() {
                                                             {section.name}
                                                         </h4>
                                                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                                                            {data.sub_sections.filter(name => 
+                                                            {data.sub_sections.filter(name =>
                                                                 section.sub_sections.some(sub => sub.name === name)
                                                             ).length} of {section.sub_sections.length} sub sections selected
                                                         </p>
@@ -676,7 +690,7 @@ export default function Edit() {
                                                 type="password"
                                                 id="password_confirmation"
                                                 value={data.password_confirmation}
-                                             onChange={(e) => setData('password_confirmation', e.target.value)}
+                                                onChange={(e) => setData('password_confirmation', e.target.value)}
 
                                                 className="w-full bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                                             />
@@ -702,40 +716,39 @@ export default function Edit() {
             {/* Sub Section Modal */}
             {showSubSectionModal && selectedSection && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto">
-                    <div 
-                        className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
+                    <div
+                        className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
                         onClick={() => setShowSubSectionModal(false)}
                     ></div>
-                    
+
                     <div className="inline-block w-full max-w-md p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white dark:bg-gray-800 shadow-xl rounded-lg">
                         <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                             <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-gray-100 mb-4">
                                 Select Sub Sections from {selectedSection.name}
                             </h3>
-                            
+
                             <div className="mb-4 flex justify-between items-center">
                                 <button
                                     type="button"
                                     onClick={handleSelectAll}
                                     className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
                                 >
-                                    {tempSelectedSubSections.length === selectedSection.sub_sections.length 
-                                        ? 'Deselect All' 
+                                    {tempSelectedSubSections.length === selectedSection.sub_sections.length
+                                        ? 'Deselect All'
                                         : 'Select All'}
                                 </button>
                                 <span className="text-sm text-gray-500 dark:text-gray-400">
                                     {tempSelectedSubSections.length} selected
                                 </span>
                             </div>
-                            
+
                             <div className="max-h-96 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-md">
                                 <div className="space-y-0 divide-y divide-gray-200 dark:divide-gray-700">
                                     {selectedSection.sub_sections.map((subSection) => (
-                                        <label 
+                                        <label
                                             key={subSection.id}
-                                            className={`flex items-center px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${
-                                                tempSelectedSubSections.includes(subSection.name) ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
-                                            }`}
+                                            className={`flex items-center px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 ${tempSelectedSubSections.includes(subSection.name) ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''
+                                                }`}
                                         >
                                             <input
                                                 type="checkbox"
@@ -751,7 +764,7 @@ export default function Edit() {
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                             <button
                                 type="button"

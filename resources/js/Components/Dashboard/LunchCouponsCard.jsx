@@ -60,19 +60,8 @@ const LunchCouponsCard = ({ initialDate, formatDate }) => {
                         <span className="font-medium">Date:</span> {formattedDate}
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4 mb-4">
-                        <div className="text-center">
-                            <div className="text-2xl font-bold text-gray-800 dark:text-gray-100">{totalCoupons}</div>
-                            <div className="text-sm text-gray-500 dark:text-gray-400">Total</div>
-                        </div>
-                        <div className="text-center">
-                            <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-500">{pendingCoupons}</div>
-                            <div className="text-sm text-gray-500 dark:text-gray-400">Pending</div>
-                        </div>
-                        <div className="text-center">
-                            <div className="text-2xl font-bold text-green-600 dark:text-green-500">{claimedCoupons}</div>
-                            <div className="text-sm text-gray-500 dark:text-gray-400">Claimed</div>
-                        </div>
+                    <div className="mb-2 text-lg font-semibold text-gray-600 dark:text-gray-400">
+                        <span className="font-medium">Total:</span> {totalCoupons}
                     </div>
 
                     <div className="mt-4 mb-4">
