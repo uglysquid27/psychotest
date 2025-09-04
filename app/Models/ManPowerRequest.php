@@ -21,7 +21,7 @@ class ManPowerRequest extends Model
         'status',
         'fulfilled_by',
         'reason', // Added
-        'is_additional' // Added
+        'is_additional', // Added
     ];
 
     protected $casts = [

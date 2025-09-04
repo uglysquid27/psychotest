@@ -211,6 +211,7 @@ public function bulkStore(Request $request)
         'request_ids'   => 'required|array',
         'request_ids.*' => 'exists:man_power_requests,id',
         'strategy'      => 'required|in:optimal,same_section,balanced',
+        'visibility'    => 'in:public,private'
     ]);
 
     DB::beginTransaction();
@@ -388,6 +389,7 @@ public function bulkStore(Request $request)
                     'man_power_request_id' => $manpowerRequest->id,
                     'date' => $manpowerRequest->date,
                     'status' => 'pending',
+                    'visibility' => 'private'
                 ]);
             }
 
@@ -821,6 +823,7 @@ private function autoAssignEmployees(ManPowerRequest $request, string $strategy 
             'man_power_request_id' => $request->id,
             'date'                 => $request->date,
             'status'               => 'pending',
+            'visibility' => 'private'
         ]);
     }
 
@@ -865,7 +868,8 @@ private function autoAssignEmployees(ManPowerRequest $request, string $strategy 
         $validated = $request->validate([
             'employee_ids' => 'required|array',
             'employee_ids.*' => 'exists:employees,id',
-            'fulfilled_by' => 'required|exists:users,id'
+            'fulfilled_by' => 'required|exists:users,id',
+            'visibility' => 'in:public,private'
         ]);
 
         $req = ManPowerRequest::with(['schedules.employee'])->findOrFail($id);
@@ -910,6 +914,7 @@ private function autoAssignEmployees(ManPowerRequest $request, string $strategy 
                         'sub_section_id' => $req->sub_section_id,
                         'man_power_request_id' => $req->id,
                         'date' => $req->date,
+                        'visibility' => 'private'
                     ]);
 
                     $employee->status = 'assigned';

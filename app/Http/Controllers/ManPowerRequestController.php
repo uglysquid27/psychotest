@@ -813,8 +813,6 @@ private function getEligibleEmployeesForRequest($request)
 }
 
 
-
-
     /**
      * Auto-select employees based on the specified strategy
      */

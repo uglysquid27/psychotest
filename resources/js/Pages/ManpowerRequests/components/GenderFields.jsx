@@ -7,7 +7,7 @@ export default function GenderFields({
   sectionName // Add sectionName as a prop
 }) {
   // Hide gender fields for these sections
-  const hideGenderFields = ['Finished goods', 'Loader'].includes(sectionName);
+  const hideGenderFields = ['Loader'].includes(sectionName);
 
   if (hideGenderFields) {
     return null;

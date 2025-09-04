@@ -249,7 +249,7 @@ export default function EmployeeDashboard() {
                                                                 </button>
                                                             </td>
                                                         </tr>
-                                                        
+
                                                         {/* Coworkers Row */}
                                                         {expandedSchedule === schedule.id && coworkersData && (
                                                             <tr>
@@ -258,7 +258,7 @@ export default function EmployeeDashboard() {
                                                                         <h5 className="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-3">
                                                                             Rekan Kerja Hari yang Sama ({formatDate(schedule.date)}) - Section: {coworkersData.current_schedule?.section_name}
                                                                         </h5>
-                                                                        
+
                                                                         {coworkersData.shiftGroups && Object.keys(coworkersData.shiftGroups).length > 0 ? (
                                                                             Object.entries(coworkersData.shiftGroups).map(([shiftId, shiftData]) => (
                                                                                 <div key={shiftId} className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-blue-200 dark:border-blue-700">
@@ -266,34 +266,53 @@ export default function EmployeeDashboard() {
                                                                                         Shift: {shiftData.shift_name} ({shiftData.start_time?.substring(0, 5)} - {shiftData.end_time?.substring(0, 5)}) - {shiftData.employees.length} orang
                                                                                     </h6>
                                                                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                                                        {shiftData.employees.map((emp, index) => (
-                                                                                            <div key={emp.id || index} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 text-xs">
-                                                                                                <div className="font-medium text-gray-800 dark:text-gray-200">
-                                                                                                    {emp.employee?.name || 'N/A'}
-                                                                                                </div>
-                                                                                                <div className="text-gray-600 dark:text-gray-400 mt-1">
-                                                                                                    NIK: {emp.employee?.nik || 'N/A'}
-                                                                                                </div>
-                                                                                                <div className="text-gray-600 dark:text-gray-400">
-                                                                                                    Sub Bagian: {emp.sub_section || 'N/A'}
-                                                                                                </div>
-                                                                                                <div className="mt-2">
-                                                                                                    <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
-                                                                                                        emp.status === 'accepted' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                                                                                                        emp.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
-                                                                                                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                                                                                                    }`}>
-                                                                                                        {emp.status === 'accepted' ? 'Diterima' :
-                                                                                                         emp.status === 'rejected' ? 'Ijin' : 'Menunggu'}
-                                                                                                    </span>
-                                                                                                </div>
-                                                                                                {/* {emp.rejection_reason && (
-                                                                                                    <div className="mt-1 text-xs text-red-500 italic">
-                                                                                                        "{emp.rejection_reason}"
+                                                                                        {shiftData.employees.map((emp, index) => {
+                                                                                            // Handle both string and number ID comparisons
+                                                                                            const isCurrentUser =
+                                                                                                String(emp.employee?.id) === String(auth.user.id) ||
+                                                                                                Number(emp.employee?.id) === Number(auth.user.id);
+
+                                                                                            return (
+                                                                                                <div
+                                                                                                    key={emp.id || index}
+                                                                                                    className={`rounded-lg p-3 text-xs ${isCurrentUser
+                                                                                                            ? 'bg-blue-100 dark:bg-blue-900/40 border-2 border-blue-500 dark:border-blue-400'
+                                                                                                            : 'bg-gray-50 dark:bg-gray-700'
+                                                                                                        }`}
+                                                                                                >
+                                                                                                    <div className="font-medium text-gray-800 dark:text-gray-200 flex items-center">
+                                                                                                        {emp.employee?.name || 'N/A'}
+                                                                                                        {isCurrentUser && (
+                                                                                                            <span className="ml-2 bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">
+                                                                                                                Anda
+                                                                                                            </span>
+                                                                                                        )}
                                                                                                     </div>
-                                                                                                )} */}
-                                                                                            </div>
-                                                                                        ))}
+                                                                                                    <div className="text-gray-600 dark:text-gray-400 mt-1">
+                                                                                                        NIK: {emp.employee?.nik || 'N/A'}
+                                                                                                    </div>
+                                                                                                    <div className="text-gray-600 dark:text-gray-400">
+                                                                                                        Sub Bagian: {emp.sub_section || 'N/A'}
+                                                                                                    </div>
+                                                                                                    <div className="mt-2">
+                                                                                                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${emp.status === 'accepted' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                                                                                                                emp.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                                                                                                                    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                                                                                            }`}>
+                                                                                                            {emp.status === 'accepted' ? 'Diterima' :
+                                                                                                                emp.status === 'rejected' ? 'Ijin' : 'Menunggu'}
+                                                                                                        </span>
+                                                                                                    </div>
+                                                                                                    {/* Debug info - remove in production */}
+                                                                                                    {process.env.NODE_ENV === 'development' && (
+                                                                                                        <div className="mt-1 text-xs text-gray-400">
+                                                                                                            Emp ID: {emp.employee?.id} (Type: {typeof emp.employee?.id}) |
+                                                                                                            Auth ID: {auth.user.id} (Type: {typeof auth.user.id})
+                                                                                                        </div>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                            );
+                                                                                        })}
                                                                                     </div>
                                                                                 </div>
                                                                             ))
