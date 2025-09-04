@@ -29,7 +29,11 @@ export default function Create({ sections, shifts }) {
   const handleSubSectionSelect = (subSections) => {
     const initialTimeSlots = {};
     shifts.forEach(shift => {
-      initialTimeSlots[shift.id] = {
+      // Initialize with empty array for each shift
+      initialTimeSlots[shift.id] = [];
+      
+      // Add default time slot for each shift
+      initialTimeSlots[shift.id].push({
         requested_amount: '',
         male_count: 0,
         female_count: 0,
@@ -37,7 +41,7 @@ export default function Create({ sections, shifts }) {
         end_time: shift.end_time || '',
         reason: '',
         is_additional: false,
-      };
+      });
     });
 
     const newRequests = subSections.map(subSection => ({
@@ -69,9 +73,22 @@ export default function Create({ sections, shifts }) {
     setRequests(updatedRequests);
   };
 
-  const handleSlotChange = (index, shiftId, field, value) => {
+  const handleSlotChange = (index, shiftId, slotIndex, field, value) => {
     const updatedRequests = [...requests];
-    updatedRequests[index].time_slots[shiftId][field] = value;
+    
+    if (field === 'add_slot') {
+      // Add a new time slot
+      updatedRequests[index].time_slots[shiftId].push(value);
+    } else if (field === 'remove_slot') {
+      // Remove a time slot (only if not the first one)
+      if (slotIndex > 0) {
+        updatedRequests[index].time_slots[shiftId].splice(slotIndex, 1);
+      }
+    } else {
+      // Update a specific field in a time slot
+      updatedRequests[index].time_slots[shiftId][slotIndex][field] = value;
+    }
+    
     setRequests(updatedRequests);
   };
 
@@ -86,8 +103,8 @@ export default function Create({ sections, shifts }) {
 
   const handleShowSummary = () => {
     const hasValidRequests = requests.some(request => 
-      Object.values(request.time_slots).some(slot => 
-        slot.requested_amount && parseInt(slot.requested_amount) > 0
+      Object.values(request.time_slots).some(slots => 
+        slots.some(slot => slot.requested_amount && parseInt(slot.requested_amount) > 0)
       )
     );
 
@@ -111,19 +128,27 @@ export default function Create({ sections, shifts }) {
       sub_section_id: request.sub_section_id,
       date: globalDate,
       time_slots: Object.entries(request.time_slots)
-        .filter(([_, slot]) => slot.requested_amount && parseInt(slot.requested_amount) > 0)
-        .reduce((acc, [shiftId, slot]) => ({
-          ...acc,
-          [shiftId]: {
-            requested_amount: parseInt(slot.requested_amount),
-            male_count: parseInt(slot.male_count) || 0,
-            female_count: parseInt(slot.female_count) || 0,
-            start_time: slot.start_time,
-            end_time: slot.end_time,
-            reason: slot.reason || '',
-            is_additional: slot.is_additional || false
-          }
-        }), {})
+        .filter(([shiftId, slots]) => 
+          slots.some(slot => slot.requested_amount && parseInt(slot.requested_amount) > 0)
+        )
+        .reduce((acc, [shiftId, slots]) => {
+          // Process each time slot for this shift
+          slots.forEach((slot, slotIndex) => {
+            if (slot.requested_amount && parseInt(slot.requested_amount) > 0) {
+              const slotKey = slotIndex === 0 ? shiftId : `${shiftId}_${slotIndex}`;
+              acc[slotKey] = {
+                requested_amount: parseInt(slot.requested_amount),
+                male_count: parseInt(slot.male_count) || 0,
+                female_count: parseInt(slot.female_count) || 0,
+                start_time: slot.start_time,
+                end_time: slot.end_time,
+                reason: slot.reason || '',
+                is_additional: slotIndex > 0 || slot.is_additional || false
+              };
+            }
+          });
+          return acc;
+        }, {})
     })).filter(request => Object.keys(request.time_slots).length > 0);
 
     if (formattedRequests.length === 0) {
@@ -145,6 +170,15 @@ export default function Create({ sections, shifts }) {
     };
 
     const getShiftName = (shiftId) => {
+      // Handle additional time slots
+      if (shiftId.includes('_')) {
+        const parts = shiftId.split('_');
+        const baseShiftId = parts[0];
+        const slotIndex = parseInt(parts[1]);
+        const shift = shifts.find(s => s.id == baseShiftId);
+        return shift ? `${shift.name} (Time ${slotIndex + 1})` : `Shift ${baseShiftId} (Time ${slotIndex + 1})`;
+      }
+      
       const shift = shifts.find(s => s.id == shiftId);
       return shift ? shift.name : `Shift ${shiftId}`;
     };
@@ -168,13 +202,15 @@ export default function Create({ sections, shifts }) {
       let totalShifts = 0;
 
       requests.forEach(request => {
-        Object.values(request.time_slots).forEach(slot => {
-          if (slot.requested_amount && parseInt(slot.requested_amount) > 0) {
-            totalEmployees += parseInt(slot.requested_amount);
-            totalMale += parseInt(slot.male_count) || 0;
-            totalFemale += parseInt(slot.female_count) || 0;
-            totalShifts += 1;
-          }
+        Object.values(request.time_slots).forEach(slots => {
+          slots.forEach(slot => {
+            if (slot.requested_amount && parseInt(slot.requested_amount) > 0) {
+              totalEmployees += parseInt(slot.requested_amount);
+              totalMale += parseInt(slot.male_count) || 0;
+              totalFemale += parseInt(slot.female_count) || 0;
+              totalShifts += 1;
+            }
+          });
         });
       });
 
@@ -185,190 +221,122 @@ export default function Create({ sections, shifts }) {
 
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+        <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-lg">
+          <div className="px-4 py-5 sm:px-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
               Request Summary
             </h3>
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              Review your manpower requests before submission
+            <p className="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400">
+              Review your manpower requests before submitting.
             </p>
           </div>
-          <div className="text-right">
-            <p className="text-sm text-gray-600 dark:text-gray-400">Date:</p>
-            <p className="font-medium text-gray-900 dark:text-gray-100">
-              {formatDate(globalDate)}
-            </p>
-          </div>
-        </div>
+          <div className="px-4 py-5 sm:p-6">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-6">
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">Total Requests</h4>
+                <p className="text-2xl font-bold text-blue-600 dark:text-blue-300">{requests.length}</p>
+                <p className="text-xs text-blue-600 dark:text-blue-300 mt-1">Sub-sections</p>
+              </div>
+              <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-green-800 dark:text-green-200 mb-2">Total Employees</h4>
+                <p className="text-2xl font-bold text-green-600 dark:text-green-300">{totals.totalEmployees}</p>
+                <p className="text-xs text-green-600 dark:text-green-300 mt-1">Across all shifts</p>
+              </div>
+            </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg text-center">
-            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-              {totals.totalSections}
-            </div>
-            <div className="text-xs text-blue-600 dark:text-blue-400 uppercase tracking-wide">
-              Sections
-            </div>
-          </div>
-          <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg text-center">
-            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-              {totals.totalShifts}
-            </div>
-            <div className="text-xs text-green-600 dark:text-green-400 uppercase tracking-wide">
-              Shifts
-            </div>
-          </div>
-          <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg text-center">
-            <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-              {totals.totalEmployees}
-            </div>
-            <div className="text-xs text-purple-600 dark:text-purple-400 uppercase tracking-wide">
-              Total Staff
-            </div>
-          </div>
-          <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg text-center">
-            <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-              {totals.totalMale}
-            </div>
-            <div className="text-xs text-indigo-600 dark:text-indigo-400 uppercase tracking-wide">
-              Male
-            </div>
-          </div>
-          <div className="bg-pink-50 dark:bg-pink-900/20 p-4 rounded-lg text-center">
-            <div className="text-2xl font-bold text-pink-600 dark:text-pink-400">
-              {totals.totalFemale}
-            </div>
-            <div className="text-xs text-pink-600 dark:text-pink-400 uppercase tracking-wide">
-              Female
-            </div>
-          </div>
-        </div>
+            <div className="mt-6">
+              <h4 className="text-md font-medium text-gray-900 dark:text-gray-100 mb-3">Details by Sub-section</h4>
+              <div className="space-y-4">
+                {requests.map((request, index) => {
+                  const requestTotals = {
+                    employees: 0,
+                    male: 0,
+                    female: 0,
+                    shifts: 0
+                  };
 
-        <div className="space-y-4">
-          <h4 className="font-medium text-gray-900 dark:text-gray-100">Request Details</h4>
-          
-          {requests.map((request, requestIndex) => {
-            const activeSlots = Object.entries(request.time_slots).filter(
-              ([_, slot]) => slot.requested_amount && parseInt(slot.requested_amount) > 0
-            );
+                  Object.values(request.time_slots).forEach(slots => {
+                    slots.forEach(slot => {
+                      if (slot.requested_amount && parseInt(slot.requested_amount) > 0) {
+                        requestTotals.employees += parseInt(slot.requested_amount);
+                        requestTotals.male += parseInt(slot.male_count) || 0;
+                        requestTotals.female += parseInt(slot.female_count) || 0;
+                        requestTotals.shifts += 1;
+                      }
+                    });
+                  });
 
-            if (activeSlots.length === 0) return null;
+                  if (requestTotals.employees === 0) return null;
 
-            return (
-              <div key={requestIndex} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h5 className="font-medium text-gray-900 dark:text-gray-100">
-                    {request.section_name} - {request.sub_section_name}
-                  </h5>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    {activeSlots.length} shift{activeSlots.length > 1 ? 's' : ''}
-                  </span>
-                </div>
-
-                <div className="space-y-3">
-                  {activeSlots.map(([shiftId, slot]) => (
-                    <div key={shiftId} className="bg-white dark:bg-gray-700 rounded-md p-3">
-                      <div className="grid grid-cols-1 md:grid-cols-6 gap-3 text-sm">
-                        <div>
-                          <span className="font-medium text-gray-700 dark:text-gray-300">
-                            {getShiftName(shiftId)}
-                          </span>
+                  return (
+                    <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                      <h5 className="font-medium text-gray-900 dark:text-gray-100">
+                        {request.section_name} - {request.sub_section_name}
+                      </h5>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                        Date: {formatDate(request.date)}
+                      </p>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                        <div className="bg-gray-50 dark:bg-gray-700 rounded p-2">
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Total Employees</p>
+                          <p className="font-medium">{requestTotals.employees}</p>
                         </div>
-                        <div>
-                          <span className="text-gray-600 dark:text-gray-400">Staff: </span>
-                          <span className="font-medium text-gray-900 dark:text-gray-100">
-                            {slot.requested_amount}
-                          </span>
+                        <div className="bg-blue-50 dark:bg-blue-900/20 rounded p-2">
+                          <p className="text-xs text-blue-500 dark:text-blue-400">Male</p>
+                          <p className="font-medium text-blue-600 dark:text-blue-300">{requestTotals.male}</p>
                         </div>
-                        <div>
-                          <span className="text-gray-600 dark:text-gray-400">Male: </span>
-                          <span className="font-medium text-blue-600 dark:text-blue-400">
-                            {slot.male_count || 0}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-gray-600 dark:text-gray-400">Female: </span>
-                          <span className="font-medium text-pink-600 dark:text-pink-400">
-                            {slot.female_count || 0}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-gray-600 dark:text-gray-400">Start: </span>
-                          <span className="font-medium text-gray-900 dark:text-gray-100">
-                            {formatTimeForDisplay(slot.start_time)}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-gray-600 dark:text-gray-400">End: </span>
-                          <span className="font-medium text-gray-900 dark:text-gray-100">
-                            {formatTimeForDisplay(slot.end_time)}
-                          </span>
+                        <div className="bg-pink-50 dark:bg-pink-900/20 rounded p-2">
+                          <p className="text-xs text-pink-500 dark:text-pink-400">Female</p>
+                          <p className="font-medium text-pink-600 dark:text-pink-300">{requestTotals.female}</p>
                         </div>
                       </div>
-                      
-                      {slot.reason && (
-                        <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
-                          <span className="text-xs text-gray-600 dark:text-gray-400">Reason: </span>
-                          <span className="text-xs text-gray-800 dark:text-gray-200">
-                            {slot.reason}
-                          </span>
-                        </div>
-                      )}
-                      
-                      {slot.is_additional && (
-                        <div className="mt-1">
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300">
-                            Additional Request
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
 
-        <div className="flex justify-between pt-6 border-t border-gray-200 dark:border-gray-700">
-          <button
-            type="button"
-            onClick={() => setShowSummary(false)}
-            disabled={processing}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-            </svg>
-            Back to Edit
-          </button>
-          
-          <button
-            type="button"
-            onClick={submitAllRequests}
-            disabled={processing}
-            className={`inline-flex items-center px-6 py-2 bg-indigo-600 dark:bg-indigo-700 text-white text-sm font-medium rounded-md hover:bg-indigo-700 dark:hover:bg-indigo-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed ${
-              processing ? 'opacity-75' : ''
-            }`}
-          >
-            {processing ? (
-              <>
-                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Submitting...
-              </>
-            ) : (
-              <>
-                Submit All Requests
-                <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                </svg>
-              </>
-            )}
-          </button>
+                      <div className="mt-3">
+                        <h6 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Shift Details:</h6>
+                        <div className="space-y-2">
+                          {Object.entries(request.time_slots).map(([shiftId, slots]) => 
+                            slots.map((slot, slotIndex) => {
+                              if (!slot.requested_amount || parseInt(slot.requested_amount) === 0) return null;
+                              
+                              return (
+                                <div key={`${shiftId}_${slotIndex}`} className="text-sm pl-3 border-l-2 border-gray-200 dark:border-gray-600">
+                                  <p className="font-medium">{getShiftName(slotIndex === 0 ? shiftId : `${shiftId}_${slotIndex}`)}</p>
+                                  <p>Time: {formatTimeForDisplay(slot.start_time)} - {formatTimeForDisplay(slot.end_time)}</p>
+                                  <p>Employees: {slot.requested_amount} ({slot.male_count || 0}M / {slot.female_count || 0}F)</p>
+                                  {slot.reason && (
+                                    <p className="text-gray-500 dark:text-gray-400 italic">Reason: {slot.reason}</p>
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700 flex justify-between">
+              <button
+                type="button"
+                onClick={() => setShowSummary(false)}
+                className="inline-flex items-center px-4 py-2 bg-gray-600 dark:bg-gray-700 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition ease-in-out duration-150"
+              >
+                Back to Edit
+              </button>
+              <button
+                type="button"
+                onClick={submitAllRequests}
+                disabled={processing}
+                className="inline-flex items-center px-4 py-2 bg-indigo-600 dark:bg-indigo-500 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 dark:hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition ease-in-out duration-150"
+              >
+                {processing ? 'Submitting...' : 'Submit All Requests'}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -460,7 +428,6 @@ export default function Create({ sections, shifts }) {
                     <button
                       type="button"
                       onClick={() => setShowSubSectionModal(true)}
-                      // disabled={!globalDate}
                       className={`flex items-center px-4 py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-gray-700 rounded-md whitespace-nowrap `}
                     >
                       + Add Sub Section
@@ -474,7 +441,7 @@ export default function Create({ sections, shifts }) {
                         shifts={shifts}
                         errors={errors.requests?.[activeRequestIndex] || {}}
                         onChange={(field, value) => handleRequestChange(activeRequestIndex, field, value)}
-                        onSlotChange={(shiftId, field, value) => handleSlotChange(activeRequestIndex, shiftId, field, value)}
+                        onSlotChange={(shiftId, slotIndex, field, value) => handleSlotChange(activeRequestIndex, shiftId, slotIndex, field, value)}
                         globalDate={globalDate}
                         hideDate={true}
                       />

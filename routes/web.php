@@ -248,6 +248,12 @@ Route::post('/employee-attendance/bulk-deactivate', [EmployeeSum::class, 'bulkDe
     Route::get('/schedules', [ScheduleController::class, 'index'])->name('schedules.index');
     Route::get('/schedules/{id}/edit', [ScheduleController::class, 'edit'])->name('schedules.edit');
     Route::post('/schedules', [ScheduleController::class, 'store'])->name('schedules.store');
+    Route::post('/schedules/{manPowerRequest}/toggle-visibility', [ScheduleController::class, 'toggleVisibility'])
+    ->name('schedules.toggle-visibility');
+    Route::post('/schedules/toggle-visibility-group', [ScheduleController::class, 'toggleVisibilityGroup'])
+    ->name('schedules.toggle-visibility-group');
+
+
 
     // Lunch routes
 

@@ -16,6 +16,7 @@ class Schedule extends Model
         'date',
         'status',
         'rejection_reason',
+        'visibility'
     ];
 
     protected $casts = [

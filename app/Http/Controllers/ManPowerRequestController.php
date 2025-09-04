@@ -19,7 +19,7 @@ use App\Models\Employee;
 
 class ManPowerRequestController extends Controller
 {
-   public function index(Request $request): Response
+  public function index(Request $request): Response
     {
         $query = Section::with([
             'subSections',
@@ -89,6 +89,9 @@ class ManPowerRequestController extends Controller
                     ],
                     'shift' => $request->shift ? $request->shift->only(['id', 'name']) : null,
                     'shift_id' => $request->shift_id,
+                    'start_time' => $request->start_time,
+                    'end_time' => $request->end_time,
+                    'slot_index' => $request->slot_index,
                 ];
             }
         }
@@ -101,6 +104,7 @@ class ManPowerRequestController extends Controller
             'requests' => $requests,
         ]);
     }
+
     public function create(): Response
     {
         $sections = Section::with('subSections')->get();
@@ -135,6 +139,8 @@ class ManPowerRequestController extends Controller
                     'requested_amount' => $request->requested_amount,
                     'status' => $request->status,
                     'is_additional' => $request->is_additional,
+                    'start_time' => $request->start_time,
+                    'end_time' => $request->end_time,
                 ];
             });
     
@@ -169,23 +175,23 @@ class ManPowerRequestController extends Controller
 
             // Additional validation for time order and format conversion
             foreach ($validated['requests'] as $requestIndex => $requestData) {
-                foreach ($requestData['time_slots'] as $shiftId => $slot) {
+                foreach ($requestData['time_slots'] as $slotKey => $slot) {
                     // Convert times to H:i:s format
                     if (!empty($slot['start_time'])) {
-                        $validated['requests'][$requestIndex]['time_slots'][$shiftId]['start_time'] = 
+                        $validated['requests'][$requestIndex]['time_slots'][$slotKey]['start_time'] = 
                             $this->convertToHisFormat($slot['start_time']);
                     }
                     if (!empty($slot['end_time'])) {
-                        $validated['requests'][$requestIndex]['time_slots'][$shiftId]['end_time'] = 
+                        $validated['requests'][$requestIndex]['time_slots'][$slotKey]['end_time'] = 
                             $this->convertToHisFormat($slot['end_time']);
                     }
 
                     // Validate time order if both times are provided
-                    if (!empty($validated['requests'][$requestIndex]['time_slots'][$shiftId]['start_time']) && 
-                        !empty($validated['requests'][$requestIndex]['time_slots'][$shiftId]['end_time'])) {
+                    if (!empty($validated['requests'][$requestIndex]['time_slots'][$slotKey]['start_time']) && 
+                        !empty($validated['requests'][$requestIndex]['time_slots'][$slotKey]['end_time'])) {
                         
-                        $startTime = $validated['requests'][$requestIndex]['time_slots'][$shiftId]['start_time'];
-                        $endTime = $validated['requests'][$requestIndex]['time_slots'][$shiftId]['end_time'];
+                        $startTime = $validated['requests'][$requestIndex]['time_slots'][$slotKey]['start_time'];
+                        $endTime = $validated['requests'][$requestIndex]['time_slots'][$slotKey]['end_time'];
                         
                         // Skip validation if start and end times are the same (like 00:00:00 to 00:00:00)
                         if ($startTime === $endTime) {
@@ -203,7 +209,7 @@ class ManPowerRequestController extends Controller
                         // Only validate if end time is not significantly later (more than 24 hours)
                         if ($endCarbon->lte($startCarbon) && $endCarbon->diffInHours($startCarbon) < 24) {
                             throw ValidationException::withMessages([
-                                "requests.{$requestIndex}.time_slots.{$shiftId}.end_time" => 'End time must be after start time.'
+                                "requests.{$requestIndex}.time_slots.{$slotKey}.end_time" => 'End time must be after start time.'
                             ]);
                         }
                     }
@@ -225,7 +231,12 @@ class ManPowerRequestController extends Controller
 
         DB::transaction(function () use ($validated) {
             foreach ($validated['requests'] as $requestData) {
-                foreach ($requestData['time_slots'] as $shiftId => $slot) {
+                foreach ($requestData['time_slots'] as $slotKey => $slot) {
+                    // Extract shift ID and slot index from the key
+                    $parts = explode('_', $slotKey);
+                    $shiftId = $parts[0];
+                    $slotIndex = count($parts) > 1 ? (int)$parts[1] : 0;
+                    
                     ManPowerRequest::create([
                         'sub_section_id' => $requestData['sub_section_id'],
                         'date' => $requestData['date'],
@@ -236,8 +247,9 @@ class ManPowerRequestController extends Controller
                         'start_time' => $slot['start_time'],
                         'end_time' => $slot['end_time'],
                         'reason' => $slot['reason'],
-                        'is_additional' => $slot['is_additional'] ?? false,
+                        'is_additional' => $slot['is_additional'] ?? ($slotIndex > 0),
                         'status' => 'pending',
+                        'slot_index' => $slotIndex, // Store the slot index for reference
                     ]);
                 }
             }
@@ -331,19 +343,27 @@ class ManPowerRequestController extends Controller
                 $existingRequests = ManPowerRequest::where('date', $manpowerRequest->date)
                     ->where('sub_section_id', $manpowerRequest->sub_section_id)
                     ->get()
-                    ->keyBy('shift_id');
+                    ->keyBy(function($item) {
+                        return $item->shift_id . '_' . $item->slot_index;
+                    });
 
                 $hasValidSlots = false;
-                $processedShifts = [];
+                $processedSlots = [];
 
-                foreach ($validated['time_slots'] as $shiftId => $slot) {
+                foreach ($validated['time_slots'] as $slotKey => $slot) {
                     $requestedAmount = (int) $slot['requested_amount'];
                     $maleCount = is_numeric($slot['male_count']) ? (int)$slot['male_count'] : 0;
                     $femaleCount = is_numeric($slot['female_count']) ? (int)$slot['female_count'] : 0;
 
                     if ($requestedAmount > 0) {
                         $hasValidSlots = true;
-                        $existing = $existingRequests->get($shiftId);
+                        
+                        // Extract shift ID and slot index from the key
+                        $parts = explode('_', $slotKey);
+                        $shiftId = $parts[0];
+                        $slotIndex = count($parts) > 1 ? (int)$parts[1] : 0;
+                        
+                        $existing = $existingRequests->get($slotKey);
 
                         if ($existing) {
                             $existing->update([
@@ -367,14 +387,16 @@ class ManPowerRequestController extends Controller
                                 'start_time' => $slot['start_time'],
                                 'end_time' => $slot['end_time'],
                                 'status' => 'pending',
+                                'slot_index' => $slotIndex,
                             ]);
                         }
-                        $processedShifts[] = $shiftId;
+                        $processedSlots[] = $slotKey;
                     }
                 }
 
-                foreach ($existingRequests as $shiftId => $request) {
-                    if (!in_array($shiftId, $processedShifts)) {
+                // Delete any existing requests that weren't processed
+                foreach ($existingRequests as $slotKey => $request) {
+                    if (!in_array($slotKey, $processedSlots)) {
                         $request->delete();
                     }
                 }
@@ -411,7 +433,8 @@ class ManPowerRequestController extends Controller
 
         $timeSlots = [];
         foreach ($relatedRequests as $req) {
-            $timeSlots[$req->shift_id] = [
+            $slotKey = $req->slot_index === 0 ? $req->shift_id : $req->shift_id . '_' . $req->slot_index;
+            $timeSlots[$slotKey] = [
                 'id' => $req->id,
                 'requested_amount' => $req->requested_amount,
                 'male_count' => $req->male_count,

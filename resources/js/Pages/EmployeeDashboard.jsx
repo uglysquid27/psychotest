@@ -168,7 +168,7 @@ export default function EmployeeDashboard() {
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                                {mySchedules.map((schedule) => (
+                                                {mySchedules.filter(schedule => schedule.visibility === 'public').map((schedule) => (
                                                     <React.Fragment key={schedule.id}>
                                                         <tr className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150 text-center">
                                                             <td className="px-3 py-2 sm:px-4 sm:py-3 whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-gray-100">
