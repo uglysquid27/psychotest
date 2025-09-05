@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use App\Models\ManPowerRequest;
 use App\Models\Employee;
 use App\Models\Schedule;
+use App\Models\Section;
+use App\Models\SubSection;
 use Inertia\Inertia;
 use Inertia\Response;
 use Carbon\Carbon;
@@ -26,6 +28,8 @@ class ScheduleController extends Controller
 
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
+        $sectionId = $request->input('section');
+        $subSectionId = $request->input('sub_section');
 
         if ($startDate && $endDate) {
             $query->whereBetween('date', [
@@ -34,13 +38,32 @@ class ScheduleController extends Controller
             ]);
         }
 
+        if ($sectionId) {
+            $query->whereHas('manPowerRequest.subSection', function($q) use ($sectionId) {
+                $q->where('section_id', $sectionId);
+            });
+        }
+
+        if ($subSectionId) {
+            $query->whereHas('manPowerRequest', function($q) use ($subSectionId) {
+                $q->where('sub_section_id', $subSectionId);
+            });
+        }
+
         $schedules = $query->orderBy('date')->get();
+
+        $sections = Section::all();
+        $subSections = SubSection::with('section')->get();
 
         return Inertia::render('Schedules/Index', [
             'schedules' => $schedules,
+            'sections' => $sections,
+            'subSections' => $subSections,
             'filters' => [
                 'start_date' => $startDate,
                 'end_date' => $endDate,
+                'section' => $sectionId,
+                'sub_section' => $subSectionId,
             ]
         ]);
     }
@@ -285,57 +308,53 @@ class ScheduleController extends Controller
     }
 
     public function toggleVisibility($manPowerRequestId)
-{
-    // Ambil semua schedule dengan request yang sama
-    $schedules = \App\Models\Schedule::where('man_power_request_id', $manPowerRequestId)->get();
+    {
+        // Ambil semua schedule dengan request yang sama
+        $schedules = \App\Models\Schedule::where('man_power_request_id', $manPowerRequestId)->get();
 
-    if ($schedules->isEmpty()) {
-        return redirect()->back()->with('error', 'Tidak ada schedule ditemukan');
+        if ($schedules->isEmpty()) {
+            return redirect()->back()->with('error', 'Tidak ada schedule ditemukan');
+        }
+
+        // Ambil visibility sekarang (default ambil dari schedule pertama)
+        $currentVisibility = $schedules->first()->visibility;
+
+        // Tentukan nilai baru
+        $newVisibility = $currentVisibility === 'public' ? 'private' : 'public';
+
+        // Update semua schedule pada request ini
+        \App\Models\Schedule::where('man_power_request_id', $manPowerRequestId)
+            ->update(['visibility' => $newVisibility]);
+
+        return redirect()->back()->with('success', 'Visibility berhasil diubah menjadi ' . $newVisibility);
     }
 
-    // Ambil visibility sekarang (default ambil dari schedule pertama)
-    $currentVisibility = $schedules->first()->visibility;
+    public function toggleVisibilityGroup(Request $request)
+    {
+        $validated = $request->validate([
+            'date' => 'required|date',
+            'section_id' => 'required|integer',
+            'visibility' => 'required|in:public,private',
+        ]);
 
-    // Tentukan nilai baru
-    $newVisibility = $currentVisibility === 'public' ? 'private' : 'public';
+        // Get all schedules for this date and section
+        $schedules = \App\Models\Schedule::whereDate('date', $validated['date'])
+            ->whereHas('manPowerRequest.subSection', function($query) use ($validated) {
+                $query->where('section_id', $validated['section_id']);
+            })
+            ->get();
 
-    // Update semua schedule pada request ini
-    \App\Models\Schedule::where('man_power_request_id', $manPowerRequestId)
-        ->update(['visibility' => $newVisibility]);
+        if ($schedules->isEmpty()) {
+            return back()->with('error', 'No schedules found for this group');
+        }
 
-    return redirect()->back()->with('success', 'Visibility berhasil diubah menjadi ' . $newVisibility);
-}
+        // Update visibility for all schedules in this group
+        \App\Models\Schedule::whereDate('date', $validated['date'])
+            ->whereHas('manPowerRequest.subSection', function($query) use ($validated) {
+                $query->where('section_id', $validated['section_id']);
+            })
+            ->update(['visibility' => $validated['visibility']]);
 
-public function toggleVisibilityGroup(Request $request)
-{
-    $validated = $request->validate([
-        'date' => 'required|date',
-        'sub_section_id' => 'required|integer',
-        'visibility' => 'required|in:public,private',
-    ]);
-
-    // Get all schedules for this date and sub-section
-    $schedules = \App\Models\Schedule::whereDate('date', $validated['date'])
-        ->whereHas('manPowerRequest', function($query) use ($validated) {
-            $query->where('sub_section_id', $validated['sub_section_id']);
-        })
-        ->get();
-
-    if ($schedules->isEmpty()) {
-        return back()->with('error', 'No schedules found for this group');
+        return back()->with('success', 'Visibility updated for group');
     }
-
-    // Update visibility for all schedules in this group
-    \App\Models\Schedule::whereDate('date', $validated['date'])
-        ->whereHas('manPowerRequest', function($query) use ($validated) {
-            $query->where('sub_section_id', $validated['sub_section_id']);
-        })
-        ->update(['visibility' => $validated['visibility']]);
-
-    return back()->with('success', 'Visibility updated for group');
-}
-
-
-
-
 }

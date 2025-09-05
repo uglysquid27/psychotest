@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
 
 class EmployeeDashboardController extends Controller
 {
-        public function index()
+    public function index()
     {
         /** @var Employee $employee */
         $employee = auth()->user();
@@ -23,8 +23,10 @@ class EmployeeDashboardController extends Controller
             $incompleteProfile = true;
         }
 
+        // Get all schedules (past, present, and future)
         $mySchedules = $employee->schedules()
             ->with(['manPowerRequest.shift', 'subSection.section'])
+            ->orderBy('date', 'desc') // Changed to desc to show latest first
             ->get();
 
         return inertia('EmployeeDashboard', [
@@ -37,55 +39,60 @@ class EmployeeDashboardController extends Controller
     }
 
     public function sameDayEmployees(Schedule $schedule)
-{
-    $employee = Auth::guard('employee')->user();
+    {
+        $employee = Auth::guard('employee')->user();
 
-    $currentSection = $schedule->subSection->section;
+        $currentSection = $schedule->subSection->section;
 
-    $schedules = Schedule::with(['employee', 'subSection', 'manPowerRequest.shift'])
-        ->whereHas('subSection', function ($q) use ($currentSection) {
-            $q->where('section_id', $currentSection->id);
-        })
-        ->whereDate('date', $schedule->date)
-        ->get(); // Remove the condition that excludes the current user
+        $schedules = Schedule::with(['employee', 'subSection', 'manPowerRequest.shift'])
+            ->whereHas('subSection', function ($q) use ($currentSection) {
+                $q->where('section_id', $currentSection->id);
+            })
+            ->whereDate('date', $schedule->date)
+            ->get(); // Remove the condition that excludes the current user
 
-    $shiftGroups = [];
-    foreach ($schedules as $s) {
-        $shiftId = $s->manPowerRequest->shift_id;
-        if (!isset($shiftGroups[$shiftId])) {
-            $shiftGroups[$shiftId] = [
-                'shift_name' => $s->manPowerRequest->shift->name,
-                'start_time' => $s->manPowerRequest->start_time,
-                'end_time' => $s->manPowerRequest->end_time,
-                'employees' => []
+        $shiftGroups = [];
+        foreach ($schedules as $s) {
+            $shiftId = $s->manPowerRequest->shift_id;
+            if (!isset($shiftGroups[$shiftId])) {
+                $shiftGroups[$shiftId] = [
+                    'shift_name' => $s->manPowerRequest->shift->name,
+                    'start_time' => $s->manPowerRequest->start_time,
+                    'end_time' => $s->manPowerRequest->end_time,
+                    'employees' => []
+                ];
+            }
+
+            $shiftGroups[$shiftId]['employees'][] = [
+                'id' => $s->id,
+                'employee' => $s->employee,
+                'sub_section' => $s->subSection->name,
+                'status' => $s->status,
+                'rejection_reason' => $s->rejection_reason,
+                'is_current_user' => $s->employee_id === $employee->id // Add flag to identify current user
             ];
         }
 
-        $shiftGroups[$shiftId]['employees'][] = [
-            'id' => $s->id,
-            'employee' => $s->employee,
-            'sub_section' => $s->subSection->name,
-            'status' => $s->status,
-            'rejection_reason' => $s->rejection_reason,
-            'is_current_user' => $s->employee_id === $employee->id // Add flag to identify current user
-        ];
+        uasort($shiftGroups, fn($a, $b) => strcmp($a['start_time'], $b['start_time']));
+
+        return response()->json([
+            'current_schedule' => [
+                'id' => $schedule->id,
+                'status' => $schedule->status,
+                'section_name' => $currentSection->name
+            ],
+            'shiftGroups' => $shiftGroups,
+            'current_user_id' => $employee->id // Also return current user ID for reference
+        ]);
     }
-
-    uasort($shiftGroups, fn($a, $b) => strcmp($a['start_time'], $b['start_time']));
-
-    return response()->json([
-        'current_schedule' => [
-            'id' => $schedule->id,
-            'status' => $schedule->status,
-            'section_name' => $currentSection->name
-        ],
-        'shiftGroups' => $shiftGroups,
-        'current_user_id' => $employee->id // Also return current user ID for reference
-    ]);
-}
 
     public function respond(Request $req, Schedule $schedule)
     {
+        // Only allow responding to today's or future schedules
+        if (Carbon::parse($schedule->date)->isPast() && !Carbon::parse($schedule->date)->isToday()) {
+            return back()->with('error', 'Tidak dapat merespon jadwal yang sudah lewat.');
+        }
+
         $req->validate([
             'status' => 'required|in:accepted,rejected',
             'rejection_reason' => 'nullable|required_if:status,rejected|string|max:1000',

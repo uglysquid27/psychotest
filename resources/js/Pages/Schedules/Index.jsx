@@ -86,7 +86,19 @@ const ManPowerRequestDetailModal = ({ request, assignedEmployees, onClose }) => 
     );
 };
 
-const ScheduleSection = ({ title, schedulesByShift, date, subSectionId, currentVisibility }) => {
+const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility }) => {
+    const [shiftPages, setShiftPages] = useState({});
+    const itemsPerPage = 5;
+
+    useEffect(() => {
+        // Initialize pagination for each shift
+        const initialPages = {};
+        Object.keys(shifts).forEach(shiftName => {
+            initialPages[shiftName] = 1;
+        });
+        setShiftPages(initialPages);
+    }, [shifts]);
+
     const getStatusBadge = (status) => {
         switch (status) {
             case 'accepted':
@@ -100,26 +112,33 @@ const ScheduleSection = ({ title, schedulesByShift, date, subSectionId, currentV
         }
     };
 
-const toggleVisibility = () => {
-    router.post(
-        route("schedules.toggle-visibility-group"),
-        {
-            date: date,
-            sub_section_id: subSectionId,
-            visibility: currentVisibility === "public" ? "private" : "public",
-        },
-        {
-            preserveScroll: true,
-            preserveState: true,
-            onSuccess: () => {
-                // You might want to add a success message or refresh the data
+    const toggleVisibility = () => {
+        router.post(
+            route("schedules.toggle-visibility-group"),
+            {
+                date: date,
+                section_id: sectionId,
+                visibility: currentVisibility === "public" ? "private" : "public",
             },
-            onError: (errors) => {
-                console.error('Error toggling visibility:', errors);
+            {
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => {
+                    // You might want to add a success message or refresh the data
+                },
+                onError: (errors) => {
+                    console.error('Error toggling visibility:', errors);
+                }
             }
-        }
-    );
-};
+        );
+    };
+
+    const changeShiftPage = (shiftName, page) => {
+        setShiftPages(prev => ({
+            ...prev,
+            [shiftName]: page
+        }));
+    };
 
     const openEyeSVG = (
         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -137,42 +156,86 @@ const toggleVisibility = () => {
     return (
         <div className="rounded-lg bg-white p-4 shadow-md dark:bg-gray-800">
             <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">{title}</h2>
-            
-            {Object.keys(schedulesByShift).length === 0 ? (
+
+            {Object.keys(shifts).length === 0 ? (
                 <p className="italic text-gray-600 dark:text-gray-400">Tidak ada penjadwalan di bagian ini.</p>
             ) : (
-                Object.entries(schedulesByShift).map(([shiftName, shiftData]) => (
-                    <div key={shiftName} className="mb-6">
-                        <h3 className="text-md font-medium text-blue-700 dark:text-blue-400 mb-2">Shift {shiftName}</h3>
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                <thead className="bg-gray-50 dark:bg-gray-700">
-                                    <tr>
-                                        <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Nama</th>
-                                        <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-300">NIK</th>
-                                        <th className="hidden px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-300 sm:table-cell">Sub-Section</th>
-                                        <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
-                                    {shiftData.schedules.map((item, index) => (
-                                        <tr key={index}>
-                                            <td className="px-3 py-2 text-sm font-medium text-gray-900 dark:text-gray-100">{item.employee.name}</td>
-                                            <td className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300">{item.employee.nik}</td>
-                                            <td className="hidden px-3 py-2 text-sm text-gray-700 dark:text-gray-300 sm:table-cell">{item.sub_section?.name || '-'}</td>
-                                            <td className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
-                                                {getStatusBadge(item.status)}
-                                            </td>
+                Object.entries(shifts).map(([shiftName, shiftData]) => {
+                    const currentPage = shiftPages[shiftName] || 1;
+                    const totalPages = Math.ceil(shiftData.schedules.length / itemsPerPage);
+                    const paginatedSchedules = shiftData.schedules.slice(
+                        (currentPage - 1) * itemsPerPage,
+                        currentPage * itemsPerPage
+                    );
+
+                    return (
+                        <div key={shiftName} className="mb-6">
+                            <h3 className="text-md font-medium text-blue-700 dark:text-blue-400 mb-2">Shift {shiftName}</h3>
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                    <thead className="bg-gray-50 dark:bg-gray-700">
+                                        <tr>
+                                            <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Nama</th>
+                                            <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-300">NIK</th>
+                                            <th className="hidden px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-300 sm:table-cell">Sub-Section</th>
+                                            <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-300">Status</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
+                                        {paginatedSchedules.map((item, index) => (
+                                            <tr key={index}>
+                                                <td className="px-3 py-2 text-sm font-medium text-gray-900 dark:text-gray-100">{item.employee.name}</td>
+                                                <td className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300">{item.employee.nik}</td>
+                                                <td className="hidden px-3 py-2 text-sm text-gray-700 dark:text-gray-300 sm:table-cell">{item.sub_section?.name || '-'}</td>
+                                                <td className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
+                                                    {getStatusBadge(item.status)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {totalPages > 1 && (
+                                <div className="mt-3 flex justify-center">
+                                    <nav className="flex items-center space-x-1">
+                                        <button
+                                            onClick={() => changeShiftPage(shiftName, currentPage - 1)}
+                                            disabled={currentPage === 1}
+                                            className="rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                                        >
+                                            Prev
+                                        </button>
+
+                                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                                            <button
+                                                key={page}
+                                                onClick={() => changeShiftPage(shiftName, page)}
+                                                className={`rounded-md px-2 py-1 text-xs font-medium ${currentPage === page
+                                                    ? 'bg-indigo-600 text-white'
+                                                    : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                                                    }`}
+                                            >
+                                                {page}
+                                            </button>
+                                        ))}
+
+                                        <button
+                                            onClick={() => changeShiftPage(shiftName, currentPage + 1)}
+                                            disabled={currentPage === totalPages}
+                                            className="rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                                        >
+                                            Next
+                                        </button>
+                                    </nav>
+                                </div>
+                            )}
                         </div>
-                    </div>
-                ))
+                    );
+                })
             )}
 
-            {Object.keys(schedulesByShift).length > 0 && (
+            {Object.keys(shifts).length > 0 && (
                 <div className="mt-4 flex justify-between items-center">
                     <span className="text-sm text-gray-700 dark:text-gray-300">
                         Visibility: <strong>{currentVisibility}</strong>
@@ -191,9 +254,11 @@ const toggleVisibility = () => {
 };
 
 const Index = () => {
-    const { schedules, filters } = usePage().props;
+    const { schedules, filters, sections, subSections } = usePage().props;
     const [startDate, setStartDate] = useState(filters.start_date || '');
     const [endDate, setEndDate] = useState(filters.end_date || '');
+    const [selectedSection, setSelectedSection] = useState(filters.section || '');
+    const [selectedSubSection, setSelectedSubSection] = useState(filters.sub_section || '');
     const [currentPage, setCurrentPage] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
 
@@ -202,47 +267,50 @@ const Index = () => {
     useEffect(() => {
         setStartDate(filters.start_date || '');
         setEndDate(filters.end_date || '');
+        setSelectedSection(filters.section || '');
+        setSelectedSubSection(filters.sub_section || '');
         setCurrentPage(1);
     }, [filters]);
 
-    const groupedSchedulesByDateDivisionShift = useMemo(() => {
+    const filteredSubSections = useMemo(() => {
+        if (!selectedSection) return subSections;
+        return subSections.filter(sub => sub.section_id == selectedSection);
+    }, [selectedSection, subSections]);
+
+    const groupedSchedulesByDateSectionShift = useMemo(() => {
         return schedules.reduce((acc, schedule) => {
             const dateKey = dayjs(schedule.date).format('YYYY-MM-DD');
             const displayDate = dayjs(schedule.date).format('dddd, DD MMMM YYYY');
-            const divisionName = schedule.man_power_request.sub_section.section.name;
-            const subSectionName = schedule.man_power_request.sub_section.name;
+            const sectionName = schedule.man_power_request.sub_section.section.name;
+            const sectionId = schedule.man_power_request.sub_section.section.id;
             const shiftName = schedule.man_power_request.shift.name;
-            const subSectionId = schedule.man_power_request.sub_section.id;
             const visibility = schedule.visibility;
 
             if (!acc[dateKey]) {
-                acc[dateKey] = { displayDate, divisions: {} };
+                acc[dateKey] = { displayDate, sections: {} };
             }
-            if (!acc[dateKey].divisions[divisionName]) {
-                acc[dateKey].divisions[divisionName] = { subSections: {} };
-            }
-            if (!acc[dateKey].divisions[divisionName].subSections[subSectionName]) {
-                acc[dateKey].divisions[divisionName].subSections[subSectionName] = {
-                    subSectionId,
+            if (!acc[dateKey].sections[sectionName]) {
+                acc[dateKey].sections[sectionName] = {
+                    sectionId,
                     shifts: {},
-                    visibility: visibility, // Use the first schedule's visibility as the group visibility
+                    visibility: visibility,
                 };
             }
-            if (!acc[dateKey].divisions[divisionName].subSections[subSectionName].shifts[shiftName]) {
-                acc[dateKey].divisions[divisionName].subSections[subSectionName].shifts[shiftName] = {
+            if (!acc[dateKey].sections[sectionName].shifts[shiftName]) {
+                acc[dateKey].sections[sectionName].shifts[shiftName] = {
                     schedules: [],
                 };
             }
-            acc[dateKey].divisions[divisionName].subSections[subSectionName].shifts[shiftName].schedules.push(schedule);
-            
+            acc[dateKey].sections[sectionName].shifts[shiftName].schedules.push(schedule);
+
             return acc;
         }, {});
     }, [schedules]);
 
     const sortedDates = useMemo(() =>
-        Object.keys(groupedSchedulesByDateDivisionShift).sort((a, b) =>
+        Object.keys(groupedSchedulesByDateSectionShift).sort((a, b) =>
             dayjs(b).valueOf() - dayjs(a).valueOf()
-        ), [groupedSchedulesByDateDivisionShift]);
+        ), [groupedSchedulesByDateSectionShift]);
 
     const totalPages = Math.ceil(sortedDates.length / itemsPerPage);
     const paginatedDates = sortedDates.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -257,7 +325,12 @@ const Index = () => {
         }
         setIsLoading(true);
         try {
-            await router.get(route('schedules.index'), { start_date: startDate, end_date: endDate }, {
+            await router.get(route('schedules.index'), {
+                start_date: startDate,
+                end_date: endDate,
+                section: selectedSection,
+                sub_section: selectedSubSection
+            }, {
                 preserveState: true, preserveScroll: true,
             });
         } finally {
@@ -268,6 +341,8 @@ const Index = () => {
     const clearFilters = () => {
         setStartDate('');
         setEndDate('');
+        setSelectedSection('');
+        setSelectedSubSection('');
         router.get(route('schedules.index'), {}, { preserveState: true, preserveScroll: true });
     };
 
@@ -277,53 +352,115 @@ const Index = () => {
                 <h1 className="mb-6 text-center text-2xl font-extrabold text-gray-900 dark:text-gray-100">Agenda Penjadwalan</h1>
 
                 <div className="mb-6 rounded-lg bg-white p-4 shadow-md dark:bg-gray-800">
-                    <div className="flex flex-col md:flex-row md:space-x-4">
-                        <div className="flex-1">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <div>
                             <label htmlFor="startDate" className="block text-sm font-medium">Dari Tanggal:</label>
-                            <input type="date" id="startDate" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1 block w-full rounded-md border px-3 py-2" />
+                            <input
+                                type="date"
+                                id="startDate"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="mt-1 block w-full rounded-md border px-3 py-2"
+                            />
                         </div>
-                        <div className="flex-1">
+
+                        <div>
                             <label htmlFor="endDate" className="block text-sm font-medium">Sampai Tanggal:</label>
-                            <input type="date" id="endDate" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1 block w-full rounded-md border px-3 py-2" />
+                            <input
+                                type="date"
+                                id="endDate"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                className="mt-1 block w-full rounded-md border px-3 py-2"
+                            />
                         </div>
-                        <div className="flex space-x-2 mt-4 md:mt-6">
-                            <button onClick={applyFilters} className="rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700">Filter</button>
-                            <button onClick={clearFilters} className="rounded-md bg-gray-500 px-4 py-2 text-white hover:bg-gray-600">Clear</button>
+
+                        <div>
+                            <label htmlFor="section" className="block text-sm font-medium">Section:</label>
+                            <select
+                                id="section"
+                                value={selectedSection}
+                                onChange={(e) => {
+                                    setSelectedSection(e.target.value);
+                                    setSelectedSubSection('');
+                                }}
+                                className="mt-1 block w-full rounded-md border px-3 py-2"
+                            >
+                                <option value="">Semua Section</option>
+                                {sections.map(section => (
+                                    <option key={section.id} value={section.id}>{section.name}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label htmlFor="subSection" className="block text-sm font-medium">Sub Section:</label>
+                            <select
+                                id="subSection"
+                                value={selectedSubSection}
+                                onChange={(e) => setSelectedSubSection(e.target.value)}
+                                className="mt-1 block w-full rounded-md border px-3 py-2"
+                            >
+                                <option value="">Semua Sub Section</option>
+                                {filteredSubSections.map(subSection => (
+                                    <option key={subSection.id} value={subSection.id}>{subSection.name}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Buttons in the same row */}
+                        <div className="flex items-end gap-2">
+                            <button
+                                onClick={applyFilters}
+                                className="flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 w-full justify-center"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707v5.172l-4 2V13.828a1 1 0 00-.293-.707L3.293 6.707A1 1 0 013 6V4z" />
+                                </svg>
+                            </button>
+
+                            <button
+                                onClick={clearFilters}
+                                className="flex items-center gap-2 rounded-md bg-gray-500 px-4 py-2 text-white hover:bg-gray-600 w-full justify-center"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582M20 20v-5h-.581M5.418 9A7.978 7.978 0 014 12c0 4.418 3.582 8 8 8a7.978 7.978 0 005.418-2M18.582 15A7.978 7.978 0 0020 12c0-4.418-3.582-8-8-8a7.978 7.978 0 00-5.418 2" />
+                                </svg>
+                            </button>
                         </div>
                     </div>
                 </div>
 
+
                 {isLoading && <div className="p-4">Memuat...</div>}
 
                 {paginatedDates.map(dateKey => {
-                    const dateData = groupedSchedulesByDateDivisionShift[dateKey];
-                    const divisionsForDate = dateData.divisions;
-                    const divisionCount = Object.keys(divisionsForDate).length;
-                    
+                    const dateData = groupedSchedulesByDateSectionShift[dateKey];
+                    const sectionsForDate = dateData.sections;
+                    const sectionCount = Object.keys(sectionsForDate).length;
+
                     let gridClasses = "grid gap-6 mb-8";
-                    if (divisionCount === 1) {
+                    if (sectionCount === 1) {
                         gridClasses += " grid-cols-1";
-                    } else if (divisionCount === 2) {
+                    } else if (sectionCount === 2) {
                         gridClasses += " grid-cols-1 md:grid-cols-2";
                     } else {
                         gridClasses += " grid-cols-1 md:grid-cols-2 lg:grid-cols-3";
                     }
-                    
+
                     return (
                         <div key={dateKey}>
                             <h2 className="mb-4 bg-gray-100 p-3 text-xl font-bold">{dateData.displayDate}</h2>
                             <div className={gridClasses}>
-                                {Object.entries(divisionsForDate).map(([divisionName, divisionData]) => (
-                                    Object.entries(divisionData.subSections).map(([subSectionName, subSectionData]) => (
-                                        <ScheduleSection
-                                            key={`${dateKey}-${subSectionName}`}
-                                            title={`${divisionName} - ${subSectionName}`}
-                                            schedulesByShift={subSectionData.shifts}
-                                            date={dateKey}
-                                            subSectionId={subSectionData.subSectionId}
-                                            currentVisibility={subSectionData.visibility}
-                                        />
-                                    ))
+                                {Object.entries(sectionsForDate).map(([sectionName, sectionData]) => (
+                                    <ScheduleSection
+                                        key={`${dateKey}-${sectionName}`}
+                                        title={sectionName}
+                                        shifts={sectionData.shifts}
+                                        date={dateKey}
+                                        sectionId={sectionData.sectionId}
+                                        currentVisibility={sectionData.visibility}
+                                    />
                                 ))}
                             </div>
                         </div>
@@ -340,21 +477,20 @@ const Index = () => {
                             >
                                 Previous
                             </button>
-                            
+
                             {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
                                 <button
                                     key={page}
                                     onClick={() => setCurrentPage(page)}
-                                    className={`rounded-md px-3 py-2 text-sm font-medium ${
-                                        currentPage === page
-                                            ? 'bg-indigo-600 text-white'
-                                            : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-                                    }`}
+                                    className={`rounded-md px-3 py-2 text-sm font-medium ${currentPage === page
+                                        ? 'bg-indigo-600 text-white'
+                                        : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                                        }`}
                                 >
                                     {page}
                                 </button>
                             ))}
-                            
+
                             <button
                                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                                 disabled={currentPage === totalPages}

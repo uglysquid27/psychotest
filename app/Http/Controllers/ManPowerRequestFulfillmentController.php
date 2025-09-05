@@ -219,14 +219,14 @@ public function bulkStore(Request $request)
         $results = [];
 
         foreach ($request->request_ids as $id) {
-            $manpowerRequest = ManPowerRequest::with('subSection.section')->findOrFail($id);
+            $manpowerRequest = ManPowerRequest::with(['subSection.section', 'schedules'])->findOrFail($id);
 
             if ($manpowerRequest->status === 'fulfilled') {
                 $results[$id] = 'already fulfilled';
                 continue;
             }
 
-            // Process each request individually, exactly like in create method
+            // Get eligible employees (same logic as create method)
             $startDate = Carbon::now()->subDays(6)->startOfDay();
             $endDate = Carbon::now()->endOfDay();
 
@@ -237,11 +237,10 @@ public function bulkStore(Request $request)
 
             $currentScheduledIds = $manpowerRequest->schedules->pluck('employee_id')->toArray();
 
-            // Get eligible employees exactly like in create method
             $eligibleEmployees = Employee::where(function ($query) use ($currentScheduledIds) {
-                $query->where('status', 'available')
-                    ->orWhereIn('id', $currentScheduledIds);
-            })
+                    $query->where('status', 'available')
+                        ->orWhereIn('id', $currentScheduledIds);
+                })
                 ->where('cuti', 'no')
                 ->whereNotIn('id', array_diff($scheduledEmployeeIdsOnRequestDate, $currentScheduledIds))
                 ->with([
@@ -260,7 +259,6 @@ public function bulkStore(Request $request)
                 ->with(['schedules.manPowerRequest.shift'])
                 ->get()
                 ->map(function ($employee) {
-                    // Same calculation logic as in create method
                     $totalWorkingHours = 0;
                     foreach ($employee->schedules as $schedule) {
                         if ($schedule->manPowerRequest && $schedule->manPowerRequest->shift) {
@@ -310,8 +308,11 @@ public function bulkStore(Request $request)
 
                     return [
                         'id' => $employee->id,
-                        'gender' => $employee->gender,
+                        'nik' => $employee->nik,
+                        'name' => $employee->name,
                         'type' => $employee->type,
+                        'status' => $employee->status,
+                        'gender' => $employee->gender,
                         'working_day_weight' => $workingDayWeight,
                         'total_score' => $totalScore,
                         'sub_sections_data' => $subSectionsData,
@@ -330,16 +331,14 @@ public function bulkStore(Request $request)
                 foreach ($employees as $employee) {
                     $subSections = collect($employee['sub_sections_data']);
 
-                    // Check for exact subsection match
                     $hasExactSubSection = $subSections->contains('id', $requestSubSectionId);
                     
-                    // Check for same section (but not exact subsection)
                     $hasSameSection = false;
                     if ($requestSectionId) {
                         $hasSameSection = $subSections->contains(function ($ss) use ($requestSectionId, $requestSubSectionId) {
                             return isset($ss['section']['id']) && 
                                    $ss['section']['id'] == $requestSectionId &&
-                                   $ss['id'] != $requestSubSectionId; // Exclude exact matches
+                                   $ss['id'] != $requestSubSectionId;
                         });
                     }
 
@@ -355,47 +354,80 @@ public function bulkStore(Request $request)
                 return [$exactSubSection, $sameSection, $other];
             };
 
-            // Sort each group of employees
-            $sortEmployees = function ($employees) {
-                return $employees->sortByDesc('total_score')
-                    ->sortByDesc(fn($employee) => $employee['type'] === 'bulanan' ? 1 : 0)
-                    ->sortBy('working_day_weight')
-                    ->values();
+            $strategy = $request->strategy;
+            $sortEmployees = function ($employees) use ($strategy, $manpowerRequest) {
+                $requestSubSectionId = $manpowerRequest->sub_section_id;
+                $requestSectionId = $manpowerRequest->subSection->section_id ?? null;
+
+                return $employees->sort(function ($a, $b) use ($strategy, $requestSubSectionId, $requestSectionId) {
+                    if ($strategy === 'same_section') {
+                        $aHasExact = collect($a['sub_sections_data'])->contains('id', $requestSubSectionId);
+                        $bHasExact = collect($b['sub_sections_data'])->contains('id', $requestSubSectionId);
+                        
+                        if ($aHasExact && !$bHasExact) return -1;
+                        if (!$aHasExact && $bHasExact) return 1;
+                        
+                        return $b['total_score'] <=> $a['total_score'];
+                    }
+                    
+                    if ($strategy === 'balanced') {
+                        return $a['working_day_weight'] <=> $b['working_day_weight'];
+                    }
+                    
+                    // optimal strategy
+                    $aInSameSection = collect($a['sub_sections_data'])->contains(function ($ss) use ($requestSectionId) {
+                        return isset($ss['section']['id']) && $ss['section']['id'] == $requestSectionId;
+                    });
+                    $bInSameSection = collect($b['sub_sections_data'])->contains(function ($ss) use ($requestSectionId) {
+                        return isset($ss['section']['id']) && $ss['section']['id'] == $requestSectionId;
+                    });
+                    
+                    if ($aInSameSection && !$bInSameSection) return -1;
+                    if (!$aInSameSection && $bInSameSection) return 1;
+                    
+                    return $b['total_score'] <=> $a['total_score'];
+                });
             };
 
-            // Split employees into three groups
+            // Split and sort employees
             [$exactSubSectionEmployees, $sameSectionEmployees, $otherEmployees] = 
                 $splitEmployeesBySubSection($eligibleEmployees, $manpowerRequest);
             
-            // Sort each group
             $sortedExactSubSection = $sortEmployees($exactSubSectionEmployees);
             $sortedSameSection = $sortEmployees($sameSectionEmployees);
             $sortedOther = $sortEmployees($otherEmployees);
 
-            // Combine in priority order: exact subsection first, then same section, then others
+            // Combine in priority order
             $sortedEmployees = $sortedExactSubSection
                 ->merge($sortedSameSection)
                 ->merge($sortedOther);
 
-            // Take needed employees
-            $needed = $manpowerRequest->requested_amount;
+            // Ambil karyawan sesuai kebutuhan
+            $needed   = $manpowerRequest->requested_amount;
             $selected = $sortedEmployees->take($needed);
 
-            // Assign employees to schedule
-            foreach ($selected as $emp) {
-                Schedule::create([
-                    'employee_id' => $emp['id'],
-                    'sub_section_id' => $manpowerRequest->sub_section_id,
+            // ✅ assign ke schedule
+            foreach ($selected->values() as $index => $emp) {
+                $data = [
+                    'employee_id'          => $emp['id'],
+                    'sub_section_id'       => $manpowerRequest->sub_section_id,
                     'man_power_request_id' => $manpowerRequest->id,
-                    'date' => $manpowerRequest->date,
-                    'status' => 'pending',
-                    'visibility' => 'private'
-                ]);
+                    'date'                 => $manpowerRequest->date,
+                    'status'               => 'pending',
+                    'visibility'           => $request->visibility ?? 'private',
+                ];
+
+                // ✅ Tambahkan line kalau subsection putway
+                if (strtolower($manpowerRequest->subSection->name) === 'putway') {
+                    $data['line'] = strval((($index % 2) + 1));
+                }
+
+                Schedule::create($data);
             }
 
-            // Update request status
+            // Update request
             $manpowerRequest->update([
-                'status' => 'fulfilled',
+                'status'       => 'fulfilled',
                 'fulfilled_by' => auth()->id()
             ]);
 
@@ -411,14 +443,15 @@ public function bulkStore(Request $request)
         ]);
     } catch (\Exception $e) {
         DB::rollBack();
-        \Log::error("Bulk fulfill error: ".$e->getMessage());
+        \Log::error("Bulk fulfill error: " . $e->getMessage());
 
         return response()->json([
             'success' => false,
-            'message' => 'Bulk fulfill failed: '.$e->getMessage()
+            'message' => 'Bulk fulfill failed: ' . $e->getMessage()
         ], 500);
     }
 }
+
 
 public function bulkPreview(Request $request)
 {
@@ -863,90 +896,100 @@ private function autoAssignEmployees(ManPowerRequest $request, string $strategy 
 }
 
 
-    public function store(Request $request, $id)
-    {
-        $validated = $request->validate([
-            'employee_ids' => 'required|array',
-            'employee_ids.*' => 'exists:employees,id',
-            'fulfilled_by' => 'required|exists:users,id',
-            'visibility' => 'in:public,private'
+ public function store(Request $request, $id)
+{
+    $validated = $request->validate([
+        'employee_ids'   => 'required|array',
+        'employee_ids.*' => 'exists:employees,id',
+        'fulfilled_by'   => 'required|exists:users,id',
+        'visibility'     => 'in:public,private'
+    ]);
+
+    $req = ManPowerRequest::with(['schedules.employee', 'subSection'])->findOrFail($id);
+
+    try {
+        DB::transaction(function () use ($validated, $req) {
+            $currentSchedules   = $req->schedules;
+            $currentEmployeeIds = $currentSchedules->pluck('employee_id')->toArray();
+            $newEmployeeIds     = $validated['employee_ids'];
+
+            // Hapus yang lama
+            $employeesToRemove = array_diff($currentEmployeeIds, $newEmployeeIds);
+            foreach ($employeesToRemove as $employeeId) {
+                $schedule = $currentSchedules->where('employee_id', $employeeId)->first();
+                if ($schedule) {
+                    $employee = $schedule->employee;
+                    $employee->status = 'available';
+                    $employee->save();
+                    $schedule->delete();
+                }
+            }
+
+            // Tambahkan yang baru
+            $employeesToAdd = array_diff($newEmployeeIds, $currentEmployeeIds);
+            foreach (array_values($employeesToAdd) as $index => $employeeId) {
+                $employee = Employee::where('id', $employeeId)
+                    ->where(function ($query) {
+                        $query->where('status', 'available')
+                              ->orWhere('status', 'assigned');
+                    })
+                    ->where('cuti', 'no')
+                    ->whereDoesntHave('schedules', function ($query) use ($req) {
+                        $query->where('date', $req->date)
+                              ->where('man_power_request_id', '!=', $req->id);
+                    })
+                    ->first();
+
+                if (!$employee) {
+                    throw new \Exception("Karyawan ID {$employeeId} tidak tersedia, sedang cuti, atau sudah dijadwalkan pada tanggal ini.");
+                }
+
+                $data = [
+                    'employee_id'          => $employeeId,
+                    'sub_section_id'       => $req->sub_section_id,
+                    'man_power_request_id' => $req->id,
+                    'date'                 => $req->date,
+                    'visibility'           => $validated['visibility'] ?? 'private',
+                ];
+
+                // Tambahkan line kalau subsection putway
+                if (strtolower($req->subSection->name) === 'putway') {
+                    $data['line'] = (($index % 2) + 1); // 1,2,1,2...
+                }
+
+                Schedule::create($data);
+
+                $employee->status = 'assigned';
+                $employee->save();
+            }
+
+            $req->status       = 'fulfilled';
+            $req->fulfilled_by = $validated['fulfilled_by'];
+            $req->save();
+
+            Log::info('Manpower request fulfilled', [
+                'request_id'       => $req->id,
+                'fulfilled_by'     => $validated['fulfilled_by'],
+                'employees_added'  => $employeesToAdd,
+                'employees_removed'=> $employeesToRemove,
+                'date'             => $req->date
+            ]);
+        });
+    } catch (\Exception $e) {
+        Log::error('Fulfillment Error: ' . $e->getMessage(), [
+            'exception'  => $e,
+            'request_id' => $id,
+            'user_id'    => auth()->id()
         ]);
 
-        $req = ManPowerRequest::with(['schedules.employee'])->findOrFail($id);
-
-        try {
-            DB::transaction(function () use ($validated, $req) {
-                $currentSchedules = $req->schedules;
-                $currentEmployeeIds = $currentSchedules->pluck('employee_id')->toArray();
-                $newEmployeeIds = $validated['employee_ids'];
-
-                $employeesToRemove = array_diff($currentEmployeeIds, $newEmployeeIds);
-                foreach ($employeesToRemove as $employeeId) {
-                    $schedule = $currentSchedules->where('employee_id', $employeeId)->first();
-                    if ($schedule) {
-                        $employee = $schedule->employee;
-                        $employee->status = 'available';
-                        $employee->save();
-                        $schedule->delete();
-                    }
-                }
-
-                $employeesToAdd = array_diff($newEmployeeIds, $currentEmployeeIds);
-                foreach ($employeesToAdd as $employeeId) {
-                    $employee = Employee::where('id', $employeeId)
-                        ->where(function ($query) {
-                            $query->where('status', 'available')
-                                ->orWhere('status', 'assigned');
-                        })
-                        ->where('cuti', 'no')
-                        ->whereDoesntHave('schedules', function ($query) use ($req) {
-                            $query->where('date', $req->date)
-                                ->where('man_power_request_id', '!=', $req->id);
-                        })
-                        ->first();
-
-                    if (!$employee) {
-                        throw new \Exception("Karyawan ID {$employeeId} tidak tersedia, sedang cuti, atau sudah dijadwalkan pada tanggal ini.");
-                    }
-
-                    Schedule::create([
-                        'employee_id' => $employeeId,
-                        'sub_section_id' => $req->sub_section_id,
-                        'man_power_request_id' => $req->id,
-                        'date' => $req->date,
-                        'visibility' => 'private'
-                    ]);
-
-                    $employee->status = 'assigned';
-                    $employee->save();
-                }
-
-                $req->status = 'fulfilled';
-                $req->fulfilled_by = $validated['fulfilled_by'];
-                $req->save();
-
-                Log::info('Manpower request fulfilled', [
-                    'request_id' => $req->id,
-                    'fulfilled_by' => $validated['fulfilled_by'],
-                    'employees_added' => $employeesToAdd,
-                    'employees_removed' => $employeesToRemove,
-                    'date' => $req->date
-                ]);
-            });
-        } catch (\Exception $e) {
-            Log::error('Fulfillment Error: ' . $e->getMessage(), [
-                'exception' => $e,
-                'request_id' => $id,
-                'user_id' => auth()->id()
-            ]);
-
-            return back()->withErrors(['fulfillment_error' => $e->getMessage()]);
-        }
-
-        return redirect()
-            ->route('manpower-requests.index')
-            ->with('success', 'Permintaan berhasil dipenuhi');
+        return back()->withErrors(['fulfillment_error' => $e->getMessage()]);
     }
+
+    return redirect()
+        ->route('manpower-requests.index')
+        ->with('success', 'Permintaan berhasil dipenuhi');
+}
+
 
     
 }
