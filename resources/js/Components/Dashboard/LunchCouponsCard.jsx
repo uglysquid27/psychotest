@@ -14,6 +14,16 @@ const LunchCouponsCard = ({ initialDate, formatDate }) => {
     const [claimedCoupons, setClaimedCoupons] = useState(0);
     const [todayCouponsData, setTodayCouponsData] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
+    
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
+    
+    // Filter state
+    const [sectionFilter, setSectionFilter] = useState('');
+    const [subsectionFilter, setSubsectionFilter] = useState('');
+    const [availableSections, setAvailableSections] = useState([]);
+    const [availableSubsections, setAvailableSubsections] = useState([]);
 
     useEffect(() => {
         fetchCouponData();
@@ -29,11 +39,34 @@ const LunchCouponsCard = ({ initialDate, formatDate }) => {
             setPendingCoupons(data.pending);
             setClaimedCoupons(data.claimed);
             setTodayCouponsData(data.details || []);
+            
+            // Extract unique sections and subsections for filters
+            const sections = [...new Set(data.details.map(item => item.section?.name).filter(Boolean))];
+            const subsections = [...new Set(data.details.map(item => item.sub_section?.name).filter(Boolean))];
+            
+            setAvailableSections(sections);
+            setAvailableSubsections(subsections);
         } catch (error) {
             console.error('Error fetching lunch coupons data:', error);
         } finally {
             setIsLoading(false);
         }
+    };
+
+    // Apply filters to data
+    const filteredData = todayCouponsData.filter(coupon => {
+        const matchesSection = !sectionFilter || coupon.section?.name === sectionFilter;
+        const matchesSubsection = !subsectionFilter || coupon.sub_section?.name === subsectionFilter;
+        return matchesSection && matchesSubsection;
+    });
+
+    // Pagination logic
+    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const paginatedData = filteredData.slice(startIndex, startIndex + itemsPerPage);
+
+    const handlePageChange = (page) => {
+        setCurrentPage(page);
     };
 
     const formattedDate = dayjs(date).format('dddd, D MMMM YYYY');
@@ -68,13 +101,65 @@ const LunchCouponsCard = ({ initialDate, formatDate }) => {
                         <input
                             type="date"
                             value={date}
-                            onChange={(e) => setDate(e.target.value)}
+                            onChange={(e) => {
+                                setDate(e.target.value);
+                                setCurrentPage(1); // Reset to first page when date changes
+                            }}
                             className="block w-full bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors duration-200"
                         />
                     </div>
 
+                    {/* Filter Section */}
+                    <div className="mt-4 mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="section-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Filter by Section
+                            </label>
+                            <select
+                                id="section-filter"
+                                value={sectionFilter}
+                                onChange={(e) => {
+                                    setSectionFilter(e.target.value);
+                                    setCurrentPage(1); // Reset to first page when filter changes
+                                }}
+                                className="block w-full bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors duration-200"
+                            >
+                                <option value="">All Sections</option>
+                                {availableSections.map((section, index) => (
+                                    <option key={index} value={section}>{section}</option>
+                                ))}
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label htmlFor="subsection-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Filter by Sub-Section
+                            </label>
+                            <select
+                                id="subsection-filter"
+                                value={subsectionFilter}
+                                onChange={(e) => {
+                                    setSubsectionFilter(e.target.value);
+                                    setCurrentPage(1); // Reset to first page when filter changes
+                                }}
+                                className="block w-full bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors duration-200"
+                            >
+                                <option value="">All Sub-Sections</option>
+                                {availableSubsections.map((subsection, index) => (
+                                    <option key={index} value={subsection}>{subsection}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
                     <div className="mt-6">
-                        <h4 className="text-md font-medium mb-3 text-gray-800 dark:text-gray-100">Coupon Details</h4>
+                        <div className="flex justify-between items-center mb-3">
+                            <h4 className="text-md font-medium text-gray-800 dark:text-gray-100">Coupon Details</h4>
+                            <span className="text-sm text-gray-500 dark:text-gray-400">
+                                Showing {paginatedData.length} of {filteredData.length} records
+                            </span>
+                        </div>
+                        
                         <div className="overflow-auto">
                             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                 <thead className="bg-white/50 dark:bg-gray-700/50">
@@ -86,8 +171,8 @@ const LunchCouponsCard = ({ initialDate, formatDate }) => {
                                     </tr>
                                 </thead>
                                 <tbody className="bg-transparent divide-y divide-gray-200 dark:divide-gray-700">
-                                    {todayCouponsData.length > 0 ? (
-                                        todayCouponsData.map((coupon, index) => (
+                                    {paginatedData.length > 0 ? (
+                                        paginatedData.map((coupon, index) => (
                                             <tr key={index} className="hover:bg-gray-100/50 dark:hover:bg-gray-700/50 transition-colors duration-200">
                                                 <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-800 dark:text-gray-200">
                                                     {coupon.date ? formatDate(coupon.date) : 'N/A'}
@@ -105,14 +190,43 @@ const LunchCouponsCard = ({ initialDate, formatDate }) => {
                                         ))
                                     ) : (
                                         <tr>
-                                            <td colSpan={5} className="px-4 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                                                No lunch coupons for selected date
+                                            <td colSpan={4} className="px-4 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+                                                No lunch coupons match your filters
                                             </td>
                                         </tr>
                                     )}
                                 </tbody>
                             </table>
                         </div>
+                        
+                        {/* Pagination Controls */}
+                        {totalPages > 1 && (
+                            <div className="mt-4 flex justify-between items-center">
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                    Page {currentPage} of {totalPages}
+                                </div>
+                                <div className="flex space-x-2">
+                                    <button
+                                        onClick={() => handlePageChange(currentPage - 1)}
+                                        disabled={currentPage === 1}
+                                        className={`px-3 py-1 text-sm rounded-md ${currentPage === 1 
+                                            ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed' 
+                                            : 'bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-200 hover:bg-indigo-200 dark:hover:bg-indigo-800'}`}
+                                    >
+                                        Previous
+                                    </button>
+                                    <button
+                                        onClick={() => handlePageChange(currentPage + 1)}
+                                        disabled={currentPage === totalPages}
+                                        className={`px-3 py-1 text-sm rounded-md ${currentPage === totalPages 
+                                            ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed' 
+                                            : 'bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-200 hover:bg-indigo-200 dark:hover:bg-indigo-800'}`}
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </>
             )}

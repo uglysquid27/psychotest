@@ -112,6 +112,13 @@ Route::middleware(['auth:employee', 'prevent.back'])
         Route::get('/schedule/{schedule}/same-day', [EmployeeDashboardController::class, 'sameDayEmployees'])
             ->name('schedule.same-day'); // Changed from 'employee.schedule.same-day'
     
+        Route::get('/employee/famday/check', [EmployeeDashboardController::class, 'checkFamdayAccount'])
+            ->name('famday.check');
+
+        Route::get('/employee/famday/data', [EmployeeDashboardController::class, 'getFamdayData'])
+            ->name('famday.data');
+
+
         // Old same-shift route (you can remove this if not used anymore)
         // Route::get('/schedule/{schedule}/same-shift', [EmployeeDashboardController::class, 'sameShiftEmployees'])
         //     ->name('schedule.same-shift');
@@ -144,12 +151,12 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     Route::get('/employee-attendance/incomplete-profiles/export', [EmployeeSum::class, 'exportXls'])
         ->name('employee-attendance.incomplete-profiles.exports');
     Route::get('/employee-attendance/export-filtered', [EmployeeSum::class, 'exportFilteredXls'])
-    ->name('employee-attendance.exports');
+        ->name('employee-attendance.exports');
     Route::get('/employee-attendance/incomplete-profiles/exportIncomplete', [EmployeeSum::class, 'exportIncompleteXls'])
         ->name('employee-attendance.incomplete-profiles.exportIncomplete');
     // Add this route to your web.php file
-Route::post('/employee-attendance/bulk-deactivate', [EmployeeSum::class, 'bulkDeactivate'])
-    ->name('employee-attendance.bulk-deactivate');
+    Route::post('/employee-attendance/bulk-deactivate', [EmployeeSum::class, 'bulkDeactivate'])
+        ->name('employee-attendance.bulk-deactivate');
 
 
     // Route::get('/employee-attendance/incomplete-profiles/export', [EmployeeSum::class, 'exportIncompleteProfiles'])
@@ -214,9 +221,9 @@ Route::post('/employee-attendance/bulk-deactivate', [EmployeeSum::class, 'bulkDe
     Route::get('/manpower-requests/{id}/fulfill', [ManPowerRequestFulfillmentController::class, 'create'])
         ->name('manpower-requests.fulfill');
     Route::post('/manpower-requests/bulk-fulfill', [ManPowerRequestFulfillmentController::class, 'bulkStore'])
-    ->name('manpower-requests.bulk-fulfill');
+        ->name('manpower-requests.bulk-fulfill');
     Route::post('/manpower-requests/bulk-preview', [ManPowerRequestFulfillmentController::class, 'bulkPreview'])
-    ->name('manpower-requests.bulk-preview');
+        ->name('manpower-requests.bulk-preview');
     Route::get('/manpower-requests/create', [ManPowerRequestController::class, 'create'])
         ->name('manpower-requests.create');
     Route::post('/manpower-requests/{id}/fulfill', [ManPowerRequestFulfillmentController::class, 'store'])
@@ -249,9 +256,9 @@ Route::post('/employee-attendance/bulk-deactivate', [EmployeeSum::class, 'bulkDe
     Route::get('/schedules/{id}/edit', [ScheduleController::class, 'edit'])->name('schedules.edit');
     Route::post('/schedules', [ScheduleController::class, 'store'])->name('schedules.store');
     Route::post('/schedules/{manPowerRequest}/toggle-visibility', [ScheduleController::class, 'toggleVisibility'])
-    ->name('schedules.toggle-visibility');
+        ->name('schedules.toggle-visibility');
     Route::post('/schedules/toggle-visibility-group', [ScheduleController::class, 'toggleVisibilityGroup'])
-    ->name('schedules.toggle-visibility-group');
+        ->name('schedules.toggle-visibility-group');
 
 
 

@@ -16,6 +16,91 @@ const MoonIcon = () => (
     </svg>
 );
 
+// User icon for when no photo is available
+const UserIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+    </svg>
+);
+
+// Profile dropdown component
+const ProfileDropdown = ({ user, isEmployee }) => {
+    const [isOpen, setIsOpen] = useState(false);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (isOpen && !event.target.closest('.profile-dropdown')) {
+                setIsOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isOpen]);
+
+    return (
+        <div className="relative profile-dropdown">
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex items-center space-x-2 focus:outline-none"
+            >
+                {user?.photo ? (
+                    <img 
+                        src={`/storage/${user.photo}`} 
+                        alt={user.name}
+                        className="h-8 w-8 rounded-full object-cover"
+                    />
+                ) : (
+                    <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-semibold text-sm">
+                        {user?.name ? user.name.charAt(0).toUpperCase() : <UserIcon />}
+                    </div>
+                )}
+                <span className="hidden md:block text-gray-700 dark:text-gray-200 text-sm font-medium">
+                    {user?.name || 'User'}
+                </span>
+                <svg 
+                    className={`w-4 h-4 text-gray-600 dark:text-gray-300 transition-transform ${isOpen ? 'rotate-180' : ''}`} 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24" 
+                    xmlns="http://www.w3.org/2000/svg"
+                >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+            </button>
+
+            {isOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 z-50 border border-gray-200 dark:border-gray-700">
+                    <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
+                        <p className="text-sm font-medium text-gray-800 dark:text-gray-200">{user?.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{user?.email || user?.nik}</p>
+                    </div>
+                    
+                    <Link
+                        href={isEmployee ? route('employee.employees.edit', { employee: user.id }) : route('profile.edit')}
+                        className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-indigo-50 dark:hover:bg-gray-700"
+                        onClick={() => setIsOpen(false)}
+                    >
+                        Edit Profile
+                    </Link>
+                    
+                    <Link
+                        href={route('logout')}
+                        method="post"
+                        as="button"
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400"
+                        onClick={() => setIsOpen(false)}
+                    >
+                        Log Out
+                    </Link>
+                </div>
+            )}
+        </div>
+    );
+};
+
 export default function AuthenticatedLayout({ header, children, hideSidebar = false }) {
     const { auth } = usePage().props;
     const user = auth && auth.user ? auth.user : null;
@@ -39,11 +124,6 @@ export default function AuthenticatedLayout({ header, children, hideSidebar = fa
 
     // Check if current user is a forklift operator based on NIK
     const isForkliftOperator = user && user.nik && forkliftOperatorNiks.includes(user.nik);
-
-    // console.log('=== FORKLIFT OPERATOR CHECK ===');
-    // console.log('User NIK:', user?.nik);
-    // console.log('Is Forklift Operator:', isForkliftOperator);
-    // console.log('================================');
 
     // Effect to initialize theme
     useEffect(() => {
@@ -381,7 +461,7 @@ ${route().current('employee.license')
                                                 : 'text-gray-700 dark:text-gray-200'
                                             }`}
                                     >
-                                        <span className="block">SIO Input</span>
+                                    <span className="block">SIO Input</span>
                                     </NavLink>
                                 )}
 
@@ -402,24 +482,54 @@ ${route().current('employee.license')
 
                         <div className="flex-grow"></div>
 
-                        <Link
-                            href={route('logout')}
-                            method="post"
-                            as="button"
-                            className="w-full text-left py-4 md:py-6 px-3 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-red-100/50 dark:hover:bg-red-900/50 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-all duration-200 ease-in-out"
-                        >
-                            Log Out
-                        </Link>
+                        {/* Profile Section for Mobile - Added at bottom of sidebar */}
+                        <div className="md:hidden p-4 border-t border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm flex flex-col space-y-3 transition-colors duration-200">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                    {user?.photo ? (
+                                        <img 
+                                            src={`/storage/${user.photo}`} 
+                                            alt={user.name}
+                                            className="h-10 w-10 rounded-full object-cover"
+                                        />
+                                    ) : (
+                                        <div className="h-10 w-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-semibold">
+                                            {user?.name ? user.name.charAt(0).toUpperCase() : <UserIcon />}
+                                        </div>
+                                    )}
+                                    <div>
+                                        <div className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{user ? user.name : 'Memuat...'}</div>
+                                        <div className="text-xs text-gray-500 dark:text-gray-400">{user ? (user.email || user.nik) : ''}</div>
+                                    </div>
+                                </div>
+                                <Link
+                                    href={isEmployee ? route('employee.employees.edit', { employee: user.id }) : route('profile.edit')}
+                                    className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                                    title="Edit Profile"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                </Link>
+                            </div>
+                            
+                            <Link
+                                href={route('logout')}
+                                method="post"
+                                as="button"
+                                className="w-full text-center py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-100/50 dark:hover:bg-red-900/50 rounded-lg transition-all duration-200 ease-in-out flex items-center justify-center"
+                            >
+                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                                </svg>
+                                Log Out
+                            </Link>
+                        </div>
                     </nav>
-
-                    <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm flex flex-col space-y-3 transition-colors duration-200 rounded-br-3xl">
-                        <div className="font-semibold text-gray-800 dark:text-gray-100">{user ? user.name : 'Memuat...'}</div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">{user ? (user.email || user.nik) : ''}</div>
-                    </div>
                 </aside>
             )}
-            {/* Overlay for mobile menu */}
 
+            {/* Overlay for mobile menu */}
             {!hideSidebar && isMobileMenuOpen && (
                 <div
                     className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 md:hidden transition-opacity duration-300 ease-in-out opacity-100"
@@ -435,21 +545,26 @@ ${route().current('employee.license')
                                 {header}
                             </div>
 
-                            <label htmlFor="theme-toggle-checkbox-desktop" className="flex items-center cursor-pointer ml-4 transition-transform hover:scale-110" title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}>
-                                <div className="relative">
-                                    <input
-                                        type="checkbox"
-                                        id="theme-toggle-checkbox-desktop"
-                                        className="sr-only"
-                                        checked={isDark}
-                                        onChange={toggleDarkMode}
-                                    />
-                                    <div className="block bg-gray-300 dark:bg-gray-700 w-12 h-7 sm:w-14 sm:h-8 rounded-full transition-colors duration-300 ease-in-out"></div>
-                                    <div className={`dot absolute left-1 top-1 bg-white dark:bg-gray-300 w-5 h-5 sm:w-6 sm:h-6 rounded-full transition-all duration-300 ease-in-out transform ${isDark ? 'translate-x-full sm:translate-x-6' : ''} flex items-center justify-center shadow-md`}>
-                                        {isDark ? <MoonIcon /> : <SunIcon />}
+                            <div className="flex items-center space-x-4">
+                                <label htmlFor="theme-toggle-checkbox-desktop" className="flex items-center cursor-pointer ml-4 transition-transform hover:scale-110" title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}>
+                                    <div className="relative">
+                                        <input
+                                            type="checkbox"
+                                            id="theme-toggle-checkbox-desktop"
+                                            className="sr-only"
+                                            checked={isDark}
+                                            onChange={toggleDarkMode}
+                                        />
+                                        <div className="block bg-gray-300 dark:bg-gray-700 w-12 h-7 sm:w-14 sm:h-8 rounded-full transition-colors duration-300 ease-in-out"></div>
+                                        <div className={`dot absolute left-1 top-1 bg-white dark:bg-gray-300 w-5 h-5 sm:w-6 sm:h-6 rounded-full transition-all duration-300 ease-in-out transform ${isDark ? 'translate-x-full sm:translate-x-6' : ''} flex items-center justify-center shadow-md`}>
+                                            {isDark ? <MoonIcon /> : <SunIcon />}
+                                        </div>
                                     </div>
-                                </div>
-                            </label>
+                                </label>
+                                
+                                {/* Profile Dropdown for Desktop */}
+                                <ProfileDropdown user={user} isEmployee={isEmployee} />
+                            </div>
                         </div>
                     </header>
                 )}
