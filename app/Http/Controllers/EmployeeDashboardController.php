@@ -29,6 +29,8 @@ class EmployeeDashboardController extends Controller
             ->orderBy('date', 'desc') // Changed to desc to show latest first
             ->get();
 
+        \Log::info('Schedule: ' . $mySchedules);
+
         return inertia('EmployeeDashboard', [
             'auth' => [
                 'user' => $employee,
@@ -38,53 +40,55 @@ class EmployeeDashboardController extends Controller
         ]);
     }
 
-    public function sameDayEmployees(Schedule $schedule)
-    {
-        $employee = Auth::guard('employee')->user();
+// In EmployeeDashboardController.php - sameDayEmployees method
+public function sameDayEmployees(Schedule $schedule)
+{
+    $employee = Auth::guard('employee')->user();
 
-        $currentSection = $schedule->subSection->section;
+    $currentSection = $schedule->subSection->section;
 
-        $schedules = Schedule::with(['employee', 'subSection', 'manPowerRequest.shift'])
-            ->whereHas('subSection', function ($q) use ($currentSection) {
-                $q->where('section_id', $currentSection->id);
-            })
-            ->whereDate('date', $schedule->date)
-            ->get(); // Remove the condition that excludes the current user
+    $schedules = Schedule::with(['employee', 'subSection', 'manPowerRequest.shift'])
+        ->whereHas('subSection', function ($q) use ($currentSection) {
+            $q->where('section_id', $currentSection->id);
+        })
+        ->whereDate('date', $schedule->date)
+        ->get();
 
-        $shiftGroups = [];
-        foreach ($schedules as $s) {
-            $shiftId = $s->manPowerRequest->shift_id;
-            if (!isset($shiftGroups[$shiftId])) {
-                $shiftGroups[$shiftId] = [
-                    'shift_name' => $s->manPowerRequest->shift->name,
-                    'start_time' => $s->manPowerRequest->start_time,
-                    'end_time' => $s->manPowerRequest->end_time,
-                    'employees' => []
-                ];
-            }
-
-            $shiftGroups[$shiftId]['employees'][] = [
-                'id' => $s->id,
-                'employee' => $s->employee,
-                'sub_section' => $s->subSection->name,
-                'status' => $s->status,
-                'rejection_reason' => $s->rejection_reason,
-                'is_current_user' => $s->employee_id === $employee->id // Add flag to identify current user
+    $shiftGroups = [];
+    foreach ($schedules as $s) {
+        $shiftId = $s->manPowerRequest->shift_id;
+        if (!isset($shiftGroups[$shiftId])) {
+            $shiftGroups[$shiftId] = [
+                'shift_name' => $s->manPowerRequest->shift->name,
+                'start_time' => $s->manPowerRequest->start_time,
+                'end_time' => $s->manPowerRequest->end_time,
+                'employees' => []
             ];
         }
 
-        uasort($shiftGroups, fn($a, $b) => strcmp($a['start_time'], $b['start_time']));
-
-        return response()->json([
-            'current_schedule' => [
-                'id' => $schedule->id,
-                'status' => $schedule->status,
-                'section_name' => $currentSection->name
-            ],
-            'shiftGroups' => $shiftGroups,
-            'current_user_id' => $employee->id // Also return current user ID for reference
-        ]);
+        $shiftGroups[$shiftId]['employees'][] = [
+            'id' => $s->id,
+            'employee' => $s->employee,
+            'sub_section' => $s->subSection->name,
+            'line' => $s->line, // ← ADD THIS LINE to include the line field
+            'status' => $s->status,
+            'rejection_reason' => $s->rejection_reason,
+            'is_current_user' => $s->employee_id === $employee->id
+        ];
     }
+
+    uasort($shiftGroups, fn($a, $b) => strcmp($a['start_time'], $b['start_time']));
+
+    return response()->json([
+        'current_schedule' => [
+            'id' => $schedule->id,
+            'status' => $schedule->status,
+            'section_name' => $currentSection->name
+        ],
+        'shiftGroups' => $shiftGroups,
+        'current_user_id' => $employee->id
+    ]);
+}
 
     public function respond(Request $req, Schedule $schedule)
     {

@@ -56,7 +56,7 @@ export default function EmployeeDashboard() {
     const respond = (scheduleId, status, reason = '') => {
         // Find the schedule
         const schedule = mySchedules.find(s => s.id === scheduleId);
-        
+
         // Check if schedule is in the past
         if (schedule && isPastDate(schedule.date)) {
             alert('Tidak dapat merespon jadwal yang sudah lewat.');
@@ -110,7 +110,7 @@ export default function EmployeeDashboard() {
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
         const date = dayjs(dateString);
-        
+
         if (date.isToday()) {
             return 'Hari Ini, ' + date.format('DD MMMM YYYY');
         } else if (date.isTomorrow()) {
@@ -125,7 +125,7 @@ export default function EmployeeDashboard() {
     const getDateBadge = (dateString) => {
         if (!dateString) return null;
         const date = dayjs(dateString);
-        
+
         if (date.isToday()) {
             return <span className="ml-2 bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full">Hari Ini</span>;
         } else if (date.isTomorrow()) {
@@ -187,7 +187,7 @@ export default function EmployeeDashboard() {
                             {/* Penjadwalan Anda */}
                             <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 sm:p-8 shadow-2xl border border-gray-100 dark:border-gray-700">
                                 <h4 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800 dark:text-white mb-6">
-                                    Penjadwalan Anda 
+                                    Penjadwalan Anda
                                 </h4>
 
                                 {mySchedules && mySchedules.length > 0 ? (
@@ -326,7 +326,7 @@ export default function EmployeeDashboard() {
                                                                             Object.entries(coworkersData.shiftGroups).map(([shiftId, shiftData]) => (
                                                                                 <div key={shiftId} className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-blue-200 dark:border-blue-700">
                                                                                     <h6 className="font-medium text-blue-700 dark:text-blue-300 mb-3 text-sm">
-                                                                                        Shift: {shiftData.shift_name} ({shiftData.start_time?.substring(0, 5)} - {shiftData.end_time?.substring(0, 5)}) - {shiftData.employees.length} orang
+                                                                                        Shift: {shiftData.shift_name} - {shiftData.employees.length} orang
                                                                                     </h6>
                                                                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                                                                         {shiftData.employees.map((emp, index) => {
@@ -335,12 +335,27 @@ export default function EmployeeDashboard() {
                                                                                                 String(emp.employee?.id) === String(auth.user.id) ||
                                                                                                 Number(emp.employee?.id) === Number(auth.user.id);
 
+                                                                                            // Debug logging - check what data we're receiving after PHP fix
+                                                                                            console.log('Employee data after PHP fix:', {
+                                                                                                id: emp.id,
+                                                                                                name: emp.employee?.name,
+                                                                                                sub_section: emp.sub_section,
+                                                                                                line: emp.line,
+                                                                                                lineType: typeof emp.line,
+                                                                                                hasLine: !!emp.line,
+                                                                                                isPutway: emp.sub_section === 'Putway',
+                                                                                                shouldShowLine: emp.sub_section === 'Putway' && emp.line
+                                                                                            });
+
+                                                                                            // Check if this is a Putway subsection to show the line
+                                                                                            const shouldShowLine = emp.sub_section === 'Putway' && emp.line;
+
                                                                                             return (
                                                                                                 <div
                                                                                                     key={emp.id || index}
                                                                                                     className={`rounded-lg p-3 text-xs ${isCurrentUser
-                                                                                                            ? 'bg-blue-100 dark:bg-blue-900/40 border-2 border-blue-500 dark:border-blue-400'
-                                                                                                            : 'bg-gray-50 dark:bg-gray-700'
+                                                                                                        ? 'bg-blue-100 dark:bg-blue-900/40 border-2 border-blue-500 dark:border-blue-400'
+                                                                                                        : 'bg-gray-50 dark:bg-gray-700'
                                                                                                         }`}
                                                                                                 >
                                                                                                     <div className="font-medium text-gray-800 dark:text-gray-200 flex items-center">
@@ -355,27 +370,22 @@ export default function EmployeeDashboard() {
                                                                                                         NIK: {emp.employee?.nik || 'N/A'}
                                                                                                     </div>
                                                                                                     <div className="text-gray-600 dark:text-gray-400">
-                                                                                                        Sub Bagian: {emp.sub_section || 'N/A'}
+                                                                                                        Sub Bagian: {emp.sub_section || 'N/A'} {shouldShowLine ? `Line ${emp.line}` : ''}
                                                                                                     </div>
+
                                                                                                     <div className="mt-2">
                                                                                                         <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${emp.status === 'accepted' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                                                                                                                emp.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
-                                                                                                                    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                                                                                            emp.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                                                                                                                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
                                                                                                             }`}>
                                                                                                             {emp.status === 'accepted' ? 'Diterima' :
                                                                                                                 emp.status === 'rejected' ? 'Ijin' : 'Menunggu'}
                                                                                                         </span>
                                                                                                     </div>
-                                                                                                    {/* Debug info - remove in production */}
-                                                                                                    {process.env.NODE_ENV === 'development' && (
-                                                                                                        <div className="mt-1 text-xs text-gray-400">
-                                                                                                            Emp ID: {emp.employee?.id} (Type: {typeof emp.employee?.id}) |
-                                                                                                            Auth ID: {auth.user.id} (Type: {typeof auth.user.id})
-                                                                                                        </div>
-                                                                                                    )}
                                                                                                 </div>
                                                                                             );
                                                                                         })}
+
                                                                                     </div>
                                                                                 </div>
                                                                             ))
