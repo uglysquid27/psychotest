@@ -42,14 +42,14 @@ const DateFilter = ({ filters, setFilters, applyFilters, resetFilters }) => {
                     >
                         Apply Filters
                     </motion.button>
-                    <motion.button
+                    {/* <motion.button
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                         onClick={resetFilters}
                         className="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg text-sm whitespace-nowrap transition-colors duration-200"
                     >
-                        Reset
-                    </motion.button>
+                        Reset to Last 5 Months
+                    </motion.button> */}
                 </div>
             </div>
         </div>

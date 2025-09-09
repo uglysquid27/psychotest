@@ -32,10 +32,11 @@ export default function Dashboard() {
         table2: 400
     });
 
+    // Set default date range to last 5 months
     const [filters, setFilters] = useState({
         dateRange: {
-            from: dayjs().startOf('month').format('YYYY-MM-DD'),
-            to: dayjs().endOf('month').format('YYYY-MM-DD')
+            from: dayjs().subtract(4, 'month').startOf('month').format('YYYY-MM-DD'), // Start of 5 months ago
+            to: dayjs().endOf('month').format('YYYY-MM-DD') // End of current month
         },
         section: null,
         subSection: null,
@@ -62,7 +63,7 @@ export default function Dashboard() {
     const resetFilters = () => {
         setFilters({
             dateRange: {
-                from: dayjs().startOf('month').format('YYYY-MM-DD'),
+                from: dayjs().subtract(4, 'month').startOf('month').format('YYYY-MM-DD'), // Reset to last 5 months
                 to: dayjs().endOf('month').format('YYYY-MM-DD')
             },
             section: null,

@@ -19,147 +19,154 @@ class DashboardController extends Controller
     /**
      * Display the dashboard view with summary data.
      */
-    public function index(): Response
-{
-    // Get counts for employees
-    $activeEmployeesCount = Employee::where('status', 'available')
-                                    ->where('cuti', 'no')
-                                    ->count();
-                                    
-    $totalEmployeesCount = Employee::count();
-
-   $todayLunchCoupons = LunchCoupon::whereDate('date', today())->count();
-    $thisWeekLunchCoupons = LunchCoupon::whereBetween('date', [
-        now()->startOfWeek(),
-        now()->endOfWeek()
-    ])->count();
-
-    // Get counts for manpower requests
-    $pendingRequestsCount = ManPowerRequest::where('status', 'pending')->count();
-    $fulfilledRequestsCount = ManPowerRequest::where('status', 'fulfilled')->count();
-    $totalRequestsCount = ManPowerRequest::count();
-
-    // Get counts for schedules
-    $today = Carbon::today();
-    $startOfWeek = Carbon::now()->startOfWeek(Carbon::MONDAY);
-    $endOfWeek = Carbon::now()->endOfWeek(Carbon::SUNDAY);
-
-    $todaySchedulesCount = Schedule::whereDate('date', $today)->count();
-    $thisWeekSchedulesCount = Schedule::whereBetween('date', [$startOfWeek, $endOfWeek])->count();
-    $totalSchedulesCount = Schedule::count();
-
-    // --- Chart Data 1: Manpower Request Status Trends (Monthly) ---
-    $months = [];
-    $pendingRequestsMonthly = [];
-    $fulfilledRequestsMonthly = [];
-
-    $currentMonth = Carbon::now()->startOfMonth();
-    for ($i = 5; $i >= 0; $i--) {
-        $month = $currentMonth->copy()->subMonths($i);
-        $monthLabel = $month->translatedFormat('M Y');
-        $months[] = $monthLabel;
-
-        $pendingCount = ManPowerRequest::where('status', 'pending')
-                                        ->whereYear('date', $month->year)
-                                        ->whereMonth('date', $month->month)
+  public function index(): Response
+    {
+        // Get counts for employees
+        $activeEmployeesCount = Employee::where('status', 'available')
+                                        ->where('cuti', 'no')
                                         ->count();
-        $fulfilledCount = ManPowerRequest::where('status', 'fulfilled')
-                                          ->whereYear('date', $month->year)
-                                          ->whereMonth('date', $month->month)
-                                          ->count();
+                                        
+        $totalEmployeesCount = Employee::count();
 
-        $pendingRequestsMonthly[] = $pendingCount;
-        $fulfilledRequestsMonthly[] = $fulfilledCount;
-    }
+        $todayLunchCoupons = LunchCoupon::whereDate('date', today())->count();
+        $thisWeekLunchCoupons = LunchCoupon::whereBetween('date', [
+            now()->startOfWeek(),
+            now()->endOfWeek()
+        ])->count();
 
-    $manpowerRequestChartData = [
-        'labels' => $months,
-        'datasets' => [
-            [
-                'label' => 'Pending Requests',
-                'data' => $pendingRequestsMonthly,
-                'backgroundColor' => 'rgba(251, 191, 36, 0.6)',
-                'borderColor' => 'rgba(251, 191, 36, 1)',
-                'borderWidth' => 1,
-            ],
-            [
-                'label' => 'Fulfilled Requests',
-                'data' => $fulfilledRequestsMonthly,
-                'backgroundColor' => 'rgba(34, 197, 94, 0.6)',
-                'borderColor' => 'rgba(34, 197, 94, 1)',
-                'borderWidth' => 1,
-            ],
-        ],
-    ];
+        // Get counts for manpower requests
+        $pendingRequestsCount = ManPowerRequest::where('status', 'pending')->count();
+        $fulfilledRequestsCount = ManPowerRequest::where('status', 'fulfilled')->count();
+        $totalRequestsCount = ManPowerRequest::count();
 
-    // --- Chart Data 2: Employee Assignment Distribution by Sub-Section ---
-    $sections = Section::with('subSections')->get();
-    $subSections = SubSection::all();
-    
-    // Prepare data for the chart (grouped by section)
-    $sectionLabels = [];
-    $subSectionData = [];
-    $subSectionIds = [];
-    
-    foreach ($sections as $section) {
-        foreach ($section->subSections as $subSection) {
-            $assignedCount = Schedule::where('sub_section_id', $subSection->id)
-                                    ->distinct('employee_id')
-                                    ->count('employee_id');
-            
-            $sectionLabels[] = $section->name . ' - ' . $subSection->name;
-            $subSectionData[] = $assignedCount;
-            $subSectionIds[] = $subSection->id;
+        // Get counts for schedules
+        $today = Carbon::today();
+        $startOfWeek = Carbon::now()->startOfWeek(Carbon::MONDAY);
+        $endOfWeek = Carbon::now()->endOfWeek(Carbon::SUNDAY);
+
+        $todaySchedulesCount = Schedule::whereDate('date', $today)->count();
+        $thisWeekSchedulesCount = Schedule::whereBetween('date', [$startOfWeek, $endOfWeek])->count();
+        $totalSchedulesCount = Schedule::count();
+
+        // --- Chart Data 1: Manpower Request Status Trends (Last 5 Months) ---
+        $months = [];
+        $pendingRequestsMonthly = [];
+        $fulfilledRequestsMonthly = [];
+
+        // Start from 5 months ago
+        $startMonth = Carbon::now()->startOfMonth()->subMonths(4); // 5 months total (current + 4 previous)
+        
+        for ($i = 0; $i < 5; $i++) {
+            $month = $startMonth->copy()->addMonths($i);
+            $monthLabel = $month->translatedFormat('M Y');
+            $months[] = $monthLabel;
+
+            $pendingCount = ManPowerRequest::where('status', 'pending')
+                                            ->whereYear('date', $month->year)
+                                            ->whereMonth('date', $month->month)
+                                            ->count();
+            $fulfilledCount = ManPowerRequest::where('status', 'fulfilled')
+                                              ->whereYear('date', $month->year)
+                                              ->whereMonth('date', $month->month)
+                                              ->count();
+
+            $pendingRequestsMonthly[] = $pendingCount;
+            $fulfilledRequestsMonthly[] = $fulfilledCount;
         }
-    }
 
-    $employeeAssignmentChartData = [
-        'labels' => $sectionLabels,
-        'subSectionIds' => $subSectionIds,
-        'datasets' => [
-            [
-                'label' => 'Assigned Employees',
-                'data' => $subSectionData,
-                'backgroundColor' => 'rgba(59, 130, 246, 0.6)',
-                'borderColor' => 'rgba(59, 130, 246, 1)',
-                'borderWidth' => 1,
+        $manpowerRequestChartData = [
+            'labels' => $months,
+            'datasets' => [
+                [
+                    'label' => 'Pending Requests',
+                    'data' => $pendingRequestsMonthly,
+                    'backgroundColor' => 'rgba(251, 191, 36, 0.6)',
+                    'borderColor' => 'rgba(251, 191, 36, 1)',
+                    'borderWidth' => 1,
+                ],
+                [
+                    'label' => 'Fulfilled Requests',
+                    'data' => $fulfilledRequestsMonthly,
+                    'backgroundColor' => 'rgba(34, 197, 94, 0.6)',
+                    'borderColor' => 'rgba(34, 197, 94, 1)',
+                    'borderWidth' => 1,
+                ],
             ],
-        ],
-    ];
+        ];
 
-    // --- New Data for Dashboard Sections (Tables) ---
-    $recentPendingRequests = ManPowerRequest::where('status', 'pending')
-                                            ->with(['subSection', 'shift'])
-                                            ->orderBy('date', 'desc')
-                                            ->limit(5)
-                                            ->get();
+        // --- Chart Data 2: Employee Assignment Distribution by Sub-Section ---
+        $sections = Section::with('subSections')->get();
+        $subSections = SubSection::all();
+        
+        // Prepare data for the chart (grouped by section)
+        $sectionLabels = [];
+        $subSectionData = [];
+        $subSectionIds = [];
+        
+        // Calculate assignments for the last 5 months
+        $startDate = Carbon::now()->startOfMonth()->subMonths(4);
+        $endDate = Carbon::now()->endOfMonth();
+        
+        foreach ($sections as $section) {
+            foreach ($section->subSections as $subSection) {
+                $assignedCount = Schedule::where('sub_section_id', $subSection->id)
+                                        ->whereBetween('date', [$startDate, $endDate])
+                                        ->distinct('employee_id')
+                                        ->count('employee_id');
+                
+                $sectionLabels[] = $section->name . ' - ' . $subSection->name;
+                $subSectionData[] = $assignedCount;
+                $subSectionIds[] = $subSection->id;
+            }
+        }
 
-    $upcomingSchedules = Schedule::where('date', '>=', $today)
-                                 ->with(['employee', 'subSection', 'manPowerRequest.shift'])
-                                 ->orderBy('date', 'asc')
-                                 ->limit(5)
-                                 ->get();
+        $employeeAssignmentChartData = [
+            'labels' => $sectionLabels,
+            'subSectionIds' => $subSectionIds,
+            'datasets' => [
+                [
+                    'label' => 'Assigned Employees',
+                    'data' => $subSectionData,
+                    'backgroundColor' => 'rgba(59, 130, 246, 0.6)',
+                    'borderColor' => 'rgba(59, 130, 246, 1)',
+                    'borderWidth' => 1,
+                ],
+            ],
+        ];
 
-    return Inertia::render('Dashboard', [
-        'summary' => [
-            'activeEmployeesCount' => $activeEmployeesCount,
-            'totalEmployeesCount' => $totalEmployeesCount,
-            'pendingRequestsCount' => $pendingRequestsCount,
-            'fulfilledRequestsCount' => $fulfilledRequestsCount,
-            'totalRequestsCount' => $totalRequestsCount,
-            'todaySchedulesCount' => $todaySchedulesCount,
-            'thisWeekSchedulesCount' => $thisWeekSchedulesCount,
-            'totalSchedulesCount' => $totalSchedulesCount,
-             'todayLunchCoupons' => $todayLunchCoupons,
-        'thisWeekLunchCoupons' => $thisWeekLunchCoupons
-        ],
-        'manpowerRequestChartData' => $manpowerRequestChartData,
-        'employeeAssignmentChartData' => $employeeAssignmentChartData,
-        'recentPendingRequests' => $recentPendingRequests,
-        'upcomingSchedules' => $upcomingSchedules,
-        'sections' => $sections
-    ]);
-}
+        // --- New Data for Dashboard Sections (Tables) ---
+        $recentPendingRequests = ManPowerRequest::where('status', 'pending')
+                                                ->with(['subSection', 'shift'])
+                                                ->orderBy('date', 'desc')
+                                                ->limit(5)
+                                                ->get();
+
+        $upcomingSchedules = Schedule::where('date', '>=', $today)
+                                     ->with(['employee', 'subSection', 'manPowerRequest.shift'])
+                                     ->orderBy('date', 'asc')
+                                     ->limit(5)
+                                     ->get();
+
+        return Inertia::render('Dashboard', [
+            'summary' => [
+                'activeEmployeesCount' => $activeEmployeesCount,
+                'totalEmployeesCount' => $totalEmployeesCount,
+                'pendingRequestsCount' => $pendingRequestsCount,
+                'fulfilledRequestsCount' => $fulfilledRequestsCount,
+                'totalRequestsCount' => $totalRequestsCount,
+                'todaySchedulesCount' => $todaySchedulesCount,
+                'thisWeekSchedulesCount' => $thisWeekSchedulesCount,
+                'totalSchedulesCount' => $totalSchedulesCount,
+                'todayLunchCoupons' => $todayLunchCoupons,
+                'thisWeekLunchCoupons' => $thisWeekLunchCoupons
+            ],
+            'manpowerRequestChartData' => $manpowerRequestChartData,
+            'employeeAssignmentChartData' => $employeeAssignmentChartData,
+            'recentPendingRequests' => $recentPendingRequests,
+            'upcomingSchedules' => $upcomingSchedules,
+            'sections' => $sections
+        ]);
+    }
 
     /**
      * Get paginated active employees for modal display.

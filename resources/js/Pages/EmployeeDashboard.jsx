@@ -141,10 +141,10 @@ export default function EmployeeDashboard() {
     const [showFamdayPopup, setShowFamdayPopup] = useState(false);
      const [hasFamdayAccount, setHasFamdayAccount] = useState(false);
 
-    // Date filter state - 1 week range ending with current date
+    // Date filter state - 1 week range ending with tomorrow's date
     const [dateRange, setDateRange] = useState({
         start: dayjs().subtract(6, 'day').format('YYYY-MM-DD'),
-        end: dayjs().format('YYYY-MM-DD')
+        end: dayjs().add(1, 'day').format('YYYY-MM-DD') // Changed to include tomorrow
     });
 
     // Filter schedules by date range
@@ -416,7 +416,7 @@ export default function EmployeeDashboard() {
                                         <button
                                             onClick={() => setDateRange({
                                                 start: dayjs().subtract(6, 'day').format('YYYY-MM-DD'),
-                                                end: dayjs().format('YYYY-MM-DD')
+                                                end: dayjs().add(1, 'day').format('YYYY-MM-DD') // Updated to include tomorrow
                                             })}
                                             className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded"
                                         >
