@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Log;
 class UpdateEmployeeStatusAndWorkload extends Command
 {
     protected $signature = 'employees:update-status-workload';
-    protected $description = 'Update employee status to available and calculate workloads';
+    protected $description = 'Update employee status to available and calculate workloads based on manpower requests';
 
     public function handle()
     {
@@ -26,56 +26,132 @@ class UpdateEmployeeStatusAndWorkload extends Command
 
             $this->info("Employee statuses updated to available: {$updatedCount} employees affected");
 
-            // Calculate workloads
+            // Calculate workloads for current week
             $currentWeekStart = Carbon::now()->startOfWeek();
             $currentWeekEnd = Carbon::now()->endOfWeek();
 
-            // Only process employees with valid NIK
-            $employees = Employee::whereNotNull('nik')
-                ->with([
-                    'schedules' => function ($query) use ($currentWeekStart, $currentWeekEnd) {
-                        $query->whereBetween('date', [$currentWeekStart, $currentWeekEnd]);
-                    }
-                ])->get();
-
+            // Get all employees with valid NIK
+            $employees = Employee::whereNotNull('nik')->get();
+            
             $employeesWithNullNik = Employee::whereNull('nik')->count();
             $this->info("Skipping {$employeesWithNullNik} employees with null NIK");
-
             $this->info("Processing {$employees->count()} employees for workload calculation");
 
-            foreach ($employees as $employee) {
-                // Calculate total work count (all time)
-                $totalWorkCount = Schedule::where('employee_id', $employee->id)->count();
+            $processedCount = 0;
+            $createdCount = 0;
+            $updatedCount = 0;
 
-                // Calculate weekly work count (from preloaded schedules)
-                $weeklyWorkCount = $employee->schedules->count();
+            foreach ($employees as $employee) {
+                // Get all schedules for this employee in the current week
+                $weeklySchedules = Schedule::where('employee_id', $employee->id)
+                    ->whereBetween('date', [$currentWeekStart, $currentWeekEnd])
+                    ->where('status', 'accepted') // Only count accepted schedules
+                    ->get();
+
+                // Get unique manpower request IDs from weekly schedules
+                $weeklyManPowerIds = $weeklySchedules->pluck('man_power_request_id')->unique();
+                
+                // Calculate weekly work count (number of unique manpower requests this week)
+                $weeklyWorkCount = $weeklyManPowerIds->count();
+
+                // Calculate total work count (all time unique manpower requests)
+                $totalSchedules = Schedule::where('employee_id', $employee->id)
+                    ->where('status', 'accepted')
+                    ->get();
+                
+                $totalManPowerIds = $totalSchedules->pluck('man_power_request_id')->unique();
+                $totalWorkCount = $totalManPowerIds->count();
 
                 // Calculate workload point based on weekly work count
                 $workloadPoint = $this->calculateWorkloadPoint($weeklyWorkCount);
 
-                // Update existing record or create if doesn't exist
-                Workload::updateOrCreate(
-                    ['employee_id' => $employee->id],
-                    [
+                // Check if workload record exists for this employee
+                $existingWorkload = Workload::where('employee_id', $employee->id)->first();
+
+                if ($existingWorkload) {
+                    // Update existing record
+                    $existingWorkload->update([
                         'nik' => $employee->nik,
                         'week' => $weeklyWorkCount,
                         'total_work_count' => $totalWorkCount,
                         'workload_point' => $workloadPoint
-                    ]
-                );
+                    ]);
+                    $updatedCount++;
+                } else {
+                    // Create new record if it doesn't exist
+                    Workload::create([
+                        'employee_id' => $employee->id,
+                        'nik' => $employee->nik,
+                        'week' => $weeklyWorkCount,
+                        'total_work_count' => $totalWorkCount,
+                        'workload_point' => $workloadPoint
+                    ]);
+                    $createdCount++;
+                }
 
-                $this->line("Updated workload for employee: {$employee->name} (NIK: {$employee->nik})");
+                $processedCount++;
+                $this->line("Processed employee: {$employee->name} (NIK: {$employee->nik}) - Weekly: {$weeklyWorkCount}, Total: {$totalWorkCount}, Point: {$workloadPoint}");
             }
 
+            // Handle employees that might have been removed but still exist in workload table
+            $this->syncWorkloadTable($employees);
+
             DB::commit();
-            $this->info('Workload data updated successfully for employees with valid NIK');
-            Log::info('Employee status and workload update completed successfully');
+            
+            $this->info("Workload update completed!");
+            $this->info("Processed: {$processedCount} employees");
+            $this->info("Created: {$createdCount} new workload records");
+            $this->info("Updated: {$updatedCount} existing workload records");
+            
+            Log::info("Employee status and workload update completed: {$processedCount} processed, {$createdCount} created, {$updatedCount} updated");
 
         } catch (\Exception $e) {
             DB::rollBack();
             $this->error('Error updating data: ' . $e->getMessage());
             Log::error('Error updating employee status and workloads: ' . $e->getMessage());
             Log::error($e->getTraceAsString());
+        }
+    }
+
+    /**
+     * Sync workload table - remove records for employees that no longer exist
+     * or have null NIK, and add missing records
+     */
+    private function syncWorkloadTable($currentEmployees)
+    {
+        // Get all employee IDs that should exist in workload table
+        $validEmployeeIds = $currentEmployees->pluck('id')->toArray();
+
+        // Remove workload records for employees that no longer exist or have null NIK
+        $deletedCount = Workload::whereNotIn('employee_id', $validEmployeeIds)
+            ->orWhereNull('nik')
+            ->delete();
+
+        if ($deletedCount > 0) {
+            $this->info("Removed {$deletedCount} orphaned workload records");
+        }
+
+        // Find employees that are missing from workload table and create records for them
+        $existingWorkloadEmployeeIds = Workload::pluck('employee_id')->toArray();
+        $missingEmployees = Employee::whereNotNull('nik')
+            ->whereNotIn('id', $existingWorkloadEmployeeIds)
+            ->get();
+
+        $newlyAddedCount = 0;
+        foreach ($missingEmployees as $employee) {
+            // Create default workload record for missing employees
+            Workload::create([
+                'employee_id' => $employee->id,
+                'nik' => $employee->nik,
+                'week' => 0,
+                'total_work_count' => 0,
+                'workload_point' => 1 // Default to low workload
+            ]);
+            $newlyAddedCount++;
+        }
+
+        if ($newlyAddedCount > 0) {
+            $this->info("Added {$newlyAddedCount} missing employees to workload table");
         }
     }
 
