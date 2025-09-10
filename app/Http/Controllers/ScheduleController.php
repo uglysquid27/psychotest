@@ -14,6 +14,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log; // Pastikan Log diimport
 use Illuminate\Validation\ValidationException; // Import untuk validasi kustom
+use Illuminate\Support\Facades\Http;
 
 class ScheduleController extends Controller
 {
@@ -218,7 +219,8 @@ class ScheduleController extends Controller
                             3 => 75,
                             2 => 105,
                             1 => 135,
-                            default => 165,
+                            0 => 165,
+                            default => 0,
                         };
 
                         $employee->setAttribute('calculated_rating', $rating);
@@ -226,135 +228,187 @@ class ScheduleController extends Controller
                         $employee->setAttribute('total_assigned_hours', $totalWorkingHours);
 
                         return $employee;
-                    });
+                    })
+                    ->sortBy(function ($employee) {
+                        return $employee->type === 'bulanan' ? 0 : 1;
+                    })
+                    ->sortBy('working_day_weight')
+                    ->values();
 
-                // Sort employees: monthly first, then by working day weight
-                $sortEmployees = function ($employees) {
-                    return $employees->sortBy([
-                        ['type', 'asc'], // 'bulanan' comes before others
-                        ['working_day_weight', 'asc']
-                    ])->values();
-                };
+                // 4. Filter employees by sub-section
+                $employeesForSubSection = $eligibleEmployees->filter(function ($employee) use ($manPowerRequest) {
+                    return $employee->subSections->contains('id', $manPowerRequest->sub_section_id);
+                });
 
-                // 4. Separate employees by matching sub-section
-                $sameSubSectionEligible = $eligibleEmployees->filter(
-                    fn($employee) =>
-                    $employee->subSections->contains('id', $manPowerRequest->sub_section_id)
-                );
-                $otherSubSectionEligible = $eligibleEmployees->filter(
-                    fn($employee) =>
-                    !$employee->subSections->contains('id', $manPowerRequest->sub_section_id)
-                );
+                // 5. If not enough employees in the sub-section, get from other sub-sections
+                if ($employeesForSubSection->count() < $requestedAmount) {
+                    $remainingNeeded = $requestedAmount - $employeesForSubSection->count();
+                    $otherEmployees = $eligibleEmployees->whereNotIn('id', $employeesForSubSection->pluck('id'))
+                        ->take($remainingNeeded);
+                    $employeesToAssign = $employeesForSubSection->concat($otherEmployees);
+                } else {
+                    $employeesToAssign = $employeesForSubSection->take($requestedAmount);
+                }
 
-                $sortedSameSubSectionEmployees = $sortEmployees($sameSubSectionEligible);
-                $sortedOtherSubSectionEmployees = $sortEmployees($otherSubSectionEligible);
+                // 6. Assign employees to the schedule
+                foreach ($employeesToAssign as $employee) {
+                    Schedule::create([
+                        'employee_id' => $employee->id,
+                        'man_power_request_id' => $manPowerRequest->id,
+                        'date' => $manPowerRequest->date,
+                        'status' => 'accepted',
+                        'visibility' => 'private',
+                    ]);
 
-                // 5. Assign employees from same sub-section first
-                foreach ($sortedSameSubSectionEmployees as $employee) {
-                    if ($assignedEmployeeCount < $requestedAmount) {
-                        Schedule::create([
-                            'employee_id' => $employee->id,
-                            'sub_section_id' => $manPowerRequest->sub_section_id,
-                            'man_power_request_id' => $manPowerRequest->id,
-                            'date' => $manPowerRequest->date,
-                            'status' => 'pending'
-                        ]);
-                        $assignedEmployeeCount++;
-                    } else {
+                    $assignedEmployeeIds[] = $employee->id;
+                    $assignedEmployeeCount++;
+                }
+
+                // 7. Update the request status
+                $manPowerRequest->update([
+                    'status' => 'fulfilled',
+                ]);
+
+                // 8. Log the assignment
+                Log::info('Automatic assignment completed', [
+                    'request_id' => $manPowerRequest->id,
+                    'assigned_employees' => $assignedEmployeeIds,
+                    'assigned_count' => $assignedEmployeeCount,
+                ]);
+            });
+
+            return redirect()->route('man-power-requests.index')
+                ->with('success', 'Penjadwalan berhasil dilakukan secara otomatis!');
+        } catch (\Exception $e) {
+            Log::error('Automatic assignment failed: ' . $e->getMessage());
+            return back()->withErrors(['assignment_error' => 'Terjadi kesalahan saat melakukan penjadwalan otomatis.']);
+        }
+    }
+
+    /**
+     * Update the specified resource in storage.
+     */
+    public function update(Request $request, Schedule $schedule)
+    {
+        $validated = $request->validate([
+            'status' => 'required|in:accepted,rejected,pending',
+        ]);
+
+        $schedule->update($validated);
+
+        return back()->with('success', 'Status jadwal berhasil diperbarui!');
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     */
+    public function destroy(Schedule $schedule)
+    {
+        $schedule->delete();
+
+        return back()->with('success', 'Jadwal berhasil dihapus!');
+    }
+
+public function toggleVisibilityGroup(Request $request)
+{
+    $request->validate([
+        'date' => 'required|date',
+        'section_id' => 'required|exists:sections,id',
+        'visibility' => 'required|in:public,private',
+        'send_wa_notification' => 'boolean'
+    ]);
+
+    try {
+        // Get section with exact name for notification
+        $section = Section::find($request->section_id);
+        $sectionName = $section ? $section->name : 'Unknown Section';
+        
+        DB::transaction(function () use ($request) {
+            // Update visibility for all schedules in the given date and section
+            Schedule::where('date', $request->date)
+                ->whereHas('manPowerRequest.subSection', function ($query) use ($request) {
+                    $query->where('section_id', $request->section_id);
+                })
+                ->update(['visibility' => $request->visibility]);
+        });
+
+        // Send WhatsApp notification if making public and requested
+        if ($request->visibility === 'public' && $request->send_wa_notification) {
+            try {
+                // Map sections to their respective WhatsApp channels with flexible matching
+                $channelMap = [
+                    'finished good' => 'https://whatsapp.com/channel/0029Vb5yFSoJP210x9EUlD35',
+                    'loader' => 'https://whatsapp.com/channel/0029VbBWUNfKGGG8PgMo1y1N',
+                    'delivery' => 'https://whatsapp.com/channel/0029VbAkjJLC1Fu3zYOXeZ1J',
+                    'rm/pm' => 'https://whatsapp.com/channel/0029VbCGRFPIyPtQvd2VfN0h',
+                    'operator forklift' => 'https://whatsapp.com/channel/0029Vb6iFOh59PwYZgjfSZ3A',
+                    'inspeksi' => 'https://whatsapp.com/channel/0029Vb6lyZkEFeXtq8FkMG2s',
+                    'produksi' => 'https://whatsapp.com/channel/0029VbBUb0o3WHTW6NF5oN10',
+                    'food & snackbar' => 'https://whatsapp.com/channel/0029Vb6XObFJJhzZx6JBAo1r',
+                    'food and snackbar' => 'https://whatsapp.com/channel/0029Vb6XObFJJhzZx6JBAo1r',
+                    'food' => 'https://whatsapp.com/channel/0029Vb6XObFJJhzZx6JBAo1r',
+                    'snackbar' => 'https://whatsapp.com/channel/0029Vb6XObFJJhzZx6JBAo1r'
+                ];
+
+                // Normalize section name for matching (lowercase, remove special chars)
+                $normalizedSectionName = strtolower(trim($sectionName));
+                $normalizedSectionName = preg_replace('/[^a-z0-9\s]/', '', $normalizedSectionName);
+                
+                $channelUrl = 'https://whatsapp.com/channel/0029Vb6yHUYId7nVlpjQ3r2R'; // Default
+                
+                // Find matching channel
+                foreach ($channelMap as $key => $url) {
+                    if (str_contains($normalizedSectionName, $key) || str_contains($key, $normalizedSectionName)) {
+                        $channelUrl = $url;
                         break;
                     }
                 }
+                
+                Log::info('Channel mapping debug', [
+                    'original_section_name' => $sectionName,
+                    'normalized_section_name' => $normalizedSectionName,
+                    'selected_channel_url' => $channelUrl
+                ]);
 
-                // 6. If still need more, assign from other sub-sections
-                if ($assignedEmployeeCount < $requestedAmount) {
-                    foreach ($sortedOtherSubSectionEmployees as $employee) {
-                        if ($assignedEmployeeCount < $requestedAmount) {
-                            Schedule::create([
-                                'employee_id' => $employee->id,
-                                'sub_section_id' => $manPowerRequest->sub_section_id,
-                                'man_power_request_id' => $manPowerRequest->id,
-                                'date' => $manPowerRequest->date,
-                                'status' => 'pending'
-                            ]);
-                            $assignedEmployeeCount++;
-                        } else {
-                            break;
-                        }
-                    }
-                }
-
-                // 7. Update request status if at least one employee was assigned
-                if ($assignedEmployeeCount > 0) {
-                    $manPowerRequest->update([
-                        'status' => 'fulfilled',
-                        'fulfilled_at' => now(),
-                        'fulfilled_by' => auth()->id()
+                $response = Http::timeout(15)
+                    ->withHeaders([
+                        'Content-Type' => 'application/json',
+                    ])
+                    ->post('https://sendwa.xyz/send-text-channel', [
+                        'api_key' => 'v3wrR6SeHcgCoGIchMQqMC0gEFZ3QZ',
+                        'sender' => '6281133318167',
+                        'url' => $channelUrl,
+                        'message' => "Jadwal untuk " . Carbon::parse($request->date)->translatedFormat('l, d F Y') . 
+                                    " di bagian {$sectionName} sudah dipublikasikan. Silakan cek aplikasi untuk detail lengkap.",
+                        'footer' => 'otsuka.asystem.co.id'
                     ]);
-                } else {
-                    throw ValidationException::withMessages([
-                        'assignment_error' => 'Tidak ada karyawan yang tersedia yang cocok dengan kriteria untuk permintaan ini.'
-                    ]);
-                }
-            });
-
-            return redirect()->route('schedules.index')->with('success', 'Karyawan berhasil dijadwalkan secara otomatis!');
-        } catch (\Exception $e) {
-            Log::error('Schedule Auto-Assignment Error: ' . $e->getMessage(), [
-                'exception' => $e,
-                'request_id' => $manPowerRequest->id
-            ]);
-            return back()->withErrors(['assignment_error' => $e->getMessage()])->withInput();
-        }
-    }
-
-    public function toggleVisibility($manPowerRequestId)
-    {
-        // Ambil semua schedule dengan request yang sama
-        $schedules = \App\Models\Schedule::where('man_power_request_id', $manPowerRequestId)->get();
-
-        if ($schedules->isEmpty()) {
-            return redirect()->back()->with('error', 'Tidak ada schedule ditemukan');
+                
+                Log::info('WhatsApp channel notification sent via toggle', [
+                    'date' => $request->date,
+                    'section_id' => $request->section_id,
+                    'section_name' => $sectionName,
+                    'channel_url' => $channelUrl,
+                    'response' => $response->json()
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Failed to send WhatsApp channel notification: ' . $e->getMessage());
+                // Don't throw error, just log it
+            }
         }
 
-        // Ambil visibility sekarang (default ambil dari schedule pertama)
-        $currentVisibility = $schedules->first()->visibility;
-
-        // Tentukan nilai baru
-        $newVisibility = $currentVisibility === 'public' ? 'private' : 'public';
-
-        // Update semua schedule pada request ini
-        \App\Models\Schedule::where('man_power_request_id', $manPowerRequestId)
-            ->update(['visibility' => $newVisibility]);
-
-        return redirect()->back()->with('success', 'Visibility berhasil diubah menjadi ' . $newVisibility);
-    }
-
-    public function toggleVisibilityGroup(Request $request)
-    {
-        $validated = $request->validate([
-            'date' => 'required|date',
-            'section_id' => 'required|integer',
-            'visibility' => 'required|in:public,private',
+        // Log the visibility change with section name for debugging
+        Log::info('Visibility toggled for group', [
+            'date' => $request->date,
+            'section_id' => $request->section_id,
+            'section_name' => $sectionName,
+            'visibility' => $request->visibility,
+            'send_wa_notification' => $request->send_wa_notification ?? false
         ]);
 
-        // Get all schedules for this date and section
-        $schedules = \App\Models\Schedule::whereDate('date', $validated['date'])
-            ->whereHas('manPowerRequest.subSection', function($query) use ($validated) {
-                $query->where('section_id', $validated['section_id']);
-            })
-            ->get();
-
-        if ($schedules->isEmpty()) {
-            return back()->with('error', 'No schedules found for this group');
-        }
-
-        // Update visibility for all schedules in this group
-        \App\Models\Schedule::whereDate('date', $validated['date'])
-            ->whereHas('manPowerRequest.subSection', function($query) use ($validated) {
-                $query->where('section_id', $validated['section_id']);
-            })
-            ->update(['visibility' => $validated['visibility']]);
-
-        return back()->with('success', 'Visibility updated for group');
+        return back()->with('success', 'Visibility berhasil diubah!');
+    } catch (\Exception $e) {
+        Log::error('Error toggling visibility: ' . $e->getMessage());
+        return back()->withErrors(['visibility_error' => 'Gagal mengubah visibility.']);
     }
+}
 }

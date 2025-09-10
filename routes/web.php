@@ -13,6 +13,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\PermitController;
 use App\Http\Controllers\EmployeeSum;
 use App\Http\Controllers\ScheduleController;
+use App\Http\Controllers\WhatsAppNotificationController;
 use App\Http\Controllers\ManPowerRequestController;
 use App\Http\Controllers\ManPowerRequestFulfillmentController;
 use App\Http\Controllers\ShiftController;
@@ -259,6 +260,10 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
         ->name('schedules.toggle-visibility');
     Route::post('/schedules/toggle-visibility-group', [ScheduleController::class, 'toggleVisibilityGroup'])
         ->name('schedules.toggle-visibility-group');
+Route::post('/whatsapp/send', [WhatsAppNotificationController::class, 'sendScheduleNotification'])->name('whatsapp.send');
+    Route::get('/wa/test', [WhatsAppNotificationController::class, 'testSend']);
+    
+
 
 
 

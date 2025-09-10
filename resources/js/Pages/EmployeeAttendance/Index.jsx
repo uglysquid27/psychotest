@@ -206,7 +206,7 @@ export default function Index() {
                       </Link>
 
                       {/* Reset All Statuses */}
-                      <button
+                      {/* <button
                         onClick={() => setShowResetModal(true)}
                         className="flex items-center justify-center gap-1 bg-red-600 hover:bg-red-700 px-2 py-1.5 sm:px-3 sm:py-2 rounded-md font-medium text-white text-xs sm:text-sm transition-colors duration-200"
                         title="Reset All Statuses"
@@ -215,10 +215,10 @@ export default function Index() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
                         <span className="hidden sm:inline">Reset</span>
-                      </button>
+                      </button> */}
 
                       {/* Update Workloads */}
-                      <button
+                      {/* <button
                         onClick={() => setShowWorkloadModal(true)}
                         disabled={processing}
                         className={`flex items-center justify-center gap-1 px-2 py-1.5 sm:px-3 sm:py-2 rounded-md font-medium text-white text-xs sm:text-sm transition-colors duration-200 ${processing ? 'bg-purple-400' : 'bg-purple-600 hover:bg-purple-700'
@@ -242,7 +242,7 @@ export default function Index() {
                             <span className="hidden sm:inline">Update</span>
                           </>
                         )}
-                      </button>
+                      </button> */}
 
                       {/* Incomplete Profiles */}
                       <Link

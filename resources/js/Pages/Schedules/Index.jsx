@@ -87,6 +87,7 @@ const ManPowerRequestDetailModal = ({ request, assignedEmployees, onClose }) => 
 };
 
 const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility }) => {
+     const [isToggling, setIsToggling] = useState(false);
     const [shiftPages, setShiftPages] = useState({});
     const itemsPerPage = 5;
 
@@ -112,26 +113,36 @@ const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility }) 
         }
     };
 
-    const toggleVisibility = () => {
-        router.post(
+const toggleVisibility = async () => {
+    setIsToggling(true);
+    try {
+        // Toggle visibility and optionally send WA notification
+        await router.post(
             route("schedules.toggle-visibility-group"),
             {
                 date: date,
                 section_id: sectionId,
                 visibility: currentVisibility === "public" ? "private" : "public",
+                send_wa_notification: currentVisibility !== "public" // Send notification only when making public
             },
             {
                 preserveScroll: true,
                 preserveState: true,
-                onSuccess: () => {
-                    // You might want to add a success message or refresh the data
-                },
-                onError: (errors) => {
-                    console.error('Error toggling visibility:', errors);
-                }
             }
         );
-    };
+
+        console.log("Visibility toggled successfully");
+    } catch (error) {
+        console.error("Error toggling visibility:", error);
+        alert(
+            "Gagal mengubah visibility: " +
+                (error.response?.data?.message || error.message || "Unknown error")
+        );
+    } finally {
+        setIsToggling(false);
+    }
+};
+
 
     const changeShiftPage = (shiftName, page) => {
         setShiftPages(prev => ({
@@ -235,17 +246,27 @@ const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility }) 
                 })
             )}
 
-            {Object.keys(shifts).length > 0 && (
+    {Object.keys(shifts).length > 0 && (
                 <div className="mt-4 flex justify-between items-center">
                     <span className="text-sm text-gray-700 dark:text-gray-300">
                         Visibility: <strong>{currentVisibility}</strong>
                     </span>
                     <button
                         onClick={toggleVisibility}
-                        className="rounded-md p-2 text-indigo-600 hover:bg-indigo-100 dark:text-indigo-400 dark:hover:bg-indigo-900"
+                        disabled={isToggling}
+                        className="rounded-md p-2 text-indigo-600 hover:bg-indigo-100 dark:text-indigo-400 dark:hover:bg-indigo-900 disabled:opacity-50"
                         title="Toggle Visibility"
                     >
-                        {currentVisibility === 'public' ? openEyeSVG : closedEyeSVG}
+                        {isToggling ? (
+                            <svg className="h-5 w-5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        ) : currentVisibility === 'public' ? (
+                            openEyeSVG
+                        ) : (
+                            closedEyeSVG
+                        )}
                     </button>
                 </div>
             )}
@@ -424,7 +445,7 @@ const Index = () => {
                                 className="flex items-center gap-2 rounded-md bg-gray-500 px-4 py-2 text-white hover:bg-gray-600 w-full justify-center"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582M20 20v-5h-.581M5.418 9A7.978 7.978 0 014 12c0 4.418 3.582 8 8 8a7.978 7.978 0 005.418-2M18.582 15A7.978 7.978 0 0020 12c0-4.418-3.582-8-8-8a7.978 7.978 0 00-5.418 2" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582M20 20v-5h-.581M5.418 9A7.978 7.978 0 014 12c0 4.418 3.582 8 8 8a7.978 7.978 0 015.418-2M18.582 15A7.978 7.978 0 0020 12c0-4.418-3.582-8-8-8a7.978 7.978 0 00-5.418 2" />
                                 </svg>
                             </button>
                         </div>
