@@ -364,11 +364,40 @@ public function toggleVisibilityGroup(Request $request)
                     }
                 }
                 
-                Log::info('Channel mapping debug', [
-                    'original_section_name' => $sectionName,
-                    'normalized_section_name' => $normalizedSectionName,
-                    'selected_channel_url' => $channelUrl
-                ]);
+                // Format tanggal dalam bahasa Indonesia
+                $indonesianMonths = [
+                    'January' => 'Januari',
+                    'February' => 'Februari',
+                    'March' => 'Maret',
+                    'April' => 'April',
+                    'May' => 'Mei',
+                    'June' => 'Juni',
+                    'July' => 'Juli',
+                    'August' => 'Agustus',
+                    'September' => 'September',
+                    'October' => 'Oktober',
+                    'November' => 'November',
+                    'December' => 'Desember'
+                ];
+
+                $indonesianDays = [
+                    'Sunday' => 'Minggu',
+                    'Monday' => 'Senin',
+                    'Tuesday' => 'Selasa',
+                    'Wednesday' => 'Rabu',
+                    'Thursday' => 'Kamis',
+                    'Friday' => 'Jumat',
+                    'Saturday' => 'Sabtu'
+                ];
+
+                $date = Carbon::parse($request->date);
+                $englishDay = $date->format('l');
+                $englishMonth = $date->format('F');
+                
+                $indonesianDay = $indonesianDays[$englishDay] ?? $englishDay;
+                $indonesianMonth = $indonesianMonths[$englishMonth] ?? $englishMonth;
+                
+                $formattedDate = $indonesianDay . ', ' . $date->format('d') . ' ' . $indonesianMonth . ' ' . $date->format('Y');
 
                 $response = Http::timeout(15)
                     ->withHeaders([
@@ -378,7 +407,7 @@ public function toggleVisibilityGroup(Request $request)
                         'api_key' => 'v3wrR6SeHcgCoGIchMQqMC0gEFZ3QZ',
                         'sender' => '6281133318167',
                         'url' => $channelUrl,
-                        'message' => "Jadwal untuk " . Carbon::parse($request->date)->translatedFormat('l, d F Y') . 
+                        'message' => "Jadwal untuk " . $formattedDate . 
                                     " di bagian {$sectionName} sudah dipublikasikan. Silakan cek aplikasi untuk detail lengkap.",
                         'footer' => 'otsuka.asystem.co.id'
                     ]);
@@ -388,6 +417,7 @@ public function toggleVisibilityGroup(Request $request)
                     'section_id' => $request->section_id,
                     'section_name' => $sectionName,
                     'channel_url' => $channelUrl,
+                    'indonesian_date' => $formattedDate,
                     'response' => $response->json()
                 ]);
             } catch (\Exception $e) {
@@ -411,4 +441,5 @@ public function toggleVisibilityGroup(Request $request)
         return back()->withErrors(['visibility_error' => 'Gagal mengubah visibility.']);
     }
 }
+
 }
