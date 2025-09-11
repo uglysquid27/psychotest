@@ -29,6 +29,17 @@ export default function Inactive() {
     }
   };
 
+  // Format date function
+  const formatDate = (dateString) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('id-ID', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  };
+
   // Handle search
   const handleSearchChange = (e) => {
     const newSearchTerm = e.target.value;
@@ -58,21 +69,21 @@ export default function Inactive() {
     setShowModal(true);
   };
 
-const showDeleteModal = (employeeId, employeeName) => {
-  setModalConfig({
-    title: 'Hapus Pegawai',
-    message: `Apakah Anda yakin ingin menghapus data pegawai ${employeeName}? Data yang dihapus tidak dapat dikembalikan.`,
-    action: () => {
-      router.delete(`/employee-attendance/${employeeId}`, {
-        preserveScroll: true,
-        onSuccess: () => router.reload(),
-      });
-      setShowModal(false);
-    },
-    employeeName,
-  });
-  setShowModal(true);
-};
+  const showDeleteModal = (employeeId, employeeName) => {
+    setModalConfig({
+      title: 'Hapus Pegawai',
+      message: `Apakah Anda yakin ingin menghapus data pegawai ${employeeName}? Data yang dihapus tidak dapat dikembalikan.`,
+      action: () => {
+        router.delete(`/employee-attendance/${employeeId}`, {
+          preserveScroll: true,
+          onSuccess: () => router.reload(),
+        });
+        setShowModal(false);
+      },
+      employeeName,
+    });
+    setShowModal(true);
+  };
 
   return (
     <AuthenticatedLayout
@@ -174,11 +185,19 @@ const showDeleteModal = (employeeId, employeeName) => {
                       <div className="grid grid-cols-2 gap-2 text-sm mt-3">
                         <div>
                           <p className="text-gray-500 dark:text-gray-400">Alasan Nonaktif</p>
-                          <p>{employee.deactivation_reason || '-'}</p>
+                          <p className="font-medium">{employee.deactivation_reason || '-'}</p>
                         </div>
                         <div>
                           <p className="text-gray-500 dark:text-gray-400">Tanggal Nonaktif</p>
-                          <p>{employee.deactivated_at ? new Date(employee.deactivated_at).toLocaleDateString('id-ID') : '-'}</p>
+                          <p className="font-medium">{formatDate(employee.deactivated_at)}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500 dark:text-gray-400">Catatan</p>
+                          <p className="font-medium">{employee.deactivation_notes || '-'}</p>
+                        </div>
+                        <div>
+                          <p className="text-gray-500 dark:text-gray-400">Dinonaktifkan Oleh</p>
+                          <p className="font-medium">{employee.deactivated_by_user?.name || '-'}</p>
                         </div>
                       </div>
 
@@ -209,7 +228,9 @@ const showDeleteModal = (employeeId, employeeName) => {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nama</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">NIK</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Alasan Nonaktif</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Catatan</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Tanggal Nonaktif</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Dinonaktifkan Oleh</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Aksi</th>
                     </tr>
@@ -217,7 +238,7 @@ const showDeleteModal = (employeeId, employeeName) => {
                   <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                     {employees.length === 0 ? (
                       <tr>
-                        <td colSpan="6" className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
+                        <td colSpan="8" className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">
                           Tidak ada data pegawai nonaktif
                         </td>
                       </tr>
@@ -234,8 +255,14 @@ const showDeleteModal = (employeeId, employeeName) => {
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
                             {employee.deactivation_reason || '-'}
                           </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate">
+                            {employee.deactivation_notes || '-'}
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                            {employee.deactivated_at ? new Date(employee.deactivated_at).toLocaleDateString('id-ID') : '-'}
+                            {formatDate(employee.deactivated_at)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                            {employee.deactivated_by_user?.name || '-'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`px-2 py-1 inline-flex text-xs font-semibold rounded-full ${getStatusClasses(employee.status)}`}>

@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Models\Employee; // Add this import
 
 class AuthenticatedSessionController extends Controller
 {
@@ -31,6 +32,16 @@ class AuthenticatedSessionController extends Controller
         $isNik = preg_match('/^EMP\d+$|^\d+$/', $credential);
 
         if ($isNik) {
+            // First check if employee exists and is not deactivated
+            $employee = Employee::where('nik', $credential)->first();
+            
+            // Check if employee exists and is not deactivated
+            if (!$employee || $employee->status === 'deactivated') {
+                throw ValidationException::withMessages([
+                    'credential' => __('Akun telah dinonaktifkan dan tidak dapat login.'),
+                ]);
+            }
+
             if (!Auth::guard('employee')->attempt(
                 ['nik' => $credential, 'password' => $password],
                 $remember

@@ -119,8 +119,9 @@ class Employee extends Authenticatable
         return $this->hasMany(Workload::class);
     }
 
-    public function deactivatedBy(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'deactivated_by');
-    }
+ // In your Employee model
+public function deactivatedByUser()
+{
+    return $this->belongsTo(User::class, 'deactivated_by');
+}
 }

@@ -349,44 +349,47 @@ class EmployeeSum extends Controller
             ->with('success', 'Employee updated successfully.');
     }
 
-    public function inactive(Request $request)
-    {
-        try {
-            Log::info('Accessing inactive employees list', [
-                'user_id' => auth()->id(),
-                'time' => now(),
-                'request_params' => $request->all()
+   public function inactive(Request $request)
+{
+    try {
+        Log::info('Accessing inactive employees list', [
+            'user_id' => auth()->id(),
+            'time' => now(),
+            'request_params' => $request->all()
+        ]);
+
+        $query = Employee::where('status', 'deactivated')
+            ->orWhereNotNull('deactivated_at')
+            ->with([
+                'subSections.section',
+                'deactivatedByUser:id,name' // Add this relationship
             ]);
 
-            $query = Employee::where('status', 'deactivated')
-                ->orWhereNotNull('deactivated_at')
-                ->with(['subSections.section']);
-
-            if ($request->has('search') && $request->input('search') !== null) {
-                $searchTerm = $request->input('search');
-                $query->where(function ($q) use ($searchTerm) {
-                    $q->where('name', 'like', '%' . $searchTerm . '%')
-                        ->orWhere('nik', 'like', '%' . $searchTerm . '%');
-                });
-            }
-
-            $employees = $query->paginate(10);
-
-            return Inertia::render('EmployeeAttendance/Inactive', [
-                'employees' => $employees,
-                'filters' => $request->only('search')
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Failed to retrieve inactive employees', [
-                'error' => $e->getMessage(),
-                'stack_trace' => $e->getTraceAsString(),
-                'user_id' => auth()->id()
-            ]);
-
-            return back()->with('error', 'Failed to load inactive employees. Please try again.');
+        if ($request->has('search') && $request->input('search') !== null) {
+            $searchTerm = $request->input('search');
+            $query->where(function ($q) use ($searchTerm) {
+                $q->where('name', 'like', '%' . $searchTerm . '%')
+                    ->orWhere('nik', 'like', '%' . $searchTerm . '%');
+            });
         }
+
+        $employees = $query->paginate(10);
+
+        return Inertia::render('EmployeeAttendance/Inactive', [
+            'employees' => $employees,
+            'filters' => $request->only('search')
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Failed to retrieve inactive employees', [
+            'error' => $e->getMessage(),
+            'stack_trace' => $e->getTraceAsString(),
+            'user_id' => auth()->id()
+        ]);
+
+        return back()->with('error', 'Failed to load inactive employees. Please try again.');
     }
+}
 
     public function exportXls(Request $request)
     {
@@ -617,24 +620,25 @@ class EmployeeSum extends Controller
         }
     }
 
-    public function processDeactivation(Request $request, Employee $employee)
-    {
-        $validated = $request->validate([
-            'deactivation_reason' => 'required|string|max:255',
-            'deactivation_notes' => 'nullable|string'
-        ]);
+   public function processDeactivation(Request $request, Employee $employee)
+{
+    $validated = $request->validate([
+        'deactivation_reason' => 'required|string|max:255',
+        'deactivation_notes' => 'nullable|string',
+        'deactivated_at' => 'required|date|before_or_equal:today' // Add validation
+    ]);
 
-        $employee->update([
-            'status' => 'deactivated',
-            'deactivation_reason' => $validated['deactivation_reason'],
-            'deactivation_notes' => $validated['deactivation_notes'], // Fixed this line
-            'deactivated_at' => now(),
-            'deactivated_by' => auth()->id()
-        ]);
+    $employee->update([
+        'status' => 'deactivated',
+        'deactivation_reason' => $validated['deactivation_reason'],
+        'deactivation_notes' => $validated['deactivation_notes'],
+        'deactivated_at' => $validated['deactivated_at'], // Use the selected date
+        'deactivated_by' => auth()->id()
+    ]);
 
-        return redirect()->route('employee-attendance.inactive')
-            ->with('success', 'Employee deactivated successfully');
-    }
+    return redirect()->route('employee-attendance.inactive')
+        ->with('success', 'Employee deactivated successfully');
+}
 
     public function destroy(Employee $employee)
     {
@@ -985,42 +989,44 @@ class EmployeeSum extends Controller
         ]);
     }
 
-    public function bulkDeactivate(Request $request)
-    {
-        $validated = $request->validate([
-            'employee_ids' => 'required|array',
-            'employee_ids.*' => 'exists:employees,id',
-            'deactivation_reason' => 'required|string|max:255',
-            'deactivation_notes' => 'nullable|string'
-        ]);
+   public function bulkDeactivate(Request $request)
+{
+    $validated = $request->validate([
+        'employee_ids' => 'required|array',
+        'employee_ids.*' => 'exists:employees,id',
+        'deactivation_reason' => 'required|string|max:255',
+        'deactivation_notes' => 'nullable|string',
+        'deactivated_at' => 'required|date|before_or_equal:today' // Add validation
+    ]);
 
-        try {
-            DB::beginTransaction();
+    try {
+        DB::beginTransaction();
 
-            $employeeIds = $validated['employee_ids'];
-            $reason = $validated['deactivation_reason'];
-            $notes = $validated['deactivation_notes'] ?? null;
-            $userId = auth()->id();
+        $employeeIds = $validated['employee_ids'];
+        $reason = $validated['deactivation_reason'];
+        $notes = $validated['deactivation_notes'] ?? null;
+        $deactivatedAt = $validated['deactivated_at']; // Get the selected date
+        $userId = auth()->id();
 
-            Employee::whereIn('id', $employeeIds)
-                ->update([
-                    'status' => 'deactivated',
-                    'deactivation_reason' => $reason,
-                    'deactivation_notes' => $notes,
-                    'deactivated_at' => now(),
-                    'deactivated_by' => $userId
-                ]);
+        Employee::whereIn('id', $employeeIds)
+            ->update([
+                'status' => 'deactivated',
+                'deactivation_reason' => $reason,
+                'deactivation_notes' => $notes,
+                'deactivated_at' => $deactivatedAt, // Use the selected date
+                'deactivated_by' => $userId
+            ]);
 
-            DB::commit();
+        DB::commit();
 
-            return redirect()->route('employee-attendance.index')
-                ->with('success', count($employeeIds) . ' employees deactivated successfully');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Bulk deactivation failed: ' . $e->getMessage());
-            
-            return redirect()->back()
-                ->with('error', 'Failed to deactivate employees. Please try again.');
-        }
+        return redirect()->route('employee-attendance.index')
+            ->with('success', count($employeeIds) . ' employees deactivated successfully');
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Bulk deactivation failed: ' . $e->getMessage());
+        
+        return redirect()->back()
+            ->with('error', 'Failed to deactivate employees. Please try again.');
     }
+}
 }
