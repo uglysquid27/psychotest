@@ -14,17 +14,18 @@ class WhatsAppNotificationController extends Controller
 private function getChannelUrl($sectionName)
 {
     $channelMap = [
-        'finished good' => 'https://whatsapp.com/channel/0029Vb5yFSoJP210x9EUlD35',
-        'loader' => 'https://whatsapp.com/channel/0029VbBWUNfKGGG8PgMo1y1N',
-        'delivery' => 'https://whatsapp.com/channel/0029VbAkjJLC1Fu3zYOXeZ1J',
-        'rm/pm' => 'https://whatsapp.com/channel/0029VbCGRFPIyPtQvd2VfN0h',
-        'operator forklift' => 'https://whatsapp.com/channel/0029Vb6iFOh59PwYZgjfSZ3A',
-        'inspeksi' => 'https://whatsapp.com/channel/0029Vb6lyZkEFeXtq8FkMG2s',
-        'produksi' => 'https://whatsapp.com/channel/0029VbBUb0o3WHTW6NF5oN10',
-        'food & snackbar' => 'https://whatsapp.com/channel/0029Vb6XObFJJhzZx6JBAo1r',
-        'food and snackbar' => 'https://whatsapp.com/channel/0029Vb6XObFJJhzZx6JBAo1r',
-        'food' => 'https://whatsapp.com/channel/0029Vb6XObFJJhzZx6JBAo1r',
-        'snackbar' => 'https://whatsapp.com/channel/0029Vb6XObFJJhzZx6JBAo1r'
+      'finished good' => 'https://whatsapp.com/channel/0029VbBWBvVAjPXQ4iY7L90d',
+        'loader' => 'https://whatsapp.com/channel/0029VbBNaesDTkK3vu0W7Q36',
+        'delivery' => 'https://whatsapp.com/channel/0029Vb6dIgk2ZjCkr10i0k2Y',
+        'rm/pm' => 'https://whatsapp.com/channel/0029VbBJ3mTJkK7F3ZE05I3R',
+        'operator forklift' => 'https://whatsapp.com/channel/0029Vb6KMP6LtOj88kKdIa2e',
+        'forklift' => 'https://whatsapp.com/channel/0029Vb6KMP6LtOj88kKdIa2e',
+        'inspeksi' => 'https://whatsapp.com/channel/0029Vb6gjUx42DcbfzDpxe3w',
+        'produksi' => 'https://whatsapp.com/channel/0029VbB8fDNHrDZkPRpYKW1e',
+        'food & snackbar' => 'https://whatsapp.com/channel/0029Vb6SGxXBPzjaAh71oC1t',
+        'food and snackbar' => 'https://whatsapp.com/channel/0029Vb6SGxXBPzjaAh71oC1t',
+        'food' => 'https://whatsapp.com/channel/0029Vb6SGxXBPzjaAh71oC1t',
+        'snackbar' => 'https://whatsapp.com/channel/0029Vb6SGxXBPzjaAh71oC1t'
     ];
 
     // Normalize section name for matching

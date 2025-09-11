@@ -40,13 +40,13 @@ class ScheduleController extends Controller
         }
 
         if ($sectionId) {
-            $query->whereHas('manPowerRequest.subSection', function($q) use ($sectionId) {
+            $query->whereHas('manPowerRequest.subSection', function ($q) use ($sectionId) {
                 $q->where('section_id', $sectionId);
             });
         }
 
         if ($subSectionId) {
-            $query->whereHas('manPowerRequest', function($q) use ($subSectionId) {
+            $query->whereHas('manPowerRequest', function ($q) use ($subSectionId) {
                 $q->where('sub_section_id', $subSectionId);
             });
         }
@@ -309,137 +309,138 @@ class ScheduleController extends Controller
         return back()->with('success', 'Jadwal berhasil dihapus!');
     }
 
-public function toggleVisibilityGroup(Request $request)
-{
-    $request->validate([
-        'date' => 'required|date',
-        'section_id' => 'required|exists:sections,id',
-        'visibility' => 'required|in:public,private',
-        'send_wa_notification' => 'boolean'
-    ]);
-
-    try {
-        // Get section with exact name for notification
-        $section = Section::find($request->section_id);
-        $sectionName = $section ? $section->name : 'Unknown Section';
-        
-        DB::transaction(function () use ($request) {
-            // Update visibility for all schedules in the given date and section
-            Schedule::where('date', $request->date)
-                ->whereHas('manPowerRequest.subSection', function ($query) use ($request) {
-                    $query->where('section_id', $request->section_id);
-                })
-                ->update(['visibility' => $request->visibility]);
-        });
-
-        // Send WhatsApp notification if making public and requested
-        if ($request->visibility === 'public' && $request->send_wa_notification) {
-            try {
-                // Map sections to their respective WhatsApp channels with flexible matching
-                $channelMap = [
-                    'finished good' => 'https://whatsapp.com/channel/0029Vb5yFSoJP210x9EUlD35',
-                    'loader' => 'https://whatsapp.com/channel/0029VbBWUNfKGGG8PgMo1y1N',
-                    'delivery' => 'https://whatsapp.com/channel/0029VbAkjJLC1Fu3zYOXeZ1J',
-                    'rm/pm' => 'https://whatsapp.com/channel/0029VbCGRFPIyPtQvd2VfN0h',
-                    'operator forklift' => 'https://whatsapp.com/channel/0029Vb6iFOh59PwYZgjfSZ3A',
-                    'inspeksi' => 'https://whatsapp.com/channel/0029Vb6lyZkEFeXtq8FkMG2s',
-                    'produksi' => 'https://whatsapp.com/channel/0029VbBUb0o3WHTW6NF5oN10',
-                    'food & snackbar' => 'https://whatsapp.com/channel/0029Vb6XObFJJhzZx6JBAo1r',
-                    'food and snackbar' => 'https://whatsapp.com/channel/0029Vb6XObFJJhzZx6JBAo1r',
-                    'food' => 'https://whatsapp.com/channel/0029Vb6XObFJJhzZx6JBAo1r',
-                    'snackbar' => 'https://whatsapp.com/channel/0029Vb6XObFJJhzZx6JBAo1r'
-                ];
-
-                // Normalize section name for matching (lowercase, remove special chars)
-                $normalizedSectionName = strtolower(trim($sectionName));
-                $normalizedSectionName = preg_replace('/[^a-z0-9\s]/', '', $normalizedSectionName);
-                
-                $channelUrl = 'https://whatsapp.com/channel/0029Vb6yHUYId7nVlpjQ3r2R'; // Default
-                
-                // Find matching channel
-                foreach ($channelMap as $key => $url) {
-                    if (str_contains($normalizedSectionName, $key) || str_contains($key, $normalizedSectionName)) {
-                        $channelUrl = $url;
-                        break;
-                    }
-                }
-                
-                // Format tanggal dalam bahasa Indonesia
-                $indonesianMonths = [
-                    'January' => 'Januari',
-                    'February' => 'Februari',
-                    'March' => 'Maret',
-                    'April' => 'April',
-                    'May' => 'Mei',
-                    'June' => 'Juni',
-                    'July' => 'Juli',
-                    'August' => 'Agustus',
-                    'September' => 'September',
-                    'October' => 'Oktober',
-                    'November' => 'November',
-                    'December' => 'Desember'
-                ];
-
-                $indonesianDays = [
-                    'Sunday' => 'Minggu',
-                    'Monday' => 'Senin',
-                    'Tuesday' => 'Selasa',
-                    'Wednesday' => 'Rabu',
-                    'Thursday' => 'Kamis',
-                    'Friday' => 'Jumat',
-                    'Saturday' => 'Sabtu'
-                ];
-
-                $date = Carbon::parse($request->date);
-                $englishDay = $date->format('l');
-                $englishMonth = $date->format('F');
-                
-                $indonesianDay = $indonesianDays[$englishDay] ?? $englishDay;
-                $indonesianMonth = $indonesianMonths[$englishMonth] ?? $englishMonth;
-                
-                $formattedDate = $indonesianDay . ', ' . $date->format('d') . ' ' . $indonesianMonth . ' ' . $date->format('Y');
-
-                $response = Http::timeout(15)
-                    ->withHeaders([
-                        'Content-Type' => 'application/json',
-                    ])
-                    ->post('https://sendwa.xyz/send-text-channel', [
-                        'api_key' => 'v3wrR6SeHcgCoGIchMQqMC0gEFZ3QZ',
-                        'sender' => '6281133318167',
-                        'url' => $channelUrl,
-                        'message' => "Jadwal untuk " . $formattedDate . 
-                                    " di bagian {$sectionName} sudah dipublikasikan. Silakan cek aplikasi untuk detail lengkap.",
-                        'footer' => 'otsuka.asystem.co.id'
-                    ]);
-                
-                Log::info('WhatsApp channel notification sent via toggle', [
-                    'date' => $request->date,
-                    'section_id' => $request->section_id,
-                    'section_name' => $sectionName,
-                    'channel_url' => $channelUrl,
-                    'indonesian_date' => $formattedDate,
-                    'response' => $response->json()
-                ]);
-            } catch (\Exception $e) {
-                Log::error('Failed to send WhatsApp channel notification: ' . $e->getMessage());
-                // Don't throw error, just log it
-            }
-        }
-
-        // Log the visibility change with section name for debugging
-        Log::info('Visibility toggled for group', [
-            'date' => $request->date,
-            'section_id' => $request->section_id,
-            'section_name' => $sectionName,
-            'visibility' => $request->visibility,
-            'send_wa_notification' => $request->send_wa_notification ?? false
+    public function toggleVisibilityGroup(Request $request)
+    {
+        $request->validate([
+            'date' => 'required|date',
+            'section_id' => 'required|exists:sections,id',
+            'visibility' => 'required|in:public,private',
+            'send_wa_notification' => 'boolean'
         ]);
 
-        return back()->with('success', 'Visibility berhasil diubah!');
-    } catch (\Exception $e) {
-        Log::error('Error toggling visibility: ' . $e->getMessage());
-        return back()->withErrors(['visibility_error' => 'Gagal mengubah visibility.']);
+        try {
+            // Get section with exact name for notification
+            $section = Section::find($request->section_id);
+            $sectionName = $section ? $section->name : 'Unknown Section';
+
+            DB::transaction(function () use ($request) {
+                // Update visibility for all schedules in the given date and section
+                Schedule::where('date', $request->date)
+                    ->whereHas('manPowerRequest.subSection', function ($query) use ($request) {
+                        $query->where('section_id', $request->section_id);
+                    })
+                    ->update(['visibility' => $request->visibility]);
+            });
+
+            // Send WhatsApp notification if making public and requested
+            if ($request->visibility === 'public' && $request->send_wa_notification) {
+                try {
+                    // Map sections to their respective WhatsApp channels with flexible matching
+                    $channelMap = [
+                        'finished good' => 'https://whatsapp.com/channel/0029VbBWBvVAjPXQ4iY7L90d',
+                        'loader' => 'https://whatsapp.com/channel/0029VbBNaesDTkK3vu0W7Q36',
+                        'delivery' => 'https://whatsapp.com/channel/0029Vb6dIgk2ZjCkr10i0k2Y',
+                        'rm/pm' => 'https://whatsapp.com/channel/0029VbBJ3mTJkK7F3ZE05I3R',
+                        'operator forklift' => 'https://whatsapp.com/channel/0029Vb6KMP6LtOj88kKdIa2e',
+                        'forklift' => 'https://whatsapp.com/channel/0029Vb6KMP6LtOj88kKdIa2e',
+                        'inspeksi' => 'https://whatsapp.com/channel/0029Vb6gjUx42DcbfzDpxe3w',
+                        'produksi' => 'https://whatsapp.com/channel/0029VbB8fDNHrDZkPRpYKW1e',
+                        'food & snackbar' => 'https://whatsapp.com/channel/0029Vb6SGxXBPzjaAh71oC1t',
+                        'food and snackbar' => 'https://whatsapp.com/channel/0029Vb6SGxXBPzjaAh71oC1t',
+                        'food' => 'https://whatsapp.com/channel/0029Vb6SGxXBPzjaAh71oC1t',
+                        'snackbar' => 'https://whatsapp.com/channel/0029Vb6SGxXBPzjaAh71oC1t'
+                    ];
+
+                    // Normalize section name for matching (lowercase, remove special chars)
+                    $normalizedSectionName = strtolower(trim($sectionName));
+                    $normalizedSectionName = preg_replace('/[^a-z0-9\s]/', '', $normalizedSectionName);
+
+                    $channelUrl = 'https://whatsapp.com/channel/0029Vb6yHUYId7nVlpjQ3r2R'; // Default
+
+                    // Find matching channel
+                    foreach ($channelMap as $key => $url) {
+                        if (str_contains($normalizedSectionName, $key) || str_contains($key, $normalizedSectionName)) {
+                            $channelUrl = $url;
+                            break;
+                        }
+                    }
+
+                    // Format tanggal dalam bahasa Indonesia
+                    $indonesianMonths = [
+                        'January' => 'Januari',
+                        'February' => 'Februari',
+                        'March' => 'Maret',
+                        'April' => 'April',
+                        'May' => 'Mei',
+                        'June' => 'Juni',
+                        'July' => 'Juli',
+                        'August' => 'Agustus',
+                        'September' => 'September',
+                        'October' => 'Oktober',
+                        'November' => 'November',
+                        'December' => 'Desember'
+                    ];
+
+                    $indonesianDays = [
+                        'Sunday' => 'Minggu',
+                        'Monday' => 'Senin',
+                        'Tuesday' => 'Selasa',
+                        'Wednesday' => 'Rabu',
+                        'Thursday' => 'Kamis',
+                        'Friday' => 'Jumat',
+                        'Saturday' => 'Sabtu'
+                    ];
+
+                    $date = Carbon::parse($request->date);
+                    $englishDay = $date->format('l');
+                    $englishMonth = $date->format('F');
+
+                    $indonesianDay = $indonesianDays[$englishDay] ?? $englishDay;
+                    $indonesianMonth = $indonesianMonths[$englishMonth] ?? $englishMonth;
+
+                    $formattedDate = $indonesianDay . ', ' . $date->format('d') . ' ' . $indonesianMonth . ' ' . $date->format('Y');
+
+                    $response = Http::timeout(15)
+                        ->withHeaders([
+                            'Content-Type' => 'application/json',
+                        ])
+                        ->post('https://sendwa.xyz/send-text-channel', [
+                            'api_key' => 'v3wrR6SeHcgCoGIchMQqMC0gEFZ3QZ',
+                            'sender' => '6281133318167',
+                            'url' => $channelUrl,
+                            'message' => "Jadwal untuk " . $formattedDate .
+                                " di bagian {$sectionName} sudah dipublikasikan. Silakan cek aplikasi untuk detail lengkap.",
+                            'footer' => 'otsuka.asystem.co.id'
+                        ]);
+
+                    Log::info('WhatsApp channel notification sent via toggle', [
+                        'date' => $request->date,
+                        'section_id' => $request->section_id,
+                        'section_name' => $sectionName,
+                        'channel_url' => $channelUrl,
+                        'indonesian_date' => $formattedDate,
+                        'response' => $response->json()
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('Failed to send WhatsApp channel notification: ' . $e->getMessage());
+                    // Don't throw error, just log it
+                }
+            }
+
+            // Log the visibility change with section name for debugging
+            Log::info('Visibility toggled for group', [
+                'date' => $request->date,
+                'section_id' => $request->section_id,
+                'section_name' => $sectionName,
+                'visibility' => $request->visibility,
+                'send_wa_notification' => $request->send_wa_notification ?? false
+            ]);
+
+            return back()->with('success', 'Visibility berhasil diubah!');
+        } catch (\Exception $e) {
+            Log::error('Error toggling visibility: ' . $e->getMessage());
+            return back()->withErrors(['visibility_error' => 'Gagal mengubah visibility.']);
+        }
     }
-}
 
 }
