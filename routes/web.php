@@ -30,6 +30,7 @@ use App\Http\Controllers\HitunganController;
 use App\Http\Controllers\TesDeretController;
 use App\Http\Controllers\SpasialController;
 use App\Http\Controllers\TesNumerikController;
+use App\Http\Controllers\CronJobSettingController;
 
 // app/Http/Controllers/LicenseVerificationController.php
 /*
@@ -59,6 +60,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // POST route - handles form submission
     Route::post('/verify-license', [LicenseVerificationController::class, 'verify'])
         ->name('license.verify');
+
+     Route::get('/cronjob-settings', [CronJobSettingController::class, 'index'])
+        ->name('cronjob-settings.index');
+    Route::put('/cronjob-settings/{cronJobSetting}', [CronJobSettingController::class, 'update'])
+        ->name('cronjob-settings.update');
+    Route::post('/cronjob-settings/update-multiple', [CronJobSettingController::class, 'updateMultiple'])
+        ->name('cronjob-settings.update-multiple');
 });
 
 // API-style endpoint
