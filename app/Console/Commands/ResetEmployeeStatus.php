@@ -25,6 +25,7 @@ class ResetEmployeeStatus extends Command
         }
 
         $updatedCount = Employee::where('status', '!=', 'available')
+            ->where('status', '!=', 'deactivated') // Exclude deactivated employees
             ->update(['status' => 'available']);
             
         $this->info("Successfully reset {$updatedCount} employee statuses to 'available'");

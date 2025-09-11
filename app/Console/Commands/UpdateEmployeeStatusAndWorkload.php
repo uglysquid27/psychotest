@@ -31,8 +31,9 @@ class UpdateEmployeeStatusAndWorkload extends Command
         try {
             DB::beginTransaction();
 
-            // Update all employee statuses to 'available'
+            // Update employee statuses to 'available' but exclude deactivated employees
             $updatedCount = Employee::where('status', '!=', 'available')
+                    ->where('status', '!=', 'deactivated') // Exclude deactivated employees
                     ->update(['status' => 'available']);
 
             $this->info("Employee statuses updated to available: {$updatedCount} employees affected");
@@ -41,11 +42,16 @@ class UpdateEmployeeStatusAndWorkload extends Command
             $currentWeekStart = Carbon::now()->startOfWeek();
             $currentWeekEnd = Carbon::now()->endOfWeek();
 
-            // Get all employees with valid NIK
-            $employees = Employee::whereNotNull('nik')->get();
+            // Get all employees with valid NIK and exclude deactivated employees
+            $employees = Employee::whereNotNull('nik')
+                ->where('status', '!=', 'deactivated') // Exclude deactivated employees
+                ->get();
             
             $employeesWithNullNik = Employee::whereNull('nik')->count();
+            $deactivatedEmployees = Employee::where('status', 'deactivated')->count();
+            
             $this->info("Skipping {$employeesWithNullNik} employees with null NIK");
+            $this->info("Skipping {$deactivatedEmployees} deactivated employees");
             $this->info("Processing {$employees->count()} employees for workload calculation");
 
             $processedCount = 0;
@@ -145,6 +151,7 @@ class UpdateEmployeeStatusAndWorkload extends Command
         // Find employees that are missing from workload table and create records for them
         $existingWorkloadEmployeeIds = Workload::pluck('employee_id')->toArray();
         $missingEmployees = Employee::whereNotNull('nik')
+            ->where('status', '!=', 'deactivated') // Exclude deactivated employees
             ->whereNotIn('id', $existingWorkloadEmployeeIds)
             ->get();
 
