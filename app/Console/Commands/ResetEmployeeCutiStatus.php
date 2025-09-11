@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use App\Models\Employee;
 use App\Models\Permit;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class ResetEmployeeCutiStatus extends Command
 {
@@ -14,6 +15,17 @@ class ResetEmployeeCutiStatus extends Command
 
     public function handle()
     {
+        // Check if this cron job is enabled
+        $cronJobSetting = DB::table('cron_job_settings')
+            ->where('command', $this->signature)
+            ->first();
+
+        if (!$cronJobSetting || !$cronJobSetting->is_enabled) {
+            $this->info('Cron job is disabled. Skipping execution.');
+            \Log::info('Cron job employees:reset-cuti-status is disabled. Skipping execution.');
+            return 0;
+        }
+
         $today = Carbon::today();
         $updatedCount = 0;
 

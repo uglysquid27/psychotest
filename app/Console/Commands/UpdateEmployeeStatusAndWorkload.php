@@ -17,6 +17,17 @@ class UpdateEmployeeStatusAndWorkload extends Command
 
     public function handle()
     {
+        // Check if this cron job is enabled
+        $cronJobSetting = DB::table('cron_job_settings')
+            ->where('command', $this->signature)
+            ->first();
+
+        if (!$cronJobSetting || !$cronJobSetting->is_enabled) {
+            $this->info('Cron job is disabled. Skipping execution.');
+            Log::info('Cron job employees:update-status-workload is disabled. Skipping execution.');
+            return 0;
+        }
+
         try {
             DB::beginTransaction();
 
