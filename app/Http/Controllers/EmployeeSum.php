@@ -996,7 +996,8 @@ class EmployeeSum extends Controller
         'employee_ids.*' => 'exists:employees,id',
         'deactivation_reason' => 'required|string|max:255',
         'deactivation_notes' => 'nullable|string',
-        'deactivated_at' => 'required|date|before_or_equal:today' // Add validation
+       'deactivated_at' => 'required|date'
+
     ]);
 
     try {

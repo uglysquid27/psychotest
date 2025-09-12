@@ -90,7 +90,7 @@ export default function UpdateProfileInformationForm({ employee, className }) {
                 </p>
                 {isAddressLocked && (
                     <div className="mt-2 p-3 bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded-md">
-                        <p className="text-sm">Data karyawan telah terkunci dan tidak dapat diubah karena alamat (kelurahan & kecamatan) sudah terisi.</p>
+                        <p className="text-sm">Data karyawan telah terkunci dan tidak dapat diubah karena data diri sudah terisi.</p>
                     </div>
                 )}
             </header>

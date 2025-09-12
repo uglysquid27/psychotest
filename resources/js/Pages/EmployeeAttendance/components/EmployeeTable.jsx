@@ -145,12 +145,12 @@ const EmployeeTable = ({
               );
             })
           )}
-          <tr className="bg-gray-100 dark:bg-gray-700 font-semibold text-gray-700 dark:text-gray-300">
+          {/* <tr className="bg-gray-100 dark:bg-gray-700 font-semibold text-gray-700 dark:text-gray-300">
             <td colSpan={isUser ? 6 : 7} className="px-4 py-3 text-right">Total Penugasan:</td>
             <td className="px-4 py-3 text-center">{totalWorkCount}</td>
             <td className="px-4 py-3 text-center">{totalWeeklyWorkCount}</td>
             <td colSpan={isUser ? 4 : 5} className="px-4 py-3 text-center"></td>
-          </tr>
+          </tr> */}
         </tbody>
       </table>
     </div>

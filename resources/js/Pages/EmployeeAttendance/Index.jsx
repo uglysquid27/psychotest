@@ -7,7 +7,7 @@ import EmployeeTable from './components/EmployeeTable';
 import EmployeeCards from './components/EmployeeCards';
 import ResetStatusModal from './components/ResetStatusModal';
 import UpdateWorkloadModal from './components/UpdateWorkloadModal';
-import BulkDeactivateModal from './components/BulkDeactivateModal'; // Add this import
+import BulkDeactivateModal from './components/BulkDeactivateModal';
 
 export default function Index() {
   const { employees: paginationData, filters, uniqueStatuses, uniqueSections, uniqueSubSections, auth } = usePage().props;
@@ -23,8 +23,8 @@ export default function Index() {
   const [processing, setProcessing] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [showWorkloadModal, setShowWorkloadModal] = useState(false);
-  const [selectedEmployees, setSelectedEmployees] = useState([]); // Add this for bulk selection
-  const [showBulkDeactivateModal, setShowBulkDeactivateModal] = useState(false); // Add this for bulk deactivate modal
+  const [selectedEmployees, setSelectedEmployees] = useState([]);
+  const [showBulkDeactivateModal, setShowBulkDeactivateModal] = useState(false);
 
   // Apply filters
   const applyFilters = (newFilters) => {
@@ -131,6 +131,32 @@ export default function Index() {
   // Add this function to handle bulk deactivation
   const handleBulkDeactivate = () => {
     setShowBulkDeactivateModal(true);
+  };
+
+  // Function to generate pagination URLs with current filters
+  const getPaginationUrl = (url) => {
+    if (!url) return '#';
+    
+    const urlObj = new URL(url, window.location.origin);
+    
+    // Add current filter parameters to the pagination URL
+    if (filterStatus !== 'All') {
+      urlObj.searchParams.set('status', filterStatus);
+    }
+    
+    if (filterSection !== 'All') {
+      urlObj.searchParams.set('section', filterSection);
+    }
+    
+    if (filterSubSection !== 'All') {
+      urlObj.searchParams.set('sub_section', filterSubSection);
+    }
+    
+    if (searchTerm) {
+      urlObj.searchParams.set('search', searchTerm);
+    }
+    
+    return urlObj.pathname + urlObj.search;
   };
 
   return (
@@ -302,73 +328,60 @@ export default function Index() {
                 handleSectionChange={handleSectionChange}
                 handleSubSectionChange={handleSubSectionChange}
                 handleSearchChange={handleSearchChange}
-                isMobile
               />
 
-              <EmployeeFilters
-                filterStatus={filterStatus}
-                filterSection={filterSection}
-                filterSubSection={filterSubSection}
-                searchTerm={searchTerm}
-                uniqueStatuses={uniqueStatuses}
-                uniqueSections={uniqueSections}
-                uniqueSubSections={uniqueSubSections}
-                handleStatusChange={handleStatusChange}
-                handleSectionChange={handleSectionChange}
-                handleSubSectionChange={handleSubSectionChange}
-                handleSearchChange={handleSearchChange}
-              />
-
-              {/* Add select all checkbox */}
-              {!isUser && employees.length > 0 && (
-                <div className="mb-4 flex items-center">
-                  <input
-                    type="checkbox"
-                    id="select-all"
-                    checked={selectedEmployees.length === employees.length}
-                    onChange={selectAllEmployees}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="select-all" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                    Select all {employees.length} employees
-                  </label>
-                  {selectedEmployees.length > 0 && (
-                    <span className="ml-4 text-sm text-gray-700 dark:text-gray-300">
-                      {selectedEmployees.length} selected
-                    </span>
-                  )}
+              {/* <div className="mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
+                    <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300">Total Work Count</h3>
+                    <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{totalWorkCount}</p>
+                  </div>
+                  <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-700">
+                    <h3 className="text-sm font-medium text-green-800 dark:text-green-300">Weekly Work Count</h3>
+                    <p className="text-2xl font-bold text-green-900 dark:text-green-100">{totalWeeklyWorkCount}</p>
+                  </div>
                 </div>
-              )}
+              </div> */}
 
-              <EmployeeCards 
-                employees={employees} 
-                isUser={isUser} 
-                selectedEmployees={selectedEmployees}
-                toggleEmployeeSelection={toggleEmployeeSelection}
-              />
-              <EmployeeTable 
-                employees={employees} 
-                totalWorkCount={totalWorkCount} 
-                totalWeeklyWorkCount={totalWeeklyWorkCount} 
-                isUser={isUser}
-                selectedEmployees={selectedEmployees}
-                toggleEmployeeSelection={toggleEmployeeSelection}
-              />
+              <div className="flex flex-col gap-6">
+                <div className="hidden md:block">
+                  <EmployeeTable
+                    employees={employees}
+                    selectedEmployees={selectedEmployees}
+                    toggleEmployeeSelection={toggleEmployeeSelection}
+                    selectAllEmployees={selectAllEmployees}
+                    isUser={isUser}
+                  />
+                </div>
+                <div className="md:hidden">
+                  <EmployeeCards
+                    employees={employees}
+                    selectedEmployees={selectedEmployees}
+                    toggleEmployeeSelection={toggleEmployeeSelection}
+                    isUser={isUser}
+                  />
+                </div>
+              </div>
 
+              {/* Pagination */}
               {paginationLinks.length > 3 && (
-                <div className="flex flex-wrap justify-center sm:justify-end gap-2 mt-6">
-                  {paginationLinks.map((link, index) => (
-                    <Link
-                      key={index}
-                      href={link.url || '#'}
-                      className={`px-3 py-1 rounded-md text-sm ${link.active
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                        } ${!link.url && 'pointer-events-none opacity-50'}`}
-                      dangerouslySetInnerHTML={{ __html: link.label }}
-                      preserveScroll
-                    />
-                  ))}
+                <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="text-sm text-gray-700 dark:text-gray-300">
+                    Showing {paginationData.from} to {paginationData.to} of {paginationData.total} results
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {paginationLinks.map((link, index) => (
+                      <Link
+                        key={index}
+                        href={getPaginationUrl(link.url)}
+                        className={`px-3 py-1 rounded-md text-sm font-medium ${link.active
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                          }`}
+                        dangerouslySetInnerHTML={{ __html: link.label }}
+                      />
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

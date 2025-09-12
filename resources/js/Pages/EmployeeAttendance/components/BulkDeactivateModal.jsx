@@ -5,6 +5,7 @@ const BulkDeactivateModal = ({ show, onClose, employeeIds, employeeCount }) => {
   const { data, setData, post, processing, errors } = useForm({
     deactivation_reason: '',
     deactivation_notes: '',
+    deactivated_at: '', // ⬅️ tambahkan ini
     employee_ids: employeeIds
   });
 
@@ -31,6 +32,23 @@ const BulkDeactivateModal = ({ show, onClose, employeeIds, employeeCount }) => {
             <p className="text-sm text-yellow-700 dark:text-yellow-300">
               You are about to deactivate {employeeCount} employee(s). This action cannot be undone.
             </p>
+          </div>
+
+          {/* Field tanggal deaktifasi */}
+          <div className="mb-4">
+            <label className="block font-medium text-sm text-gray-700 dark:text-gray-300">
+              Deactivation Date *
+            </label>
+            <input
+              type="date"
+              value={data.deactivated_at}
+              onChange={(e) => setData('deactivated_at', e.target.value)}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300"
+              required
+            />
+            {errors.deactivated_at && (
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.deactivated_at}</p>
+            )}
           </div>
 
           <div className="mb-4">
