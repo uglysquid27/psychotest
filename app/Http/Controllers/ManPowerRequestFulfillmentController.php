@@ -1002,295 +1002,306 @@ public function store(Request $request, $id)
 /**
  * Show the form for revising a fulfilled request
  */
-public function revise($id)
-{
-    $request = ManPowerRequest::with([
-        'subSection.section',
-        'shift',
-        'fulfilledBy',
-        'schedules.employee.subSections.section'
-    ])->findOrFail($id);
+    public function revise($id)
+    {
+        $request = ManPowerRequest::with([
+            'subSection.section',
+            'shift',
+            'fulfilledBy',
+            'schedules.employee.subSections.section'
+        ])->findOrFail($id);
 
-    // Only allow revision for fulfilled requests
-    if ($request->status !== 'fulfilled') {
-        abort(403, 'Hanya permintaan yang sudah terpenuhi yang dapat direvisi.');
-    }
-
-    $startDate = Carbon::now()->subDays(6)->startOfDay();
-    $endDate = Carbon::now()->endOfDay();
-
-    $scheduledEmployeeIdsOnRequestDate = Schedule::where('date', $request->date)
-        ->where('man_power_request_id', '!=', $request->id)
-        ->pluck('employee_id')
-        ->toArray();
-
-    $currentScheduledIds = $request->schedules->pluck('employee_id')->toArray();
-
-    // Get eligible employees
-    $eligibleEmployees = Employee::where(function ($query) use ($currentScheduledIds) {
-        $query->where('status', 'available')
-            ->orWhereIn('id', $currentScheduledIds);
-    })
-        ->where('cuti', 'no')
-        ->whereNotIn('id', array_diff($scheduledEmployeeIdsOnRequestDate, $currentScheduledIds))
-        ->with([
-            'subSections' => function ($query) {
-                $query->with('section');
-            },
-            'workloads', 
-            'blindTests', 
-            'ratings'
-        ])
-        ->withCount([
-            'schedules' => function ($query) use ($startDate, $endDate) {
-                $query->whereBetween('date', [$startDate, $endDate]);
-            }
-        ])
-        ->with(['schedules.manPowerRequest.shift'])
-        ->get()
-        ->map(function ($employee) {
-            $totalWorkingHours = 0;
-            foreach ($employee->schedules as $schedule) {
-                if ($schedule->manPowerRequest && $schedule->manPowerRequest->shift) {
-                    $totalWorkingHours += $schedule->manPowerRequest->shift->hours;
-                }
-            }
-
-            $weeklyScheduleCount = $employee->schedules_count;
-
-            $rating = match ($weeklyScheduleCount) {
-                5 => 5,
-                4 => 4,
-                3 => 3,
-                2 => 2,
-                1 => 1,
-                default => 0,
-            };
-
-            $workingDayWeight = match ($rating) {
-                5 => 15,
-                4 => 45,
-                3 => 75,
-                2 => 105,
-                1 => 135,
-                0 => 165,
-                default => 0,
-            };
-
-            $workloadPoints = $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0;
-
-            $blindTestResult = $employee->blindTests->sortByDesc('test_date')->first()->result ?? 'Fail';
-            $blindTestPoints = $blindTestResult === 'Pass' ? 3 : 0;
-
-            $averageRating = $employee->ratings->avg('rating') ?? 0;
-
-            $totalScore = ($workloadPoints * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
-
-            $subSectionsData = $employee->subSections->map(function ($subSection) {
-                return [
-                    'id' => $subSection->id,
-                    'name' => $subSection->name,
-                    'section_id' => $subSection->section_id,
-                    'section' => $subSection->section ? [
-                        'id' => $subSection->section->id,
-                        'name' => $subSection->section->name,
-                    ] : null,
-                ];
-            })->toArray();
-            
-
-            return [
-                'id' => $employee->id,
-                'nik' => $employee->nik,
-                'name' => $employee->name,
-                'type' => $employee->type,
-                'status' => $employee->status,
-                'cuti' => $employee->cuti,
-                'photo' => $employee->photo,
-                'gender' => $employee->gender,
-                'created_at' => $employee->created_at,
-                'updated_at' => $employee->updated_at,
-                'schedules_count' => $employee->schedules_count,
-                'calculated_rating' => $rating,
-                'working_day_weight' => $workingDayWeight,
-                'total_assigned_hours' => $totalWorkingHours,
-                'sub_sections_data' => $subSectionsData,
-                'workload_points' => $workloadPoints,
-                'blind_test_points' => $blindTestPoints,
-                'average_rating' => $averageRating,
-                'total_score' => $totalScore,
-            ];
-        });
-
-    // Split employees by subsection
-    $splitEmployeesBySubSection = function ($employees, $request) {
-        $requestSubSectionId = $request->sub_section_id;
-        $requestSectionId = $request->subSection->section_id ?? null;
-
-        $same = collect();
-        $other = collect();
-
-        foreach ($employees as $employee) {
-            $subSections = collect($employee['sub_sections_data']);
-
-            $hasExactSubSection = $subSections->contains('id', $requestSubSectionId);
-
-            $hasSameSection = false;
-            if ($requestSectionId) {
-                $hasSameSection = $subSections->contains(function ($ss) use ($requestSectionId) {
-                    return isset($ss['section']['id']) && $ss['section']['id'] == $requestSectionId;
-                });
-            }
-
-            if ($hasExactSubSection || $hasSameSection) {
-                $same->push($employee);
-            } else {
-                $other->push($employee);
-            }
+        // Only allow revision for fulfilled requests
+        if ($request->status !== 'fulfilled') {
+            abort(403, 'Hanya permintaan yang sudah terpenuhi yang dapat direvisi.');
         }
 
-        return [$same, $other];
-    };
+        $startDate = Carbon::now()->subDays(6)->startOfDay();
+        $endDate = Carbon::now()->endOfDay();
 
-    $sortEmployees = function ($employees) {
-        return $employees->sortByDesc('total_score')
-            ->sortByDesc(fn($employee) => $employee['type'] === 'bulanan' ? 1 : 0)
-            ->sortBy('working_day_weight')
-            ->values();
-    };
+        $scheduledEmployeeIdsOnRequestDate = Schedule::where('date', $request->date)
+            ->where('man_power_request_id', '!=', $request->id)
+            ->pluck('employee_id')
+            ->toArray();
 
-    [$sameSubSectionEligible, $otherSubSectionEligible] = $splitEmployeesBySubSection($eligibleEmployees, $request);
+        $currentScheduledIds = $request->schedules->pluck('employee_id')->toArray();
 
-    $sortedSameSubSectionEmployees = $sortEmployees($sameSubSectionEligible);
-    $sortedOtherSubSectionEmployees = $sortEmployees($otherSubSectionEligible);
+        // Convert IDs to strings for consistent comparison
+        $currentScheduledIds = array_map('strval', $currentScheduledIds);
+        $scheduledEmployeeIdsOnRequestDate = array_map('strval', $scheduledEmployeeIdsOnRequestDate);
 
-    return Inertia::render('Fullfill/Revise', [
-        'request' => $request,
-        'sameSubSectionEmployees' => $sortedSameSubSectionEmployees,
-        'otherSubSectionEmployees' => $sortedOtherSubSectionEmployees,
-        'currentScheduledIds' => $currentScheduledIds,
-        'auth' => ['user' => auth()->user()]
-    ]);
-}
+        // Get eligible employees
+        $eligibleEmployees = Employee::where(function ($query) use ($currentScheduledIds) {
+            $query->where('status', 'available')
+                ->orWhereIn('id', $currentScheduledIds);
+        })
+            ->where('cuti', 'no')
+            ->whereNotIn('id', array_diff($scheduledEmployeeIdsOnRequestDate, $currentScheduledIds))
+            ->with([
+                'subSections' => function ($query) {
+                    $query->with('section');
+                },
+                'workloads', 
+                'blindTests', 
+                'ratings'
+            ])
+            ->withCount([
+                'schedules' => function ($query) use ($startDate, $endDate) {
+                    $query->whereBetween('date', [$startDate, $endDate]);
+                }
+            ])
+            ->with(['schedules.manPowerRequest.shift'])
+            ->get()
+            ->map(function ($employee) {
+                $totalWorkingHours = 0;
+                foreach ($employee->schedules as $schedule) {
+                    if ($schedule->manPowerRequest && $schedule->manPowerRequest->shift) {
+                        $totalWorkingHours += $schedule->manPowerRequest->shift->hours;
+                    }
+                }
 
-/**
- * Update the revised fulfillment
- */
-public function updateRevision(Request $request, $id)
-{
-    $validated = $request->validate([
-        'employee_ids'   => 'required|array',
-        'employee_ids.*' => 'exists:employees,id',
-        'fulfilled_by'   => 'required|exists:users,id',
-        'visibility'     => 'in:public,private'
-    ]);
+                $weeklyScheduleCount = $employee->schedules_count;
 
-    $req = ManPowerRequest::with(['schedules.employee', 'subSection'])->findOrFail($id);
+                $rating = match ($weeklyScheduleCount) {
+                    5 => 5,
+                    4 => 4,
+                    3 => 3,
+                    2 => 2,
+                    1 => 1,
+                    default => 0,
+                };
 
-    // Only allow revision for fulfilled requests
-    if ($req->status !== 'fulfilled') {
-        return back()->withErrors(['revision_error' => 'Hanya permintaan yang sudah terpenuhi yang dapat direvisi.']);
+                $workingDayWeight = match ($rating) {
+                    5 => 15,
+                    4 => 45,
+                    3 => 75,
+                    2 => 105,
+                    1 => 135,
+                    0 => 165,
+                    default => 0,
+                };
+
+                $workloadPoints = $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0;
+
+                $blindTestResult = $employee->blindTests->sortByDesc('test_date')->first()->result ?? 'Fail';
+                $blindTestPoints = $blindTestResult === 'Pass' ? 3 : 0;
+
+                $averageRating = $employee->ratings->avg('rating') ?? 0;
+
+                $totalScore = ($workloadPoints * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
+
+                $subSectionsData = $employee->subSections->map(function ($subSection) {
+                    return [
+                        'id' => (string) $subSection->id,
+                        'name' => $subSection->name,
+                        'section_id' => (string) $subSection->section_id,
+                        'section' => $subSection->section ? [
+                            'id' => (string) $subSection->section->id,
+                            'name' => $subSection->section->name,
+                        ] : null,
+                    ];
+                })->toArray();
+                
+
+                return [
+                    'id' => (string) $employee->id,
+                    'nik' => $employee->nik,
+                    'name' => $employee->name,
+                    'type' => $employee->type,
+                    'status' => $employee->status,
+                    'cuti' => $employee->cuti,
+                    'photo' => $employee->photo,
+                    'gender' => $employee->gender,
+                    'created_at' => $employee->created_at,
+                    'updated_at' => $employee->updated_at,
+                    'schedules_count' => $employee->schedules_count,
+                    'calculated_rating' => $rating,
+                    'working_day_weight' => $workingDayWeight,
+                    'total_assigned_hours' => $totalWorkingHours,
+                    'sub_sections_data' => $subSectionsData,
+                    'workload_points' => $workloadPoints,
+                    'blind_test_points' => $blindTestPoints,
+                    'average_rating' => $averageRating,
+                    'total_score' => $totalScore,
+                ];
+            });
+
+        // Split employees by subsection
+        $splitEmployeesBySubSection = function ($employees, $request) {
+            $requestSubSectionId = (string) $request->sub_section_id;
+            $requestSectionId = $request->subSection ? (string) $request->subSection->section_id : null;
+
+            $same = collect();
+            $other = collect();
+
+            foreach ($employees as $employee) {
+                $subSections = collect($employee['sub_sections_data']);
+
+                $hasExactSubSection = $subSections->contains('id', $requestSubSectionId);
+
+                $hasSameSection = false;
+                if ($requestSectionId) {
+                    $hasSameSection = $subSections->contains(function ($ss) use ($requestSectionId) {
+                        return isset($ss['section']['id']) && (string) $ss['section']['id'] === $requestSectionId;
+                    });
+                }
+
+                if ($hasExactSubSection || $hasSameSection) {
+                    $same->push($employee);
+                } else {
+                    $other->push($employee);
+                }
+            }
+
+            return [$same, $other];
+        };
+
+        $sortEmployees = function ($employees) {
+            return $employees->sortByDesc('total_score')
+                ->sortByDesc(fn($employee) => $employee['type'] === 'bulanan' ? 1 : 0)
+                ->sortBy('working_day_weight')
+                ->values();
+        };
+
+        [$sameSubSectionEligible, $otherSubSectionEligible] = $splitEmployeesBySubSection($eligibleEmployees, $request);
+
+        $sortedSameSubSectionEmployees = $sortEmployees($sameSubSectionEligible);
+        $sortedOtherSubSectionEmployees = $sortEmployees($otherSubSectionEligible);
+
+        // Convert current scheduled IDs to strings for frontend consistency
+        $currentScheduledIds = array_map('strval', $currentScheduledIds);
+
+        return Inertia::render('Fullfill/Revise', [
+            'request' => $request,
+            'sameSubSectionEmployees' => $sortedSameSubSectionEmployees,
+            'otherSubSectionEmployees' => $sortedOtherSubSectionEmployees,
+            'currentScheduledIds' => $currentScheduledIds,
+            'auth' => ['user' => auth()->user()]
+        ]);
     }
 
-    try {
-        DB::transaction(function () use ($validated, $req) {
-            $currentSchedules   = $req->schedules;
-            $currentEmployeeIds = $currentSchedules->pluck('employee_id')->toArray();
-            $newEmployeeIds     = $validated['employee_ids'];
-
-            // Hapus yang lama
-            $employeesToRemove = array_diff($currentEmployeeIds, $newEmployeeIds);
-            foreach ($employeesToRemove as $employeeId) {
-                $schedule = $currentSchedules->where('employee_id', $employeeId)->first();
-                if ($schedule) {
-                    $employee = $schedule->employee;
-                    
-                    // Only update status if not assigned elsewhere
-                    $otherAssignments = Schedule::where('employee_id', $employeeId)
-                        ->where('man_power_request_id', '!=', $req->id)
-                        ->where('date', $req->date)
-                        ->count();
-                        
-                    if ($otherAssignments === 0) {
-                        $employee->status = 'available';
-                        $employee->save();
-                    }
-
-                    $scheduleId = $schedule->id;
-                    $schedule->delete();
-
-                    Log::info("Employee {$employeeId} removed from schedule {$scheduleId} during revision");
-                } else {
-                    Log::warning("Employee {$employeeId} not found in current schedules for removal (request_id={$req->id})");
-                }
-            }
-
-            // Tambahkan yang baru
-            $employeesToAdd = array_diff($newEmployeeIds, $currentEmployeeIds);
-            foreach (array_values($employeesToAdd) as $index => $employeeId) {
-                $employee = Employee::where('id', $employeeId)
-                    ->where(function ($query) {
-                        $query->where('status', 'available')
-                              ->orWhere('status', 'assigned');
-                    })
-                    ->where('cuti', 'no')
-                    ->whereDoesntHave('schedules', function ($query) use ($req) {
-                        $query->where('date', $req->date)
-                              ->where('man_power_request_id', '!=', $req->id);
-                    })
-                    ->first();
-
-                if (!$employee) {
-                    throw new \Exception("Karyawan ID {$employeeId} tidak tersedia, sedang cuti, atau sudah dijadwalkan pada tanggal ini.");
-                }
-
-                $data = [
-                    'employee_id'          => $employeeId,
-                    'sub_section_id'       => $req->sub_section_id,
-                    'man_power_request_id' => $req->id,
-                    'date'                 => $req->date,
-                    'visibility'           => $validated['visibility'] ?? 'private',
-                ];
-
-                // Tambahkan line kalau subsection putway
-                if (strtolower($req->subSection->name) === 'putway') {
-                    $data['line'] = (($index % 2) + 1); // 1,2,1,2...
-                }
-
-                $schedule = Schedule::create($data);
-
-                $employee->status = 'assigned';
-                $employee->save();
-
-                Log::info("Employee {$employeeId} assigned to new schedule {$schedule->id} during revision");
-            }
-
-            // Update request status (still fulfilled but with revision)
-            $req->fulfilled_by = $validated['fulfilled_by'];
-            $req->save();
-
-            Log::info('Manpower request revised', [
-                'request_id'        => $req->id,
-                'fulfilled_by'      => $validated['fulfilled_by'],
-                'employees_added'   => $employeesToAdd,
-                'employees_removed' => $employeesToRemove,
-                'date'              => $req->date
-            ]);
-        });
-    } catch (\Exception $e) {
-        Log::error('Revision Error: ' . $e->getMessage(), [
-            'exception'  => $e,
-            'request_id' => $id,
-            'user_id'    => auth()->id()
+    /**
+     * Update the revised fulfillment
+     */
+    public function updateRevision(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'employee_ids'   => 'required|array',
+            'employee_ids.*' => 'exists:employees,id',
+            'fulfilled_by'   => 'required|exists:users,id',
+            'visibility'     => 'in:public,private'
         ]);
 
-        return back()->withErrors(['revision_error' => $e->getMessage()]);
-    }
+        $req = ManPowerRequest::with(['schedules.employee', 'subSection'])->findOrFail($id);
 
-    return redirect()
-        ->route('manpower-requests.index')
-        ->with('success', 'Revisi permintaan berhasil disimpan');
-}
+        // Only allow revision for fulfilled requests
+        if ($req->status !== 'fulfilled') {
+            return back()->withErrors(['revision_error' => 'Hanya permintaan yang sudah terpenuhi yang dapat direvisi.']);
+        }
+
+        try {
+            DB::transaction(function () use ($validated, $req) {
+                $currentSchedules   = $req->schedules;
+                $currentEmployeeIds = $currentSchedules->pluck('employee_id')->toArray();
+                $newEmployeeIds     = $validated['employee_ids'];
+
+                // Convert all IDs to strings for consistent comparison
+                $currentEmployeeIds = array_map('strval', $currentEmployeeIds);
+                $newEmployeeIds = array_map('strval', $newEmployeeIds);
+
+                // Hapus yang lama
+                $employeesToRemove = array_diff($currentEmployeeIds, $newEmployeeIds);
+                foreach ($employeesToRemove as $employeeId) {
+                    $schedule = $currentSchedules->where('employee_id', $employeeId)->first();
+                    if ($schedule) {
+                        $employee = $schedule->employee;
+                        
+                        // Only update status if not assigned elsewhere
+                        $otherAssignments = Schedule::where('employee_id', $employeeId)
+                            ->where('man_power_request_id', '!=', $req->id)
+                            ->where('date', $req->date)
+                            ->count();
+                            
+                        if ($otherAssignments === 0) {
+                            $employee->status = 'available';
+                            $employee->save();
+                        }
+
+                        $scheduleId = $schedule->id;
+                        $schedule->delete();
+
+                        Log::info("Employee {$employeeId} removed from schedule {$scheduleId} during revision");
+                    } else {
+                        Log::warning("Employee {$employeeId} not found in current schedules for removal (request_id={$req->id})");
+                    }
+                }
+
+                // Tambahkan yang baru
+                $employeesToAdd = array_diff($newEmployeeIds, $currentEmployeeIds);
+                foreach (array_values($employeesToAdd) as $index => $employeeId) {
+                    $employee = Employee::where('id', $employeeId)
+                        ->where(function ($query) {
+                            $query->where('status', 'available')
+                                  ->orWhere('status', 'assigned');
+                        })
+                        ->where('cuti', 'no')
+                        ->whereDoesntHave('schedules', function ($query) use ($req) {
+                            $query->where('date', $req->date)
+                                  ->where('man_power_request_id', '!=', $req->id);
+                        })
+                        ->first();
+
+                    if (!$employee) {
+                        throw new \Exception("Karyawan ID {$employeeId} tidak tersedia, sedang cuti, atau sudah dijadwalkan pada tanggal ini.");
+                    }
+
+                    $data = [
+                        'employee_id'          => $employeeId,
+                        'sub_section_id'       => $req->sub_section_id,
+                        'man_power_request_id' => $req->id,
+                        'date'                 => $req->date,
+                        'visibility'           => $validated['visibility'] ?? 'private',
+                    ];
+
+                    // Tambahkan line kalau subsection putway
+                    if (strtolower($req->subSection->name) === 'putway') {
+                        $data['line'] = (($index % 2) + 1); // 1,2,1,2...
+                    }
+
+                    $schedule = Schedule::create($data);
+
+                    $employee->status = 'assigned';
+                    $employee->save();
+
+                    Log::info("Employee {$employeeId} assigned to new schedule {$schedule->id} during revision");
+                }
+
+                // Update request status (still fulfilled but with revision)
+                $req->fulfilled_by = $validated['fulfilled_by'];
+                $req->save();
+
+                Log::info('Manpower request revised', [
+                    'request_id'        => $req->id,
+                    'fulfilled_by'      => $validated['fulfilled_by'],
+                    'employees_added'   => $employeesToAdd,
+                    'employees_removed' => $employeesToRemove,
+                    'date'              => $req->date
+                ]);
+            });
+        } catch (\Exception $e) {
+            Log::error('Revision Error: ' . $e->getMessage(), [
+                'exception'  => $e,
+                'request_id' => $id,
+                'user_id'    => auth()->id()
+            ]);
+
+            return back()->withErrors(['revision_error' => $e->getMessage()]);
+        }
+
+        return redirect()
+            ->route('manpower-requests.index')
+            ->with('success', 'Revisi permintaan berhasil disimpan');
+    }
 
     
 }

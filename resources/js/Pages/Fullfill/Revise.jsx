@@ -25,7 +25,6 @@ export default function Revise({
         return false;
     });
 
-
     useEffect(() => {
         if (typeof window !== 'undefined') {
             if (isDarkMode) {
@@ -36,11 +35,26 @@ export default function Revise({
         }
     }, [isDarkMode]);
 
+    // Safe access to request properties
+    const safeRequest = useMemo(() => ({
+        ...request,
+        sub_section: request?.sub_section || request?.subSection || {},
+        male_count: request?.male_count || 0,
+        female_count: request?.female_count || 0,
+        requested_amount: request?.requested_amount || 0,
+        sub_section_id: request?.sub_section_id || ''
+    }), [request]);
+
+    // Safe access to auth
+    const safeAuth = useMemo(() => ({
+        user: auth?.user || {}
+    }), [auth]);
+
     // Check if this is a putway subsection for line assignments
     const isPutwaySubsection = useMemo(() => {
-        return request?.sub_section?.name?.toLowerCase() === 'putway' ||
-            request?.subSection?.name?.toLowerCase() === 'putway';
-    }, [request]);
+        const subsectionName = safeRequest.sub_section?.name || '';
+        return subsectionName.toLowerCase() === 'putway';
+    }, [safeRequest]);
 
     const normalizeGender = (gender) => {
         if (!gender) {
@@ -79,18 +93,18 @@ export default function Revise({
             }
 
             // PRIORITIZE SAME SUBSECTION
-            const aIsSame = a.subSections.some(ss => String(ss.id) === String(request?.sub_section_id));
-            const bIsSame = b.subSections.some(ss => String(ss.id) === String(request?.sub_section_id));
+            const aIsSame = a.subSections.some(ss => String(ss.id) === String(safeRequest?.sub_section_id));
+            const bIsSame = b.subSections.some(ss => String(ss.id) === String(safeRequest?.sub_section_id));
 
             if (aIsSame !== bIsSame) return aIsSame ? -1 : 1;
 
             const aTotalScore = (a.workload_points || 0) + (a.blind_test_points || 0) + (a.average_rating || 0);
             const bTotalScore = (b.workload_points || 0) + (b.blind_test_points || 0) + (b.average_rating || 0);
 
-            const aGenderMatch = request?.male_count > 0 && a.gender === 'male' ? 0 :
-                request?.female_count > 0 && a.gender === 'female' ? 0 : 1;
-            const bGenderMatch = request?.male_count > 0 && b.gender === 'male' ? 0 :
-                request?.female_count > 0 && b.gender === 'female' ? 0 : 1;
+            const aGenderMatch = safeRequest?.male_count > 0 && a.gender === 'male' ? 0 :
+                safeRequest?.female_count > 0 && a.gender === 'female' ? 0 : 1;
+            const bGenderMatch = safeRequest?.male_count > 0 && b.gender === 'male' ? 0 :
+                safeRequest?.female_count > 0 && b.gender === 'female' ? 0 : 1;
             if (aGenderMatch !== bGenderMatch) return aGenderMatch - bGenderMatch;
 
             if (aTotalScore !== bTotalScore) {
@@ -108,7 +122,7 @@ export default function Revise({
         });
 
         return sorted;
-    }, [combinedEmployees, request?.sub_section_id, request?.male_count, request?.female_count]);
+    }, [combinedEmployees, safeRequest]);
 
 
     const getEmployeeDetails = useCallback((id) => {
@@ -118,12 +132,12 @@ export default function Revise({
     const initialSelectedIds = useMemo(() => {
         return (currentScheduledIds || []).filter(id =>
             allSortedEligibleEmployees.some(e => e.id === id)
-        ).slice(0, request?.requested_amount || 0);
-    }, [allSortedEligibleEmployees, request?.requested_amount, currentScheduledIds]);
+        ).slice(0, safeRequest?.requested_amount || 0);
+    }, [allSortedEligibleEmployees, safeRequest?.requested_amount, currentScheduledIds]);
 
     const { data, setData, put, processing, errors } = useForm({
         employee_ids: initialSelectedIds,
-        fulfilled_by: auth?.user?.id || '',
+        fulfilled_by: safeAuth?.user?.id || '',
         visibility: 'private'
     });
 
@@ -177,15 +191,15 @@ export default function Revise({
         e.preventDefault();
         setBackendError(null);
 
-        if (selectedIds.length !== (request?.requested_amount || 0)) {
-            setBackendError(`Jumlah karyawan yang dipilih harus ${request?.requested_amount}`);
+        if (selectedIds.length !== (safeRequest?.requested_amount || 0)) {
+            setBackendError(`Jumlah karyawan yang dipilih harus ${safeRequest?.requested_amount}`);
             return;
         }
 
-        put(route('manpower-requests.update-revision', request?.id), {
+        put(route('manpower-requests.update-revision', safeRequest?.id), {
             data: { // Wrap data in data property
                 employee_ids: selectedIds,
-                fulfilled_by: auth?.user?.id || '',
+                fulfilled_by: safeAuth?.user?.id || '',
                 visibility: data.visibility
             },
             onSuccess: () => {
@@ -233,20 +247,20 @@ export default function Revise({
     const maleCount = selectedEmployees.filter(e => e.gender === 'male').length;
     const femaleCount = selectedEmployees.filter(e => e.gender === 'female').length;
 
-    if (request.male_count > 0 && maleCount > request.male_count) {
-        alert(`Maksimum ${request.male_count} karyawan laki-laki diperbolehkan`);
+    if (safeRequest.male_count > 0 && maleCount > safeRequest.male_count) {
+        alert(`Maksimum ${safeRequest.male_count} karyawan laki-laki diperbolehkan`);
         return false;
     }
 
-    if (request.female_count > 0 && femaleCount > request.female_count) {
-        alert(`Maksimum ${request.female_count} karyawan perempuan diperbolehkan`);
+    if (safeRequest.female_count > 0 && femaleCount > safeRequest.female_count) {
+        alert(`Maksimum ${safeRequest.female_count} karyawan perempuan diperbolehkan`);
         return false;
     }
 
     // If validation passes, update the selection
     setSelectedIds(newSelectedIds);
     return true;
-}, [allSortedEligibleEmployees, request.male_count, request.female_count]);
+}, [allSortedEligibleEmployees, safeRequest.male_count, safeRequest.female_count]);
 
 const selectNewEmployee = useCallback((employeeId) => {
     if (changingEmployeeIndex !== null) {
@@ -276,7 +290,7 @@ const selectNewEmployee = useCallback((employeeId) => {
 
 return (
     <AuthenticatedLayout
-        user={auth?.user || {}}
+        user={safeAuth?.user || {}}
         header={<h2 className="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">Revisi Pemenuhan Permintaan</h2>}
     >
         <div className="py-6">
@@ -298,20 +312,20 @@ return (
                                 </div>
                             )}
 
-                            <RequestDetails request={request} auth={auth} />
+                            <RequestDetails request={safeRequest} auth={safeAuth} />
 
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
                                 <div className="lg:col-span-2">
                                     <EmployeeSelection
                                         selectedEmployees={selectedEmployees}
                                         selectedIds={selectedIds}
-                                        request={request}
+                                        request={safeRequest}
                                         isPutwaySubsection={isPutwaySubsection}
                                         onReplaceEmployee={handleReplaceEmployee}
                                         onRemoveEmployee={handleRemoveEmployee}
                                         onAddEmployee={handleAddEmployee}
                                         isRevision={true}
-                                        auth={auth}
+                                        auth={safeAuth}
                                         getEmployeeDetails={getEmployeeDetails}
                                         openChangeModal={handleReplaceEmployee}
                                         lineAssignments={{}}
@@ -321,7 +335,7 @@ return (
                                 <div className="space-y-6">
                                     <GenderStats
                                         genderStats={genderStats}
-                                        request={request}
+                                        request={safeRequest}
                                     />
 
                                     <ConfirmationSection
@@ -331,7 +345,7 @@ return (
                                         errors={errors}
                                         onSubmit={handleSubmit}
                                         isRevision={true}
-                                        auth={auth}
+                                        auth={safeAuth}
                                     />
                                 </div>
                             </div>
@@ -350,7 +364,7 @@ return (
                     setChangingEmployeeIndex(null);
                     setMultiSelectMode(false);
                 }}
-                request={request}
+                request={safeRequest}
                 allSortedEligibleEmployees={allSortedEligibleEmployees}
                 selectedIds={selectedIds}
                 selectNewEmployee={selectNewEmployee}
