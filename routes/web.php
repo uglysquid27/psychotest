@@ -243,6 +243,13 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
         ->name('manpower-requests.revision.edit');
     Route::post('/manpower-requests/check-dulicates', [ManPowerRequestController::class, 'checkDuplicates'])
         ->name('manpower-requests.check-duplicates');
+    Route::get('/manpower-requests/{id}/can-revise', [ManPowerRequestController::class, 'canRevise'])
+    ->name('manpower-requests.can-revise');
+    // Revision routes for fulfilled requests
+Route::get('/manpower-requests/{id}/revise', [ManPowerRequestFulfillmentController::class, 'revise'])
+    ->name('manpower-requests.revise');
+Route::put('/manpower-requests/{id}/update-revision', [ManPowerRequestFulfillmentController::class, 'updateRevision'])
+    ->name('manpower-requests.update-revision');
 
     // Additional dashboard routes
     Route::get('/dashboard/requests/{month}/{status}', [DashboardController::class, 'getManpowerRequestsByMonth'])

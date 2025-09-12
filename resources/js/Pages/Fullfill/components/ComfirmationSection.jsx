@@ -6,7 +6,7 @@ export default function ConfirmationSection({ auth, processing }) {
                 Anda akan mengirim permintaan ini sebagai: <span className="font-medium text-gray-900 dark:text-gray-100">{auth.user.name}</span>
             </p>
             <button
-                type="submit"
+                type="submit" // This will now submit the parent form
                 disabled={processing}
                 className="bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed px-6 py-3 rounded-lg text-white font-medium transition duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800"
             >

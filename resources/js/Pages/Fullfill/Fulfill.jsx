@@ -10,18 +10,18 @@ import EmployeeSelection from './components/EmployeeSelection';
 import ConfirmationSection from './components/ComfirmationSection';
 import EmployeeModal from './components/EmployeeModal';
 
-export default function Fulfill({ 
-    request, 
-    sameSubSectionEmployees, 
-    otherSubSectionEmployees, 
+export default function Fulfill({
+    request,
+    sameSubSectionEmployees,
+    otherSubSectionEmployees,
     currentScheduledIds = [],
     message,
-    auth 
+    auth
 }) {
     const [isDarkMode, setIsDarkMode] = useState(() => {
         if (typeof window !== 'undefined') {
-            return localStorage.getItem('darkMode') === 'true' || 
-                   (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            return localStorage.getItem('darkMode') === 'true' ||
+                (!localStorage.getItem('darkMode') && window.matchMedia('(prefers-color-scheme: dark)').matches);
         }
         return false;
     });
@@ -38,8 +38,8 @@ export default function Fulfill({
 
     // Check if this is a putway subsection for line assignments
     const isPutwaySubsection = useMemo(() => {
-        return request?.sub_section?.name?.toLowerCase() === 'putway' || 
-               request?.subSection?.name?.toLowerCase() === 'putway';
+        return request?.sub_section?.name?.toLowerCase() === 'putway' ||
+            request?.subSection?.name?.toLowerCase() === 'putway';
     }, [request]);
 
     const normalizeGender = (gender) => {
@@ -52,6 +52,23 @@ export default function Fulfill({
         }
         return normalized;
     };
+
+    const canReviseFulfilledRequest = useMemo(() => {
+        if (request.status === 'fulfilled') {
+            // Check if there are any pending schedules
+            const hasPendingSchedules = request.schedules?.some(schedule =>
+                schedule.status === 'pending'
+            );
+
+            // Or check if any employees have rejected
+            const hasRejectedEmployees = request.schedules?.some(schedule =>
+                schedule.employee?.status === 'rejected' || schedule.status === 'rejected'
+            );
+
+            return hasPendingSchedules || hasRejectedEmployees;
+        }
+        return false;
+    }, [request]);
 
     const combinedEmployees = useMemo(() => {
         return [
@@ -111,36 +128,36 @@ export default function Fulfill({
     }, [combinedEmployees, request.sub_section_id, request.male_count, request.female_count]);
 
     const initialSelectedIds = useMemo(() => {
-        const validCurrentIds = currentScheduledIds.filter(id => 
+        const validCurrentIds = currentScheduledIds.filter(id =>
             allSortedEligibleEmployees.some(e => e.id === id)
         );
-        
+
         if (validCurrentIds.length > 0) {
             if (validCurrentIds.length < request.requested_amount) {
                 const remainingCount = request.requested_amount - validCurrentIds.length;
-                
+
                 // PRIORITIZE SAME SUBSECTION FIRST
                 const remainingSameSubSection = allSortedEligibleEmployees
-                    .filter(e => 
-                        !validCurrentIds.includes(e.id) && 
+                    .filter(e =>
+                        !validCurrentIds.includes(e.id) &&
                         e.subSections.some(ss => ss.id === request.sub_section_id)
                     )
                     .slice(0, remainingCount)
                     .map(e => e.id);
-                
+
                 if (remainingSameSubSection.length >= remainingCount) {
                     return [...validCurrentIds, ...remainingSameSubSection];
                 }
-                
+
                 // If not enough same subsection, get from other subsections
                 const remainingOtherSubSection = allSortedEligibleEmployees
-                    .filter(e => 
-                        !validCurrentIds.includes(e.id) && 
+                    .filter(e =>
+                        !validCurrentIds.includes(e.id) &&
                         !e.subSections.some(ss => ss.id === request.sub_section_id)
                     )
                     .slice(0, remainingCount - remainingSameSubSection.length)
                     .map(e => e.id);
-                
+
                 return [...validCurrentIds, ...remainingSameSubSection, ...remainingOtherSubSection];
             }
             return validCurrentIds.slice(0, request.requested_amount);
@@ -154,14 +171,14 @@ export default function Fulfill({
         // Get employees from same subsection first
         const sameSubMales = allSortedEligibleEmployees
             .filter(e => e.gender === 'male' && e.subSections.some(ss => ss.id === request.sub_section_id));
-        
+
         const sameSubFemales = allSortedEligibleEmployees
             .filter(e => e.gender === 'female' && e.subSections.some(ss => ss.id === request.sub_section_id));
 
         // Then from other subsections
         const otherSubMales = allSortedEligibleEmployees
             .filter(e => e.gender === 'male' && !e.subSections.some(ss => ss.id === request.sub_section_id));
-        
+
         const otherSubFemales = allSortedEligibleEmployees
             .filter(e => e.gender === 'female' && !e.subSections.some(ss => ss.id === request.sub_section_id));
 
@@ -195,23 +212,23 @@ export default function Fulfill({
         // Fill any remaining slots with same subsection employees first
         if (selected.length < request.requested_amount) {
             const remainingSameSub = allSortedEligibleEmployees
-                .filter(e => 
-                    !selected.includes(e.id) && 
+                .filter(e =>
+                    !selected.includes(e.id) &&
                     e.subSections.some(ss => ss.id === request.sub_section_id)
                 )
                 .slice(0, request.requested_amount - selected.length);
-            
+
             selected.push(...remainingSameSub.map(e => e.id));
-            
+
             // If still not enough, get from other subsections
             if (selected.length < request.requested_amount) {
                 const remainingOtherSub = allSortedEligibleEmployees
-                    .filter(e => 
-                        !selected.includes(e.id) && 
+                    .filter(e =>
+                        !selected.includes(e.id) &&
                         !e.subSections.some(ss => ss.id === request.sub_section_id)
                     )
                     .slice(0, request.requested_amount - selected.length);
-                
+
                 selected.push(...remainingOtherSub.map(e => e.id));
             }
         }
@@ -275,13 +292,13 @@ export default function Fulfill({
     // Generate line assignments for putway subsection
     const lineAssignments = useMemo(() => {
         if (!isPutwaySubsection) return {};
-        
+
         const assignments = {};
         selectedIds.forEach((id, index) => {
             // Cycle between 1 and 2: index 0,2,4... = line 1, index 1,3,5... = line 2
             assignments[id] = ((index % 2) + 1).toString();
         });
-        
+
         return assignments;
     }, [isPutwaySubsection, selectedIds]);
 
@@ -291,36 +308,46 @@ export default function Fulfill({
         }
     }, [errors]);
 
-    const handleSubmit = useCallback((e) => {
-        e.preventDefault();
-        setBackendError(null);
+   // In the handleSubmit function
+const handleSubmit = useCallback((e) => {
+  e.preventDefault();
+  setBackendError(null);
 
-        const selectedEmployees = selectedIds.map(id =>
-            allSortedEligibleEmployees.find(e => e.id === id)
-        );
+  const selectedEmployees = selectedIds.map(id =>
+    allSortedEligibleEmployees.find(e => e.id === id)
+  );
 
-        const maleCount = selectedEmployees.filter(e => e?.gender === 'male').length;
-        const femaleCount = selectedEmployees.filter(e => e?.gender === 'female').length;
+  const maleCount = selectedEmployees.filter(e => e?.gender === 'male').length;
+  const femaleCount = selectedEmployees.filter(e => e?.gender === 'female').length;
 
-        if (request.male_count > 0 && maleCount < request.male_count) {
-            alert(`Diperlukan minimal ${request.male_count} karyawan laki-laki`);
-            return;
-        }
+  if (request.male_count > 0 && maleCount < request.male_count) {
+    alert(`Diperlukan minimal ${request.male_count} karyawan laki-laki`);
+    return;
+  }
 
-        if (request.female_count > 0 && femaleCount < request.female_count) {
-            alert(`Diperlukan minimal ${request.female_count} karyawan perempuan`);
-            return;
-        }
+  if (request.female_count > 0 && femaleCount < request.female_count) {
+    alert(`Diperlukan minimal ${request.female_count} karyawan perempuan`);
+    return;
+  }
 
-        post(route('manpower-requests.fulfill.store', request.id), {
-            onSuccess: () => router.visit(route('manpower-requests.index')),
-            onError: (errors) => {
-                if (errors.fulfillment_error) {
-                    setBackendError(errors.fulfillment_error);
-                }
-            }
-        });
-    }, [selectedIds, request, allSortedEligibleEmployees, post]);
+  // ✅ update form state dulu
+  setData({
+    employee_ids: selectedIds,
+    fulfilled_by: auth.user.id,
+    is_revision: request.status === 'fulfilled'
+  });
+
+  // ✅ lalu submit
+  post(route('manpower-requests.fulfill.store', request.id), {
+    onSuccess: () => router.visit(route('manpower-requests.index')),
+    onError: (errors) => {
+      if (errors.fulfillment_error) {
+        setBackendError(errors.fulfillment_error);
+      }
+    }
+  });
+}, [selectedIds, request, allSortedEligibleEmployees, post, auth.user.id]);
+
 
     const openChangeModal = useCallback((index) => {
         setChangingEmployeeIndex(index);
@@ -408,7 +435,7 @@ export default function Fulfill({
         setMultiSelectMode(prev => !prev);
     }, []);
 
-    if (request.status === 'fulfilled' && !request.schedules?.length) {
+    if (request.status === 'fulfilled' && !canReviseFulfilledRequest && !request.schedules?.length) {
         return (
             <AuthenticatedLayout
                 header={
@@ -436,6 +463,18 @@ export default function Fulfill({
         );
     }
 
+    {
+        request.status === 'fulfilled' && canReviseFulfilledRequest && (
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 shadow-md mb-6 p-4 rounded-lg border border-yellow-200 dark:border-yellow-700">
+                <h3 className="mb-3 font-bold text-lg text-yellow-800 dark:text-yellow-300">Revisi Penugasan</h3>
+                <p className="text-yellow-700 dark:text-yellow-300">
+                    Permintaan ini sudah terpenuhi tetapi memiliki karyawan yang pending atau menolak.
+                    Anda dapat merevisi penugasan karyawan.
+                </p>
+            </div>
+        )
+    }
+
     const totalSameSubSection = sameSubSectionEmployees.length;
 
     return (
@@ -449,7 +488,7 @@ export default function Fulfill({
         >
             <div className="mx-auto mt-6 max-w-4xl">
                 <RequestDetails request={request} auth={auth} />
-                
+
                 {request.status === 'fulfilled' && (
                     <div className="bg-blue-50 dark:bg-blue-900/20 shadow-md mb-6 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
                         <h3 className="mb-3 font-bold text-lg text-blue-800 dark:text-blue-300">Informasi Jadwal Saat Ini</h3>
@@ -508,10 +547,10 @@ export default function Fulfill({
                     </div>
                 )}
 
-                <GenderStats 
-                    genderStats={genderStats} 
-                    request={request} 
-                    selectedIds={selectedIds} 
+                <GenderStats
+                    genderStats={genderStats}
+                    request={request}
+                    selectedIds={selectedIds}
                     allSortedEligibleEmployees={allSortedEligibleEmployees}
                 />
 
@@ -529,7 +568,7 @@ export default function Fulfill({
                 )}
 
                 <form onSubmit={handleSubmit}>
-                    <EmployeeSelection 
+                    <EmployeeSelection
                         request={request}
                         selectedIds={selectedIds}
                         getEmployeeDetails={getEmployeeDetails}
@@ -540,13 +579,13 @@ export default function Fulfill({
                         lineAssignments={lineAssignments}
                     />
 
-                    <ConfirmationSection 
+                    <ConfirmationSection
                         auth={auth}
                         processing={processing}
                     />
                 </form>
 
-                <EmployeeModal 
+                <EmployeeModal
                     showModal={showModal}
                     setShowModal={setShowModal}
                     request={request}

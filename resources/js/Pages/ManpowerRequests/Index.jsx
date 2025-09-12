@@ -627,9 +627,10 @@ export default function Index({ sections: initialSections, auth }) {
                     initialOpen
                     quickFulfill={quickFulfill}
                     processingRequests={processingRequests}
-                    bulkMode={true} // Always show checkboxes in details modal
+                    bulkMode={true}
                     selectedRequests={selectedRequests}
                     handleRequestSelect={handleRequestSelect}
+                    canRevise={true} // Add this prop
                   />
                 </div>
               </div>

@@ -20,7 +20,7 @@ export default function RequestItem({ request, formatDate, getStatusClasses, onD
     destroy(route('manpower-requests.destroy', request.id), {
       preserveScroll: true,
       onSuccess: () => {
-        
+
         // Call the parent's onDelete to update local state
         if (onDelete) {
           onDelete(request.id);
@@ -62,6 +62,7 @@ export default function RequestItem({ request, formatDate, getStatusClasses, onD
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
             </Link>
+            
 
             {/* Fulfill Button (Admin only) */}
             {request.status === 'pending' && !isUser && (
@@ -75,6 +76,16 @@ export default function RequestItem({ request, formatDate, getStatusClasses, onD
                 </svg>
               </Link>
             )}
+
+            {/* // Add this button to RequestItem.jsx for fulfilled requests that can be revised */}
+{request.status === 'fulfilled' && (
+    <Link
+        href={route('manpower-requests.revise', request.id)}
+        className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 ml-2"
+    >
+        Revisi
+    </Link>
+)}
 
             {/* Delete Button */}
             <button

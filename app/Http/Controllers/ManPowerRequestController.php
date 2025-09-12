@@ -1020,4 +1020,24 @@ private function getEligibleEmployeesForRequest($request)
         
         return array_unique($assignedIds);
     }
+
+    // Add this method to ManPowerRequestController.php
+public function canRevise($id)
+{
+    $request = ManPowerRequest::with('schedules')->findOrFail($id);
+    
+    if ($request->status !== 'fulfilled') {
+        return response()->json(['can_revise' => false]);
+    }
+    
+    // Check if there are any pending schedules or rejected employees
+    $hasPendingSchedules = $request->schedules->contains('status', 'pending');
+    $hasRejectedEmployees = $request->schedules->contains(function ($schedule) {
+        return $schedule->employee && $schedule->employee->status === 'rejected';
+    });
+    
+    return response()->json([
+        'can_revise' => $hasPendingSchedules || $hasRejectedEmployees
+    ]);
+}
 }
