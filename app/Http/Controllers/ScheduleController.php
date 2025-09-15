@@ -337,18 +337,18 @@ class ScheduleController extends Controller
                 try {
                     // Map sections to their respective WhatsApp channels with flexible matching
                     $channelMap = [
-                        'finished good' => 'https://whatsapp.com/channel/0029VbBWBvVAjPXQ4iY7L90d',
-                        'loader' => 'https://whatsapp.com/channel/0029VbBNaesDTkK3vu0W7Q36',
-                        'delivery' => 'https://whatsapp.com/channel/0029Vb6dIgk2ZjCkr10i0k2Y',
-                        'rm/pm' => 'https://whatsapp.com/channel/0029VbBJ3mTJkK7F3ZE05I3R',
-                        'operator forklift' => 'https://whatsapp.com/channel/0029Vb6KMP6LtOj88kKdIa2e',
-                        'forklift' => 'https://whatsapp.com/channel/0029Vb6KMP6LtOj88kKdIa2e',
-                        'inspeksi' => 'https://whatsapp.com/channel/0029Vb6gjUx42DcbfzDpxe3w',
-                        'produksi' => 'https://whatsapp.com/channel/0029VbB8fDNHrDZkPRpYKW1e',
-                        'food & snackbar' => 'https://whatsapp.com/channel/0029Vb6SGxXBPzjaAh71oC1t',
-                        'food and snackbar' => 'https://whatsapp.com/channel/0029Vb6SGxXBPzjaAh71oC1t',
-                        'food' => 'https://whatsapp.com/channel/0029Vb6SGxXBPzjaAh71oC1t',
-                        'snackbar' => 'https://whatsapp.com/channel/0029Vb6SGxXBPzjaAh71oC1t'
+                        // 'finished good' => 'https://whatsapp.com/channel/0029VbBWBvVAjPXQ4iY7L90d',
+                        // 'loader' => 'https://whatsapp.com/channel/0029VbBNaesDTkK3vu0W7Q36',
+                        // 'delivery' => 'https://whatsapp.com/channel/0029Vb6dIgk2ZjCkr10i0k2Y',
+                        // 'rm/pm' => 'https://whatsapp.com/channel/0029VbBJ3mTJkK7F3ZE05I3R',
+                        // 'operator forklift' => 'https://whatsapp.com/channel/0029Vb6KMP6LtOj88kKdIa2e',
+                        // 'forklift' => 'https://whatsapp.com/channel/0029Vb6KMP6LtOj88kKdIa2e',
+                        // 'inspeksi' => 'https://whatsapp.com/channel/0029Vb6gjUx42DcbfzDpxe3w',
+                        // 'produksi' => 'https://whatsapp.com/channel/0029VbB8fDNHrDZkPRpYKW1e',
+                        // 'food & snackbar' => 'https://whatsapp.com/channel/0029Vb6SGxXBPzjaAh71oC1t',
+                        // 'food and snackbar' => 'https://whatsapp.com/channel/0029Vb6SGxXBPzjaAh71oC1t',
+                        // 'food' => 'https://whatsapp.com/channel/0029Vb6SGxXBPzjaAh71oC1t',
+                        // 'snackbar' => 'https://whatsapp.com/channel/0029Vb6SGxXBPzjaAh71oC1t'
                     ];
 
                     // Normalize section name for matching (lowercase, remove special chars)

@@ -209,7 +209,6 @@ class EmployeeSum extends Controller
             DB::transaction(function () {
                 Employee::query()->update([
                     'status' => 'available',
-                    'cuti' => 'no',
                 ]);
             });
 
