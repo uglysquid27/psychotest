@@ -250,6 +250,9 @@ Route::get('/manpower-requests/{id}/revise', [ManPowerRequestFulfillmentControll
 Route::put('/manpower-requests/{id}/update-revision', [ManPowerRequestFulfillmentController::class, 'updateRevision'])
     ->name('manpower-requests.update-revision');
 
+    Route::post('/manpower-requests/bulk-fulfill', [ManPowerRequestController::class, 'bulkFulfill'])
+    ->name('manpower-requests.bulk-fulfill');
+
     // Additional dashboard routes
     Route::get('/dashboard/requests/{month}/{status}', [DashboardController::class, 'getManpowerRequestsByMonth'])
         ->name('dashboard.requests.byMonth');
