@@ -9,7 +9,7 @@ dayjs.extend(localizedFormat);
 dayjs.locale('id');
 
 const LunchCouponsIndex = () => {
-    const { schedules, filters, totalCoupons, lunchCoupons = {} } = usePage().props;
+    const { schedules, filters, totalCoupons, lunchCoupons = {}, links } = usePage().props;
     const [date, setDate] = useState(filters.date || dayjs().format('YYYY-MM-DD'));
     const [isLoading, setIsLoading] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -81,6 +81,18 @@ const LunchCouponsIndex = () => {
         }
     };
 
+    // Pagination handler
+    const handlePagination = (url) => {
+        if (url) {
+            setIsLoading(true);
+            router.visit(url, {
+                preserveState: true,
+                preserveScroll: true,
+                onFinish: () => setIsLoading(false)
+            });
+        }
+    };
+
     return (
         <AuthenticatedLayout
             header={
@@ -146,14 +158,14 @@ const LunchCouponsIndex = () => {
                     </div>
                 )}
 
-                {schedules.length === 0 ? (
+                {schedules.data && schedules.data.length === 0 ? (
                     <div className="rounded-md border-l-4 border-blue-500 bg-blue-100 p-4 text-blue-700 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200" role="alert">
                         <p className="font-bold">Information:</p>
                         <p>No scheduled employees found for the selected date.</p>
                     </div>
                 ) : (
                     <div className="space-y-6">
-                        {schedules.map((dateGroup) => (
+                        {(schedules.data ? schedules.data : schedules).map((dateGroup) => (
                             <div key={dateGroup.date} className="rounded-lg bg-white p-4 shadow-md dark:bg-gray-800">
                                 <div className="mb-4 flex items-center justify-between border-b border-gray-200 pb-2 dark:border-gray-700">
                                     <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">
@@ -183,9 +195,6 @@ const LunchCouponsIndex = () => {
                                                 <th scope="col" className="hidden px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300 md:table-cell sm:px-6">
                                                     Sub-Section
                                                 </th>
-                                                <th scope="col" className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300 sm:px-6">
-                                                    Coupon Status
-                                                </th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
@@ -210,17 +219,6 @@ const LunchCouponsIndex = () => {
                                                     </td>
                                                     <td className="hidden whitespace-nowrap px-3 py-4 text-sm text-gray-700 dark:text-gray-300 md:table-cell sm:px-6">
                                                         {schedule.sub_section?.name || 'N/A'}
-                                                    </td>
-                                                    <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-700 dark:text-gray-300 sm:px-6">
-                                                        {lunchCoupons[schedule.id] ? (
-                                                            <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900 dark:text-green-200">
-                                                                {lunchCoupons[schedule.id].status === 'claimed' ? 'Claimed' : 'Saved'}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-                                                                Pending
-                                                            </span>
-                                                        )}
                                                     </td>
                                                 </tr>
                                             ))}
@@ -247,6 +245,33 @@ const LunchCouponsIndex = () => {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                )}
+
+                {/* Pagination Component */}
+                {schedules.data && links && (
+                    <div className="mt-6 flex items-center justify-between">
+                        <div className="text-sm text-gray-700 dark:text-gray-300">
+                            Showing <span className="font-medium">{schedules.from}</span> to <span className="font-medium">{schedules.to}</span> of{' '}
+                            <span className="font-medium">{schedules.total}</span> results
+                        </div>
+                        <div className="flex space-x-2">
+                            {links.map((link, index) => (
+                                <button
+                                    key={index}
+                                    onClick={() => handlePagination(link.url)}
+                                    disabled={!link.url || link.active}
+                                    className={`px-3 py-1 rounded-md text-sm font-medium ${
+                                        link.active
+                                            ? 'bg-indigo-600 text-white'
+                                            : link.url
+                                            ? 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+                                            : 'bg-gray-100 text-gray-400 cursor-not-allowed dark:bg-gray-800 dark:text-gray-600'
+                                    }`}
+                                    dangerouslySetInnerHTML={{ __html: link.label }}
+                                />
+                            ))}
+                        </div>
                     </div>
                 )}
             </div>

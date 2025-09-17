@@ -31,6 +31,7 @@ use App\Http\Controllers\TesDeretController;
 use App\Http\Controllers\SpasialController;
 use App\Http\Controllers\TesNumerikController;
 use App\Http\Controllers\CronJobSettingController;
+use App\Http\Controllers\ResignController;
 
 // app/Http/Controllers/LicenseVerificationController.php
 /*
@@ -127,13 +128,12 @@ Route::middleware(['auth:employee', 'prevent.back'])
         Route::get('/employee/famday/data', [EmployeeDashboardController::class, 'getFamdayData'])
             ->name('famday.data');
 
-
-        // Old same-shift route (you can remove this if not used anymore)
-        // Route::get('/schedule/{schedule}/same-shift', [EmployeeDashboardController::class, 'sameShiftEmployees'])
-        //     ->name('schedule.same-shift');
-    
         // Other routes
         Route::resource('permits', PermitController::class);
+        
+        // Resignation routes - ADDED
+        Route::resource('resign', ResignController::class);
+        
         Route::post('/operator-license', [LicenseVerificationController::class, 'store']);
         Route::get('/employees/{employee}/edit', [EmployeeProfileController::class, 'edit'])
             ->name('employees.edit');
@@ -143,7 +143,6 @@ Route::middleware(['auth:employee', 'prevent.back'])
             ->name('employees.password.update');
         Route::put('employees/{employee}/photo', [EmployeeProfileController::class, 'updatePhoto'])
             ->name('employees.photo.update');
-
     });
 
 // Admin routes with session protection

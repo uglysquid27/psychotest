@@ -320,6 +320,24 @@ export default function Edit({ employee }) {
                                 </div>
                             </div>
                         </div>
+                          <div className="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg rounded-3xl border border-gray-100 dark:border-gray-700">
+                            <div className="p-6 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-6">Pengajuan Resign</h3>
+                                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg">
+                                    <div className="max-w-3xl">
+                                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                                            Jika Anda ingin mengajukan resign, silakan kunjungi halaman pengajuan resign.
+                                        </p>
+                                        <Link
+                                            href={route('employee.resign.index')}
+                                            className="inline-flex items-center px-4 py-2 bg-red-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-red-700 focus:bg-red-700 active:bg-red-800 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition ease-in-out duration-150"
+                                        >
+                                            Ajukan Resign
+                                        </Link>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
