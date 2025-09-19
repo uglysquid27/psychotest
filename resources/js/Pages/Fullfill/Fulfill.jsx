@@ -462,31 +462,33 @@ export default function Fulfill({
     setBulkSelectedEmployees(newBulkSelections);
 }, [allSortedEligibleEmployees, bulkSelectedEmployees, sameDayRequests, request.sub_section_id]);
 
-    const handleBulkSubmit = useCallback((strategy, visibility) => {
-        setBackendError(null);
-        
-        // Prepare bulk data with employee selections
-        const bulkData = {};
-        Object.keys(bulkSelectedEmployees).forEach(requestId => {
-            bulkData[requestId] = bulkSelectedEmployees[requestId];
-        });
+const handleBulkSubmit = useCallback((strategy, visibility) => {
+    setBackendError(null);
+    
+    // Prepare bulk data with employee selections
+    const bulkData = {};
+    Object.keys(bulkSelectedEmployees).forEach(requestId => {
+        bulkData[requestId] = bulkSelectedEmployees[requestId];
+    });
 
-        router.post(route('manpower-requests.bulk-fulfill'), {
-            request_ids: selectedBulkRequests,
-            employee_selections: bulkData,
-            strategy: strategy,
-            visibility: visibility
-        }, {
-            onSuccess: () => {
-                router.visit(route('manpower-requests.index'));
-            },
-            onError: (errors) => {
-                if (errors.fulfillment_error) {
-                    setBackendError(errors.fulfillment_error);
-                }
+    // Use Inertia post instead of router.post
+    router.post(route('manpower-requests.bulk-fulfill'), {
+        request_ids: selectedBulkRequests,
+        employee_selections: bulkData,
+        strategy: strategy,
+        visibility: visibility,
+        status: 'pending' // ← ADD THIS LINE to ensure status is 'pending'
+    }, {
+        onSuccess: () => {
+            router.visit(route('manpower-requests.index'));
+        },
+        onError: (errors) => {
+            if (errors.fulfillment_error) {
+                setBackendError(errors.fulfillment_error);
             }
-        });
-    }, [selectedBulkRequests, bulkSelectedEmployees]);
+        }
+    });
+}, [selectedBulkRequests, bulkSelectedEmployees]);
 
     const openChangeModal = useCallback((index) => {
         setChangingEmployeeIndex(index);
@@ -638,23 +640,36 @@ export default function Fulfill({
         setMultiSelectMode(prev => !prev);
     }, []);
 
-    const toggleBulkMode = useCallback(() => {
-        setBulkMode(prev => !prev);
-        if (!bulkMode) {
-            // Auto-select all same-day requests for the same subsection
-            const sameDaySubsectionRequests = sameDayRequests.filter(req => 
-                req.sub_section_id === request.sub_section_id && req.id !== request.id
-            );
-            setSelectedBulkRequests(sameDaySubsectionRequests.map(req => req.id));
-            
-            // Initialize empty selections for bulk requests
-            const initialSelections = {};
-            sameDaySubsectionRequests.forEach(req => {
-                initialSelections[req.id] = [];
-            });
-            setBulkSelectedEmployees(initialSelections);
+const toggleBulkMode = useCallback(() => {
+    setBulkMode(prev => !prev);
+    if (!bulkMode) {
+        // Select same-day requests from the SAME subsection, INCLUDING the current request
+        const sameSubsectionSameDayRequests = sameDayRequests.filter(req => 
+            req.sub_section_id === request.sub_section_id
+        );
+        
+        // Ensure current request is included
+        const allRequests = [...sameSubsectionSameDayRequests];
+        if (!allRequests.some(req => req.id === request.id)) {
+            allRequests.push(request);
         }
-    }, [bulkMode, sameDayRequests, request]);
+        
+        setSelectedBulkRequests(allRequests.map(req => req.id));
+        
+        // Initialize selections - for the current request, use the already selected IDs
+        const initialSelections = {};
+        allRequests.forEach(req => {
+            if (req.id === request.id) {
+                // For the current request, use the already selected employee IDs
+                initialSelections[req.id] = [...selectedIds];
+            } else {
+                // For other requests, initialize empty
+                initialSelections[req.id] = [];
+            }
+        });
+        setBulkSelectedEmployees(initialSelections);
+    }
+}, [bulkMode, sameDayRequests, request, selectedIds]);
 
     const toggleBulkRequestSelection = useCallback((requestId) => {
         setSelectedBulkRequests(prev => {

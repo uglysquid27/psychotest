@@ -24,15 +24,18 @@ export default function RequestItem({ request, formatDate, getStatusClasses, onD
         // Call the parent's onDelete to update local state
         if (onDelete) {
           onDelete(request.id);
+          console.log("ok")
         }
 
         // Show success message
         // toast.success('Request deleted'); // You'll need to implement toast
         setShowDeleteModal(false);
+
       },
       onError: () => {
         // toast.error('Failed to delete'); // You'll need to implement toast
         setShowDeleteModal(false);
+        console.log('lah')
       },
     });
   };

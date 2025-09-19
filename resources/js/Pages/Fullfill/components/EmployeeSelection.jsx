@@ -47,11 +47,11 @@ export default function EmployeeSelection({
                                 <span className="font-medium text-gray-600 dark:text-gray-400 text-sm">
                                     #{index + 1}
                                 </span>
-                                {isPutwaySubsection && employee && (
-                                    <span className="bg-purple-100 dark:bg-purple-900/30 px-2 py-1 rounded-full font-medium text-purple-800 dark:text-purple-300 text-xs">
-                                        Line {lineAssignments[employee.id]}
-                                    </span>
-                                )}
+                             {isPutwaySubsection && employee && (
+  <span className="bg-purple-100 dark:bg-purple-900/30 px-2 py-1 rounded-full font-medium text-purple-800 dark:text-purple-300 text-xs">
+    Line {lineAssignments[employee.id]}
+  </span>
+)}
                             </div>
 
                             {employee ? (

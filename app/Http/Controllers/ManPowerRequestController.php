@@ -695,7 +695,7 @@ public function bulkFulfill(Request $request)
 
         // Tandai semua request dulu supaya tidak bentrok
         $manpowerRequests->each(function ($req) {
-            $req->update(['status' => 'fulfilling']);
+            $req->update(['status' => 'fulfilled']);
         });
 
         foreach ($manpowerRequests as $manpowerRequest) {
@@ -781,7 +781,7 @@ private function createEmployeeAssignments(ManpowerRequest $request, $employees)
             'sub_section_id'     => $request->sub_section_id,
             'man_power_request_id' => $request->id,
             'date'               => $request->date,
-            'status'             => 'assigned',
+            'status'             => 'pending',
         ]);
     }
 }

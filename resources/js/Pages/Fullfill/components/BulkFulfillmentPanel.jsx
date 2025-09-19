@@ -12,25 +12,30 @@ export default function BulkFulfillmentPanel({
     openBulkChangeModal,
     getEmployeeDetails,
     allSortedEligibleEmployees,
-    handleAutoFulfill // New prop for auto-fulfillment
+    handleAutoFulfill
 }) {
     const [strategy, setStrategy] = useState('optimal');
     const [visibility, setVisibility] = useState('private');
-
-    // Filter requests for the same subsection and date
+    
+    // Get all requests from the same subsection including current request
     const sameSubsectionRequests = sameDayRequests.filter(req => 
-        req.sub_section_id === currentRequest.sub_section_id && 
-        req.date === currentRequest.date
+        req.sub_section_id === currentRequest.sub_section_id
     );
+    
+    // Ensure current request is included
+    const allRequests = [...sameSubsectionRequests];
+    if (!allRequests.some(req => req.id === currentRequest.id)) {
+        allRequests.push(currentRequest);
+    }
 
-    const totalRequests = sameSubsectionRequests.length;
-    const totalEmployeesNeeded = sameSubsectionRequests.reduce((total, req) => total + req.requested_amount, 0);
+    const totalRequests = allRequests.length;
+    const totalEmployeesNeeded = allRequests.reduce((total, req) => total + req.requested_amount, 0);
 
     // Calculate how many requests have been fully assigned
     const fullyAssignedRequests = Object.keys(bulkSelectedEmployees).filter(
         requestId => {
             const employees = bulkSelectedEmployees[requestId] || [];
-            const request = sameSubsectionRequests.find(req => req.id.toString() === requestId);
+            const request = allRequests.find(req => req.id.toString() === requestId);
             return request && employees.length === request.requested_amount && employees.every(id => id);
         }
     ).length;
@@ -45,7 +50,7 @@ export default function BulkFulfillmentPanel({
                 </div>
                 <div>
                     <h3 className="font-bold text-blue-800 dark:text-blue-300 text-2xl">Bulk Fulfillment</h3>
-                    <p className="text-blue-600 dark:text-blue-400">Penuhi semua request untuk sub-bagian yang sama secara sekaligus</p>
+                    <p className="text-blue-600 dark:text-blue-400">Penuhi semua request untuk sub-bagian "{currentRequest.sub_section?.name}" secara sekaligus</p>
                 </div>
             </div>
 
@@ -72,14 +77,16 @@ export default function BulkFulfillmentPanel({
                             </span>
                         </div>
                         <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">Sub-Bagian:</span>
+                            <span className="font-medium text-gray-900 dark:text-gray-100">
+                                {currentRequest.sub_section?.name}
+                            </span>
+                        </div>
+                        <div className="flex justify-between">
                             <span className="text-gray-600 dark:text-gray-400">Tanggal:</span>
                             <span className="font-medium text-gray-900 dark:text-gray-100">
                                 {new Date(currentRequest.date).toLocaleDateString('id-ID')}
                             </span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span className="text-gray-600 dark:text-gray-400">Sub-Bagian:</span>
-                            <span className="font-medium text-gray-900 dark:text-gray-100">{currentRequest.sub_section?.name}</span>
                         </div>
                     </div>
                 </div>
@@ -132,7 +139,25 @@ export default function BulkFulfillmentPanel({
                 </div>
             </div>
 
-            <div className="flex justify-end mb-4">
+            <div className="flex justify-end mb-4 space-x-3">
+                <button
+                    onClick={() => {
+                        // Select all requests including current one
+                        setSelectedBulkRequests(allRequests.map(req => req.id));
+                    }}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium text-sm"
+                >
+                    📋 Pilih Semua ({totalRequests})
+                </button>
+                <button
+                    onClick={() => {
+                        // Clear all selections
+                        setSelectedBulkRequests([]);
+                    }}
+                    className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md font-medium text-sm"
+                >
+                    🗑️ Hapus Semua
+                </button>
                 <button
                     onClick={() => handleAutoFulfill(strategy, selectedBulkRequests)}
                     disabled={processing || selectedBulkRequests.length === 0}
@@ -142,18 +167,18 @@ export default function BulkFulfillmentPanel({
                             : 'bg-green-600 hover:bg-green-700 text-white'
                     }`}
                 >
-                    ⚡ Auto-Fulfill Semua
+                    ⚡ Auto-Fulfill Terpilih
                 </button>
             </div>
 
             <div className="bg-white dark:bg-gray-800 mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-                <h4 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">📋 Daftar Request yang Akan Dipenuhi</h4>
+                <h4 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">📋 Daftar Request untuk Sub-Bagian "{currentRequest.sub_section?.name}"</h4>
                 <div className="max-h-60 overflow-y-auto">
-                    {sameSubsectionRequests.length > 0 ? (
-                        sameSubsectionRequests.map((req) => {
-                            // Fix: Properly access male_count and female_count
+                   {allRequests.length > 0 ? (
+        allRequests.map((req) => {
                             const maleCount = req.male_count || 0;
                             const femaleCount = req.female_count || 0;
+                            const isCurrentRequest = req.id === currentRequest.id;
                             
                             return (
                                 <div
@@ -162,7 +187,7 @@ export default function BulkFulfillmentPanel({
                                         selectedBulkRequests.includes(req.id)
                                             ? 'bg-blue-100 dark:bg-blue-900/40 border border-blue-300 dark:border-blue-600'
                                             : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
-                                    }`}
+                                    } ${isCurrentRequest ? 'ring-2 ring-yellow-400 dark:ring-yellow-500' : ''}`}
                                     onClick={() => toggleBulkRequestSelection(req.id)}
                                 >
                                     <div className="flex justify-between items-center">
@@ -176,6 +201,11 @@ export default function BulkFulfillmentPanel({
                                             <div>
                                                 <div className="font-medium text-gray-900 dark:text-gray-100">
                                                     {req.shift?.name || 'No Shift'} - {req.requested_amount} orang
+                                                    {isCurrentRequest && (
+                                                        <span className="bg-yellow-100 dark:bg-yellow-800 ml-2 px-2 py-1 rounded-full text-yellow-800 dark:text-yellow-200 text-xs">
+                                                            Request Saat Ini
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <div className="text-gray-600 dark:text-gray-400 text-sm">
                                                     Status: <span className={`px-2 py-1 text-xs rounded-full ${
@@ -247,7 +277,7 @@ export default function BulkFulfillmentPanel({
                                                                         {employee.name}
                                                                     </div>
                                                                     <div className="text-gray-500 dark:text-gray-400 text-xs">
-                                                                        {employee.type}
+                                                                        {employee.type} - {employee.subSections?.[0]?.name || '-'}
                                                                     </div>
                                                                 </div>
                                                             ) : (
@@ -277,7 +307,7 @@ export default function BulkFulfillmentPanel({
                         })
                     ) : (
                         <div className="py-4 text-gray-500 dark:text-gray-400 text-center">
-                            Tidak ada request lain untuk sub-bagian ini pada tanggal yang sama.
+                            Tidak ada request untuk sub-bagian ini.
                         </div>
                     )}
                 </div>
