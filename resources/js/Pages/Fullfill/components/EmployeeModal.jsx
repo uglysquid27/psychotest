@@ -62,50 +62,50 @@ export default function EmployeeModal({
     }, [allSortedEligibleEmployees, searchTerm, selectedSubSection]);
 
     // FIXED: More robust sub-section filtering
-   // FIXED: Comprehensive sub-section filtering with better type handling
-const sameSubSectionEmployees = useMemo(() => {
-    const reqSubId = request.sub_section_id;
-    if (!reqSubId) return [];
-    
-    return filteredEmployees.filter(emp => {
-        if (!emp.subSections || !Array.isArray(emp.subSections)) return false;
-        
-        return emp.subSections.some(ss => {
-            if (!ss || !ss.id) return false;
-            
-            // Try multiple comparison methods
-            const ssId = ss.id;
-            const matches = 
-                ssId == reqSubId || // Loose equality
-                String(ssId) === String(reqSubId) || // String comparison
-                Number(ssId) === Number(reqSubId); // Number comparison
-                
-            return matches;
-        });
-    });
-}, [filteredEmployees, request.sub_section_id]);
+    // FIXED: Comprehensive sub-section filtering with better type handling
+    const sameSubSectionEmployees = useMemo(() => {
+        const reqSubId = request?.sub_section_id;
+        if (!reqSubId) return [];
 
-const otherSubSectionEmployees = useMemo(() => {
-    const reqSubId = request.sub_section_id;
-    if (!reqSubId) return filteredEmployees;
-    
-    return filteredEmployees.filter(emp => {
-        if (!emp.subSections || !Array.isArray(emp.subSections)) return true;
-        
-        return !emp.subSections.some(ss => {
-            if (!ss || !ss.id) return false;
-            
-            const ssId = ss.id;
-            const matches = 
-                ssId == reqSubId ||
-                String(ssId) === String(reqSubId) ||
-                Number(ssId) === Number(reqSubId);
-                
-            return matches;
+        return filteredEmployees.filter(emp => {
+            if (!emp.subSections || !Array.isArray(emp.subSections)) return false;
+
+            return emp.subSections.some(ss => {
+                if (!ss || !ss.id) return false;
+
+                // Try multiple comparison methods
+                const ssId = ss.id;
+                const matches =
+                    ssId == reqSubId || // Loose equality
+                    String(ssId) === String(reqSubId) || // String comparison
+                    Number(ssId) === Number(reqSubId); // Number comparison
+
+                return matches;
+            });
         });
-    });
-}, [filteredEmployees, request.sub_section_id]);
-    
+    }, [filteredEmployees, request?.sub_section_id]);
+
+    const otherSubSectionEmployees = useMemo(() => {
+        const reqSubId = request?.sub_section_id;
+        if (!reqSubId) return filteredEmployees;
+
+        return filteredEmployees.filter(emp => {
+            if (!emp.subSections || !Array.isArray(emp.subSections)) return true;
+
+            return !emp.subSections.some(ss => {
+                if (!ss || !ss.id) return false;
+
+                const ssId = ss.id;
+                const matches =
+                    ssId == reqSubId ||
+                    String(ssId) === String(reqSubId) ||
+                    Number(ssId) === Number(reqSubId);
+
+                return matches;
+            });
+        });
+    }, [filteredEmployees, request?.sub_section_id]);
+
 
     // Rest of the component remains the same...
     const toggleEmployeeSelection = (employeeId) => {
@@ -440,7 +440,7 @@ const otherSubSectionEmployees = useMemo(() => {
                         <div className="mb-8">
                             <h4 className="mb-4 font-semibold text-lg text-gray-700 dark:text-gray-300 flex items-center">
                                 <span className="w-3 h-3 bg-green-500 rounded-full mr-2"></span>
-                                Karyawan dari Sub-Bagian Sama ({request.sub_section?.name}) - {sameSubSectionEmployees.length} orang
+                                Karyawan dari Sub-Bagian Sama ({request?.sub_section?.name || 'Unknown'}) - {sameSubSectionEmployees.length} orang
                             </h4>
                             <div className="gap-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                                 {sameSubSectionEmployees.map(renderEmployeeCard)}

@@ -320,7 +320,7 @@ export default function Edit({ employee }) {
                                 </div>
                             </div>
                         </div>
-                          <div className="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg rounded-3xl border border-gray-100 dark:border-gray-700">
+                          {/* <div className="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg rounded-3xl border border-gray-100 dark:border-gray-700">
                             <div className="p-6 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
                                 <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-6">Pengajuan Resign</h3>
                                 <div className="bg-white dark:bg-gray-800 p-6 rounded-lg">
@@ -337,7 +337,7 @@ export default function Edit({ employee }) {
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        </div> */}
                     </div>
                 </div>
             </div>
