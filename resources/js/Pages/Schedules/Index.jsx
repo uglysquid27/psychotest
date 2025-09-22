@@ -87,7 +87,7 @@ const ManPowerRequestDetailModal = ({ request, assignedEmployees, onClose }) => 
 };
 
 const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility }) => {
-     const [isToggling, setIsToggling] = useState(false);
+    const [isToggling, setIsToggling] = useState(false);
     const [shiftPages, setShiftPages] = useState({});
     const itemsPerPage = 5;
 
@@ -100,12 +100,21 @@ const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility }) 
         setShiftPages(initialPages);
     }, [shifts]);
 
-    const getStatusBadge = (status) => {
+    const getStatusBadge = (status, rejectionReason) => {
         switch (status) {
             case 'accepted':
                 return <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">Diterima</span>;
             case 'rejected':
-                return <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">Ditolak</span>;
+                return (
+                    <div className="flex flex-col">
+                        <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800 mb-1">Ditolak</span>
+                        {rejectionReason && (
+                            <span className="text-xs text-red-600 dark:text-red-400" title={rejectionReason}>
+                                Alasan: {rejectionReason}
+                            </span>
+                        )}
+                    </div>
+                );
             case 'pending':
                 return <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">Menunggu</span>;
             default:
@@ -113,35 +122,35 @@ const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility }) 
         }
     };
 
-const toggleVisibility = async () => {
-    setIsToggling(true);
-    try {
-        // Toggle visibility and optionally send WA notification
-        await router.post(
-            route("schedules.toggle-visibility-group"),
-            {
-                date: date,
-                section_id: sectionId,
-                visibility: currentVisibility === "public" ? "private" : "public",
-                send_wa_notification: currentVisibility !== "public" // Send notification only when making public
-            },
-            {
-                preserveScroll: true,
-                preserveState: true,
-            }
-        );
+    const toggleVisibility = async () => {
+        setIsToggling(true);
+        try {
+            // Toggle visibility and optionally send WA notification
+            await router.post(
+                route("schedules.toggle-visibility-group"),
+                {
+                    date: date,
+                    section_id: sectionId,
+                    visibility: currentVisibility === "public" ? "private" : "public",
+                    send_wa_notification: currentVisibility !== "public" // Send notification only when making public
+                },
+                {
+                    preserveScroll: true,
+                    preserveState: true,
+                }
+            );
 
-        console.log("Visibility toggled successfully");
-    } catch (error) {
-        console.error("Error toggling visibility:", error);
-        alert(
-            "Gagal mengubah visibility: " +
+            console.log("Visibility toggled successfully");
+        } catch (error) {
+            console.error("Error toggling visibility:", error);
+            alert(
+                "Gagal mengubah visibility: " +
                 (error.response?.data?.message || error.message || "Unknown error")
-        );
-    } finally {
-        setIsToggling(false);
-    }
-};
+            );
+        } finally {
+            setIsToggling(false);
+        }
+    };
 
 
     const changeShiftPage = (shiftName, page) => {
@@ -199,7 +208,7 @@ const toggleVisibility = async () => {
                                                 <td className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300">{item.employee.nik}</td>
                                                 <td className="hidden px-3 py-2 text-sm text-gray-700 dark:text-gray-300 sm:table-cell">{item.sub_section?.name || '-'}</td>
                                                 <td className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
-                                                    {getStatusBadge(item.status)}
+                                                    {getStatusBadge(item.status, item.rejection_reason)}
                                                 </td>
                                             </tr>
                                         ))}
@@ -246,7 +255,7 @@ const toggleVisibility = async () => {
                 })
             )}
 
-    {Object.keys(shifts).length > 0 && (
+            {Object.keys(shifts).length > 0 && (
                 <div className="mt-4 flex justify-between items-center">
                     <span className="text-sm text-gray-700 dark:text-gray-300">
                         Visibility: <strong>{currentVisibility}</strong>

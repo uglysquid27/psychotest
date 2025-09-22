@@ -1,5 +1,5 @@
 // BulkFulfillmentPanel.jsx
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 export default function BulkFulfillmentPanel({
     sameDayRequests,
@@ -16,29 +16,65 @@ export default function BulkFulfillmentPanel({
 }) {
     const [strategy, setStrategy] = useState('optimal');
     const [visibility, setVisibility] = useState('private');
-    
+
     // Get all requests from the same subsection including current request
-    const sameSubsectionRequests = sameDayRequests.filter(req => 
-        req.sub_section_id === currentRequest.sub_section_id
+    const sameSubsectionRequests = sameDayRequests.filter(req =>
+        req.sub_section_id === currentRequest.sub_section_id &&
+        req.status !== 'fulfilled' // Only show belum selesai
     );
-    
+
     // Ensure current request is included
     const allRequests = [...sameSubsectionRequests];
     if (!allRequests.some(req => req.id === currentRequest.id)) {
         allRequests.push(currentRequest);
     }
 
-    const totalRequests = allRequests.length;
-    const totalEmployeesNeeded = allRequests.reduce((total, req) => total + req.requested_amount, 0);
+    const nonFulfilledRequests = useMemo(() => {
+        const sameSubsectionRequests = sameDayRequests.filter(req =>
+            req.sub_section_id === currentRequest.sub_section_id &&
+            req.status !== 'fulfilled'
+        );
+
+        // Ensure current request is included if not fulfilled
+        const allRequests = [...sameSubsectionRequests];
+        if (currentRequest.status !== 'fulfilled' && !allRequests.some(req => req.id === currentRequest.id)) {
+            allRequests.push(currentRequest);
+        }
+
+        return allRequests;
+    }, [sameDayRequests, currentRequest]);
+
+    const totalRequests = nonFulfilledRequests.length;
+    const totalEmployeesNeeded = nonFulfilledRequests.reduce((total, req) => total + req.requested_amount, 0);
 
     // Calculate how many requests have been fully assigned
-    const fullyAssignedRequests = Object.keys(bulkSelectedEmployees).filter(
-        requestId => {
+    const fullyAssignedRequests = useMemo(() => {
+        return Object.keys(bulkSelectedEmployees).filter(
+            requestId => {
+                const employees = bulkSelectedEmployees[requestId] || [];
+                const request = nonFulfilledRequests.find(req => req.id.toString() === requestId);
+                return request && employees.length === request.requested_amount && employees.every(id => id);
+            }
+        ).length;
+    }, [bulkSelectedEmployees, nonFulfilledRequests]);
+
+    const allRequestsFullyAssigned = useMemo(() => {
+        return selectedBulkRequests.every(requestId => {
             const employees = bulkSelectedEmployees[requestId] || [];
-            const request = allRequests.find(req => req.id.toString() === requestId);
-            return request && employees.length === request.requested_amount && employees.every(id => id);
-        }
-    ).length;
+            const request = nonFulfilledRequests.find(req => req.id.toString() === requestId);
+            return request && employees.length === request.requested_amount;
+        });
+    }, [selectedBulkRequests, bulkSelectedEmployees, nonFulfilledRequests]);
+
+
+    // Check if all selected requests are fully assigned
+    const hasIncompleteAssignments = useMemo(() => {
+        return selectedBulkRequests.some(requestId => {
+            const employees = bulkSelectedEmployees[requestId] || [];
+            const request = nonFulfilledRequests.find(req => req.id.toString() === requestId);
+            return request && employees.length < request.requested_amount;
+        });
+    }, [selectedBulkRequests, bulkSelectedEmployees, nonFulfilledRequests]);
 
     return (
         <div className="bg-gradient-to-br from-blue-50 dark:from-blue-900/20 to-indigo-100 dark:to-indigo-900/20 shadow-lg mb-6 p-6 border border-blue-200 dark:border-blue-700 rounded-xl">
@@ -76,6 +112,22 @@ export default function BulkFulfillmentPanel({
                                 {fullyAssignedRequests} / {selectedBulkRequests.length}
                             </span>
                         </div>
+                        {hasIncompleteAssignments && (
+                            <div className="flex justify-between">
+                                <span className="text-yellow-600 dark:text-yellow-400">Status:</span>
+                                <span className="font-medium text-yellow-600 dark:text-yellow-400">
+                                    ⚠️ Beberapa request belum terisi penuh
+                                </span>
+                            </div>
+                        )}
+                        {allRequestsFullyAssigned && selectedBulkRequests.length > 0 && (
+                            <div className="flex justify-between">
+                                <span className="text-green-600 dark:text-green-400">Status:</span>
+                                <span className="font-medium text-green-600 dark:text-green-400">
+                                    ✅ Semua request terisi penuh
+                                </span>
+                            </div>
+                        )}
                         <div className="flex justify-between">
                             <span className="text-gray-600 dark:text-gray-400">Sub-Bagian:</span>
                             <span className="font-medium text-gray-900 dark:text-gray-100">
@@ -139,11 +191,11 @@ export default function BulkFulfillmentPanel({
                 </div>
             </div>
 
-            <div className="flex justify-end mb-4 space-x-3">
+            {/* <div className="flex justify-end mb-4 space-x-3">
                 <button
                     onClick={() => {
                         // Select all requests including current one
-                        setSelectedBulkRequests(allRequests.map(req => req.id));
+                        setSelectedBulkRequests(nonFulfilledRequests.map(req => req.id));
                     }}
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium text-sm"
                 >
@@ -161,33 +213,31 @@ export default function BulkFulfillmentPanel({
                 <button
                     onClick={() => handleAutoFulfill(strategy, selectedBulkRequests)}
                     disabled={processing || selectedBulkRequests.length === 0}
-                    className={`px-4 py-2 rounded-md font-medium text-sm ${
-                        processing || selectedBulkRequests.length === 0
+                    className={`px-4 py-2 rounded-md font-medium text-sm ${processing || selectedBulkRequests.length === 0
                             ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed text-gray-700'
                             : 'bg-green-600 hover:bg-green-700 text-white'
-                    }`}
+                        }`}
                 >
                     ⚡ Auto-Fulfill Terpilih
                 </button>
-            </div>
+            </div> */}
 
             <div className="bg-white dark:bg-gray-800 mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-                <h4 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">📋 Daftar Request untuk Sub-Bagian "{currentRequest.sub_section?.name}"</h4>
+                <h4 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">Daftar Request untuk Sub-Bagian "{currentRequest.sub_section?.name}"</h4>
                 <div className="max-h-60 overflow-y-auto">
-                   {allRequests.length > 0 ? (
-        allRequests.map((req) => {
+                    {allRequests.length > 0 ? (
+                        allRequests.map((req) => {
                             const maleCount = req.male_count || 0;
                             const femaleCount = req.female_count || 0;
                             const isCurrentRequest = req.id === currentRequest.id;
-                            
+
                             return (
                                 <div
                                     key={req.id}
-                                    className={`p-3 rounded-md mb-2 cursor-pointer transition-colors ${
-                                        selectedBulkRequests.includes(req.id)
+                                    className={`p-3 rounded-md mb-2 cursor-pointer transition-colors ${selectedBulkRequests.includes(req.id)
                                             ? 'bg-blue-100 dark:bg-blue-900/40 border border-blue-300 dark:border-blue-600'
                                             : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
-                                    } ${isCurrentRequest ? 'ring-2 ring-yellow-400 dark:ring-yellow-500' : ''}`}
+                                        } ${isCurrentRequest ? 'ring-2 ring-yellow-400 dark:ring-yellow-500' : ''}`}
                                     onClick={() => toggleBulkRequestSelection(req.id)}
                                 >
                                     <div className="flex justify-between items-center">
@@ -195,7 +245,7 @@ export default function BulkFulfillmentPanel({
                                             <input
                                                 type="checkbox"
                                                 checked={selectedBulkRequests.includes(req.id)}
-                                                onChange={() => {}}
+                                                onChange={() => { }}
                                                 className="mr-3"
                                             />
                                             <div>
@@ -208,11 +258,10 @@ export default function BulkFulfillmentPanel({
                                                     )}
                                                 </div>
                                                 <div className="text-gray-600 dark:text-gray-400 text-sm">
-                                                    Status: <span className={`px-2 py-1 text-xs rounded-full ${
-                                                        req.status === 'fulfilled' 
-                                                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' 
+                                                    Status: <span className={`px-2 py-1 text-xs rounded-full ${req.status === 'fulfilled'
+                                                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
                                                             : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-                                                    }`}>
+                                                        }`}>
                                                         {req.status === 'fulfilled' ? 'Sudah dipenuhi' : 'Belum dipenuhi'}
                                                     </span>
                                                 </div>
@@ -225,7 +274,7 @@ export default function BulkFulfillmentPanel({
                                             </div>
                                         </div>
                                     </div>
-                                    
+
                                     {/* Employee Selection for Bulk Request */}
                                     {selectedBulkRequests.includes(req.id) && (
                                         <div className="mt-3 pt-3 border-gray-200 dark:border-gray-600 border-t">
@@ -233,11 +282,10 @@ export default function BulkFulfillmentPanel({
                                                 <h5 className="font-medium text-gray-700 dark:text-gray-300 text-sm">
                                                     Karyawan Terpilih:
                                                 </h5>
-                                                <span className={`text-xs px-2 py-1 rounded-full ${
-                                                    (bulkSelectedEmployees[req.id]?.length || 0) === req.requested_amount
+                                                <span className={`text-xs px-2 py-1 rounded-full ${(bulkSelectedEmployees[req.id]?.length || 0) === req.requested_amount
                                                         ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
                                                         : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-                                                }`}>
+                                                    }`}>
                                                     {(bulkSelectedEmployees[req.id]?.length || 0)} / {req.requested_amount}
                                                 </span>
                                             </div>
@@ -246,31 +294,29 @@ export default function BulkFulfillmentPanel({
                                                     const employeeIds = bulkSelectedEmployees[req.id] || [];
                                                     const employeeId = employeeIds[index];
                                                     const employee = employeeId ? getEmployeeDetails(employeeId) : null;
-                                                    
+
                                                     return (
                                                         <div
                                                             key={index}
-                                                            className={`p-2 rounded border ${
-                                                                employee 
-                                                                    ? 'border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20' 
+                                                            className={`p-2 rounded border ${employee
+                                                                    ? 'border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
                                                                     : 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700'
-                                                            }`}
+                                                                }`}
                                                         >
                                                             <div className="flex justify-between items-center">
                                                                 <span className="text-gray-500 dark:text-gray-400 text-xs">
                                                                     #{index + 1}
                                                                 </span>
                                                                 {employee && (
-                                                                    <span className={`text-xs px-1 rounded ${
-                                                                        employee.gender === 'female'
+                                                                    <span className={`text-xs px-1 rounded ${employee.gender === 'female'
                                                                             ? 'bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300'
                                                                             : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
-                                                                    }`}>
+                                                                        }`}>
                                                                         {employee.gender === 'female' ? 'P' : 'L'}
                                                                     </span>
                                                                 )}
                                                             </div>
-                                                            
+
                                                             {employee ? (
                                                                 <div className="mt-1">
                                                                     <div className="font-medium text-gray-900 dark:text-gray-100 text-sm">
@@ -285,7 +331,7 @@ export default function BulkFulfillmentPanel({
                                                                     Belum dipilih
                                                                 </div>
                                                             )}
-                                                            
+
                                                             <button
                                                                 type="button"
                                                                 onClick={(e) => {
@@ -319,12 +365,11 @@ export default function BulkFulfillmentPanel({
                 </div>
                 <button
                     onClick={() => handleBulkSubmit(strategy, visibility)}
-                    disabled={processing || selectedBulkRequests.length === 0}
-                    className={`px-6 py-3 rounded-lg font-semibold text-white transition-colors ${
-                        processing || selectedBulkRequests.length === 0
+                    disabled={processing || selectedBulkRequests.length === 0 || hasIncompleteAssignments}
+                    className={`px-6 py-3 rounded-lg font-semibold text-white transition-colors ${processing || selectedBulkRequests.length === 0 || hasIncompleteAssignments
                             ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
                             : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700'
-                    }`}
+                        }`}
                 >
                     {processing ? (
                         <span className="flex items-center">
@@ -335,7 +380,7 @@ export default function BulkFulfillmentPanel({
                             Memproses...
                         </span>
                     ) : (
-                        `🚀 Penuhi ${selectedBulkRequests.length} Request Sekaligus`
+                        `Penuhi ${selectedBulkRequests.length} Request`
                     )}
                 </button>
             </div>

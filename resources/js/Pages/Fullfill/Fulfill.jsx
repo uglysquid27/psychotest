@@ -98,8 +98,8 @@ export default function Fulfill({
             }
 
             // PRIORITIZE SAME SUBSECTION
-            const aIsSame = a.subSections.some(ss => String(ss.id) === String(request.sub_section_id));
-            const bIsSame = b.subSections.some(ss => String(ss.id) === String(request.sub_section_id));
+      const aIsSame = a.subSections.some(ss => String(ss.id) === String(request.sub_section_id));
+const bIsSame = b.subSections.some(ss => String(ss.id) === String(request.sub_section_id));
 
             if (aIsSame !== bIsSame) return aIsSame ? -1 : 1;
 
@@ -316,24 +316,24 @@ export default function Fulfill({
     }, [errors]);
 
     const handleBulkEmployeeChange = useCallback((requestId, index, newEmployeeId) => {
-    setBulkSelectedEmployees(prev => {
-        const currentEmployees = prev[requestId] || [];
-        
-        // Check if employee is already selected in this request
-        if (newEmployeeId !== currentEmployees[index] && currentEmployees.includes(newEmployeeId)) {
-            alert('Karyawan ini sudah dipilih untuk request ini');
-            return prev;
-        }
+        setBulkSelectedEmployees(prev => {
+            const currentEmployees = prev[requestId] || [];
 
-        const newEmployees = [...currentEmployees];
-        newEmployees[index] = newEmployeeId;
-        
-        return {
-            ...prev,
-            [requestId]: newEmployees
-        };
-    });
-}, []);
+            // Check if employee is already selected in this request
+            if (newEmployeeId !== currentEmployees[index] && currentEmployees.includes(newEmployeeId)) {
+                alert('Karyawan ini sudah dipilih untuk request ini');
+                return prev;
+            }
+
+            const newEmployees = [...currentEmployees];
+            newEmployees[index] = newEmployeeId;
+
+            return {
+                ...prev,
+                [requestId]: newEmployees
+            };
+        });
+    }, []);
 
     const handleSubmit = useCallback((e) => {
         e.preventDefault();
@@ -375,17 +375,24 @@ export default function Fulfill({
         });
     }, [selectedIds, request, allSortedEligibleEmployees, post, auth.user.id, data.visibility]);
 
-    const handleAutoFulfill = useCallback((strategy, requestIds) => {
+const handleAutoFulfill = useCallback((strategy, requestIds) => {
     // Create a copy of current bulk selections
     const newBulkSelections = { ...bulkSelectedEmployees };
     
     // Get all requests that need to be fulfilled
-    const requestsToFulfill = sameDayRequests.filter(req => 
+    const requestsToFulfill = sameDayRequests.filter(req =>
         requestIds.includes(req.id)
     );
     
+    // Create a set of already used employees across ALL requests
+    const usedEmployeeIds = new Set(
+        Object.values(newBulkSelections).flat()
+    );
+    
     // Create a pool of available employees (clone to avoid mutation)
-    let availableEmployees = [...allSortedEligibleEmployees];
+    let availableEmployees = allSortedEligibleEmployees.filter(emp =>
+        !usedEmployeeIds.has(emp.id)
+    );
     
     // Strategy-based sorting
     if (strategy === 'same_section') {
@@ -413,14 +420,14 @@ export default function Fulfill({
         const totalRequired = req.requested_amount;
         
         // Filter available employees that match gender requirements
-        const maleCandidates = availableEmployees.filter(emp => 
-            emp.gender === 'male' && 
-            !Object.values(newBulkSelections).flat().includes(emp.id)
+        const maleCandidates = availableEmployees.filter(emp =>
+            emp.gender === 'male' &&
+            !usedEmployeeIds.has(emp.id)
         );
         
-        const femaleCandidates = availableEmployees.filter(emp => 
-            emp.gender === 'female' && 
-            !Object.values(newBulkSelections).flat().includes(emp.id)
+        const femaleCandidates = availableEmployees.filter(emp =>
+            emp.gender === 'female' &&
+            !usedEmployeeIds.has(emp.id)
         );
         
         // Select employees for this request
@@ -428,67 +435,83 @@ export default function Fulfill({
         
         // First, add required males
         for (let i = 0; i < requiredMale && maleCandidates.length > 0; i++) {
-            selectedForRequest.push(maleCandidates.shift().id);
+            const candidate = maleCandidates.shift();
+            selectedForRequest.push(candidate.id);
+            usedEmployeeIds.add(candidate.id);
         }
         
         // Then, add required females
         for (let i = 0; i < requiredFemale && femaleCandidates.length > 0; i++) {
-            selectedForRequest.push(femaleCandidates.shift().id);
+            const candidate = femaleCandidates.shift();
+            selectedForRequest.push(candidate.id);
+            usedEmployeeIds.add(candidate.id);
         }
         
         // Fill remaining slots with any available employees
         const remainingSlots = totalRequired - selectedForRequest.length;
         if (remainingSlots > 0) {
-            const otherCandidates = availableEmployees.filter(emp => 
-                !selectedForRequest.includes(emp.id) &&
-                !Object.values(newBulkSelections).flat().includes(emp.id)
-            );
+            const otherCandidates = availableEmployees.filter(emp =>
+                !usedEmployeeIds.has(emp.id)
+            ).slice(0, remainingSlots);
             
-            for (let i = 0; i < remainingSlots && otherCandidates.length > 0; i++) {
-                selectedForRequest.push(otherCandidates.shift().id);
-            }
+            otherCandidates.forEach(candidate => {
+                selectedForRequest.push(candidate.id);
+                usedEmployeeIds.add(candidate.id);
+            });
         }
         
         // Update the bulk selections
         newBulkSelections[req.id] = selectedForRequest;
-        
-        // Remove selected employees from available pool
-        availableEmployees = availableEmployees.filter(emp => 
-            !selectedForRequest.includes(emp.id)
-        );
     });
     
     // Update state with the new selections
     setBulkSelectedEmployees(newBulkSelections);
 }, [allSortedEligibleEmployees, bulkSelectedEmployees, sameDayRequests, request.sub_section_id]);
 
-const handleBulkSubmit = useCallback((strategy, visibility) => {
-    setBackendError(null);
-    
-    // Prepare bulk data with employee selections
-    const bulkData = {};
-    Object.keys(bulkSelectedEmployees).forEach(requestId => {
-        bulkData[requestId] = bulkSelectedEmployees[requestId];
-    });
+   const handleBulkSubmit = useCallback((strategy, visibility) => {
+        setBackendError(null);
+        
+        // Prepare bulk data with employee selections
+        const bulkData = {};
+        Object.keys(bulkSelectedEmployees).forEach(requestId => {
+            bulkData[requestId] = bulkSelectedEmployees[requestId];
+        });
 
-    // Use Inertia post instead of router.post
-    router.post(route('manpower-requests.bulk-fulfill'), {
-        request_ids: selectedBulkRequests,
-        employee_selections: bulkData,
-        strategy: strategy,
-        visibility: visibility,
-        status: 'pending' // ← ADD THIS LINE to ensure status is 'pending'
-    }, {
-        onSuccess: () => {
-            router.visit(route('manpower-requests.index'));
-        },
-        onError: (errors) => {
-            if (errors.fulfillment_error) {
-                setBackendError(errors.fulfillment_error);
+        console.log('Submitting bulk fulfill:', {
+            request_ids: selectedBulkRequests,
+            employee_selections: bulkData,
+            strategy,
+            visibility
+        });
+
+        // Use router.post instead of useForm's post
+        router.post(route('manpower-requests.bulk-fulfill'), {
+            request_ids: selectedBulkRequests,
+            employee_selections: bulkData,
+            strategy: strategy,
+            visibility: visibility,
+            status: 'pending'
+        }, {
+            onSuccess: () => {
+                console.log('Bulk fulfill successful');
+                // Clear any debug data and redirect
+                setBulkSelectedEmployees({});
+                setSelectedBulkRequests([]);
+                setBulkMode(false);
+                router.visit(route('manpower-requests.index'));
+            },
+            onError: (errors) => {
+                console.error('Bulk fulfill error:', errors);
+                if (errors.fulfillment_error) {
+                    setBackendError(errors.fulfillment_error);
+                } else if (errors.message) {
+                    setBackendError(errors.message);
+                } else {
+                    setBackendError('Terjadi kesalahan saat memproses bulk fulfillment');
+                }
             }
-        }
-    });
-}, [selectedBulkRequests, bulkSelectedEmployees]);
+        });
+    }, [selectedBulkRequests, bulkSelectedEmployees]);
 
     const openChangeModal = useCallback((index) => {
         setChangingEmployeeIndex(index);
@@ -507,7 +530,7 @@ const handleBulkSubmit = useCallback((strategy, visibility) => {
             // Handle bulk employee selection
             const { requestId, index } = activeBulkRequest;
             const currentEmployees = bulkSelectedEmployees[requestId] || [];
-            
+
             if (newEmployeeId !== currentEmployees[index] && currentEmployees.includes(newEmployeeId)) {
                 alert('Karyawan ini sudah dipilih untuk request ini');
                 return;
@@ -550,12 +573,12 @@ const handleBulkSubmit = useCallback((strategy, visibility) => {
 
             const newEmployees = [...currentEmployees];
             newEmployees[index] = newEmployeeId;
-            
+
             setBulkSelectedEmployees(prev => ({
                 ...prev,
                 [requestId]: newEmployees
             }));
-            
+
             setShowModal(false);
             setActiveBulkRequest(null);
             return;
@@ -643,33 +666,87 @@ const handleBulkSubmit = useCallback((strategy, visibility) => {
 const toggleBulkMode = useCallback(() => {
     setBulkMode(prev => !prev);
     if (!bulkMode) {
-        // Select same-day requests from the SAME subsection, INCLUDING the current request
-        const sameSubsectionSameDayRequests = sameDayRequests.filter(req => 
-            req.sub_section_id === request.sub_section_id
+        // Get NON-FULFILLED requests from the SAME subsection, INCLUDING the current request if not fulfilled
+        const nonFulfilledSameSubsectionRequests = sameDayRequests.filter(req => 
+            req.sub_section_id === request.sub_section_id && 
+            req.status !== 'fulfilled'
         );
         
-        // Ensure current request is included
-        const allRequests = [...sameSubsectionSameDayRequests];
-        if (!allRequests.some(req => req.id === request.id)) {
+        // Ensure current request is included if not fulfilled
+        const allRequests = [...nonFulfilledSameSubsectionRequests];
+        if (request.status !== 'fulfilled' && !allRequests.some(req => req.id === request.id)) {
             allRequests.push(request);
         }
         
         setSelectedBulkRequests(allRequests.map(req => req.id));
         
-        // Initialize selections - for the current request, use the already selected IDs
+        // Initialize selections and AUTO-FILL them
         const initialSelections = {};
+        let usedEmployeeIds = new Set(); // Track used employees across all requests
+        
+        // First, handle the current request with already selected employees
+        if (request.status !== 'fulfilled') {
+            initialSelections[request.id] = [...selectedIds];
+            selectedIds.forEach(id => usedEmployeeIds.add(id));
+        }
+        
+        // Then process other requests
         allRequests.forEach(req => {
-            if (req.id === request.id) {
-                // For the current request, use the already selected employee IDs
-                initialSelections[req.id] = [...selectedIds];
-            } else {
-                // For other requests, initialize empty
-                initialSelections[req.id] = [];
+            // Skip if already processed (current request)
+            if (req.id === request.id && request.status !== 'fulfilled') return;
+            
+            const requiredMale = req.male_count || 0;
+            const requiredFemale = req.female_count || 0;
+            const totalRequired = req.requested_amount;
+            
+            // Filter available employees (not used in any request yet)
+            const availableEmployees = allSortedEligibleEmployees.filter(emp => 
+                !usedEmployeeIds.has(emp.id)
+            );
+            
+            // Auto-select employees based on optimal strategy
+            const selectedForRequest = [];
+            
+            // First, add required males
+            const maleCandidates = availableEmployees.filter(emp => 
+                emp.gender === 'male'
+            ).slice(0, requiredMale);
+            
+            maleCandidates.forEach(emp => {
+                selectedForRequest.push(emp.id);
+                usedEmployeeIds.add(emp.id);
+            });
+            
+            // Then, add required females
+            const femaleCandidates = availableEmployees.filter(emp => 
+                emp.gender === 'female' &&
+                !usedEmployeeIds.has(emp.id)
+            ).slice(0, requiredFemale);
+            
+            femaleCandidates.forEach(emp => {
+                selectedForRequest.push(emp.id);
+                usedEmployeeIds.add(emp.id);
+            });
+            
+            // Fill remaining slots with any available employees
+            const remainingSlots = totalRequired - selectedForRequest.length;
+            if (remainingSlots > 0) {
+                const otherCandidates = availableEmployees.filter(emp => 
+                    !usedEmployeeIds.has(emp.id)
+                ).slice(0, remainingSlots);
+                
+                otherCandidates.forEach(emp => {
+                    selectedForRequest.push(emp.id);
+                    usedEmployeeIds.add(emp.id);
+                });
             }
+            
+            initialSelections[req.id] = selectedForRequest;
         });
+        
         setBulkSelectedEmployees(initialSelections);
     }
-}, [bulkMode, sameDayRequests, request, selectedIds]);
+}, [bulkMode, sameDayRequests, request, selectedIds, allSortedEligibleEmployees]);
 
     const toggleBulkRequestSelection = useCallback((requestId) => {
         setSelectedBulkRequests(prev => {
@@ -719,13 +796,12 @@ const toggleBulkMode = useCallback(() => {
                     <div className="flex items-center space-x-4">
                         <button
                             onClick={toggleBulkMode}
-                            className={`px-4 py-2 rounded-md font-medium transition-colors ${
-                                bulkMode 
-                                    ? 'bg-purple-600 hover:bg-purple-700 text-white' 
-                                    : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200'
-                            }`}
+                            className={`px-4 py-2 rounded-md font-medium transition-colors ${bulkMode
+                                ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                                : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200'
+                                }`}
                         >
-                            {bulkMode ? '❌ Keluar Mode Bulk' : '🚀 Mode Bulk Fulfill'}
+                            {bulkMode ? 'Keluar Mode Bulk' : 'Mode Bulk Fulfill'}
                         </button>
                     </div>
                 </div>
@@ -748,19 +824,19 @@ const toggleBulkMode = useCallback(() => {
                 )}
 
                 {bulkMode && (
-        <BulkFulfillmentPanel
-    sameDayRequests={sameDayRequests}
-    currentRequest={request}
-    selectedBulkRequests={selectedBulkRequests}
-    toggleBulkRequestSelection={toggleBulkRequestSelection}
-    handleBulkSubmit={handleBulkSubmit}
-    processing={processing}
-    bulkSelectedEmployees={bulkSelectedEmployees}
-    openBulkChangeModal={openBulkChangeModal}
-    getEmployeeDetails={getEmployeeDetails}
-    allSortedEligibleEmployees={allSortedEligibleEmployees}
-    handleAutoFulfill={handleAutoFulfill} // Add this line
-/>
+                    <BulkFulfillmentPanel
+                        sameDayRequests={sameDayRequests}
+                        currentRequest={request}
+                        selectedBulkRequests={selectedBulkRequests}
+                        toggleBulkRequestSelection={toggleBulkRequestSelection}
+                        handleBulkSubmit={handleBulkSubmit}
+                        processing={processing}
+                        bulkSelectedEmployees={bulkSelectedEmployees}
+                        openBulkChangeModal={openBulkChangeModal}
+                        getEmployeeDetails={getEmployeeDetails}
+                        allSortedEligibleEmployees={allSortedEligibleEmployees}
+                        handleAutoFulfill={handleAutoFulfill} // Add this line
+                    />
                 )}
 
                 {/* Putway Line Assignment Notice */}

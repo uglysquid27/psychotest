@@ -463,82 +463,72 @@ class ManPowerRequestController extends Controller
         ]);
     }
 
-    public function destroy($id)
-    {
-        try {
-            DB::beginTransaction();
+public function destroy($id)
+{
+    try {
+        DB::beginTransaction();
 
-            $manPowerRequest = ManPowerRequest::with('schedules.employee')->findOrFail($id);
+        $manPowerRequest = ManPowerRequest::with('schedules.employee')->findOrFail($id);
 
-            Log::info('Attempting to delete manpower request', [
+        Log::info('Attempting to delete manpower request', [
+            'request_id' => $manPowerRequest->id,
+            'user_id' => auth()->id(),
+            'status' => $manPowerRequest->status
+        ]);
+
+        if ($manPowerRequest->schedules->isNotEmpty()) {
+            Log::info('Updating employee statuses to available for schedules related to deleted request', [
                 'request_id' => $manPowerRequest->id,
-                'user_id' => auth()->id(),
-                'status' => $manPowerRequest->status
+                'schedule_count' => $manPowerRequest->schedules->count()
             ]);
-
-            if ($manPowerRequest->schedules->isNotEmpty()) {
-                Log::info('Updating employee statuses to available for schedules related to deleted request', [
-                    'request_id' => $manPowerRequest->id,
-                    'schedule_count' => $manPowerRequest->schedules->count()
-                ]);
-                foreach ($manPowerRequest->schedules as $schedule) {
-                    if ($schedule->employee) {
-                        $employee = $schedule->employee;
-                        if ($employee->status === 'assigned') {
-                            $employee->status = 'available';
-                            $employee->save();
-                            Log::debug("Employee ID {$employee->id} status changed to 'available'.");
-                        }
+            foreach ($manPowerRequest->schedules as $schedule) {
+                if ($schedule->employee) {
+                    $employee = $schedule->employee;
+                    if ($employee->status === 'assigned') {
+                        $employee->status = 'available';
+                        $employee->save();
+                        Log::debug("Employee ID {$employee->id} status changed to 'available'.");
                     }
                 }
             }
+        }
 
-            if ($manPowerRequest->status === 'fulfilled') {
-                if ($manPowerRequest->created_at->diffInDays(now()) > 7) {
-                    Log::warning('Attempt to delete fulfilled request older than 7 days', [
-                        'request_id' => $manPowerRequest->id,
-                        'status' => $manPowerRequest->status,
-                        'user_id' => auth()->id()
-                    ]);
-                    DB::rollBack();
-                    return back()->with('error', 'Cannot delete fulfilled requests older than 7 days');
-                }
-            }
-            elseif (!in_array($manPowerRequest->status, ['pending', 'revision_requested'])) {
-                Log::warning('Invalid delete attempt', [
-                    'request_id' => $manPowerRequest->id,
-                    'status' => $manPowerRequest->status,
-                    'user_id' => auth()->id()
-                ]);
-                DB::rollBack();
-                return back()->with('error', 'Cannot delete request in current status');
-            }
-
-            $manPowerRequest->delete();
-
-            DB::commit();
-
-            Log::info('Successfully deleted request', [
-                'request_id' => $id,
+        // REMOVED: The 7-day limit check for fulfilled requests
+        if (!in_array($manPowerRequest->status, ['pending', 'revision_requested', 'fulfilled'])) {
+            Log::warning('Invalid delete attempt', [
+                'request_id' => $manPowerRequest->id,
+                'status' => $manPowerRequest->status,
                 'user_id' => auth()->id()
             ]);
-
-            return redirect()->route('manpower-requests.index')
-                ->with('success', 'Request deleted successfully');
-
-        } catch (\Exception $e) {
             DB::rollBack();
-            
-            Log::error('Delete failed', [
-                'error' => $e->getMessage(),
-                'request_id' => $id ?? 'unknown',
-                'user_id' => auth()->id(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return back()->with('error', 'Failed to delete request');
+            return back()->with('error', 'Cannot delete request in current status');
         }
+
+        $manPowerRequest->delete();
+
+        DB::commit();
+
+        Log::info('Successfully deleted request', [
+            'request_id' => $id,
+            'user_id' => auth()->id()
+        ]);
+
+        return redirect()->route('manpower-requests.index')
+            ->with('success', 'Request deleted successfully');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        
+        Log::error('Delete failed', [
+            'error' => $e->getMessage(),
+            'request_id' => $id ?? 'unknown',
+            'user_id' => auth()->id(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        return back()->with('error', 'Failed to delete request');
     }
+}
 
     public function fulfill(ManPowerRequest $manPowerRequest)
     {
@@ -681,10 +671,8 @@ public function bulkFulfill(Request $request)
             ->get();
 
         if ($manpowerRequests->isEmpty()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No eligible requests found for bulk fulfillment'
-            ], 400);
+            // return response()->json([...], 400);
+            return;
         }
 
         $results = [
@@ -700,10 +688,8 @@ public function bulkFulfill(Request $request)
 
         foreach ($manpowerRequests as $manpowerRequest) {
             try {
-                // Cari employee yg sudah assigned di request lain supaya tidak double
                 $currentlyAssigned = $this->getCurrentlyAssignedEmployees($manpowerRequests, $manpowerRequest);
 
-                // Pilih karyawan otomatis
                 $selectedEmployees = $this->autoSelectEmployees(
                     $manpowerRequest, 
                     $strategy,
@@ -712,12 +698,11 @@ public function bulkFulfill(Request $request)
 
                 if ($selectedEmployees->isEmpty()) {
                     $results['failed']++;
-                    $results['errors'][] = "No eligible employees found for request ID {$manpowerRequest->id}";
+                    $results['errors'][] = "No eligible employees huha found for request ID {$manpowerRequest->id}";
                     $manpowerRequest->update(['status' => 'pending']);
                     continue;
                 }
 
-                // Validasi gender
                 $validationResult = $this->validateGenderRequirements($manpowerRequest, $selectedEmployees);
                 if (!$validationResult['valid']) {
                     $results['failed']++;
@@ -726,10 +711,8 @@ public function bulkFulfill(Request $request)
                     continue;
                 }
 
-                // Buat schedule assignment
                 $this->createEmployeeAssignments($manpowerRequest, $selectedEmployees);
 
-                // Update status
                 $manpowerRequest->update([
                     'status'       => 'fulfilled',
                     'fulfilled_by' => auth()->id(),
@@ -753,22 +736,18 @@ public function bulkFulfill(Request $request)
             $message .= ". Errors: " . implode('; ', $results['errors']);
         }
 
-        return response()->json([
-            'success' => $results['fulfilled'] > 0,
-            'message' => $message,
-            'results' => $results
-        ]);
+        // return response()->json([...]);
+        return;
 
     } catch (\Exception $e) {
         DB::rollBack();
         Log::error('Bulk fulfill error: ' . $e->getMessage());
         
-        return response()->json([
-            'success' => false,
-            'message' => 'An error occurred during bulk fulfillment'
-        ], 500);
+        // return response()->json([...], 500);
+        return;
     }
 }
+
 
 /**
  * Buat schedule assignment untuk employees terpilih
