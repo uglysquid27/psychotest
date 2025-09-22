@@ -375,143 +375,177 @@ export default function Fulfill({
         });
     }, [selectedIds, request, allSortedEligibleEmployees, post, auth.user.id, data.visibility]);
 
-    const handleAutoFulfill = useCallback((strategy, requestIds) => {
-        // Create a copy of current bulk selections
-        const newBulkSelections = { ...bulkSelectedEmployees };
+ const handleAutoFulfill = useCallback((strategy, requestIds) => {
+    // Create a copy of current bulk selections
+    const newBulkSelections = { ...bulkSelectedEmployees };
 
-        // Get all requests that need to be fulfilled
-        const requestsToFulfill = sameDayRequests.filter(req =>
-            requestIds.includes(req.id)
-        );
+    // Get all requests that need to be fulfilled
+    const requestsToFulfill = sameDayRequests.filter(req =>
+        requestIds.includes(req.id) && req.status !== 'fulfilled'
+    );
 
-        // Create a set of already used employees across ALL requests
-        const usedEmployeeIds = new Set(
-            Object.values(newBulkSelections).flat()
-        );
+    // Create a set of already used employees across ALL requests
+    const usedEmployeeIds = new Set(
+        Object.values(newBulkSelections).flat().filter(id => id)
+    );
 
-        // Create a pool of available employees (clone to avoid mutation)
-        let availableEmployees = allSortedEligibleEmployees.filter(emp =>
+    // Create a pool of available employees (clone to avoid mutation)
+    let availableEmployees = allSortedEligibleEmployees.filter(emp =>
+        !usedEmployeeIds.has(emp.id)
+    );
+
+    // Strategy-based sorting
+    if (strategy === 'same_section') {
+        // Prioritize employees from the same section
+        availableEmployees.sort((a, b) => {
+            const aIsSame = a.subSections.some(ss => String(ss.id) === String(request.sub_section_id));
+            const bIsSame = b.subSections.some(ss => String(ss.id) === String(request.sub_section_id));
+            if (aIsSame !== bIsSame) return aIsSame ? -1 : 1;
+            
+            // Then by score
+            const aTotalScore = (a.workload_points || 0) + (a.blind_test_points || 0) + (a.average_rating || 0);
+            const bTotalScore = (b.workload_points || 0) + (b.blind_test_points || 0) + (b.average_rating || 0);
+            return bTotalScore - aTotalScore;
+        });
+    } else if (strategy === 'balanced') {
+        // Prioritize employees with lower workload
+        availableEmployees.sort((a, b) => {
+            const aWorkload = (a.workload_points || 0) + (a.blind_test_points || 0);
+            const bWorkload = (b.workload_points || 0) + (b.blind_test_points || 0);
+            return aWorkload - bWorkload;
+        });
+    }
+    // Default is 'optimal' which uses the original sorting
+
+    // Process each request
+    requestsToFulfill.forEach(req => {
+        const requiredMale = req.male_count || 0;
+        const requiredFemale = req.female_count || 0;
+        const totalRequired = req.requested_amount;
+
+        // Filter available employees that match gender requirements
+        const maleCandidates = availableEmployees.filter(emp =>
+            emp.gender === 'male' &&
             !usedEmployeeIds.has(emp.id)
         );
 
-        // Strategy-based sorting
-        if (strategy === 'same_section') {
-            // Prioritize employees from the same section
-            availableEmployees.sort((a, b) => {
-                const aIsSame = a.subSections.some(ss => String(ss.id) === String(request.sub_section_id));
-                const bIsSame = b.subSections.some(ss => String(ss.id) === String(request.sub_section_id));
-                if (aIsSame !== bIsSame) return aIsSame ? -1 : 1;
-                return 0;
-            });
-        } else if (strategy === 'balanced') {
-            // Prioritize employees with lower workload
-            availableEmployees.sort((a, b) => {
-                const aWorkload = (a.workload_points || 0) + (a.blind_test_points || 0);
-                const bWorkload = (b.workload_points || 0) + (b.blind_test_points || 0);
-                return aWorkload - bWorkload;
+        const femaleCandidates = availableEmployees.filter(emp =>
+            emp.gender === 'female' &&
+            !usedEmployeeIds.has(emp.id)
+        );
+
+        // Select employees for this request
+        const selectedForRequest = [];
+
+        // First, add required males
+        for (let i = 0; i < requiredMale && maleCandidates.length > 0; i++) {
+            const candidate = maleCandidates.shift();
+            selectedForRequest.push(candidate.id);
+            usedEmployeeIds.add(candidate.id);
+            
+            // Remove from available employees
+            availableEmployees = availableEmployees.filter(emp => emp.id !== candidate.id);
+        }
+
+        // Then, add required females
+        for (let i = 0; i < requiredFemale && femaleCandidates.length > 0; i++) {
+            const candidate = femaleCandidates.shift();
+            selectedForRequest.push(candidate.id);
+            usedEmployeeIds.add(candidate.id);
+            
+            // Remove from available employees
+            availableEmployees = availableEmployees.filter(emp => emp.id !== candidate.id);
+        }
+
+        // Fill remaining slots with any available employees
+        const remainingSlots = totalRequired - selectedForRequest.length;
+        if (remainingSlots > 0) {
+            const otherCandidates = availableEmployees
+                .filter(emp => !usedEmployeeIds.has(emp.id))
+                .slice(0, remainingSlots);
+
+            otherCandidates.forEach(candidate => {
+                selectedForRequest.push(candidate.id);
+                usedEmployeeIds.add(candidate.id);
+                
+                // Remove from available employees
+                availableEmployees = availableEmployees.filter(emp => emp.id !== candidate.id);
             });
         }
-        // Default is 'optimal' which uses the original sorting
 
-        // Process each request
-        requestsToFulfill.forEach(req => {
-            const requiredMale = req.male_count || 0;
-            const requiredFemale = req.female_count || 0;
-            const totalRequired = req.requested_amount;
+        // Update the bulk selections
+        newBulkSelections[req.id] = selectedForRequest;
+    });
 
-            // Filter available employees that match gender requirements
-            const maleCandidates = availableEmployees.filter(emp =>
-                emp.gender === 'male' &&
-                !usedEmployeeIds.has(emp.id)
-            );
+    // Update state with the new selections
+    setBulkSelectedEmployees(newBulkSelections);
+}, [allSortedEligibleEmployees, bulkSelectedEmployees, sameDayRequests, request.sub_section_id]);
 
-            const femaleCandidates = availableEmployees.filter(emp =>
-                emp.gender === 'female' &&
-                !usedEmployeeIds.has(emp.id)
-            );
+const handleBulkSubmit = useCallback((strategy, visibility) => {
+    setBackendError(null);
 
-            // Select employees for this request
-            const selectedForRequest = [];
+    // Validate all selected requests have complete assignments
+    const hasIncompleteAssignments = selectedBulkRequests.some(requestId => {
+        const employees = bulkSelectedEmployees[requestId] || [];
+        const request = sameDayRequests.find(req => req.id.toString() === requestId.toString());
+        return request && employees.length < request.requested_amount;
+    });
 
-            // First, add required males
-            for (let i = 0; i < requiredMale && maleCandidates.length > 0; i++) {
-                const candidate = maleCandidates.shift();
-                selectedForRequest.push(candidate.id);
-                usedEmployeeIds.add(candidate.id);
+    if (hasIncompleteAssignments) {
+        setBackendError('Beberapa request belum terisi penuh. Silakan lengkapi semua assignment terlebih dahulu.');
+        return;
+    }
+
+    // Prepare bulk data with employee selections
+    const bulkData = {};
+    selectedBulkRequests.forEach(requestId => {
+        const employees = bulkSelectedEmployees[requestId] || [];
+        if (employees.length > 0) {
+            bulkData[requestId] = employees;
+        }
+    });
+
+    console.log('Submitting bulk fulfill:', {
+        request_ids: selectedBulkRequests,
+        employee_selections: bulkData,
+        strategy,
+        visibility
+    });
+
+    console.log("🚀 Submitting bulk fulfill:");
+console.log("Selected Bulk Requests:", selectedBulkRequests);
+console.log("bulkSelectedEmployees (state):", JSON.stringify(bulkSelectedEmployees, null, 2));
+
+
+    // Use router.post instead of useForm's post
+    router.post(route('manpower-requests.bulk-fulfill'), {
+        request_ids: selectedBulkRequests,
+        employee_selections: bulkData,
+        strategy: strategy,
+        visibility: visibility,
+        status: 'pending'
+    }, {
+        onSuccess: () => {
+            console.log('Bulk fulfill successful');
+            // Clear any debug data and redirect
+            setBulkSelectedEmployees({});
+            setSelectedBulkRequests([]);
+            setBulkMode(false);
+            router.visit(route('manpower-requests.index'));
+        },
+        onError: (errors) => {
+            console.error('Bulk fulfill error:', errors);
+            if (errors.fulfillment_error) {
+                setBackendError(errors.fulfillment_error);
+            } else if (errors.message) {
+                setBackendError(errors.message);
+            } else {
+                setBackendError('Terjadi kesalahan saat memproses bulk fulfillment');
             }
+        }
+    });
+}, [selectedBulkRequests, bulkSelectedEmployees, sameDayRequests]);
 
-            // Then, add required females
-            for (let i = 0; i < requiredFemale && femaleCandidates.length > 0; i++) {
-                const candidate = femaleCandidates.shift();
-                selectedForRequest.push(candidate.id);
-                usedEmployeeIds.add(candidate.id);
-            }
-
-            // Fill remaining slots with any available employees
-            const remainingSlots = totalRequired - selectedForRequest.length;
-            if (remainingSlots > 0) {
-                const otherCandidates = availableEmployees.filter(emp =>
-                    !usedEmployeeIds.has(emp.id)
-                ).slice(0, remainingSlots);
-
-                otherCandidates.forEach(candidate => {
-                    selectedForRequest.push(candidate.id);
-                    usedEmployeeIds.add(candidate.id);
-                });
-            }
-
-            // Update the bulk selections
-            newBulkSelections[req.id] = selectedForRequest;
-        });
-
-        // Update state with the new selections
-        setBulkSelectedEmployees(newBulkSelections);
-    }, [allSortedEligibleEmployees, bulkSelectedEmployees, sameDayRequests, request.sub_section_id]);
-
-    const handleBulkSubmit = useCallback((strategy, visibility) => {
-        setBackendError(null);
-
-        // Prepare bulk data with employee selections
-        const bulkData = {};
-        Object.keys(bulkSelectedEmployees).forEach(requestId => {
-            bulkData[requestId] = bulkSelectedEmployees[requestId];
-        });
-
-        console.log('Submitting bulk fulfill:', {
-            request_ids: selectedBulkRequests,
-            employee_selections: bulkData,
-            strategy,
-            visibility
-        });
-
-        // Use router.post instead of useForm's post
-        router.post(route('manpower-requests.bulk-fulfill'), {
-            request_ids: selectedBulkRequests,
-            employee_selections: bulkData,
-            strategy: strategy,
-            visibility: visibility,
-            status: 'pending'
-        }, {
-            onSuccess: () => {
-                console.log('Bulk fulfill successful');
-                // Clear any debug data and redirect
-                setBulkSelectedEmployees({});
-                setSelectedBulkRequests([]);
-                setBulkMode(false);
-                router.visit(route('manpower-requests.index'));
-            },
-            onError: (errors) => {
-                console.error('Bulk fulfill error:', errors);
-                if (errors.fulfillment_error) {
-                    setBackendError(errors.fulfillment_error);
-                } else if (errors.message) {
-                    setBackendError(errors.message);
-                } else {
-                    setBackendError('Terjadi kesalahan saat memproses bulk fulfillment');
-                }
-            }
-        });
-    }, [selectedBulkRequests, bulkSelectedEmployees]);
 
     const openChangeModal = useCallback((index) => {
         setChangingEmployeeIndex(index);
@@ -679,6 +713,7 @@ export default function Fulfill({
             }
 
             setSelectedBulkRequests(allRequests.map(req => req.id));
+
 
             // Initialize selections and AUTO-FILL them
             const initialSelections = {};

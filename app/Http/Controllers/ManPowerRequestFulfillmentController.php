@@ -211,330 +211,243 @@ class ManPowerRequestFulfillmentController extends Controller
         ]);
     }
 
- public function bulkStore(Request $request)
-    {
-        $request->validate([
-            'request_ids' => 'required|array',
-            'request_ids.*' => 'exists:man_power_requests,id',
-            'employee_selections' => 'required|array',
-            'strategy' => 'required|in:optimal,same_section,balanced',
-            'visibility' => 'in:public,private',
-            'status' => 'in:pending,accepted,rejected'
-        ]);
+public function bulkStore(Request $request)
+{
+    $request->validate([
+        'request_ids'         => 'required|array',
+        'request_ids.*'       => 'exists:man_power_requests,id',
+        'employee_selections' => 'required|array',
+        'strategy'            => 'required|in:optimal,same_section,balanced',
+        'visibility'          => 'in:public,private',
+        'status'              => 'in:pending,accepted,rejected'
+    ]);
 
-        Log::info('=== BULK FULFILLMENT STARTED ===', [
-            'user_id' => auth()->id(),
-            'user_name' => auth()->user()->name,
-            'request_ids' => $request->request_ids,
-            'request_count' => count($request->request_ids),
-            'strategy' => $request->strategy,
-            'visibility' => $request->visibility,
-            'timestamp' => now()->toDateTimeString()
-        ]);
+    Log::info('=== BULK FULFILLMENT STARTED ===', [
+        'user_id'     => auth()->id(),
+        'user_name'   => auth()->user()->name,
+        'request_ids' => $request->request_ids,
+        'request_count' => count($request->request_ids),
+        'strategy'    => $request->strategy,
+        'visibility'  => $request->visibility,
+        'timestamp'   => now()->toDateTimeString(),
+        'raw_input'   => $request->all(), // 🔍 log payload mentah
+    ]);
 
-        DB::beginTransaction();
-        try {
-            $results = [];
-            $successCount = 0;
-            $failureCount = 0;
-            $employeeSelections = $request->employee_selections;
-            $status = $request->status ?? 'pending';
+    DB::beginTransaction();
+    try {
+        $results          = [];
+        $successCount     = 0;
+        $failureCount     = 0;
+        $employeeSelections = $request->employee_selections;
+        $status           = $request->status ?? 'pending';
 
-            foreach ($request->request_ids as $id) {
-                Log::info('Processing request ID: ' . $id);
-                
-                $manpowerRequest = ManPowerRequest::with(['subSection', 'schedules'])->findOrFail($id);
+        foreach ($request->request_ids as $id) {
+            Log::info('⚡ Processing request', ['request_id' => $id]);
 
-                Log::info('Request details', [
+            $manpowerRequest = ManPowerRequest::with(['subSection', 'schedules'])->findOrFail($id);
+
+            // Skip if already fulfilled
+            if ($manpowerRequest->status === 'fulfilled') {
+                $results[$id] = 'already fulfilled';
+                $failureCount++;
+                Log::warning('REQUEST ALREADY FULFILLED - SKIPPING', ['request_id' => $id]);
+                continue;
+            }
+
+            // Get selected employee IDs for this request
+            $selectedEmployeeIds = $employeeSelections[$id] ?? [];
+
+            // Validate employee selection count
+            if (count($selectedEmployeeIds) !== $manpowerRequest->requested_amount) {
+                $results[$id] = 'invalid employee selection count';
+                $failureCount++;
+                Log::error('INVALID EMPLOYEE SELECTION COUNT - SKIPPING', [
                     'request_id' => $id,
-                    'current_status' => $manpowerRequest->status,
-                    'requested_amount' => $manpowerRequest->requested_amount,
-                    'male_count' => $manpowerRequest->male_count,
-                    'female_count' => $manpowerRequest->female_count,
-                    'sub_section' => $manpowerRequest->subSection->name ?? 'N/A'
+                    'selected'   => count($selectedEmployeeIds),
+                    'expected'   => $manpowerRequest->requested_amount
                 ]);
+                continue;
+            }
 
-                if ($manpowerRequest->status === 'fulfilled') {
-                    $results[$id] = 'already fulfilled';
-                    $failureCount++;
-                    Log::warning('REQUEST ALREADY FULFILLED - SKIPPING', ['request_id' => $id]);
-                    continue;
+            // Validate gender requirements
+            $maleCount   = 0;
+            $femaleCount = 0;
+
+            foreach ($selectedEmployeeIds as $employeeId) {
+                $employee = Employee::find($employeeId);
+                if (!$employee) {
+                    throw new \Exception("Employee {$employeeId} not found");
                 }
 
-                // Get selected employee IDs for this request
-                $selectedEmployeeIds = $employeeSelections[$id] ?? [];
+                if ($employee->gender === 'male') {
+                    $maleCount++;
+                } elseif ($employee->gender === 'female') {
+                    $femaleCount++;
+                }
+            }
 
-                Log::info('Employee selection validation', [
+            if ($manpowerRequest->male_count > 0 && $maleCount < $manpowerRequest->male_count) {
+                $results[$id] = 'insufficient male employees';
+                $failureCount++;
+                Log::error('INSUFFICIENT MALE EMPLOYEES - SKIPPING', [
                     'request_id' => $id,
-                    'selected_count' => count($selectedEmployeeIds),
-                    'expected_count' => $manpowerRequest->requested_amount,
-                    'selected_employees' => $selectedEmployeeIds
+                    'actual'     => $maleCount,
+                    'required'   => $manpowerRequest->male_count
                 ]);
+                continue;
+            }
 
-                if (count($selectedEmployeeIds) !== $manpowerRequest->requested_amount) {
-                    $results[$id] = 'invalid employee selection count';
-                    $failureCount++;
-                    Log::error('INVALID EMPLOYEE SELECTION COUNT - SKIPPING', [
-                        'request_id' => $id,
-                        'selected' => count($selectedEmployeeIds),
-                        'expected' => $manpowerRequest->requested_amount
-                    ]);
-                    continue;
-                }
-
-                // Validate gender requirements
-                $maleCount = 0;
-                $femaleCount = 0;
-                $employeeDetails = [];
-
-                foreach ($selectedEmployeeIds as $employeeId) {
-                    $employee = Employee::find($employeeId);
-                    if (!$employee) {
-                        throw new \Exception("Employee {$employeeId} not found");
-                    }
-
-                    if ($employee->gender === 'male') {
-                        $maleCount++;
-                    } elseif ($employee->gender === 'female') {
-                        $femaleCount++;
-                    }
-
-                    $employeeDetails[] = [
-                        'id' => $employee->id,
-                        'name' => $employee->name,
-                        'gender' => $employee->gender,
-                        'type' => $employee->type
-                    ];
-                }
-
-                Log::info('Gender validation results', [
+            if ($manpowerRequest->female_count > 0 && $femaleCount < $manpowerRequest->female_count) {
+                $results[$id] = 'insufficient female employees';
+                $failureCount++;
+                Log::error('INSUFFICIENT FEMALE EMPLOYEES - SKIPPING', [
                     'request_id' => $id,
-                    'male_count' => $maleCount,
-                    'required_male' => $manpowerRequest->male_count,
-                    'female_count' => $femaleCount,
-                    'required_female' => $manpowerRequest->female_count,
-                    'employees' => $employeeDetails
+                    'actual'     => $femaleCount,
+                    'required'   => $manpowerRequest->female_count
                 ]);
+                continue;
+            }
 
-                if ($manpowerRequest->male_count > 0 && $maleCount < $manpowerRequest->male_count) {
-                    $results[$id] = 'insufficient male employees';
-                    $failureCount++;
-                    Log::error('INSUFFICIENT MALE EMPLOYEES - SKIPPING', [
-                        'request_id' => $id,
-                        'actual' => $maleCount,
-                        'required' => $manpowerRequest->male_count
-                    ]);
-                    continue;
+            // Create schedules
+            $createdSchedules = [];
+            foreach ($selectedEmployeeIds as $index => $employeeId) {
+                $data = [
+                    'employee_id'        => $employeeId,
+                    'sub_section_id'     => $manpowerRequest->sub_section_id,
+                    'man_power_request_id' => $manpowerRequest->id,
+                    'date'               => $manpowerRequest->date,
+                    'status'             => $status,
+                    'visibility'         => $request->visibility ?? 'private',
+                ];
+
+                // Add line for putway subsection
+                if ($manpowerRequest->subSection && strtolower($manpowerRequest->subSection->name) === 'putway') {
+                    $data['line'] = strval((($index % 2) + 1));
                 }
 
-                if ($manpowerRequest->female_count > 0 && $femaleCount < $manpowerRequest->female_count) {
-                    $results[$id] = 'insufficient female employees';
-                    $failureCount++;
-                    Log::error('INSUFFICIENT FEMALE EMPLOYEES - SKIPPING', [
-                        'request_id' => $id,
-                        'actual' => $femaleCount,
-                        'required' => $manpowerRequest->female_count
-                    ]);
-                    continue;
-                }
+                $schedule = Schedule::create($data);
+                $createdSchedules[] = $schedule->id;
 
-                // Create schedules
-                $createdSchedules = [];
-                foreach ($selectedEmployeeIds as $index => $employeeId) {
-                    $data = [
-                        'employee_id' => $employeeId,
-                        'sub_section_id' => $manpowerRequest->sub_section_id,
-                        'man_power_request_id' => $manpowerRequest->id,
-                        'date' => $manpowerRequest->date,
-                        'status' => $status,
-                        'visibility' => $request->visibility ?? 'private',
-                    ];
-
-                    // Add line for putway subsection
-                    if ($manpowerRequest->subSection && strtolower($manpowerRequest->subSection->name) === 'putway') {
-                        $data['line'] = strval((($index % 2) + 1));
-                    }
-
-                    $schedule = Schedule::create($data);
-                    $createdSchedules[] = $schedule->id;
-                }
-
-                Log::info('Schedules created successfully', [
-                    'request_id' => $id,
-                    'schedule_ids' => $createdSchedules,
-                    'employee_count' => count($selectedEmployeeIds)
-                ]);
-
-                // Update request status
-                $manpowerRequest->update([
-                    'status' => 'fulfilled',
-                    'fulfilled_by' => auth()->id()
-                ]);
-
-                $results[$id] = 'fulfilled - ' . count($selectedEmployeeIds) . ' employees assigned';
-                $successCount++;
-                Log::info('REQUEST FULFILLED SUCCESSFULLY', [
-                    'request_id' => $id,
-                    'employees_assigned' => count($selectedEmployeeIds)
+                Log::info('✅ Employee assigned', [
+                    'request_id'  => $id,
+                    'employee_id' => $employeeId,
+                    'schedule_id' => $schedule->id,
                 ]);
             }
 
-            DB::commit();
-
-            Log::info('=== BULK FULFILLMENT COMPLETED ===', [
-                'total_requests' => count($request->request_ids),
-                'successful' => $successCount,
-                'failed' => $failureCount,
-                'success_rate' => round(($successCount / count($request->request_ids)) * 100, 2) . '%',
-                'results' => $results,
-                'timestamp' => now()->toDateTimeString()
+            // Update request status
+            $manpowerRequest->update([
+                'status'       => 'fulfilled',
+                'fulfilled_by' => auth()->id()
             ]);
 
-            // Return Inertia redirect instead of JSON response
-            return redirect()->route('manpower-requests.index')->with([
-                'success' => 'Bulk fulfill completed: ' . $successCount . ' successful, ' . $failureCount . ' failed',
-                'bulk_results' => $results
-            ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            
-            Log::error('=== BULK FULFILLMENT FAILED ===', [
-                'error_message' => $e->getMessage(),
-                'error_trace' => $e->getTraceAsString(),
-                'request_data' => $request->except(['employee_selections']), // Don't log all employee data
-                'timestamp' => now()->toDateTimeString()
-            ]);
-
-            return redirect()->back()->withErrors([
-                'fulfillment_error' => 'Bulk fulfill failed: ' . $e->getMessage()
-            ]);
+            $results[$id] = 'fulfilled - ' . count($selectedEmployeeIds) . ' employees assigned';
+            $successCount++;
         }
+
+        DB::commit();
+
+        Log::info('=== BULK FULFILLMENT COMPLETED ===', [
+            'total_requests' => count($request->request_ids),
+            'successful'     => $successCount,
+            'failed'         => $failureCount,
+            'success_rate'   => round(($successCount / count($request->request_ids)) * 100, 2) . '%',
+            'results'        => $results,
+            'timestamp'      => now()->toDateTimeString()
+        ]);
+
+        return redirect()->route('manpower-requests.index')->with([
+            'success' => 'Bulk fulfill completed: ' . $successCount . ' successful, ' . $failureCount . ' failed',
+            'bulk_results' => $results
+        ]);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+
+        Log::error('=== BULK FULFILLMENT FAILED ===', [
+            'error_message' => $e->getMessage(),
+            'error_trace'   => $e->getTraceAsString(),
+            'request_data'  => $request->except(['employee_selections']),
+            'timestamp'     => now()->toDateTimeString()
+        ]);
+
+        return redirect()->back()->withErrors([
+            'fulfillment_error' => 'Bulk fulfill failed: ' . $e->getMessage()
+        ]);
     }
+}
+
 
 public function bulkFulfill(Request $request)
-    {
-        $validated = $request->validate([
-            'request_ids' => 'required|array',
-            'request_ids.*' => 'exists:man_power_requests,id',
-            'strategy' => 'required|in:optimal,same_section,balanced',
-            'visibility' => 'required|in:private,public'
-        ]);
+{
+    $request->validate([
+        'request_ids'           => 'required|array',
+        'request_ids.*'         => 'exists:man_power_requests,id',
+        'employee_selections'   => 'required|array',
+        'strategy'              => 'required|in:optimal,same_section,balanced',
+        'visibility'            => 'required|in:private,public',
+    ]);
 
-        $requestIds = $validated['request_ids'];
-        $strategy = $validated['strategy'];
-        $visibility = $validated['visibility'];
-
-        // Get all requests with their relationships
-        $requests = ManPowerRequest::with(['subSection', 'shift', 'schedules.employee'])
-            ->whereIn('id', $requestIds)
-            ->get();
-
-        // Group by date and validate they're all for the same date
-        $dates = $requests->pluck('date')->unique();
-        if ($dates->count() > 1) {
-            return redirect()->back()->withErrors([
-                'fulfillment_error' => 'Bulk fulfillment hanya bisa untuk tanggal yang sama'
-            ]);
-        }
-
-        $date = $dates->first();
-
-        // Get all available employees for this date
-        $employees = Employee::with([
-            'subSections',
-            'schedules' => function ($query) use ($date) {
-                $query->whereDate('date', $date);
-            }
-        ])
-            ->where('cuti', 'no')
-            ->where('status', 'available')
-            ->get()
-            ->map(function ($employee) use ($date) {
-                $employee->is_scheduled = $employee->schedules->isNotEmpty();
-                return $employee;
-            });
-
-        $totalNeeded = $requests->sum('requested_amount');
-        $availableCount = $employees->count();
-
-        if ($availableCount < $totalNeeded) {
-            return redirect()->back()->withErrors([
-                'fulfillment_error' => "Tidak cukup karyawan. Dibutuhkan: $totalNeeded, Tersedia: $availableCount"
-            ]);
-        }
-
-        // Sort employees based on strategy
-        $sortedEmployees = $this->sortEmployeesForBulk($employees, $requests, $strategy);
-
-        // Assign employees to requests
-        $employeeIndex = 0;
-        $assignments = [];
-
-        foreach ($requests as $mpRequest) {
-            $needed = $mpRequest->requested_amount;
-            $assignedEmployees = [];
-
-            for ($i = 0; $i < $needed; $i++) {
-                if ($employeeIndex >= count($sortedEmployees)) {
-                    break;
-                }
-
-                $employee = $sortedEmployees[$employeeIndex];
-                $assignedEmployees[] = $employee;
-                $employeeIndex++;
-            }
-
-            $assignments[$mpRequest->id] = $assignedEmployees;
-        }
-
-        // Create schedules in transaction
+    try {
         DB::beginTransaction();
 
-        try {
-            foreach ($assignments as $requestId => $employees) {
-                $mpRequest = $requests->firstWhere('id', $requestId);
+        $requestIds         = $request->request_ids;
+        $employeeSelections = $request->employee_selections;
 
-                foreach ($employees as $index => $employee) {
-                    $data = [
-                        'man_power_request_id' => $requestId,
-                        'employee_id' => $employee->id,
-                        'date' => $date,
-                        'sub_section_id' => $mpRequest->sub_section_id,
-                        'shift_id' => $mpRequest->shift_id,
-                        'status' => 'pending',
-                        'visibility' => $visibility,
-                        'fulfilled_by' => auth()->id()
-                    ];
+        \Log::info('🚀 BulkFulfill triggered', [
+            'request_ids'         => $requestIds,
+            'employee_selections' => $employeeSelections,
+        ]);
 
-                    // Add line for putway subsection
-                    if (strtolower($mpRequest->subSection->name) === 'putway') {
-                        $data['line'] = (($index % 2) + 1);
-                    }
+        foreach ($requestIds as $reqId) {
+            $manpowerRequest = ManPowerRequest::findOrFail($reqId);
 
-                    Schedule::create($data);
-                }
+            $employeeIds = $employeeSelections[$reqId] ?? [];
 
-                // Update request status
-                $mpRequest->update([
-                    'status' => 'fulfilled',
-                    'fulfilled_by' => auth()->id(),
-                    'fulfilled_at' => now()
+            \Log::info('⚡ Processing bulk fulfill', [
+                'request_id'   => $reqId,
+                'employee_ids' => $employeeIds,
+            ]);
+
+            // hapus schedule lama (kalau overwrite)
+            $manpowerRequest->schedules()->delete();
+
+            foreach ($employeeIds as $empId) {
+                $manpowerRequest->schedules()->create([
+                    'employee_id' => $empId,
+                    'status'      => $request->status ?? 'pending',
+                    'visibility'  => $request->visibility,
+                ]);
+
+                \Log::info('✅ Employee assigned', [
+                    'request_id'  => $reqId,
+                    'employee_id' => $empId,
                 ]);
             }
 
-            DB::commit();
-
-            return redirect()->route('manpower-requests.index')
-                ->with('success', 'Berhasil memenuhi ' . count($requests) . ' request sekaligus!');
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return redirect()->back()->withErrors([
-                'fulfillment_error' => 'Terjadi kesalahan: ' . $e->getMessage()
+            $manpowerRequest->update([
+                'status'       => 'fulfilled',
+                'fulfilled_by' => $request->user()->id,
             ]);
         }
+
+        DB::commit();
+
+        \Log::info('🎉 BulkFulfill finished successfully');
+
+        return back()->with('success', 'Bulk fulfillment berhasil diproses.');
+    } catch (\Exception $e) {
+        DB::rollBack();
+        \Log::error('❌ BulkFulfill error: ' . $e->getMessage(), [
+            'trace' => $e->getTraceAsString(),
+        ]);
+
+        return back()->withErrors([
+            'fulfillment_error' => 'Terjadi kesalahan saat memproses bulk fulfillment: ' . $e->getMessage(),
+        ]);
     }
+}
+
 
     private function sortEmployeesForBulk($employees, $requests, $strategy)
     {

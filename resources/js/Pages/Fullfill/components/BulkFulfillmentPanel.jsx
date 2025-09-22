@@ -12,7 +12,6 @@ export default function BulkFulfillmentPanel({
     openBulkChangeModal,
     getEmployeeDetails,
     allSortedEligibleEmployees,
-    handleAutoFulfill
 }) {
     const [strategy, setStrategy] = useState('optimal');
     const [visibility, setVisibility] = useState('private');
@@ -191,36 +190,6 @@ export default function BulkFulfillmentPanel({
                 </div>
             </div>
 
-            {/* <div className="flex justify-end mb-4 space-x-3">
-                <button
-                    onClick={() => {
-                        // Select all requests including current one
-                        setSelectedBulkRequests(nonFulfilledRequests.map(req => req.id));
-                    }}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium text-sm"
-                >
-                    📋 Pilih Semua ({totalRequests})
-                </button>
-                <button
-                    onClick={() => {
-                        // Clear all selections
-                        setSelectedBulkRequests([]);
-                    }}
-                    className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md font-medium text-sm"
-                >
-                    🗑️ Hapus Semua
-                </button>
-                <button
-                    onClick={() => handleAutoFulfill(strategy, selectedBulkRequests)}
-                    disabled={processing || selectedBulkRequests.length === 0}
-                    className={`px-4 py-2 rounded-md font-medium text-sm ${processing || selectedBulkRequests.length === 0
-                            ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed text-gray-700'
-                            : 'bg-green-600 hover:bg-green-700 text-white'
-                        }`}
-                >
-                    ⚡ Auto-Fulfill Terpilih
-                </button>
-            </div> */}
 
             <div className="bg-white dark:bg-gray-800 mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
                 <h4 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">Daftar Request untuk Sub-Bagian "{currentRequest.sub_section?.name}"</h4>
