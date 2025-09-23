@@ -179,110 +179,127 @@ export default function EmployeeModal({
         setShowModal(false);
     };
 
-    const renderEmployeeCard = (emp) => {
-        const isSelectedInSingle = selectedIds.includes(emp.id);
-        const isSelectedInMulti = tempSelectedIds.includes(emp.id);
-        const isSelected = multiSelectMode ? isSelectedInMulti : isSelectedInSingle;
-        const isCurrentlyScheduled = emp.isCurrentlyScheduled;
-        const isDisabledInSingle = !multiSelectMode && isSelectedInSingle;
+const renderEmployeeCard = (emp) => {
+    const isSelectedInSingle = selectedIds.includes(emp.id);
+    const isSelectedInMulti = tempSelectedIds.includes(emp.id);
+    const isSelected = multiSelectMode ? isSelectedInMulti : isSelectedInSingle;
+    const isCurrentlyScheduled = emp.isCurrentlyScheduled;
+    const isDisabledInSingle = !multiSelectMode && isSelectedInSingle;
+    
+    // NEW: Check if employee is assigned to other requests
+    const isAssigned = emp.status === 'assigned' && !isCurrentlyScheduled;
+    const isDisabled = isAssigned || isDisabledInSingle;
 
-        let displaySubSectionName = 'Tidak Ada Bagian';
-        if (emp.subSections && emp.subSections.length > 0) {
-            const sameSub = emp.subSections.find(ss => ss.id === request.sub_section_id);
-            if (sameSub) {
-                displaySubSectionName = sameSub.name;
-            } else {
-                displaySubSectionName = emp.subSections[0].name;
-            }
+    let displaySubSectionName = 'Tidak Ada Bagian';
+    if (emp.subSections && emp.subSections.length > 0) {
+        const sameSub = emp.subSections.find(ss => ss.id === request.sub_section_id);
+        if (sameSub) {
+            displaySubSectionName = sameSub.name;
+        } else {
+            displaySubSectionName = emp.subSections[0].name;
         }
+    }
 
-        const isFemale = emp.gender === 'female';
+    const isFemale = emp.gender === 'female';
 
-        return (
-            <div
-                key={emp.id}
-                onClick={() => !isDisabledInSingle && toggleEmployeeSelection(emp.id)}
-                className={`cursor-pointer text-left p-3 rounded-md border transition relative ${isSelected
+    return (
+        <div
+            key={emp.id}
+            onClick={() => !isDisabled && toggleEmployeeSelection(emp.id)}
+            className={`cursor-pointer text-left p-3 rounded-md border transition relative ${
+                isSelected
                     ? multiSelectMode
                         ? 'bg-green-100 dark:bg-green-900/40 border-green-400 dark:border-green-600 ring-2 ring-green-500 dark:ring-green-400'
                         : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'
                     : isCurrentlyScheduled
                         ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/40'
-                        : isFemale
-                            ? 'hover:bg-pink-50 dark:hover:bg-pink-900/20 border-pink-200 dark:border-pink-700'
-                            : 'hover:bg-blue-50 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-700'
-                    } ${isDisabledInSingle ? 'cursor-not-allowed opacity-60' : ''}`}
-            >
-                {multiSelectMode && (
-                    <div className="absolute top-2 right-2">
-                        <input
-                            type="checkbox"
-                            checked={isSelectedInMulti}
-                            onChange={() => { }} // Handled by parent click
-                            className="w-5 h-5 text-green-600 bg-white border-gray-300 rounded focus:ring-green-500 focus:ring-2"
-                        />
-                    </div>
-                )}
+                        : isAssigned
+                            ? 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 opacity-60' // Different style for assigned
+                            : isFemale
+                                ? 'hover:bg-pink-50 dark:hover:bg-pink-900/20 border-pink-200 dark:border-pink-700'
+                                : 'hover:bg-blue-50 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-700'
+            } ${isDisabled ? 'cursor-not-allowed opacity-60' : ''}`}
+        >
+            {multiSelectMode && (
+                <div className="absolute top-2 right-2">
+                    <input
+                        type="checkbox"
+                        checked={isSelectedInMulti}
+                        onChange={() => { }}
+                        className="w-5 h-5 text-green-600 bg-white border-gray-300 rounded focus:ring-green-500 focus:ring-2"
+                        disabled={isAssigned} // Disable checkbox for assigned employees
+                    />
+                </div>
+            )}
 
-                <div className="flex justify-between items-start">
-                    <div className={`flex ${multiSelectMode ? 'pr-8' : ''}`}>
-                        {/* Employee Photo */}
-                        <div className="mr-3 flex-shrink-0">
-                            {emp.photo ? (
-                                <img
-                                    src={`/storage/${emp.photo}`}
-                                    alt={emp.name}
-                                    className="w-12 h-12 rounded-full object-cover border border-gray-300 dark:border-gray-600"
-                                    onError={(e) => {
-                                        e.target.style.display = 'none';
-                                        e.target.nextSibling.style.display = 'flex';
-                                    }}
-                                />
-                            ) : null}
-                            <div
-                                className={`w-12 h-12 rounded-full flex items-center justify-center border border-gray-300 dark:border-gray-600 ${emp.photo ? 'hidden' : 'bg-gray-200 dark:bg-gray-700'}`}
-                            >
-                                <span className="text-gray-500 dark:text-gray-400 text-lg font-semibold">
-                                    {emp.name.charAt(0).toUpperCase()}
-                                </span>
-                            </div>
-                        </div>
-
-                        <div>
-                            <strong className="text-gray-900 dark:text-gray-100">{emp.name}</strong>
-                            <div className="mt-1 text-gray-500 dark:text-gray-400 text-xs">
-                                <p>NIK: {emp.nik}</p>
-                                <p>Tipe: {emp.type}</p>
-                                <p>Sub: {displaySubSectionName}</p>
-                                <p>Skor: {emp.total_score.toFixed(2)}</p>
-                                {emp.type === 'harian' && (
-                                    <p>Bobot Kerja: {emp.working_day_weight}</p>
-                                )}
-                                <p>Beban Kerja: {emp.workload_points}</p>
-                                <p>Test Buta: {emp.blind_test_points}</p>
-                                <p>Rating: {emp.average_rating.toFixed(1)}</p>
-                            </div>
+            <div className="flex justify-between items-start">
+                <div className={`flex ${multiSelectMode ? 'pr-8' : ''}`}>
+                    {/* Employee Photo */}
+                    <div className="mr-3 flex-shrink-0">
+                        {emp.photo ? (
+                            <img
+                                src={`/storage/${emp.photo}`}
+                                alt={emp.name}
+                                className="w-12 h-12 rounded-full object-cover border border-gray-300 dark:border-gray-600"
+                                onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    e.target.nextSibling.style.display = 'flex';
+                                }}
+                            />
+                        ) : null}
+                        <div
+                            className={`w-12 h-12 rounded-full flex items-center justify-center border border-gray-300 dark:border-gray-600 ${
+                                emp.photo ? 'hidden' : 'bg-gray-200 dark:bg-gray-700'
+                            }`}
+                        >
+                            <span className="text-gray-500 dark:text-gray-400 text-lg font-semibold">
+                                {emp.name.charAt(0).toUpperCase()}
+                            </span>
                         </div>
                     </div>
-                    {!multiSelectMode && (
-                        <div className="flex flex-col items-end">
-                            <span className={`text-xs px-1 rounded mb-1 ${isFemale
+
+                    <div>
+                        <strong className="text-gray-900 dark:text-gray-100">{emp.name}</strong>
+                        <div className="mt-1 text-gray-500 dark:text-gray-400 text-xs">
+                            <p>NIK: {emp.nik}</p>
+                            <p>Tipe: {emp.type}</p>
+                            <p>Status: {emp.status === 'assigned' ? 'Assigned' : 'Available'}</p> {/* Show status */}
+                            <p>Sub: {displaySubSectionName}</p>
+                            <p>Skor: {emp.total_score.toFixed(2)}</p>
+                            {emp.type === 'harian' && (
+                                <p>Bobot Kerja: {emp.working_day_weight}</p>
+                            )}
+                            <p>Beban Kerja: {emp.workload_points}</p>
+                            <p>Test Buta: {emp.blind_test_points}</p>
+                            <p>Rating: {emp.average_rating.toFixed(1)}</p>
+                        </div>
+                    </div>
+                </div>
+                {!multiSelectMode && (
+                    <div className="flex flex-col items-end">
+                        <span className={`text-xs px-1 rounded mb-1 ${
+                            isFemale
                                 ? 'bg-pink-100 dark:bg-pink-900/40 text-pink-800 dark:text-pink-300'
                                 : 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300'
-                                }`}>
-                                {isFemale ? 'P' : 'L'}
+                        }`}>
+                            {isFemale ? 'P' : 'L'}
+                        </span>
+                        {isCurrentlyScheduled && (
+                            <span className="text-xs px-1 rounded bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300">
+                                Sudah dijadwalkan
                             </span>
-                            {isCurrentlyScheduled && (
-                                <span className="text-xs px-1 rounded bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300">
-                                    Sudah dijadwalkan
-                                </span>
-                            )}
-                        </div>
-                    )}
-                </div>
+                        )}
+                        {isAssigned && !isCurrentlyScheduled && (
+                            <span className="text-xs px-1 rounded bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300">
+                                Sudah ditugaskan
+                            </span>
+                        )}
+                    </div>
+                )}
             </div>
-        );
-    };
+        </div>
+    );
+};
 
     if (!showModal) return null;
 

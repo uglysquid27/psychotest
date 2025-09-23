@@ -96,39 +96,67 @@ export default function Index({ sections: initialSections, auth }) {
     return allRequests.filter(req => req.status !== 'fulfilled' && req.status !== 'fulfilling');
   }, [allRequests]);
 
-  // Group by section + date (using localSections)
-  const sectionDateGroups = useMemo(() => {
-    if (!localSections?.data) return [];
-    const groups = [];
+const getDateRange = () => {
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  
+  return {
+    yesterday: yesterday.toISOString().slice(0, 10),
+    today: today.toISOString().slice(0, 10),
+    tomorrow: tomorrow.toISOString().slice(0, 10)
+  };
+};
 
-    localSections.data.forEach((section) => {
-      const dateMap = {};
-      (section.sub_sections || []).forEach((sub) => {
-        (sub.man_power_requests || []).forEach((req) => {
-          const dateKey = new Date(req.date).toISOString().slice(0, 10);
-          if (!dateMap[dateKey]) {
-            dateMap[dateKey] = [];
+// Add state for date filter
+const [dateFilter, setDateFilter] = useState('current'); // 'current' or 'all'
+const dateRange = getDateRange();
+
+// Modify the sectionDateGroups to include date filtering
+const sectionDateGroups = useMemo(() => {
+  if (!localSections?.data) return [];
+  const groups = [];
+
+  localSections.data.forEach((section) => {
+    const dateMap = {};
+    (section.sub_sections || []).forEach((sub) => {
+      (sub.man_power_requests || []).forEach((req) => {
+        const dateKey = new Date(req.date).toISOString().slice(0, 10);
+        
+        // Apply date filter
+        if (dateFilter === 'current') {
+          if (dateKey !== dateRange.yesterday && 
+              dateKey !== dateRange.today && 
+              dateKey !== dateRange.tomorrow) {
+            return; // Skip dates outside the 3-day range
           }
-          dateMap[dateKey].push({ ...req, sub_section: { id: sub.id, name: sub.name } });
-        });
-      });
-
-      Object.keys(dateMap).forEach((dateKey) => {
-        const reqs = dateMap[dateKey];
-        groups.push({
-          sectionId: section.id,
-          sectionName: section.name,
-          date: dateKey,
-          requests: reqs,
-          totalRequests: reqs.length,
-          totalWorkers: reqs.reduce((sum, r) => sum + (r.requested_amount || 0), 0),
-          statuses: [...new Set(reqs.map((r) => r.status))],
-        });
+        }
+        
+        if (!dateMap[dateKey]) {
+          dateMap[dateKey] = [];
+        }
+        dateMap[dateKey].push({ ...req, sub_section: { id: sub.id, name: sub.name } });
       });
     });
 
-    return groups;
-  }, [localSections, refreshTrigger]);
+    Object.keys(dateMap).forEach((dateKey) => {
+      const reqs = dateMap[dateKey];
+      groups.push({
+        sectionId: section.id,
+        sectionName: section.name,
+        date: dateKey,
+        requests: reqs,
+        totalRequests: reqs.length,
+        totalWorkers: reqs.reduce((sum, r) => sum + (r.requested_amount || 0), 0),
+        statuses: [...new Set(reqs.map((r) => r.status))],
+      });
+    });
+  });
+
+  return groups;
+}, [localSections, refreshTrigger, dateFilter]); 
 
   // Sorting
   const sortedGroups = useMemo(() => {
@@ -327,6 +355,31 @@ export default function Index({ sections: initialSections, auth }) {
                   <h1 className="text-xl sm:text-2xl font-bold text-gray-700 dark:text-gray-300 mb-4 sm:mb-0">
                     Manpower Requests
                   </h1>
+                  <div className="flex items-center space-x-3 mb-4 sm:mb-0">
+    <span className="text-sm text-gray-600 dark:text-gray-400">Show:</span>
+    <div className="flex bg-gray-200 dark:bg-gray-700 rounded-md p-1">
+      <button
+        onClick={() => setDateFilter('current')}
+        className={`px-3 py-1 text-sm rounded-md transition-colors ${
+          dateFilter === 'current'
+            ? 'bg-indigo-600 text-white'
+            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+        }`}
+      >
+        3 Days
+      </button>
+      <button
+        onClick={() => setDateFilter('all')}
+        className={`px-3 py-1 text-sm rounded-md transition-colors ${
+          dateFilter === 'all'
+            ? 'bg-indigo-600 text-white'
+            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+        }`}
+      >
+        All Dates
+      </button>
+    </div>
+  </div>
                   <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
                     {/* Show bulk fulfill button when requests are selected */}
                     {selectedRequests.length > 0 && (

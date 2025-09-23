@@ -230,7 +230,7 @@ public function bulkStore(Request $request)
         'strategy'    => $request->strategy,
         'visibility'  => $request->visibility,
         'timestamp'   => now()->toDateTimeString(),
-        'raw_input'   => $request->all(), // 🔍 log payload mentah
+        'raw_input'   => $request->all(),
     ]);
 
     DB::beginTransaction();
@@ -308,7 +308,7 @@ public function bulkStore(Request $request)
                 continue;
             }
 
-            // Create schedules
+            // Create schedules with line assignment for putway subsection
             $createdSchedules = [];
             foreach ($selectedEmployeeIds as $index => $employeeId) {
                 $data = [
@@ -320,9 +320,9 @@ public function bulkStore(Request $request)
                     'visibility'         => $request->visibility ?? 'private',
                 ];
 
-                // Add line for putway subsection
+                // Add line for putway subsection - SAME LOGIC AS SINGLE MODE
                 if ($manpowerRequest->subSection && strtolower($manpowerRequest->subSection->name) === 'putway') {
-                    $data['line'] = strval((($index % 2) + 1));
+                    $data['line'] = strval((($index % 2) + 1)); // 1,2,1,2...
                 }
 
                 $schedule = Schedule::create($data);
@@ -332,6 +332,7 @@ public function bulkStore(Request $request)
                     'request_id'  => $id,
                     'employee_id' => $employeeId,
                     'schedule_id' => $schedule->id,
+                    'line'        => $data['line'] ?? 'N/A',
                 ]);
             }
 
