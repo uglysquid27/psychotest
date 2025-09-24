@@ -32,6 +32,7 @@ use App\Http\Controllers\SpasialController;
 use App\Http\Controllers\TesNumerikController;
 use App\Http\Controllers\CronJobSettingController;
 use App\Http\Controllers\ResignController;
+use App\Http\Controllers\EquipmentController;
 
 // app/Http/Controllers/LicenseVerificationController.php
 /*
@@ -46,6 +47,11 @@ use App\Http\Controllers\ResignController;
 */
 
 // Redirect root URL to login page
+
+Route::get('/upload', function () {
+    return Inertia::render('ImageUpload');
+});
+
 Route::get('/', function () {
     return redirect()->route('login');
 });
@@ -62,7 +68,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/verify-license', [LicenseVerificationController::class, 'verify'])
         ->name('license.verify');
 
-     Route::get('/cronjob-settings', [CronJobSettingController::class, 'index'])
+    Route::get('/cronjob-settings', [CronJobSettingController::class, 'index'])
         ->name('cronjob-settings.index');
     Route::put('/cronjob-settings/{cronJobSetting}', [CronJobSettingController::class, 'update'])
         ->name('cronjob-settings.update');
@@ -130,10 +136,10 @@ Route::middleware(['auth:employee', 'prevent.back'])
 
         // Other routes
         Route::resource('permits', PermitController::class);
-        
+
         // Resignation routes - ADDED
         Route::resource('resign', ResignController::class);
-        
+
         Route::post('/operator-license', [LicenseVerificationController::class, 'store']);
         Route::get('/employees/{employee}/edit', [EmployeeProfileController::class, 'edit'])
             ->name('employees.edit');
@@ -243,12 +249,12 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     Route::post('/manpower-requests/check-dulicates', [ManPowerRequestController::class, 'checkDuplicates'])
         ->name('manpower-requests.check-duplicates');
     Route::get('/manpower-requests/{id}/can-revise', [ManPowerRequestController::class, 'canRevise'])
-    ->name('manpower-requests.can-revise');
+        ->name('manpower-requests.can-revise');
     // Revision routes for fulfilled requests
-Route::get('/manpower-requests/{id}/revise', [ManPowerRequestFulfillmentController::class, 'revise'])
-    ->name('manpower-requests.revise');
-Route::put('/manpower-requests/{id}/update-revision', [ManPowerRequestFulfillmentController::class, 'updateRevision'])
-    ->name('manpower-requests.update-revision');
+    Route::get('/manpower-requests/{id}/revise', [ManPowerRequestFulfillmentController::class, 'revise'])
+        ->name('manpower-requests.revise');
+    Route::put('/manpower-requests/{id}/update-revision', [ManPowerRequestFulfillmentController::class, 'updateRevision'])
+        ->name('manpower-requests.update-revision');
 
     // Route::post('/manpower-requests/bulk-fulfill', [ManPowerRequestController::class, 'bulkFulfill'])
     // ->name('manpower-requests.bulk-fulfill');
@@ -277,9 +283,9 @@ Route::put('/manpower-requests/{id}/update-revision', [ManPowerRequestFulfillmen
         ->name('schedules.toggle-visibility');
     Route::post('/schedules/toggle-visibility-group', [ScheduleController::class, 'toggleVisibilityGroup'])
         ->name('schedules.toggle-visibility-group');
-Route::post('/whatsapp/send', [WhatsAppNotificationController::class, 'sendScheduleNotification'])->name('whatsapp.send');
+    Route::post('/whatsapp/send', [WhatsAppNotificationController::class, 'sendScheduleNotification'])->name('whatsapp.send');
     Route::get('/wa/test', [WhatsAppNotificationController::class, 'testSend']);
-    
+
 
 
 
@@ -374,4 +380,11 @@ Route::post('/whatsapp/send', [WhatsAppNotificationController::class, 'sendSched
 
     });
 
+    Route::prefix('equipments')->name('equipments.')->middleware(['auth'])->group(function () {
+    Route::get('/', [EquipmentController::class, 'index'])->name('index');
+    Route::get('/create', [EquipmentController::class, 'create'])->name('create');
+    Route::post('/', [EquipmentController::class, 'store'])->name('store');
+    Route::put('/{equipment}', [EquipmentController::class, 'update'])->name('update');
+    Route::delete('/{equipment}', [EquipmentController::class, 'destroy'])->name('destroy');
+});
 });

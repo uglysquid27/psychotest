@@ -16,6 +16,7 @@ export default function EmployeeModal({
     const [selectedSubSection, setSelectedSubSection] = useState('all');
     const [tempSelectedIds, setTempSelectedIds] = useState([]);
     const [showIncompleteModal, setShowIncompleteModal] = useState(false);
+    const [failedImages, setFailedImages] = useState(new Set());
 
     const availableSubSections = useMemo(() => {
         const subSectionMap = new Map();
@@ -61,8 +62,6 @@ export default function EmployeeModal({
         return filtered;
     }, [allSortedEligibleEmployees, searchTerm, selectedSubSection]);
 
-    // FIXED: More robust sub-section filtering
-    // FIXED: Comprehensive sub-section filtering with better type handling
     const sameSubSectionEmployees = useMemo(() => {
         const reqSubId = request?.sub_section_id;
         if (!reqSubId) return [];
@@ -73,12 +72,11 @@ export default function EmployeeModal({
             return emp.subSections.some(ss => {
                 if (!ss || !ss.id) return false;
 
-                // Try multiple comparison methods
                 const ssId = ss.id;
                 const matches =
-                    ssId == reqSubId || // Loose equality
-                    String(ssId) === String(reqSubId) || // String comparison
-                    Number(ssId) === Number(reqSubId); // Number comparison
+                    ssId == reqSubId ||
+                    String(ssId) === String(reqSubId) ||
+                    Number(ssId) === Number(reqSubId);
 
                 return matches;
             });
@@ -106,8 +104,56 @@ export default function EmployeeModal({
         });
     }, [filteredEmployees, request?.sub_section_id]);
 
+    const handleImageError = (employeeId, e) => {
+        // Prevent multiple error logs for the same image
+        if (!failedImages.has(employeeId)) {
+            // console.log(`Image failed to load for employee ${employeeId}, using fallback icon`);
+            setFailedImages(prev => new Set(prev).add(employeeId));
+        }
+        
+        // Hide the broken image and show the fallback
+        e.target.style.display = 'none';
+        const fallback = e.target.nextSibling;
+        if (fallback) {
+            fallback.style.display = 'flex';
+        }
+    };
 
-    // Rest of the component remains the same...
+    const UserIcon = ({ className = "w-6 h-6" }) => (
+        <svg 
+            className={className}
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24" 
+            xmlns="http://www.w3.org/2000/svg"
+        >
+            <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" 
+            />
+        </svg>
+    );
+
+    // Enhanced image URL construction with error handling
+    const getEmployeePhotoUrl = (employee) => {
+        if (!employee.photo) return null;
+        
+        // Check if the photo path is already a full URL or relative path
+        if (employee.photo.startsWith('http')) {
+            return employee.photo;
+        }
+        
+        // Handle different possible photo path formats
+        let photoPath = employee.photo;
+        if (!photoPath.startsWith('/')) {
+            photoPath = `/storage/${photoPath}`;
+        }
+        
+        return photoPath;
+    };
+
     const toggleEmployeeSelection = (employeeId) => {
         if (!multiSelectMode) {
             selectNewEmployee(employeeId);
@@ -169,7 +215,6 @@ export default function EmployeeModal({
             handleMultiSelect(tempSelectedIds);
             setShowModal(false);
         } else {
-            // Show incomplete selection modal
             setShowIncompleteModal(true);
         }
     };
@@ -186,9 +231,11 @@ const renderEmployeeCard = (emp) => {
     const isCurrentlyScheduled = emp.isCurrentlyScheduled;
     const isDisabledInSingle = !multiSelectMode && isSelectedInSingle;
     
-    // NEW: Check if employee is assigned to other requests
     const isAssigned = emp.status === 'assigned' && !isCurrentlyScheduled;
     const isDisabled = isAssigned || isDisabledInSingle;
+
+    const imageFailed = failedImages.has(emp.id);
+    const photoUrl = getEmployeePhotoUrl(emp);
 
     let displaySubSectionName = 'Tidak Ada Bagian';
     if (emp.subSections && emp.subSections.length > 0) {
@@ -214,7 +261,7 @@ const renderEmployeeCard = (emp) => {
                     : isCurrentlyScheduled
                         ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/40'
                         : isAssigned
-                            ? 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 opacity-60' // Different style for assigned
+                            ? 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 opacity-60'
                             : isFemale
                                 ? 'hover:bg-pink-50 dark:hover:bg-pink-900/20 border-pink-200 dark:border-pink-700'
                                 : 'hover:bg-blue-50 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-700'
@@ -227,35 +274,36 @@ const renderEmployeeCard = (emp) => {
                         checked={isSelectedInMulti}
                         onChange={() => { }}
                         className="w-5 h-5 text-green-600 bg-white border-gray-300 rounded focus:ring-green-500 focus:ring-2"
-                        disabled={isAssigned} // Disable checkbox for assigned employees
+                        disabled={isAssigned}
                     />
                 </div>
             )}
 
             <div className="flex justify-between items-start">
                 <div className={`flex ${multiSelectMode ? 'pr-8' : ''}`}>
-                    {/* Employee Photo */}
-                    <div className="mr-3 flex-shrink-0">
-                        {emp.photo ? (
-                            <img
-                                src={`/storage/${emp.photo}`}
-                                alt={emp.name}
-                                className="w-12 h-12 rounded-full object-cover border border-gray-300 dark:border-gray-600"
-                                onError={(e) => {
-                                    e.target.style.display = 'none';
-                                    e.target.nextSibling.style.display = 'flex';
-                                }}
-                            />
-                        ) : null}
-                        <div
-                            className={`w-12 h-12 rounded-full flex items-center justify-center border border-gray-300 dark:border-gray-600 ${
-                                emp.photo ? 'hidden' : 'bg-gray-200 dark:bg-gray-700'
-                            }`}
-                        >
-                            <span className="text-gray-500 dark:text-gray-400 text-lg font-semibold">
-                                {emp.name.charAt(0).toUpperCase()}
-                            </span>
-                        </div>
+                    {/* Employee Photo with robust error handling */}
+                    <div className="mr-3 flex-shrink-0 relative">
+                        {photoUrl && !imageFailed ? (
+                            <>
+                                <img
+                                    src={photoUrl}
+                                    alt={emp.name}
+                                    className="w-12 h-12 rounded-full object-cover border border-gray-300 dark:border-gray-600"
+                                    onError={(e) => handleImageError(emp.id, e)}
+                                    loading="lazy"
+                                />
+                                <div
+                                    className="w-12 h-12 rounded-full flex items-center justify-center border border-gray-300 dark:border-gray-600 bg-gray-200 dark:bg-gray-700 hidden"
+                                    style={{ display: 'none' }}
+                                >
+                                    <UserIcon className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                                </div>
+                            </>
+                        ) : (
+                            <div className="w-12 h-12 rounded-full flex items-center justify-center border border-gray-300 dark:border-gray-600 bg-gray-200 dark:bg-gray-700">
+                                <UserIcon className="w-6 h-6 text-gray-500 dark:text-gray-400" />
+                            </div>
+                        )}
                     </div>
 
                     <div>
@@ -263,7 +311,7 @@ const renderEmployeeCard = (emp) => {
                         <div className="mt-1 text-gray-500 dark:text-gray-400 text-xs">
                             <p>NIK: {emp.nik}</p>
                             <p>Tipe: {emp.type}</p>
-                            <p>Status: {emp.status === 'assigned' ? 'Assigned' : 'Available'}</p> {/* Show status */}
+                            <p>Status: {emp.status === 'assigned' ? 'Assigned' : 'Available'}</p>
                             <p>Sub: {displaySubSectionName}</p>
                             <p>Skor: {emp.total_score.toFixed(2)}</p>
                             {emp.type === 'harian' && (
