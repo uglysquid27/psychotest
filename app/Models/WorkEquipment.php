@@ -14,7 +14,8 @@ class WorkEquipment extends Model
     protected $fillable = [
         'amount',
         'type',
-        'size'
+        'size',
+        'photo'
     ];
 
     // Relasi ke Handover

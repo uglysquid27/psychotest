@@ -24,22 +24,20 @@ class EquipmentController extends Controller
     /**
      * Store a newly created equipment type.
      */
-   public function store(Request $request)
+  public function store(Request $request)
 {
     $validated = $request->validate([
         'type'   => 'required|string|max:255',
         'amount' => 'nullable|integer|min:0',
         'size'   => 'nullable|string',
+        'photo'  => 'nullable|string',
     ]);
 
-    if ($validated['size']) {
-        $validated['amount'] = null;
-    }
+    if ($validated['size']) $validated['amount'] = null;
 
-    WorkEquipment::create($validated);
+    $equipment = WorkEquipment::create($validated);
 
-    // Log data yang disubmit
-    Log::info('New equipment created', ['data' => $validated]);
+    Log::info('New equipment created', ['id' => $equipment->id, 'data' => $validated]);
 
     return redirect()->route('equipments.index')->with('success', 'Equipment created successfully.');
 }
@@ -50,19 +48,14 @@ public function update(Request $request, WorkEquipment $equipment)
         'type'   => 'required|string|max:255',
         'amount' => 'nullable|integer|min:0',
         'size'   => 'nullable|string',
+        'photo'  => 'nullable|string',
     ]);
 
-    if ($validated['size']) {
-        $validated['amount'] = null;
-    }
+    if ($validated['size']) $validated['amount'] = null;
 
     $equipment->update($validated);
 
-    // Log data yang diupdate
-    Log::info('Equipment updated', [
-        'id' => $equipment->id,
-        'data' => $validated
-    ]);
+    Log::info('Equipment updated', ['id' => $equipment->id, 'data' => $validated]);
 
     return redirect()->route('equipments.index')->with('success', 'Equipment updated successfully.');
 }
