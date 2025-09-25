@@ -33,6 +33,7 @@ use App\Http\Controllers\TesNumerikController;
 use App\Http\Controllers\CronJobSettingController;
 use App\Http\Controllers\ResignController;
 use App\Http\Controllers\EquipmentController;
+use App\Http\Controllers\HandoverController;
 
 // app/Http/Controllers/LicenseVerificationController.php
 /*
@@ -379,12 +380,23 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
         Route::post('/submit', [PersonalityTestController::class, 'submit'])->name('submit'); // tambah route submit
 
     });
-
-    Route::prefix('equipments')->name('equipments.')->middleware(['auth'])->group(function () {
+Route::prefix('equipments')->name('equipments.')->middleware(['auth'])->group(function () {
     Route::get('/', [EquipmentController::class, 'index'])->name('index');
     Route::get('/create', [EquipmentController::class, 'create'])->name('create');
     Route::post('/', [EquipmentController::class, 'store'])->name('store');
     Route::put('/{equipment}', [EquipmentController::class, 'update'])->name('update');
     Route::delete('/{equipment}', [EquipmentController::class, 'destroy'])->name('destroy');
+
+    // 👉 tambahan untuk assign
+    Route::get('/{equipment}/assign', [EquipmentController::class, 'assignPage'])->name('assign.page');
+    Route::post('/{equipment}/assign', [EquipmentController::class, 'assignStore'])->name('assign.store');
+
+    // 👉 update handover (upload foto + set tanggal)
+    Route::put('/handover/{handover}', [EquipmentController::class, 'handoverUpdate'])->name('handover.update');
 });
+
+Route::prefix('handovers')->name('handovers.')->middleware(['auth'])->group(function () {
+    Route::put('/{handover}', [HandoverController::class, 'update'])->name('update');
+});
+
 });

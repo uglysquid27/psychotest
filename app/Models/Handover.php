@@ -12,6 +12,7 @@ class Handover extends Model
     protected $fillable = [
         'employee_id',
         'equipment_id',
+        'size',
         'date',
         'photo',
     ];

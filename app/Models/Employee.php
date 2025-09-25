@@ -124,4 +124,10 @@ public function deactivatedByUser()
 {
     return $this->belongsTo(User::class, 'deactivated_by');
 }
+
+public function handover()
+{
+    return $this->hasOne(Handover::class, 'employee_id');
+}
+
 }
