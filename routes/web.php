@@ -387,11 +387,15 @@ Route::prefix('equipments')->name('equipments.')->middleware(['auth'])->group(fu
     Route::put('/{equipment}', [EquipmentController::class, 'update'])->name('update');
     Route::delete('/{equipment}', [EquipmentController::class, 'destroy'])->name('destroy');
 
-    // 👉 tambahan untuk assign
+    // 👉 OLD assign routes
     Route::get('/{equipment}/assign', [EquipmentController::class, 'assignPage'])->name('assign.page');
     Route::post('/{equipment}/assign', [EquipmentController::class, 'assignStore'])->name('assign.store');
 
-    // 👉 update handover (upload foto + set tanggal)
+    // 👉 NEW modal-based assign routes
+    Route::post('/assign/employees', [EquipmentController::class, 'getEmployeesForAssign'])->name('assign.employees');
+    Route::post('/assign/store', [EquipmentController::class, 'assignStoreModal'])->name('assign.store.modal');
+
+    // 👉 update handover
     Route::put('/handover/{handover}', [EquipmentController::class, 'handoverUpdate'])->name('handover.update');
 });
 

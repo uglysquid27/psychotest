@@ -11,6 +11,7 @@ export default function Assign() {
   // modal states
   const [showModal, setShowModal] = useState(false);
   const [selectedEmp, setSelectedEmp] = useState(null);
+  const [selectedHandover, setSelectedHandover] = useState(null);
   const [photo, setPhoto] = useState("");
 
   const handleSearch = (e) => {
@@ -18,33 +19,21 @@ export default function Assign() {
     router.get(route("equipments.assign.page", equipment.id), { search });
   };
 
-  const openModal = (employee) => {
+  const openModal = (employee, handover = null) => {
     setSelectedEmp(employee);
-    setPhoto(employee.handover?.photo || "");
+    setSelectedHandover(handover);
+    setPhoto(handover?.photo || "");
     setShowModal(true);
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    if (selectedEmp.handover) {
+    if (selectedHandover) {
       // update existing handover
       router.put(
-        route("handovers.update", selectedEmp.handover.id),
+        route("handovers.update", selectedHandover.id),
         { photo }, // date = otomatis hari ini di backend
-        {
-          preserveScroll: true,
-          onSuccess: () => setShowModal(false),
-        }
-      );
-    } else {
-      // create new handover
-      router.post(
-        route("equipments.assign.store", equipment.id),
-        {
-          employee_id: selectedEmp.id,
-          photo,
-        },
         {
           preserveScroll: true,
           onSuccess: () => setShowModal(false),
@@ -57,7 +46,7 @@ export default function Assign() {
     <AuthenticatedLayout
       header={
         <h2 className="font-semibold text-xl">
-          Assign Employees - {equipment.type}
+          Update Equipment Assignments - {equipment.type}
         </h2>
       }
     >
@@ -81,72 +70,71 @@ export default function Assign() {
 
         {/* Table */}
         <table className="min-w-full border border-gray-200 dark:border-gray-700 rounded-lg">
-  <thead>
-  <tr className="bg-gray-100 dark:bg-gray-700 text-sm text-gray-700 dark:text-gray-200">
-    <th className="px-4 py-2 border">#</th>
-    <th className="px-4 py-2 border">Name</th>
-    <th className="px-4 py-2 border">NIK</th>
-    <th className="px-4 py-2 border">Photo</th>
-    <th className="px-4 py-2 border">Date</th>
-    <th className="px-4 py-2 border">Action</th>
-  </tr>
-</thead>
-<tbody>
-  {employees.data.map((emp, idx) => (
-    <tr key={emp.id} className="text-sm text-gray-800 dark:text-gray-200">
-      <td className="px-4 py-2 border">
-        {(employees.current_page - 1) * employees.per_page + idx + 1}
-      </td>
-      <td className="px-4 py-2 border">{emp.name}</td>
-      <td className="px-4 py-2 border">{emp.nik}</td>
-
-      {/* 🔥 Photo */}
-      <td className="px-4 py-2 border text-center">
-        {emp.handover?.photo ? (
-          <img
-            src={emp.handover.photo}
-            alt="handover"
-            className="w-12 h-12 object-cover rounded mx-auto"
-          />
-        ) : (
-          <span className="text-gray-400 text-sm">-</span>
-        )}
-      </td>
-
-      {/* 🔥 Date */}
-      <td className="px-4 py-2 border text-center">
-        {emp.handover?.date
-          ? new Date(emp.handover.date).toLocaleDateString("id-ID")
-          : <span className="text-gray-400 text-sm">-</span>}
-      </td>
-
-      {/* Action */}
-      <td className="px-4 py-2 border text-center">
-        <button
-          onClick={() => openModal(emp)}
-          className={`px-3 py-1 rounded text-white ${
-            emp.handover
-              ? "bg-blue-600 hover:bg-blue-700"
-              : "bg-green-600 hover:bg-green-700"
-          }`}
-        >
-          {emp.handover ? "Update" : "Assign"}
-        </button>
-      </td>
-    </tr>
-  ))}
-  {employees.data.length === 0 && (
-    <tr>
-      <td
-        colSpan="6"
-        className="text-center py-4 text-gray-500 dark:text-gray-400"
-      >
-        No employees found.
-      </td>
-    </tr>
-  )}
-</tbody>
-
+          <thead>
+            <tr className="bg-gray-100 dark:bg-gray-700 text-sm text-gray-700 dark:text-gray-200">
+              <th className="px-4 py-2 border">#</th>
+              <th className="px-4 py-2 border">Name</th>
+              <th className="px-4 py-2 border">NIK</th>
+              <th className="px-4 py-2 border">Size</th>
+              <th className="px-4 py-2 border">Assignment Date</th>
+              <th className="px-4 py-2 border">Photo</th>
+              <th className="px-4 py-2 border">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {employees.data.map((emp, idx) => (
+              // Show each handover record separately, even for the same employee
+              <>
+                {emp.handovers.map((handover, handoverIndex) => (
+                  <tr key={`${emp.id}-${handover.id}`} className="text-sm text-gray-800 dark:text-gray-200">
+                    <td className="px-4 py-2 border">
+                      {(employees.current_page - 1) * employees.per_page + idx + 1}
+                      {emp.handovers.length > 1 && `.${handoverIndex + 1}`}
+                    </td>
+                    <td className="px-4 py-2 border">{emp.name}</td>
+                    <td className="px-4 py-2 border">{emp.nik}</td>
+                    <td className="px-4 py-2 border text-center">
+                      {handover.size || '-'}
+                    </td>
+                    <td className="px-4 py-2 border text-center">
+                      {handover.date
+                        ? new Date(handover.date).toLocaleDateString("id-ID")
+                        : <span className="text-gray-400 text-sm">-</span>}
+                    </td>
+                    <td className="px-4 py-2 border text-center">
+                      {handover.photo ? (
+                        <img
+                          src={handover.photo}
+                          alt="handover"
+                          className="w-12 h-12 object-cover rounded mx-auto"
+                        />
+                      ) : (
+                        <span className="text-gray-400 text-sm">No photo</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 border text-center">
+                      <button
+                        onClick={() => openModal(emp, handover)}
+                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded"
+                      >
+                        Update Photo
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </>
+            ))}
+            {employees.data.length === 0 && (
+              <tr>
+                <td
+                  colSpan="7"
+                  className="text-center py-4 text-gray-500 dark:text-gray-400"
+                >
+                  No equipment assignments found.
+                </td>
+              </tr>
+            )}
+          </tbody>
         </table>
 
         {/* Pagination */}
@@ -164,12 +152,12 @@ export default function Assign() {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Modal - Only for updating photos */}
       <Modal show={showModal} onClose={() => setShowModal(false)}>
-        {selectedEmp && (
+        {selectedEmp && selectedHandover && (
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             <h2 className="text-lg font-semibold mb-4">
-              {selectedEmp.handover ? "Update Handover" : "Assign Equipment"}
+              Update Handover Photo
             </h2>
 
             <p>
@@ -179,10 +167,17 @@ export default function Assign() {
               <span className="font-semibold">Employee:</span>{" "}
               {selectedEmp.name} ({selectedEmp.nik})
             </p>
+            <p>
+              <span className="font-semibold">Size:</span> {selectedHandover.size || 'N/A'}
+            </p>
+            <p>
+              <span className="font-semibold">Assigned on:</span>{" "}
+              {new Date(selectedHandover.date).toLocaleDateString("id-ID")}
+            </p>
 
             {/* ImageKit Upload */}
             <div>
-              <label className="block text-sm font-medium mb-1">Photo</label>
+              <label className="block text-sm font-medium mb-1">Update Photo</label>
               <IKContext
                 publicKey={import.meta.env.VITE_IMAGEKIT_PUBLIC_KEY}
                 urlEndpoint="https://ik.imagekit.io/arina123"
@@ -192,7 +187,7 @@ export default function Assign() {
                 }}
               >
                 <IKUpload
-                  fileName={`handover_${equipment.id}_${selectedEmp.id}.jpg`}
+                  fileName={`handover_${equipment.id}_${selectedEmp.id}_${Date.now()}.jpg`}
                   onError={(err) => console.error("Upload Error:", err)}
                   onSuccess={(res) => setPhoto(res.url)}
                 />
@@ -203,6 +198,16 @@ export default function Assign() {
                   alt="preview"
                   className="w-24 h-24 object-cover rounded mt-2"
                 />
+              )}
+              {selectedHandover.photo && !photo && (
+                <div className="mt-2">
+                  <p className="text-sm text-gray-600">Current photo:</p>
+                  <img
+                    src={selectedHandover.photo}
+                    alt="current"
+                    className="w-24 h-24 object-cover rounded"
+                  />
+                </div>
               )}
             </div>
 
@@ -216,9 +221,12 @@ export default function Assign() {
               </button>
               <button
                 type="submit"
-                className="px-3 py-2 bg-indigo-600 text-white rounded-md"
+                disabled={!photo}
+                className={`px-3 py-2 rounded-md text-white ${
+                  !photo ? 'bg-gray-400' : 'bg-indigo-600 hover:bg-indigo-700'
+                }`}
               >
-                {selectedEmp.handover ? "Update" : "Assign"}
+                Update Photo
               </button>
             </div>
           </form>

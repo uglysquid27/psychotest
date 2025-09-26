@@ -125,6 +125,13 @@ public function deactivatedByUser()
     return $this->belongsTo(User::class, 'deactivated_by');
 }
 
+// In Employee.php - add this method
+public function handovers()
+{
+    return $this->hasMany(Handover::class, 'employee_id');
+}
+
+// Keep the existing handover method for single handover
 public function handover()
 {
     return $this->hasOne(Handover::class, 'employee_id');
