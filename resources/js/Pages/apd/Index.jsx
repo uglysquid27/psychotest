@@ -37,7 +37,7 @@ export default function Index() {
     const [selectedEmployees, setSelectedEmployees] = useState([]);
     const [isSelectAll, setIsSelectAll] = useState(false);
 
-    // Photo upload states (same as Assign.jsx)
+    // Photo upload states
     const [uploadStatus, setUploadStatus] = useState("");
     const [debugInfo, setDebugInfo] = useState({});
     const [showDebug, setShowDebug] = useState(false);
@@ -48,12 +48,37 @@ export default function Index() {
         setTimeout(() => setNotification({ show: false, message: '', type: '' }), 3000);
     };
 
+    // Calculate available stock
+    const getAvailableStock = () => {
+        if (!selectedEquipment) return 0;
+        
+        if (selectedEquipment.size) {
+            const selectedSizeData = selectedEquipment.size.split(',').find(s => {
+                const [sizeName] = s.split(':');
+                return sizeName === selectedSize;
+            });
+            if (selectedSizeData) {
+                const [, amount] = selectedSizeData.split(':');
+                return parseInt(amount);
+            }
+            return 0;
+        } else {
+            return parseInt(selectedEquipment.amount);
+        }
+    };
+
     // Multiple selection functions
     const handleEmployeeSelect = (employee) => {
         const isSelected = selectedEmployees.some(emp => emp.id === employee.id);
         if (isSelected) {
             setSelectedEmployees(selectedEmployees.filter(emp => emp.id !== employee.id));
         } else {
+            // Check stock before adding
+            const availableStock = getAvailableStock();
+            if (selectedEmployees.length >= availableStock) {
+                showNotification(`Cannot select more than available stock (${availableStock})!`, 'error');
+                return;
+            }
             setSelectedEmployees([...selectedEmployees, employee]);
         }
     };
@@ -64,9 +89,18 @@ export default function Index() {
         } else {
             // Only select available employees (not already assigned)
             const availableEmployees = employees.data.filter(emp => 
-                !(emp.handover !== null && emp.handover !== undefined)
+                !(emp.handovers && emp.handovers.length > 0)
             );
-            setSelectedEmployees(availableEmployees);
+            
+            // Check stock limitation
+            const availableStock = getAvailableStock();
+            const employeesToSelect = availableEmployees.slice(0, availableStock);
+            
+            if (availableEmployees.length > availableStock) {
+                showNotification(`Only ${availableStock} employees selected due to stock limitation`, 'warning');
+            }
+            
+            setSelectedEmployees(employeesToSelect);
         }
         setIsSelectAll(!isSelectAll);
     };
@@ -74,20 +108,7 @@ export default function Index() {
     const handleAssignMultiple = async () => {
         if (!selectedEquipment || selectedEmployees.length === 0) return;
 
-        // Check stock availability
-        let availableStock = 0;
-        if (selectedEquipment.size) {
-            const selectedSizeData = selectedEquipment.size.split(',').find(s => {
-                const [sizeName] = s.split(':');
-                return sizeName === selectedSize;
-            });
-            if (selectedSizeData) {
-                const [, amount] = selectedSizeData.split(':');
-                availableStock = parseInt(amount);
-            }
-        } else {
-            availableStock = parseInt(selectedEquipment.amount);
-        }
+        const availableStock = getAvailableStock();
 
         if (availableStock < selectedEmployees.length) {
             showNotification(`Cannot assign: Only ${availableStock} items available, but ${selectedEmployees.length} employees selected!`, 'error');
@@ -274,29 +295,6 @@ export default function Index() {
         }
     };
 
-    // Also update the openAssignModal function to ensure equipmentId is passed correctly
-    const openAssignModal = (equipment) => {
-        setSelectedEquipment(equipment);
-        setSelectedEmployees([]);
-        setIsSelectAll(false);
-
-        if (equipment.size) {
-            setSelectedSize('');
-            setShowSizeModal(true);
-        } else {
-            setSelectedSize(null);
-
-            // Make sure equipment.id is passed correctly
-            if (equipment && equipment.id) {
-                loadEmployees(equipment.id, null);
-                setShowAssignModal(true);
-            } else {
-                console.error('Equipment ID is missing:', equipment);
-                alert('Error: Equipment ID is missing');
-            }
-        }
-    };
-
     // Handle filter change
     const handleFilterChange = (key, value) => {
         const newFilters = {
@@ -326,7 +324,7 @@ export default function Index() {
     const handleAssignToEmployee = async (employee) => {
         if (!selectedEquipment) return;
 
-        const isAssigned = employee.handover !== null && employee.handover !== undefined;
+        const isAssigned = employee.handovers && employee.handovers.length > 0;
 
         if (isAssigned) {
             router.get(route('equipments.assign.page', selectedEquipment.id), {
@@ -337,23 +335,7 @@ export default function Index() {
         }
 
         // Check stock availability before assignment
-        let availableStock = 0;
-
-        if (selectedEquipment.size) {
-            // Equipment with sizes
-            const selectedSizeData = selectedEquipment.size.split(',').find(s => {
-                const [sizeName] = s.split(':');
-                return sizeName === selectedSize;
-            });
-
-            if (selectedSizeData) {
-                const [, amount] = selectedSizeData.split(':');
-                availableStock = parseInt(amount);
-            }
-        } else {
-            // Equipment without sizes
-            availableStock = parseInt(selectedEquipment.amount);
-        }
+        const availableStock = getAvailableStock();
 
         if (availableStock <= 0) {
             showNotification('Cannot assign equipment: Stock is out of stock!', 'error');
@@ -404,6 +386,29 @@ export default function Index() {
         } catch (error) {
             console.error('Error assigning equipment:', error);
             showNotification('Error assigning equipment: ' + error.message, 'error');
+        }
+    };
+
+    // Also update the openAssignModal function to ensure equipmentId is passed correctly
+    const openAssignModal = (equipment) => {
+        setSelectedEquipment(equipment);
+        setSelectedEmployees([]);
+        setIsSelectAll(false);
+
+        if (equipment.size) {
+            setSelectedSize('');
+            setShowSizeModal(true);
+        } else {
+            setSelectedSize(null);
+
+            // Make sure equipment.id is passed correctly
+            if (equipment && equipment.id) {
+                loadEmployees(equipment.id, null);
+                setShowAssignModal(true);
+            } else {
+                console.error('Equipment ID is missing:', equipment);
+                alert('Error: Equipment ID is missing');
+            }
         }
     };
 
@@ -547,39 +552,59 @@ export default function Index() {
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-gray-600 dark:text-gray-400">Total Stock:</span>
-                                                <span className={`font-semibold ${
+                                            <div className="flex justify-between items-center text-sm">
+                                                <span className="text-gray-600 dark:text-gray-400">Stock Available:</span>
+                                                <span className={`font-medium ${
                                                     eq.amount > 0 
                                                         ? 'text-green-600 dark:text-green-400' 
                                                         : 'text-red-600 dark:text-red-400'
                                                 }`}>
-                                                    {eq.amount} units
+                                                    {eq.amount} items
                                                 </span>
                                             </div>
                                         )}
                                     </div>
 
                                     {/* Action Buttons */}
-                                    <div className="flex gap-2 pt-4 border-t border-gray-100 dark:border-gray-700">
-                                        <button
-                                            onClick={() => handleOpen(eq)}
-                                            className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg text-sm font-medium transition-colors"
-                                        >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                            </svg>
-                                            Edit
-                                        </button>
+                                    <div className="flex gap-2 pt-3 border-t border-gray-100 dark:border-gray-700">
                                         <button
                                             onClick={() => openAssignModal(eq)}
-                                            className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg text-sm font-medium transition-colors"
+                                            disabled={eq.size ? false : eq.amount <= 0}
+                                            className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                                                eq.size || eq.amount > 0
+                                                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md'
+                                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                                            }`}
                                         >
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                                             </svg>
                                             Assign
                                         </button>
+                                        <div className="flex gap-1">
+                                            <button
+                                                onClick={() => handleOpen(eq)}
+                                                className="inline-flex items-center justify-center p-2 text-gray-600 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                                                title="Edit Equipment"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                </svg>
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    if (confirm('Are you sure you want to delete this equipment?')) {
+                                                        router.delete(route('equipments.destroy', eq.id));
+                                                    }
+                                                }}
+                                                className="inline-flex items-center justify-center p-2 text-gray-600 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                title="Delete Equipment"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -589,19 +614,17 @@ export default function Index() {
                     {/* Empty State */}
                     {equipments.length === 0 && (
                         <div className="text-center py-12">
-                            <div className="max-w-md mx-auto">
-                                <div className="w-24 h-24 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
-                                    <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                                    </svg>
-                                </div>
-                                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No equipment registered</h3>
+                            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8 max-w-md mx-auto">
+                                <svg className="w-16 h-16 text-gray-400 dark:text-gray-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                </svg>
+                                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No Equipment Found</h3>
                                 <p className="text-gray-500 dark:text-gray-400 mb-6">
-                                    Get started by adding your first piece of equipment
+                                    Get started by adding your first piece of work equipment.
                                 </p>
                                 <button
                                     onClick={() => handleOpen()}
-                                    className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg font-medium text-white text-sm transition-colors shadow-md hover:shadow-lg"
+                                    className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg font-medium text-white text-sm transition-colors"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -614,218 +637,115 @@ export default function Index() {
                 </div>
             </div>
 
-            {/* Modal Add/Edit Equipment - Updated with photo upload like Assign.jsx */}
-            <Modal show={showModal} onClose={() => setShowModal(false)} maxWidth="lg">
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl">
-                    <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-                        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                            {editing ? 'Edit Equipment' : 'Add New Equipment'}
-                        </h2>
-                    </div>
+            {/* Notification */}
+            {notification.show && (
+                <div className={`fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg font-medium ${
+                    notification.type === 'error' 
+                        ? 'bg-red-500 text-white' 
+                        : notification.type === 'warning'
+                        ? 'bg-yellow-500 text-white'
+                        : 'bg-green-500 text-white'
+                }`}>
+                    {notification.message}
+                </div>
+            )}
 
-                    <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            {/* Add/Edit Equipment Modal */}
+            <Modal show={showModal} onClose={() => setShowModal(false)} maxWidth="2xl">
+                <div className="p-6">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                        {editing ? 'Edit Equipment' : 'Add New Equipment'}
+                    </h2>
+                    <p className="text-gray-600 dark:text-gray-400 mb-6">
+                        {editing ? 'Update equipment details' : 'Add new work equipment to the system'}
+                    </p>
+
+                    <form onSubmit={handleSubmit} className="space-y-6">
                         <div>
-                            <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Equipment Type</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Equipment Type *
+                            </label>
                             <input
                                 type="text"
+                                required
                                 value={form.type}
                                 onChange={(e) => setForm({ ...form, type: e.target.value })}
-                                className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
-                                placeholder="Enter equipment type..."
-                                required
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                placeholder="e.g., Safety Helmet, Safety Shoes"
                             />
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                Will be automatically converted to uppercase
+                            </p>
                         </div>
 
-                        {/* Photo Upload Section - Same as Assign.jsx */}
-                        <div>
-                            <label className="block text-sm font-medium mb-3 text-gray-700 dark:text-gray-300">
-                                Equipment Photo
-                            </label>
-
-                            {/* Current Photo */}
-                            {form.photo && (
-                                <div className="mb-4">
-                                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Current photo:</p>
-                                    <img
-                                        src={form.photo}
-                                        alt="current equipment"
-                                        className="w-32 h-32 object-cover rounded-lg border border-gray-200 dark:border-gray-600"
-                                    />
-                                </div>
-                            )}
-
-                            {/* New Photo Upload */}
-                            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
-                                <IKContext
-                                    publicKey={import.meta.env.VITE_IMAGEKIT_PUBLIC_KEY}
-                                    urlEndpoint={import.meta.env.VITE_IMAGEKIT_URL_ENDPOINT}
-                                    authenticator={async () => {
-                                        try {
-                                            setUploadStatus("authenticating");
-                                            
-                                            const response = await fetch("/api/imagekit/auth");
-                                            
-                                            if (!response.ok) {
-                                                const errorText = await response.text();
-                                                throw new Error(`Auth failed: ${response.status} - ${errorText}`);
-                                            }
-                                            
-                                            const data = await response.json();
-                                            
-                                            if (!data.token || !data.signature) {
-                                                throw new Error('Invalid authentication response');
-                                            }
-                                            
-                                            setUploadStatus("auth-success");
-                                            return data;
-                                        } catch (error) {
-                                            setUploadStatus("auth-error");
-                                            setDebugInfo(prev => ({ 
-                                                ...prev, 
-                                                authError: error.message,
-                                                authTimestamp: new Date().toISOString()
-                                            }));
-                                            console.error("ImageKit Auth Error:", error);
-                                            throw error;
-                                        }
-                                    }}
-                                >
-                                    <IKUpload
-                                        fileName={`equipment_${editing?.id || 'new'}_${Date.now()}.jpg`}
-                                        folder="/equipments"
-                                        useUniqueFileName={true}
-                                        onError={(err) => {
-                                            console.error("Upload Error Details:", err);
-                                            setUploadStatus("upload-failed");
-                                            setDebugInfo(prev => ({ 
-                                                ...prev, 
-                                                uploadError: err,
-                                                uploadTimestamp: new Date().toISOString()
-                                            }));
-                                            alert('Photo upload failed. Please try again.');
-                                        }}
-                                        onSuccess={(res) => {
-                                            console.log("Upload Success:", res);
-                                            setUploadStatus("upload-success");
-                                            setForm({ ...form, photo: res.url });
-                                            setDebugInfo(prev => ({ 
-                                                ...prev, 
-                                                uploadSuccess: res,
-                                                uploadTimestamp: new Date().toISOString()
-                                            }));
-                                        }}
-                                        onUploadStart={() => {
-                                            setUploadStatus("uploading");
-                                            console.log("Upload starting...");
-                                        }}
-                                        validateFile={(file) => {
-                                            const validTypes = ['image/jpeg', 'image/png', 'image/jpg'];
-                                            const isValidType = validTypes.includes(file.type);
-                                            const isValidSize = file.size <= 10 * 1024 * 1024; // 10MB
-                                            
-                                            if (!isValidType) {
-                                                alert('Please select a valid image file (JPEG, PNG, JPG)');
-                                                return false;
-                                            }
-                                            
-                                            if (!isValidSize) {
-                                                alert('File size must be less than 10MB');
-                                                return false;
-                                            }
-                                            
-                                            return true;
-                                        }}
-                                        className="hidden"
-                                        id="equipment-photo-upload"
-                                    />
-                                </IKContext>
-
-                                <label htmlFor="equipment-photo-upload" className="cursor-pointer">
-                                    <svg className="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                    </svg>
-                                    <p className="text-gray-600 dark:text-gray-400 mb-1">
-                                        Click to upload equipment photo
-                                    </p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-500">
-                                        PNG, JPG, JPEG up to 10MB
-                                    </p>
-                                    {uploadStatus && (
-                                        <p className={`text-xs mt-2 ${
-                                            uploadStatus.includes('success') ? 'text-green-600' : 
-                                            uploadStatus.includes('fail') || uploadStatus.includes('error') ? 'text-red-600' : 
-                                            'text-blue-600'
-                                        }`}>
-                                            Status: {uploadStatus}
-                                        </p>
-                                    )}
-                                </label>
-                            </div>
-
-                            {/* New Photo Preview */}
-                            {form.photo && (
-                                <div className="mt-4">
-                                    <p className="text-sm text-green-600 dark:text-green-400 mb-2 font-medium">New photo ready:</p>
-                                    <img
-                                        src={form.photo}
-                                        alt="new equipment preview"
-                                        className="w-32 h-32 object-cover rounded-lg border-2 border-green-200 dark:border-green-800"
-                                    />
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                        <div className="flex items-center gap-3">
                             <input
                                 type="checkbox"
-                                checked={hasSize}
-                                onChange={(e) => setHasSize(e.target.checked)}
                                 id="hasSize"
-                                className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                                checked={hasSize}
+                                onChange={(e) => {
+                                    setHasSize(e.target.checked);
+                                    if (!e.target.checked) {
+                                        setForm({ ...form, sizes: [{ size: '', amount: '' }] });
+                                    }
+                                }}
+                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
                             />
                             <label htmlFor="hasSize" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                This equipment has different sizes
+                                This equipment has multiple sizes
                             </label>
                         </div>
 
                         {hasSize ? (
-                            <div className="space-y-4">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sizes & Quantities</label>
-                                {form.sizes.map((item, index) => (
-                                    <div key={index} className="flex gap-3 items-start">
-                                        <input
-                                            type="text"
-                                            value={item.size}
-                                            onChange={(e) => handleSizeChange(index, 'size', e.target.value)}
-                                            placeholder="Size (e.g., S, M, L)"
-                                            className="flex-1 px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
-                                            required
-                                        />
-                                        <input
-                                            type="number"
-                                            value={item.amount}
-                                            onChange={(e) => handleSizeChange(index, 'amount', e.target.value)}
-                                            placeholder="Quantity"
-                                            className="flex-1 px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
-                                            required
-                                        />
-                                        {form.sizes.length > 1 && (
-                                            <button
-                                                type="button"
-                                                onClick={() => removeSizeField(index)}
-                                                className="px-3 py-3 bg-red-100 hover:bg-red-200 dark:bg-red-900/20 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg transition-colors"
-                                            >
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                                </svg>
-                                            </button>
-                                        )}
-                                    </div>
-                                ))}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                                    Sizes and Quantities *
+                                </label>
+                                <div className="space-y-3">
+                                    {form.sizes.map((size, index) => (
+                                        <div key={index} className="flex gap-3 items-start">
+                                            <div className="flex-1">
+                                                <input
+                                                    type="text"
+                                                    required
+                                                    value={size.size}
+                                                    onChange={(e) => handleSizeChange(index, 'size', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                                    placeholder="Size (e.g., S, M, L, 42)"
+                                                />
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                    Will be automatically converted to uppercase
+                                                </p>
+                                            </div>
+                                            <div className="flex-1">
+                                                <input
+                                                    type="number"
+                                                    required
+                                                    min="0"
+                                                    value={size.amount}
+                                                    onChange={(e) => handleSizeChange(index, 'amount', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                                    placeholder="Quantity"
+                                                />
+                                            </div>
+                                            {form.sizes.length > 1 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeSizeField(index)}
+                                                    className="mt-2 px-3 py-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                    </svg>
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
                                 <button
                                     type="button"
                                     onClick={addSizeField}
-                                    className="flex items-center gap-2 px-4 py-2 bg-green-100 hover:bg-green-200 dark:bg-green-900/20 dark:hover:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg text-sm font-medium transition-colors"
+                                    className="mt-3 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -835,31 +755,117 @@ export default function Index() {
                             </div>
                         ) : (
                             <div>
-                                <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
-                                    Total Quantity
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Total Quantity *
                                 </label>
                                 <input
                                     type="number"
+                                    required
+                                    min="0"
                                     value={form.amount}
                                     onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                                    className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
-                                    placeholder="Enter total quantity..."
-                                    required
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                    placeholder="Enter total quantity"
                                 />
                             </div>
                         )}
 
-                        <div className="flex justify-end gap-3 pt-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Equipment Photo (Optional)
+                            </label>
+                            {/* FIXED: ImageKit upload with proper authentication */}
+                            <IKContext
+                                publicKey={import.meta.env.VITE_IMAGEKIT_PUBLIC_KEY}
+                                urlEndpoint={import.meta.env.VITE_IMAGEKIT_URL_ENDPOINT}
+                                authenticator={async () => {
+                                    try {
+                                        const response = await fetch(route('imagekit.auth'));
+                                        if (!response.ok) {
+                                            throw new Error('Failed to authenticate');
+                                        }
+                                        const data = await response.json();
+                                        return data;
+                                    } catch (error) {
+                                        console.error('ImageKit auth error:', error);
+                                        throw error;
+                                    }
+                                }}
+                            >
+                                <IKUpload
+                                    fileName={`equipment_${Date.now()}.jpg`}
+                                    folder="/equipments"
+                                    useUniqueFileName={true}
+                                    onError={(err) => {
+                                        console.error("ImageKit Upload Error:", err);
+                                        setUploadStatus("Upload failed");
+                                        showNotification('Photo upload failed. Please try again.', 'error');
+                                    }}
+                                    onSuccess={(res) => {
+                                        console.log("ImageKit Upload Success:", res);
+                                        setForm({ ...form, photo: res.url });
+                                        setUploadStatus("Upload successful!");
+                                        showNotification('Photo uploaded successfully!', 'success');
+                                    }}
+                                    onUploadStart={() => {
+                                        setUploadStatus("Uploading...");
+                                    }}
+                                    validateFile={(file) => {
+                                        const validTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+                                        const isValidType = validTypes.includes(file.type);
+                                        const isValidSize = file.size <= 10 * 1024 * 1024; // 10MB
+                                        
+                                        if (!isValidType) {
+                                            showNotification('Please select a valid image file (JPEG, PNG, JPG)', 'error');
+                                            return false;
+                                        }
+                                        
+                                        if (!isValidSize) {
+                                            showNotification('File size must be less than 10MB', 'error');
+                                            return false;
+                                        }
+                                        
+                                        return true;
+                                    }}
+                                    className="hidden"
+                                    id="equipment-photo-upload"
+                                />
+                            </IKContext>
+                            <label htmlFor="equipment-photo-upload" className="cursor-pointer block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-center">
+                                <div className="flex flex-col items-center justify-center">
+                                    <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    <span className="text-sm text-gray-600 dark:text-gray-400">Click to upload photo</span>
+                                    <span className="text-xs text-gray-500 dark:text-gray-500">PNG, JPG, JPEG up to 10MB</span>
+                                </div>
+                            </label>
+                            {uploadStatus && (
+                                <p className={`text-sm mt-2 ${
+                                    uploadStatus.includes("failed") ? "text-red-600" : "text-green-600"
+                                }`}>
+                                    {uploadStatus}
+                                </p>
+                            )}
+                            {form.photo && (
+                                <div className="mt-3">
+                                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Preview:</p>
+                                    <img src={form.photo} alt="Preview" className="h-20 w-20 object-cover rounded-lg border" />
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-600">
                             <button
                                 type="button"
                                 onClick={() => setShowModal(false)}
-                                className="px-6 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors"
+                                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="submit"
-                                className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors shadow-md hover:shadow-lg"
+                                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm hover:shadow-md"
                             >
                                 {editing ? 'Update Equipment' : 'Add Equipment'}
                             </button>
@@ -868,57 +874,46 @@ export default function Index() {
                 </div>
             </Modal>
 
-            {/* Modal Pilih Size sebelum Assign */}
+            {/* Size Selection Modal */}
             <Modal show={showSizeModal} onClose={() => setShowSizeModal(false)} maxWidth="md">
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl">
-                    <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-                        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Select Size</h2>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Choose the size you want to assign</p>
+                <div className="p-6">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                        Select Size
+                    </h2>
+                    <p className="text-gray-600 dark:text-gray-400 mb-6">
+                        Choose the size you want to assign for {selectedEquipment?.type}
+                    </p>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {selectedEquipment?.size?.split(',').map((sizeItem, index) => {
+                            const [size, amount] = sizeItem.split(':');
+                            const stock = parseInt(amount);
+                            return (
+                                <button
+                                    key={index}
+                                    onClick={() => handleSizeSelect(size)}
+                                    disabled={stock <= 0}
+                                    className={`p-4 rounded-lg border-2 text-center transition-all ${
+                                        stock > 0
+                                            ? 'border-blue-500 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:border-blue-400 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:shadow-md'
+                                            : 'border-gray-300 bg-gray-100 dark:border-gray-600 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                                    }`}
+                                >
+                                    <div className="font-semibold text-lg">{size}</div>
+                                    <div className={`text-sm mt-1 ${
+                                        stock > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                                    }`}>
+                                        {stock > 0 ? `${stock} available` : 'Out of stock'}
+                                    </div>
+                                </button>
+                            );
+                        })}
                     </div>
 
-                    <div className="p-6">
-                        {selectedEquipment && selectedEquipment.size ? (
-                            <div className="grid grid-cols-2 gap-3">
-                                {selectedEquipment.size.split(',').map((s, idx) => {
-                                    const [sz, amount] = s.split(':');
-                                    const stock = parseInt(amount);
-                                    return (
-                                        <button
-                                            key={idx}
-                                            onClick={() => handleSizeSelect(sz)}
-                                            disabled={stock <= 0}
-                                            className={`p-4 border rounded-lg text-center transition-all duration-200 hover:shadow-md ${
-                                                stock > 0 
-                                                    ? 'bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-700 dark:to-gray-800 hover:from-blue-100 hover:to-indigo-100 dark:hover:from-gray-600 dark:hover:to-gray-700 border-blue-100 dark:border-gray-600 cursor-pointer' 
-                                                    : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-50'
-                                            }`}
-                                        >
-                                            <div className={`text-lg font-semibold ${
-                                                stock > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400'
-                                            }`}>{sz}</div>
-                                            <div className={`text-sm mt-1 ${
-                                                stock > 0 ? 'text-gray-600 dark:text-gray-400' : 'text-red-400'
-                                            }`}>
-                                                {stock > 0 ? `Stock: ${stock}` : 'Out of stock'}
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        ) : (
-                            <div className="text-center py-8">
-                                <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                                </svg>
-                                <p className="text-gray-500 dark:text-gray-400">No sizes available</p>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                    <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-600">
                         <button
                             onClick={() => setShowSizeModal(false)}
-                            className="px-6 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors"
+                            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
                         >
                             Cancel
                         </button>
@@ -926,195 +921,458 @@ export default function Index() {
                 </div>
             </Modal>
 
-            {/* Modal Assign Equipment */}
-            <Modal show={showAssignModal} onClose={() => setShowAssignModal(false)} maxWidth="7xl">
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl h-[90vh] flex flex-col">
-                    <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                                    Assign Equipment
-                                </h2>
-                                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                                    {selectedEquipment?.type} {selectedSize ? `- Size: ${selectedSize}` : ''}
+            {/* Assign Equipment Modal */}
+            <Modal show={showAssignModal} onClose={() => setShowAssignModal(false)} maxWidth="6xl">
+                <div className="p-6 max-h-[90vh] overflow-y-auto">
+                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-6">
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                                Assign Equipment
+                            </h2>
+                            <div className="space-y-2">
+                                <p className="text-gray-600 dark:text-gray-400">
+                                    Assigning: <span className="font-semibold text-gray-800 dark:text-white">{selectedEquipment?.type}</span>
+                                </p>
+                                {selectedSize && (
+                                    <p className="text-gray-600 dark:text-gray-400">
+                                        Size: <span className="font-semibold text-gray-800 dark:text-white">{selectedSize}</span>
+                                    </p>
+                                )}
+                                <p className={`text-sm font-medium ${
+                                    getAvailableStock() > 0 
+                                        ? 'text-green-600 dark:text-green-400' 
+                                        : 'text-red-600 dark:text-red-400'
+                                }`}>
+                                    Available Stock: {getAvailableStock()} items
                                 </p>
                                 {selectedEmployees.length > 0 && (
-                                    <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
-                                        {selectedEmployees.length} employee(s) selected
+                                    <p className="text-blue-600 dark:text-blue-400 text-sm font-medium">
+                                        Selected: {selectedEmployees.length} employee(s)
                                     </p>
                                 )}
                             </div>
-                            <div className="flex items-center gap-3">
-                                {selectedEmployees.length > 0 && (
-                                    <button
-                                        onClick={handleAssignMultiple}
-                                        disabled={isSubmitting}
-                                        className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white rounded-lg font-medium transition-colors"
-                                    >
-                                        {isSubmitting ? (
-                                            <>
-                                                <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                </svg>
-                                                Assigning...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                                                </svg>
-                                                Assign to {selectedEmployees.length} Employee(s)
-                                            </>
-                                        )}
-                                    </button>
-                                )}
+                        </div>
+                        
+                        {/* Multiple Assignment Controls */}
+                        {selectedEmployees.length > 0 && (
+                            <div className="flex flex-col sm:flex-row gap-3">
                                 <button
-                                    onClick={() => setShowAssignModal(false)}
-                                    className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                                    onClick={handleAssignMultiple}
+                                    disabled={isSubmitting || getAvailableStock() < selectedEmployees.length}
+                                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                                        getAvailableStock() >= selectedEmployees.length && !isSubmitting
+                                            ? 'bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-md'
+                                            : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                                    }`}
                                 >
-                                    <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    {isSubmitting ? (
+                                        <>
+                                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                            Assigning...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                            </svg>
+                                            Assign to {selectedEmployees.length} Selected
+                                        </>
+                                    )}
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setSelectedEmployees([]);
+                                        setIsSelectAll(false);
+                                    }}
+                                    className="inline-flex items-center gap-2 px-4 py-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                     </svg>
+                                    Clear Selection
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Stock Warning */}
+                    {getAvailableStock() < selectedEmployees.length && (
+                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
+                            <div className="flex items-center gap-3">
+                                <svg className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                                </svg>
+                                <div>
+                                    <p className="text-red-800 dark:text-red-300 font-medium">
+                                        Stock Limitation Warning
+                                    </p>
+                                    <p className="text-red-700 dark:text-red-400 text-sm mt-1">
+                                        You have selected {selectedEmployees.length} employees but only {getAvailableStock()} items are available.
+                                        Please reduce your selection or cancel some assignments.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Search and Filter Section */}
+                    <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 mb-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                            {/* Search Input */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Search Employees
+                                </label>
+                                <input
+                                    type="text"
+                                    value={filters.search || ''}
+                                    onChange={(e) => handleFilterChange('search', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                    placeholder="Search by name or NIK..."
+                                />
+                            </div>
+
+                            {/* Section Filter */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Section
+                                </label>
+                                <select
+                                    value={filters.section || ''}
+                                    onChange={(e) => handleFilterChange('section', e.target.value)}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                                >
+                                    <option value="">All Sections</option>
+                                    {Object.keys(sections).map((sectionName) => (
+                                        <option key={sectionName} value={sectionName}>
+                                            {sectionName}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Subsection Filter */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Subsection
+                                </label>
+                                <select
+                                    value={filters.subsection || ''}
+                                    onChange={(e) => handleFilterChange('subsection', e.target.value)}
+                                    disabled={!filters.section}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:cursor-not-allowed"
+                                >
+                                    <option value="">All Subsections</option>
+                                    {filters.section && sections[filters.section]?.map((subsection, index) => (
+                                        <option key={index} value={subsection}>
+                                            {subsection}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Clear Filters */}
+                            <div className="flex items-end">
+                                <button
+                                    onClick={() => {
+                                        setFilters({ search: '', section: '', subsection: '' });
+                                        if (selectedEquipment) {
+                                            loadEmployees(selectedEquipment.id, selectedSize, 1, '', '', '');
+                                        }
+                                    }}
+                                    className="w-full px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                                >
+                                    Clear Filters
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-hidden">
-                        <div className="h-full flex">
-                            {/* Employee List */}
-                            <div className="flex-1 border-r border-gray-200 dark:border-gray-700 overflow-y-auto">
-                                <div className="p-6 space-y-4">
-                                    {/* Search and Filters */}
-                                    <div className="space-y-4">
-                                        <input
-                                            type="text"
-                                            placeholder="Search by name or NIK..."
-                                            value={filters.search}
-                                            onChange={(e) => handleFilterChange('search', e.target.value)}
-                                            className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
-                                        />
-                                        
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <select
-                                                value={filters.section}
-                                                onChange={(e) => handleFilterChange('section', e.target.value)}
-                                                className="px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
-                                            >
-                                                <option value="">All Sections</option>
-                                                {Object.keys(sections).map(section => (
-                                                    <option key={section} value={section}>{section}</option>
-                                                ))}
-                                            </select>
+                    {/* Photo Upload Section */}
+                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 mb-6">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                            Assignment Photo (Optional - applies to all selected employees)
+                        </label>
+                        {/* FIXED: ImageKit upload for assignment photo */}
+                        <IKContext
+                            publicKey={import.meta.env.VITE_IMAGEKIT_PUBLIC_KEY}
+                            urlEndpoint={import.meta.env.VITE_IMAGEKIT_URL_ENDPOINT}
+                            authenticator={async () => {
+                                try {
+                                    const response = await fetch(route('imagekit.auth'));
+                                    if (!response.ok) {
+                                        throw new Error('Failed to authenticate');
+                                    }
+                                    const data = await response.json();
+                                    return data;
+                                } catch (error) {
+                                    console.error('ImageKit auth error:', error);
+                                    throw error;
+                                }
+                            }}
+                        >
+                            <IKUpload
+                                fileName={`assignment_${Date.now()}.jpg`}
+                                folder="/assignments"
+                                useUniqueFileName={true}
+                                onError={(err) => {
+                                    console.error("ImageKit Upload Error:", err);
+                                    setUploadStatus("Upload failed");
+                                    showNotification('Photo upload failed. Please try again.', 'error');
+                                }}
+                                onSuccess={(res) => {
+                                    console.log("ImageKit Upload Success:", res);
+                                    setAssignPhoto(res.url);
+                                    setUploadStatus("Upload successful!");
+                                    showNotification('Photo uploaded successfully!', 'success');
+                                }}
+                                onUploadStart={() => {
+                                    setUploadStatus("Uploading...");
+                                }}
+                                validateFile={(file) => {
+                                    const validTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+                                    const isValidType = validTypes.includes(file.type);
+                                    const isValidSize = file.size <= 10 * 1024 * 1024; // 10MB
+                                    
+                                    if (!isValidType) {
+                                        showNotification('Please select a valid image file (JPEG, PNG, JPG)', 'error');
+                                        return false;
+                                    }
+                                    
+                                    if (!isValidSize) {
+                                        showNotification('File size must be less than 10MB', 'error');
+                                        return false;
+                                    }
+                                    
+                                    return true;
+                                }}
+                                className="hidden"
+                                id="assignment-photo-upload"
+                            />
+                        </IKContext>
+                        <label htmlFor="assignment-photo-upload" className="cursor-pointer block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white text-center">
+                            <div className="flex flex-col items-center justify-center">
+                                <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                </svg>
+                                <span className="text-sm text-gray-600 dark:text-gray-400">Click to upload assignment photo</span>
+                                <span className="text-xs text-gray-500 dark:text-gray-500">PNG, JPG, JPEG up to 10MB</span>
+                            </div>
+                        </label>
+                        {uploadStatus && (
+                            <p className={`text-sm mt-2 ${
+                                uploadStatus.includes("failed") ? "text-red-600" : "text-green-600"
+                            }`}>
+                                {uploadStatus}
+                            </p>
+                        )}
+                        {assignPhoto && (
+                            <div className="mt-3">
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Preview:</p>
+                                <img src={assignPhoto} alt="Assignment Preview" className="h-20 w-20 object-cover rounded-lg border" />
+                            </div>
+                        )}
+                    </div>
 
-                                            <select
-                                                value={filters.subsection}
-                                                onChange={(e) => handleFilterChange('subsection', e.target.value)}
-                                                className="px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
-                                            >
-                                                <option value="">All Sub-sections</option>
-                                                {filters.section && sections[filters.section]?.map(sub => (
-                                                    <option key={sub} value={sub}>{sub}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-
-                                        {/* Select All Checkbox */}
-                                        {employees.data && employees.data.length > 0 && (
-                                            <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                    {/* Employees Table */}
+                    <div className="bg-white dark:bg-gray-800 shadow-sm rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-600">
+                                    <tr>
+                                        <th className="px-6 py-4 text-left">
+                                            <div className="flex items-center gap-3">
                                                 <input
                                                     type="checkbox"
                                                     checked={isSelectAll}
                                                     onChange={handleSelectAll}
-                                                    id="selectAll"
-                                                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                                                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
                                                 />
-                                                <label htmlFor="selectAll" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                    Select All Available Employees ({employees.data.filter(emp => !(emp.handover !== null && emp.handover !== undefined)).length} available)
-                                                </label>
+                                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                    Select All
+                                                </span>
                                             </div>
-                                        )}
-                                    </div>
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Employee
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            NIK
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Section
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Subsection
+                                        </th>
+                                        <th className="px-6 py-4 text-left text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Status
+                                        </th>
+                                        <th className="px-6 py-4 text-right text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            Actions
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                    {employees.data && employees.data.length > 0 ? (
+                                        employees.data.map((employee) => {
+                                            const isAssigned = employee.handovers && employee.handovers.length > 0;
+                                            const isSelected = selectedEmployees.some(emp => emp.id === employee.id);
+                                            const mainSubSection = employee.sub_sections && employee.sub_sections.length > 0 ? employee.sub_sections[0] : null;
+                                            const sectionName = mainSubSection?.section?.name || 'N/A';
+                                            const subSectionName = mainSubSection?.name || 'N/A';
 
-                                    {/* Employee Cards */}
-                                    <div className="space-y-3">
-                                        {employees.data && employees.data.length > 0 ? (
-                                            employees.data.map(emp => {
-                                                const isSelected = selectedEmployees.some(selected => selected.id === emp.id);
-                                                const isAssigned = emp.handover !== null && emp.handover !== undefined;
-                                                
-                                                return (
-                                                    <div
-                                                        key={emp.id}
-                                                        className={`p-4 border rounded-lg transition-all duration-200 hover:shadow-md ${
-                                                            isSelected 
-                                                                ? 'bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800' 
-                                                                : isAssigned
-                                                                    ? 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800' 
-                                                                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700'
-                                                        } ${isAssigned ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
-                                                        onClick={() => !isAssigned && handleEmployeeSelect(emp)}
-                                                    >
-                                                        <div className="flex justify-between items-center">
-                                                            <div className="flex items-center gap-3">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={isSelected}
-                                                                    onChange={() => !isAssigned && handleEmployeeSelect(emp)}
-                                                                    disabled={isAssigned}
-                                                                    className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
-                                                                />
-                                                                <div>
-                                                                    <h3 className="font-semibold text-gray-900 dark:text-white">
-                                                                        {emp.name}
-                                                                    </h3>
-                                                                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                                        NIK: {emp.nik} | {emp.section} {emp.subsection ? `- ${emp.subsection}` : ''}
-                                                                    </p>
+                                            return (
+                                                <tr 
+                                                    key={employee.id} 
+                                                    className={`hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors ${
+                                                        isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                                                    }`}
+                                                >
+                                                    <td className="px-6 py-4">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelected}
+                                                            onChange={() => handleEmployeeSelect(employee)}
+                                                            disabled={isAssigned}
+                                                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        />
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="flex-shrink-0 h-10 w-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                                                                {employee.name?.charAt(0) || 'E'}
+                                                            </div>
+                                                            <div>
+                                                                <div className="font-medium text-gray-900 dark:text-white">
+                                                                    {employee.name}
+                                                                </div>
+                                                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                                                    {employee.position}
                                                                 </div>
                                                             </div>
-                                                            <div className="text-right">
-                                                                {isAssigned ? (
-                                                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
-                                                                        Assigned
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                                                                        Available
-                                                                    </span>
-                                                                )}
-                                                            </div>
                                                         </div>
-                                                    </div>
-                                                );
-                                            })
-                                        ) : (
-                                            <div className="text-center py-8">
-                                                <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                                                </svg>
-                                                <p className="text-gray-500 dark:text-gray-400">No employees found</p>
-                                            </div>
-                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white font-mono">
+                                                        {employee.nik}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                                                        {sectionName}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300">
+                                                        {subSectionName}
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                                            isAssigned
+                                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                                                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                                        }`}>
+                                                            {isAssigned ? 'Assigned' : 'Not Assigned'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <button
+                                                            onClick={() => handleAssignToEmployee(employee)}
+                                                            disabled={isAssigned || getAvailableStock() <= 0}
+                                                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                                                                isAssigned
+                                                                    ? 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed'
+                                                                    : getAvailableStock() > 0
+                                                                    ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md'
+                                                                    : 'bg-red-100 text-red-400 dark:bg-red-900/30 dark:text-red-400 cursor-not-allowed'
+                                                            }`}
+                                                        >
+                                                            {isAssigned ? (
+                                                                <>
+                                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                                    </svg>
+                                                                    Assigned
+                                                                </>
+                                                            ) : getAvailableStock() > 0 ? (
+                                                                <>
+                                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                                                    </svg>
+                                                                    Assign
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                                                                    </svg>
+                                                                    Out of Stock
+                                                                </>
+                                                            )}
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    ) : (
+                                        <tr>
+                                            <td colSpan="7" className="px-6 py-12 text-center">
+                                                <div className="text-gray-500 dark:text-gray-400">
+                                                    <svg className="w-12 h-12 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                                                    </svg>
+                                                    <p className="text-lg font-medium mb-2">No employees found</p>
+                                                    <p className="text-sm">Try adjusting your search or filters</p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Pagination */}
+                        {employees.data && employees.data.length > 0 && (
+                            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                                    <div className="text-sm text-gray-700 dark:text-gray-300">
+                                        Showing {employees.from || 0} to {employees.to || 0} of {employees.total || 0} results
+                                    </div>
+                                    <div className="flex gap-1">
+                                        {employees.links && employees.links.map((link, index) => (
+                                            <button
+                                                key={index}
+                                                onClick={() => {
+                                                    if (link.url && !link.active) {
+                                                        const page = new URL(link.url).searchParams.get('page');
+                                                        loadEmployees(selectedEquipment.id, selectedSize, page);
+                                                    }
+                                                }}
+                                                dangerouslySetInnerHTML={{ __html: link.label }}
+                                                className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                                                    link.active
+                                                        ? 'bg-blue-600 text-white'
+                                                        : link.url
+                                                        ? 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                                        : 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                                                }`}
+                                            />
+                                        ))}
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        )}
+                    </div>
+
+                    <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-600">
+                        <button
+                            onClick={() => setShowAssignModal(false)}
+                            className="px-6 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+                        >
+                            Close
+                        </button>
                     </div>
                 </div>
             </Modal>
-
-            {/* Notification */}
-            {notification.show && (
-                <div className={`fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 transition-all duration-300 ${
-                    notification.type === 'error' 
-                        ? 'bg-red-500 text-white' 
-                        : 'bg-green-500 text-white'
-                }`}>
-                    {notification.message}
-                </div>
-            )}
         </AuthenticatedLayout>
     );
 }

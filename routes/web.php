@@ -82,6 +82,26 @@ Route::middleware(['auth:sanctum'])->post(
     '/api/verify-license',
     [LicenseVerificationController::class, 'verify']
 );
+
+// 👉 IMAGEKIT AUTHENTICATION ROUTE - ADD THIS
+Route::get('/api/imagekit/auth', function () {
+    try {
+        $privateKey = env('IMAGEKIT_PRIVATE_KEY');
+        $token = uniqid();
+        $expire = time() + 60 * 10; // 10 minutes
+        $signature = hash_hmac('sha1', $token . $expire, $privateKey);
+        
+        return response()->json([
+            'token' => $token,
+            'expire' => $expire,
+            'signature' => $signature
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('ImageKit auth error: ' . $e->getMessage());
+        return response()->json(['error' => 'Authentication failed'], 500);
+    }
+})->name('imagekit.auth');
+
 // Authentication routes
 Route::middleware(['prevent.back'])->group(function () {
     Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
@@ -395,7 +415,7 @@ Route::prefix('equipments')->name('equipments.')->middleware(['auth'])->group(fu
     
     Route::post('/{equipment}/assign', [EquipmentController::class, 'assignStore'])->name('assign.store');
 
-    // 👉 NEW modal-based assign routes
+    // 👉 NEW modal-based assign routes (ADD THESE)
     Route::post('/assign/employees', [EquipmentController::class, 'getEmployeesForAssign'])->name('assign.employees');
     Route::post('/assign/store', [EquipmentController::class, 'assignStoreModal'])->name('assign.store.modal');
 
