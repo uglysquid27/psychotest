@@ -13,7 +13,7 @@ return new class extends Migration {
         Schema::create('handovers', function (Blueprint $table) {
             $table->id();
             $table->foreignId('employee_id')->constrained('employees')->onDelete('cascade');
-            $table->foreignId('equipment_id')->constrained('work_equipments')->onDelete('cascade');
+            $table->foreignId('equipment_id');
             $table->date('date');
             $table->string('photo')->nullable(); // simpan path foto
             $table->timestamps();

@@ -15,7 +15,9 @@ return new class extends Migration
             $table->id();
             // $table->unsignedBigInteger('emp_id'); // employee id
             $table->integer('amount');
+            $table->string('size');
             $table->string('type');
+            $table->string('photo')->nullable(); // simpan path foto
             $table->timestamps();
         });
     }
