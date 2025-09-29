@@ -117,4 +117,36 @@ public function uploadPhoto(Request $request, Handover $handover)
             ];
         }
     }
+
+     /**
+     * Delete handover assignment
+     */
+    public function destroy(Handover $handover)
+    {
+        try {
+            $handoverId = $handover->id;
+            $employeeName = $handover->employee->name;
+            $equipmentType = $handover->equipment->type;
+            
+            $handover->delete();
+
+            Log::info('Handover assignment deleted successfully', [
+                'handover_id' => $handoverId,
+                'employee' => $employeeName,
+                'equipment' => $equipmentType
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Assignment deleted successfully'
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Handover deletion error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to delete assignment: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }

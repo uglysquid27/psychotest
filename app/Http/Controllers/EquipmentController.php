@@ -238,22 +238,8 @@ class EquipmentController extends Controller
                 $equipment->amount = $equipment->amount - 1;
             }
 
-            // Check if already assigned (prevent duplicates)
-            $existingHandover = Handover::where('employee_id', $request->employee_id)
-                ->where('equipment_id', $request->equipment_id)
-                ->when($request->size, function($q) use ($request) {
-                    $q->where('size', $request->size);
-                })
-                ->first();
-
-            if ($existingHandover) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Equipment already assigned to this employee.'
-                ], 400);
-            }
-
-            // Create handover record
+            // REMOVED: Duplicate assignment check - allow multiple assignments to same employee
+            // Create handover record (allow duplicates)
             $handover = Handover::create([
                 'employee_id' => $request->employee_id,
                 'equipment_id' => $request->equipment_id,
@@ -387,17 +373,14 @@ class EquipmentController extends Controller
             $equipment->amount = $equipment->amount - 1;
         }
 
-        $handover = Handover::updateOrCreate(
-            [
-                'employee_id' => $request->employee_id,
-                'equipment_id' => $id,
-                'size' => $request->size,
-            ],
-            [
-                'date' => now(),
-                'photo' => $request->photo,
-            ]
-        );
+        // REMOVED: Duplicate assignment check - allow multiple assignments
+        $handover = Handover::create([
+            'employee_id' => $request->employee_id,
+            'equipment_id' => $id,
+            'size' => $request->size,
+            'date' => now(),
+            'photo' => $request->photo,
+        ]);
 
         // Save the equipment with updated stock
         $equipment->save();

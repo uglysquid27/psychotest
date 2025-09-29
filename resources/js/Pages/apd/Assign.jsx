@@ -21,6 +21,11 @@ export default function Assign() {
   const [debugInfo, setDebugInfo] = useState({});
   const [showDebug, setShowDebug] = useState(false);
 
+  // Delete modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [handoverToDelete, setHandoverToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const openModal = (employee, handover = null) => {
     setSelectedEmp(employee);
     setSelectedHandover(handover);
@@ -30,6 +35,58 @@ export default function Assign() {
     setUploadStatus("");
     setDebugInfo({});
     setShowDebug(false);
+  };
+
+  // Open delete confirmation modal
+  const openDeleteModal = (handover) => {
+    setHandoverToDelete(handover);
+    setShowDeleteModal(true);
+  };
+
+  // Handle delete assignment
+  const handleDelete = async () => {
+    if (!handoverToDelete) return;
+
+    setIsDeleting(true);
+
+    try {
+      const url = `/handovers/${handoverToDelete.id}`;
+      
+      // Get CSRF token
+      let csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+                     document.querySelector('meta[name="X-CSRF-TOKEN"]')?.getAttribute('content') ||
+                     document.querySelector('input[name="_token"]')?.value;
+
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Delete failed: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        setShowDeleteModal(false);
+        router.reload();
+      } else {
+        throw new Error(result.error || 'Delete failed');
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert('Delete failed: ' + error.message);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
 const handleSubmit = async (e) => {
@@ -118,56 +175,6 @@ const handleSubmit = async (e) => {
 
 // Add new state for the file
 const [photoFile, setPhotoFile] = useState(null);
-
-// Update the file input section in the modal
-<div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
-  <input
-    type="file"
-    accept="image/jpeg,image/png,image/jpg"
-    onChange={(e) => {
-      const file = e.target.files[0];
-      if (file) {
-        // Validate file
-        const validTypes = ['image/jpeg', 'image/png', 'image/jpg'];
-        if (!validTypes.includes(file.type)) {
-          alert('Please select a valid image file (JPEG, PNG, JPG)');
-          return;
-        }
-        if (file.size > 10 * 1024 * 1024) {
-          alert('File size must be less than 10MB');
-          return;
-        }
-        
-        setPhotoFile(file);
-        setPhoto(URL.createObjectURL(file)); // Create preview
-        setUploadStatus("file-selected");
-      }
-    }}
-    className="hidden"
-    id="photo-upload"
-  />
-  
-  <label htmlFor="photo-upload" className="cursor-pointer">
-    <svg className="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-    </svg>
-    <p className="text-gray-600 dark:text-gray-400 mb-1">
-      {photoFile ? 'File selected: ' + photoFile.name : 'Click to upload new photo'}
-    </p>
-    <p className="text-xs text-gray-500 dark:text-gray-500">
-      PNG, JPG, JPEG up to 10MB
-    </p>
-    {uploadStatus && (
-      <p className={`text-xs mt-2 ${
-        uploadStatus.includes('success') ? 'text-green-600' : 
-        uploadStatus.includes('error') ? 'text-red-600' : 
-        'text-blue-600'
-      }`}>
-        Status: {uploadStatus}
-      </p>
-    )}
-  </label>
-</div>
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -364,15 +371,26 @@ const [photoFile, setPhotoFile] = useState(null);
                         )}
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button
-                          onClick={() => openModal(handover.employee, handover)}
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg font-medium transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                          Update Photo
-                        </button>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => openModal(handover.employee, handover)}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg font-medium transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            Update Photo
+                          </button>
+                          <button
+                            onClick={() => openDeleteModal(handover)}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-red-100 hover:bg-red-200 dark:bg-red-900/20 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg font-medium transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -430,15 +448,26 @@ const [photoFile, setPhotoFile] = useState(null);
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => openModal(handover.employee, handover)}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg font-medium transition-colors"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    Update Photo
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => openModal(handover.employee, handover)}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg font-medium transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      Update Photo
+                    </button>
+                    <button
+                      onClick={() => openDeleteModal(handover)}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-100 hover:bg-red-200 dark:bg-red-900/20 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg font-medium transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      Delete
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -622,15 +651,13 @@ const [photoFile, setPhotoFile] = useState(null);
           const isValidSize = file.size <= 10 * 1024 * 1024; // 10MB
           
           if (!isValidType) {
-            alert('Please select a valid image file (JPEG, PNG, JPG)');
+            alert('Please select a valid image file (JPEG, PNG)');
             return false;
           }
-          
           if (!isValidSize) {
             alert('File size must be less than 10MB');
             return false;
           }
-          
           return true;
         }}
         className="hidden"
@@ -638,86 +665,200 @@ const [photoFile, setPhotoFile] = useState(null);
       />
     </IKContext>
 
-    <label htmlFor="photo-upload" className="cursor-pointer">
-      <svg className="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-      </svg>
-      <p className="text-gray-600 dark:text-gray-400 mb-1">
-        Click to upload new photo
-      </p>
-      <p className="text-xs text-gray-500 dark:text-gray-500">
-        PNG, JPG, JPEG up to 10MB
-      </p>
-      {uploadStatus && (
-        <p className={`text-xs mt-2 ${
-          uploadStatus.includes('success') ? 'text-green-600' : 
-          uploadStatus.includes('fail') || uploadStatus.includes('error') ? 'text-red-600' : 
-          'text-blue-600'
-        }`}>
-          Status: {uploadStatus}
-        </p>
+    <div className="space-y-4">
+      {!photo ? (
+        <>
+          <svg className="w-12 h-12 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <div>
+            <label
+              htmlFor="photo-upload"
+              className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              Choose Photo
+            </label>
+          </div>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Upload a new handover photo (JPEG, PNG, max 10MB)
+          </p>
+        </>
+      ) : (
+        <div className="space-y-4">
+          <p className="text-sm font-medium text-green-600 dark:text-green-400">
+            ✓ Photo uploaded successfully!
+          </p>
+          <img
+            src={photo}
+            alt="uploaded handover"
+            className="w-48 h-48 mx-auto object-cover rounded-lg border border-gray-200 dark:border-gray-600"
+          />
+          <button
+            type="button"
+            onClick={() => setPhoto("")}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Remove Photo
+          </button>
+        </div>
       )}
-    </label>
-  </div>
-
-  {/* Debug Info Button */}
-  <div className="mt-4">
-    <button
-      type="button"
-      onClick={() => setShowDebug(!showDebug)}
-      className="text-xs text-gray-500 hover:text-gray-700"
-    >
-      {showDebug ? 'Hide Debug Info' : 'Show Debug Info'}
-    </button>
-    
-    {showDebug && (
-      <div className="mt-2 p-3 bg-gray-100 dark:bg-gray-700 rounded text-xs">
-        <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
-      </div>
-    )}
-  </div>
-
-  {/* New Photo Preview */}
-  {photo && (
-    <div className="mt-4">
-      <p className="text-sm text-green-600 dark:text-green-400 mb-2 font-medium">New photo ready:</p>
-      <img
-        src={photo}
-        alt="new handover preview"
-        className="w-32 h-32 object-cover rounded-lg border-2 border-green-200 dark:border-green-800"
-      />
     </div>
-  )}
+  </div>
 </div>
-<div className="flex justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
-  <button
-    type="button"
-    onClick={() => setShowModal(false)}
-    className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
-    disabled={isSubmitting}
-  >
-    Cancel
-  </button>
-  
-  <button
-    type="submit"
-    disabled={!photo || isSubmitting || photo === selectedHandover.photo}
-    className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-  >
-    {isSubmitting ? (
-      <>
-        <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        Saving...
-      </>
-    ) : (
-      'Save Photo'
-    )}
-  </button>
-</div>
+
+              {/* Debug Section */}
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowDebug(!showDebug)}
+                  className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                >
+                  {showDebug ? '▼' : '▶'} Debug Info
+                </button>
+                {showDebug && (
+                  <div className="mt-2 p-3 bg-gray-100 dark:bg-gray-900 rounded text-xs font-mono">
+                    <div>Status: {uploadStatus}</div>
+                    <div>Handover ID: {selectedHandover.id}</div>
+                    <div>Photo URL: {photo ? 'Set' : 'Not set'}</div>
+                    <div>Debug: {JSON.stringify(debugInfo, null, 2)}</div>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!photo || isSubmitting}
+                  className={`inline-flex items-center gap-2 px-6 py-2 rounded-lg font-medium transition-colors ${!photo || isSubmitting
+                      ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                      : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md hover:shadow-lg'
+                    }`}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Save Changes
+                    </>
+                  )}
+                </button>
+              </div>
             </form>
+          )}
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal show={showDeleteModal} onClose={() => setShowDeleteModal(false)} maxWidth="md">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl">
+          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-xl font-semibold text-red-600 dark:text-red-400">
+              Delete Assignment
+            </h2>
+          </div>
+
+          {handoverToDelete && (
+            <div className="p-6 space-y-4">
+              <div className="flex items-center gap-4 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                <div className="flex-shrink-0">
+                  <svg className="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-medium text-red-800 dark:text-red-300">
+                    Are you sure you want to delete this assignment?
+                  </h3>
+                  <p className="text-sm text-red-600 dark:text-red-400 mt-1">
+                    This action cannot be undone.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <div>
+                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Employee</label>
+                  <p className="text-gray-900 dark:text-white font-medium">
+                    {handoverToDelete.employee.name} ({handoverToDelete.employee.nik})
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Equipment</label>
+                  <p className="text-gray-900 dark:text-white font-medium">{handoverToDelete.equipment.type}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Size</label>
+                  <p className="text-gray-900 dark:text-white font-medium">{handoverToDelete.size || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Assigned Date</label>
+                  <p className="text-gray-900 dark:text-white font-medium">
+                    {handoverToDelete.date 
+                      ? new Date(handoverToDelete.date).toLocaleDateString("id-ID", {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })
+                      : 'Not set'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(false)}
+                  className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="inline-flex items-center gap-2 px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isDeleting ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      Delete Assignment
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </Modal>

@@ -427,6 +427,7 @@ Route::prefix('handovers')->name('handovers.')->middleware(['auth'])->group(func
     Route::put('/{handover}', [HandoverController::class, 'update'])->name('update');
     Route::post('/{handover}/upload-photo', [HandoverController::class, 'uploadPhoto'])->name('upload-photo');
     Route::post('/{handover}/upload-direct', [HandoverController::class, 'uploadPhotoDirect'])->name('upload-direct');
+    Route::delete('/{handover}', [HandoverController::class, 'destroy'])->name('destroy');
 });
 
 });
