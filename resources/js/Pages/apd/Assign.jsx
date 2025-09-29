@@ -5,7 +5,8 @@ import Modal from "@/Components/Modal";
 import { IKContext, IKUpload } from "imagekitio-react";
 
 export default function Assign() {
-  const { equipment, employees, filters } = usePage().props;
+  // Remove equipment-specific filtering, get all handovers
+  const { handovers, filters } = usePage().props;
   const [search, setSearch] = useState(filters.search || "");
 
   // modal states
@@ -13,224 +14,712 @@ export default function Assign() {
   const [selectedEmp, setSelectedEmp] = useState(null);
   const [selectedHandover, setSelectedHandover] = useState(null);
   const [photo, setPhoto] = useState("");
-
-  const handleSearch = (e) => {
-    e.preventDefault();
-    router.get(route("equipments.assign.page", equipment.id), { search });
-  };
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Debug states
+  const [uploadStatus, setUploadStatus] = useState("");
+  const [debugInfo, setDebugInfo] = useState({});
+  const [showDebug, setShowDebug] = useState(false);
 
   const openModal = (employee, handover = null) => {
     setSelectedEmp(employee);
     setSelectedHandover(handover);
     setPhoto(handover?.photo || "");
     setShowModal(true);
+    // Reset debug info when opening modal
+    setUploadStatus("");
+    setDebugInfo({});
+    setShowDebug(false);
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  
+  if (!photo) {
+    alert('Please upload a photo first');
+    return;
+  }
 
-    if (selectedHandover) {
-      // update existing handover
-      router.put(
-        route("handovers.update", selectedHandover.id),
-        { photo }, // date = otomatis hari ini di backend
-        {
-          preserveScroll: true,
-          onSuccess: () => setShowModal(false),
+  setIsSubmitting(true);
+  setUploadStatus("saving");
+
+  try {
+    const url = `/handovers/${selectedHandover.id}/upload-photo`;
+    
+    // Get CSRF token from multiple possible sources
+    let csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+                   document.querySelector('meta[name="X-CSRF-TOKEN"]')?.getAttribute('content') ||
+                   document.querySelector('input[name="_token"]')?.value;
+
+    console.log('CSRF Token found:', !!csrfToken);
+
+    if (!csrfToken) {
+      throw new Error('CSRF token not found');
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrfToken,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json',
+      },
+      credentials: 'include', // Important for sessions
+      body: JSON.stringify({
+        photo_url: photo,
+        handover_id: selectedHandover.id
+      }),
+    });
+
+    console.log('Response status:', response.status);
+
+    // Handle different response types
+    const contentType = response.headers.get('content-type');
+    
+    if (!response.ok) {
+      // If it's a 419, it's definitely CSRF issue
+      if (response.status === 419) {
+        throw new Error('CSRF token mismatch. Please refresh the page and try again.');
+      }
+      
+      const errorText = await response.text();
+      throw new Error(`Server error: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    console.log('JSON Response:', result);
+
+    if (result.success) {
+      setUploadStatus("success");
+      setTimeout(() => {
+        setShowModal(false);
+        router.reload();
+      }, 1000);
+    } else {
+      throw new Error(result.error || 'Save failed');
+    }
+  } catch (error) {
+    setIsSubmitting(false);
+    setUploadStatus("error");
+    setDebugInfo(prev => ({ 
+      ...prev, 
+      submitError: error.message,
+      timestamp: new Date().toISOString()
+    }));
+    console.error('Save error details:', {
+      error: error.message,
+      handoverId: selectedHandover?.id,
+      photoUrl: photo
+    });
+    alert('Save failed: ' + error.message);
+  }
+};
+
+// Add new state for the file
+const [photoFile, setPhotoFile] = useState(null);
+
+// Update the file input section in the modal
+<div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
+  <input
+    type="file"
+    accept="image/jpeg,image/png,image/jpg"
+    onChange={(e) => {
+      const file = e.target.files[0];
+      if (file) {
+        // Validate file
+        const validTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+        if (!validTypes.includes(file.type)) {
+          alert('Please select a valid image file (JPEG, PNG, JPG)');
+          return;
         }
-      );
+        if (file.size > 10 * 1024 * 1024) {
+          alert('File size must be less than 10MB');
+          return;
+        }
+        
+        setPhotoFile(file);
+        setPhoto(URL.createObjectURL(file)); // Create preview
+        setUploadStatus("file-selected");
+      }
+    }}
+    className="hidden"
+    id="photo-upload"
+  />
+  
+  <label htmlFor="photo-upload" className="cursor-pointer">
+    <svg className="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+    <p className="text-gray-600 dark:text-gray-400 mb-1">
+      {photoFile ? 'File selected: ' + photoFile.name : 'Click to upload new photo'}
+    </p>
+    <p className="text-xs text-gray-500 dark:text-gray-500">
+      PNG, JPG, JPEG up to 10MB
+    </p>
+    {uploadStatus && (
+      <p className={`text-xs mt-2 ${
+        uploadStatus.includes('success') ? 'text-green-600' : 
+        uploadStatus.includes('error') ? 'text-red-600' : 
+        'text-blue-600'
+      }`}>
+        Status: {uploadStatus}
+      </p>
+    )}
+  </label>
+</div>
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    router.get(route("equipments.assign.page"), { search }); // ✅ Correct route
+  };
+
+  // In the clearSearch function
+  const clearSearch = () => {
+    setSearch("");
+    router.get(route("equipments.assign.page"), { search: "" }); // ✅ Correct route
+  };
+
+  // Debug function to test ImageKit authentication
+  const testImageKitAuth = async () => {
+    try {
+      setUploadStatus("testing-auth");
+      setDebugInfo(prev => ({ ...prev, authTest: "Testing authentication..." }));
+      
+      const response = await fetch("http://localhost:8000/api/imagekit/auth");
+      const authData = await response.json();
+      
+      setDebugInfo(prev => ({ 
+        ...prev, 
+        authTest: "Auth test completed",
+        authResponse: authData,
+        authStatus: response.status,
+        authOk: response.ok
+      }));
+      
+      if (!response.ok) {
+        setUploadStatus("auth-failed");
+        throw new Error(`Auth API failed with status: ${response.status}`);
+      }
+      
+      setUploadStatus("auth-success");
+      return authData;
+    } catch (error) {
+      setUploadStatus("auth-error");
+      setDebugInfo(prev => ({ ...prev, authError: error.message }));
+      console.error("Auth Test Error:", error);
+      return null;
     }
   };
 
   return (
     <AuthenticatedLayout
       header={
-        <h2 className="font-semibold text-xl">
-          Update Equipment Assignments - {equipment.type}
-        </h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="font-semibold text-xl text-gray-800 dark:text-white">
+              Update Equipment Assignments
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              Manage all equipment assignments across all equipment types
+            </p>
+          </div>
+          <Link
+            href={route("equipments.index")}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Equipment
+          </Link>
+        </div>
       }
     >
-      <div className="p-6 bg-white dark:bg-gray-800 shadow sm:rounded-lg">
-        {/* Search */}
-        <form onSubmit={handleSearch} className="mb-4 flex gap-2">
-          <input
-            type="text"
-            placeholder="Search by name or NIK..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="border rounded px-2 py-1 w-64"
-          />
-          <button
-            type="submit"
-            className="px-3 py-1 bg-indigo-600 text-white rounded"
-          >
-            Search
-          </button>
-        </form>
+      <div className="py-6">
+        <div className="mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
+          {/* Header Card */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900 shadow-lg rounded-xl overflow-hidden mb-6">
+            <div className="p-6">
+              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">
+                    All Assignments Management
+                  </h1>
+                  <p className="text-gray-600 dark:text-gray-300">
+                    Update handover photos for all equipment assignments
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-sm font-medium">
+                    {handovers.total} assignments
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
 
-        {/* Table */}
-        <table className="min-w-full border border-gray-200 dark:border-gray-700 rounded-lg">
-          <thead>
-            <tr className="bg-gray-100 dark:bg-gray-700 text-sm text-gray-700 dark:text-gray-200">
-              <th className="px-4 py-2 border">#</th>
-              <th className="px-4 py-2 border">Name</th>
-              <th className="px-4 py-2 border">NIK</th>
-              <th className="px-4 py-2 border">Size</th>
-              <th className="px-4 py-2 border">Assignment Date</th>
-              <th className="px-4 py-2 border">Photo</th>
-              <th className="px-4 py-2 border">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {employees.data.map((emp, idx) => (
-              // Show each handover record separately, even for the same employee
-              <>
-                {emp.handovers.map((handover, handoverIndex) => (
-                  <tr key={`${emp.id}-${handover.id}`} className="text-sm text-gray-800 dark:text-gray-200">
-                    <td className="px-4 py-2 border">
-                      {(employees.current_page - 1) * employees.per_page + idx + 1}
-                      {emp.handovers.length > 1 && `.${handoverIndex + 1}`}
-                    </td>
-                    <td className="px-4 py-2 border">{emp.name}</td>
-                    <td className="px-4 py-2 border">{emp.nik}</td>
-                    <td className="px-4 py-2 border text-center">
-                      {handover.size || '-'}
-                    </td>
-                    <td className="px-4 py-2 border text-center">
-                      {handover.date
-                        ? new Date(handover.date).toLocaleDateString("id-ID")
-                        : <span className="text-gray-400 text-sm">-</span>}
-                    </td>
-                    <td className="px-4 py-2 border text-center">
-                      {handover.photo ? (
-                        <img
-                          src={handover.photo}
-                          alt="handover"
-                          className="w-12 h-12 object-cover rounded mx-auto"
-                        />
-                      ) : (
-                        <span className="text-gray-400 text-sm">No photo</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 border text-center">
-                      <button
-                        onClick={() => openModal(emp, handover)}
-                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded"
-                      >
-                        Update Photo
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </>
-            ))}
-            {employees.data.length === 0 && (
-              <tr>
-                <td
-                  colSpan="7"
-                  className="text-center py-4 text-gray-500 dark:text-gray-400"
+          {/* Search Section */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 mb-6">
+            <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1 relative">
+                <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search employees by name, NIK, or equipment type..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors shadow-md hover:shadow-lg"
                 >
-                  No equipment assignments found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                  Search
+                </button>
+                {search && (
+                  <button
+                    type="button"
+                    onClick={clearSearch}
+                    className="px-6 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
 
-        {/* Pagination */}
-        <div className="mt-4 flex justify-center gap-2">
-          {employees.links.map((link, i) => (
-            <Link
-              key={i}
-              href={link.url || "#"}
-              dangerouslySetInnerHTML={{ __html: link.label }}
-              className={`px-3 py-1 border rounded ${
-                link.active ? "bg-indigo-600 text-white" : ""
-              }`}
-            />
-          ))}
+          {/* Assignments Table */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden">
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 dark:bg-gray-900/50">
+                  <tr className="text-left text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <th className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">Employee</th>
+                    <th className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">NIK</th>
+                    <th className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">Equipment</th>
+                    <th className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">Size</th>
+                    <th className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">Assignment Date</th>
+                    <th className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">Photo</th>
+                    <th className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {handovers.data.map((handover) => (
+                    <tr key={handover.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-medium">
+                            {handover.employee.name.charAt(0)}
+                          </div>
+                          <div>
+                            <div className="font-medium text-gray-900 dark:text-white">{handover.employee.name}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{handover.employee.nik}</td>
+                      <td className="px-6 py-4">
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          {handover.equipment.type}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {handover.size ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                            {handover.size}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-sm">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">
+                        {handover.date
+                          ? new Date(handover.date).toLocaleDateString("id-ID", {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })
+                          : <span className="text-gray-400">-</span>}
+                      </td>
+                      <td className="px-6 py-4">
+                        {handover.photo ? (
+                          <img
+                            src={handover.photo}
+                            alt="handover"
+                            className="w-12 h-12 object-cover rounded-lg border border-gray-200 dark:border-gray-600"
+                          />
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            No photo
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button
+                          onClick={() => openModal(handover.employee, handover)}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg font-medium transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          Update Photo
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards */}
+            <div className="md:hidden">
+              {handovers.data.map((handover) => (
+                <div key={handover.id} className="p-4 border-b border-gray-200 dark:border-gray-700">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-medium">
+                        {handover.employee.name.charAt(0)}
+                      </div>
+                      <div>
+                        <div className="font-medium text-gray-900 dark:text-white">{handover.employee.name}</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">{handover.employee.nik}</div>
+                      </div>
+                    </div>
+                    {handover.size && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                        {handover.size}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-sm mb-3">
+                    <div>
+                      <div className="text-gray-500 dark:text-gray-400">Equipment</div>
+                      <div className="text-gray-900 dark:text-white font-medium">{handover.equipment.type}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500 dark:text-gray-400">Assignment Date</div>
+                      <div className="text-gray-900 dark:text-white">
+                        {handover.date
+                          ? new Date(handover.date).toLocaleDateString("id-ID")
+                          : '-'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500 dark:text-gray-400">Photo</div>
+                      <div>
+                        {handover.photo ? (
+                          <img
+                            src={handover.photo}
+                            alt="handover"
+                            className="w-10 h-10 object-cover rounded border"
+                          />
+                        ) : (
+                          <span className="text-gray-400 text-xs">No photo</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => openModal(handover.employee, handover)}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg font-medium transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Update Photo
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Empty State */}
+            {handovers.data.length === 0 && (
+              <div className="text-center py-12">
+                <div className="max-w-md mx-auto">
+                  <div className="w-24 h-24 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+                    <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No assignments found</h3>
+                  <p className="text-gray-500 dark:text-gray-400">
+                    {search ? 'Try adjusting your search terms' : 'No assignments found in the system'}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Pagination */}
+          {handovers.last_page > 1 && (
+            <div className="mt-6 bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div className="text-sm text-gray-700 dark:text-gray-300">
+                  Showing {handovers.from} to {handovers.to} of {handovers.total} assignments
+                </div>
+                <div className="flex gap-2">
+                  <Link
+                    href={handovers.prev_page_url || "#"}
+                    preserveScroll
+                    className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${handovers.prev_page_url
+                        ? 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                        : 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                      }`}
+                  >
+                    Previous
+                  </Link>
+                  <Link
+                    href={handovers.next_page_url || "#"}
+                    preserveScroll
+                    className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${handovers.next_page_url
+                        ? 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                        : 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-600 cursor-not-allowed'
+                      }`}
+                  >
+                    Next
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Modal - Only for updating photos */}
-      <Modal show={showModal} onClose={() => setShowModal(false)}>
-        {selectedEmp && selectedHandover && (
-          <form onSubmit={handleSubmit} className="p-6 space-y-4">
-            <h2 className="text-lg font-semibold mb-4">
+      {/* Update Photo Modal */}
+      <Modal show={showModal} onClose={() => setShowModal(false)} maxWidth="lg">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl">
+          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
               Update Handover Photo
             </h2>
+          </div>
 
-            <p>
-              <span className="font-semibold">Equipment:</span> {equipment.type}
-            </p>
-            <p>
-              <span className="font-semibold">Employee:</span>{" "}
-              {selectedEmp.name} ({selectedEmp.nik})
-            </p>
-            <p>
-              <span className="font-semibold">Size:</span> {selectedHandover.size || 'N/A'}
-            </p>
-            <p>
-              <span className="font-semibold">Assigned on:</span>{" "}
-              {new Date(selectedHandover.date).toLocaleDateString("id-ID")}
-            </p>
-
-            {/* ImageKit Upload */}
-            <div>
-              <label className="block text-sm font-medium mb-1">Update Photo</label>
-              <IKContext
-                publicKey={import.meta.env.VITE_IMAGEKIT_PUBLIC_KEY}
-                urlEndpoint="https://ik.imagekit.io/arina123"
-                authenticator={async () => {
-                  const res = await fetch("http://localhost:8000/api/imagekit/auth");
-                  return await res.json();
-                }}
-              >
-                <IKUpload
-                  fileName={`handover_${equipment.id}_${selectedEmp.id}_${Date.now()}.jpg`}
-                  onError={(err) => console.error("Upload Error:", err)}
-                  onSuccess={(res) => setPhoto(res.url)}
-                />
-              </IKContext>
-              {photo && (
-                <img
-                  src={photo}
-                  alt="preview"
-                  className="w-24 h-24 object-cover rounded mt-2"
-                />
-              )}
-              {selectedHandover.photo && !photo && (
-                <div className="mt-2">
-                  <p className="text-sm text-gray-600">Current photo:</p>
-                  <img
-                    src={selectedHandover.photo}
-                    alt="current"
-                    className="w-24 h-24 object-cover rounded"
-                  />
+          {selectedEmp && selectedHandover && (
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              {/* Assignment Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <div>
+                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Equipment</label>
+                  <p className="text-gray-900 dark:text-white font-medium">{selectedHandover.equipment.type}</p>
                 </div>
-              )}
-            </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Employee</label>
+                  <p className="text-gray-900 dark:text-white font-medium">{selectedEmp.name} ({selectedEmp.nik})</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Size</label>
+                  <p className="text-gray-900 dark:text-white font-medium">{selectedHandover.size || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-600 dark:text-gray-400">Assigned Date</label>
+                  <p className="text-gray-900 dark:text-white font-medium">
+                    {new Date(selectedHandover.date).toLocaleDateString("id-ID", {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    })}
+                  </p>
+                </div>
+              </div>
+{/* Photo Upload */}
+<div>
+  <label className="block text-sm font-medium mb-3 text-gray-700 dark:text-gray-300">
+    Update Handover Photo
+  </label>
 
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowModal(false)}
-                className="px-3 py-2 bg-gray-500 text-white rounded-md"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!photo}
-                className={`px-3 py-2 rounded-md text-white ${
-                  !photo ? 'bg-gray-400' : 'bg-indigo-600 hover:bg-indigo-700'
-                }`}
-              >
-                Update Photo
-              </button>
-            </div>
-          </form>
-        )}
+  {/* Current Photo */}
+  {selectedHandover.photo && !photo && (
+    <div className="mb-4">
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Current photo:</p>
+      <img
+        src={selectedHandover.photo}
+        alt="current handover"
+        className="w-32 h-32 object-cover rounded-lg border border-gray-200 dark:border-gray-600"
+      />
+    </div>
+  )}
+
+  {/* New Photo Upload */}
+  <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
+    <IKContext
+      publicKey={import.meta.env.VITE_IMAGEKIT_PUBLIC_KEY}
+      urlEndpoint={import.meta.env.VITE_IMAGEKIT_URL_ENDPOINT}
+      authenticator={async () => {
+        try {
+          setUploadStatus("authenticating");
+          
+          // Use relative path instead of absolute localhost
+          const response = await fetch("/api/imagekit/auth");
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Auth failed: ${response.status} - ${errorText}`);
+          }
+          
+          const data = await response.json();
+          
+          // Validate the response has required fields
+          if (!data.token || !data.signature) {
+            throw new Error('Invalid authentication response');
+          }
+          
+          setUploadStatus("auth-success");
+          return data;
+        } catch (error) {
+          setUploadStatus("auth-error");
+          setDebugInfo(prev => ({ 
+            ...prev, 
+            authError: error.message,
+            authTimestamp: new Date().toISOString()
+          }));
+          console.error("ImageKit Auth Error:", error);
+          throw error;
+        }
+      }}
+    >
+      <IKUpload
+        fileName={`handover_${selectedHandover.id}_${Date.now()}.jpg`}
+        folder="/handovers"
+        useUniqueFileName={true}
+        onError={(err) => {
+          console.error("Upload Error Details:", err);
+          setUploadStatus("upload-failed");
+          setDebugInfo(prev => ({ 
+            ...prev, 
+            uploadError: err,
+            uploadTimestamp: new Date().toISOString()
+          }));
+          alert('Photo upload failed. Please try again.');
+        }}
+        onSuccess={(res) => {
+          console.log("Upload Success:", res);
+          setUploadStatus("upload-success");
+          setPhoto(res.url);
+          setDebugInfo(prev => ({ 
+            ...prev, 
+            uploadSuccess: res,
+            uploadTimestamp: new Date().toISOString()
+          }));
+        }}
+        onUploadStart={() => {
+          setUploadStatus("uploading");
+          console.log("Upload starting...");
+        }}
+        validateFile={(file) => {
+          const validTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+          const isValidType = validTypes.includes(file.type);
+          const isValidSize = file.size <= 10 * 1024 * 1024; // 10MB
+          
+          if (!isValidType) {
+            alert('Please select a valid image file (JPEG, PNG, JPG)');
+            return false;
+          }
+          
+          if (!isValidSize) {
+            alert('File size must be less than 10MB');
+            return false;
+          }
+          
+          return true;
+        }}
+        className="hidden"
+        id="photo-upload"
+      />
+    </IKContext>
+
+    <label htmlFor="photo-upload" className="cursor-pointer">
+      <svg className="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+      <p className="text-gray-600 dark:text-gray-400 mb-1">
+        Click to upload new photo
+      </p>
+      <p className="text-xs text-gray-500 dark:text-gray-500">
+        PNG, JPG, JPEG up to 10MB
+      </p>
+      {uploadStatus && (
+        <p className={`text-xs mt-2 ${
+          uploadStatus.includes('success') ? 'text-green-600' : 
+          uploadStatus.includes('fail') || uploadStatus.includes('error') ? 'text-red-600' : 
+          'text-blue-600'
+        }`}>
+          Status: {uploadStatus}
+        </p>
+      )}
+    </label>
+  </div>
+
+  {/* Debug Info Button */}
+  <div className="mt-4">
+    <button
+      type="button"
+      onClick={() => setShowDebug(!showDebug)}
+      className="text-xs text-gray-500 hover:text-gray-700"
+    >
+      {showDebug ? 'Hide Debug Info' : 'Show Debug Info'}
+    </button>
+    
+    {showDebug && (
+      <div className="mt-2 p-3 bg-gray-100 dark:bg-gray-700 rounded text-xs">
+        <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
+      </div>
+    )}
+  </div>
+
+  {/* New Photo Preview */}
+  {photo && (
+    <div className="mt-4">
+      <p className="text-sm text-green-600 dark:text-green-400 mb-2 font-medium">New photo ready:</p>
+      <img
+        src={photo}
+        alt="new handover preview"
+        className="w-32 h-32 object-cover rounded-lg border-2 border-green-200 dark:border-green-800"
+      />
+    </div>
+  )}
+</div>
+<div className="flex justify-end gap-3 pt-6 border-t border-gray-200 dark:border-gray-700">
+  <button
+    type="button"
+    onClick={() => setShowModal(false)}
+    className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+    disabled={isSubmitting}
+  >
+    Cancel
+  </button>
+  
+  <button
+    type="submit"
+    disabled={!photo || isSubmitting || photo === selectedHandover.photo}
+    className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 disabled:bg-indigo-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+  >
+    {isSubmitting ? (
+      <>
+        <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        Saving...
+      </>
+    ) : (
+      'Save Photo'
+    )}
+  </button>
+</div>
+            </form>
+          )}
+        </div>
       </Modal>
     </AuthenticatedLayout>
   );

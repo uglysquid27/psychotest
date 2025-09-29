@@ -387,8 +387,12 @@ Route::prefix('equipments')->name('equipments.')->middleware(['auth'])->group(fu
     Route::put('/{equipment}', [EquipmentController::class, 'update'])->name('update');
     Route::delete('/{equipment}', [EquipmentController::class, 'destroy'])->name('destroy');
 
-    // 👉 OLD assign routes
-    Route::get('/{equipment}/assign', [EquipmentController::class, 'assignPage'])->name('assign.page');
+    // ✅ CORRECT: Remove the duplicate 'equipments' prefix
+    Route::get('/assign', [EquipmentController::class, 'assignPage'])->name('assign.page'); // This becomes /equipments/assign
+    
+    // Keep the existing equipment-specific route
+    Route::get('/{equipment}/assign', [EquipmentController::class, 'assignPage'])->name('assign.page.id');
+    
     Route::post('/{equipment}/assign', [EquipmentController::class, 'assignStore'])->name('assign.store');
 
     // 👉 NEW modal-based assign routes
@@ -401,6 +405,8 @@ Route::prefix('equipments')->name('equipments.')->middleware(['auth'])->group(fu
 
 Route::prefix('handovers')->name('handovers.')->middleware(['auth'])->group(function () {
     Route::put('/{handover}', [HandoverController::class, 'update'])->name('update');
+    Route::post('/{handover}/upload-photo', [HandoverController::class, 'uploadPhoto'])->name('upload-photo');
+    Route::post('/{handover}/upload-direct', [HandoverController::class, 'uploadPhotoDirect'])->name('upload-direct');
 });
 
 });

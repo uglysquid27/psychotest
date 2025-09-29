@@ -27,44 +27,6 @@ class EquipmentController extends Controller
         return Inertia::render('apd/Create');
     }
 
-    public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'type' => 'required|string|max:255',
-            'amount' => 'nullable|integer|min:0',
-            'size' => 'nullable|string',
-            'photo' => 'nullable|string',
-        ]);
-
-        if ($validated['size'])
-            $validated['amount'] = null;
-
-        $equipment = WorkEquipment::create($validated);
-
-        Log::info('New equipment created', ['id' => $equipment->id, 'data' => $validated]);
-
-        return redirect()->route('equipments.index')->with('success', 'Equipment created successfully.');
-    }
-
-    public function update(Request $request, WorkEquipment $equipment)
-    {
-        $validated = $request->validate([
-            'type' => 'required|string|max:255',
-            'amount' => 'nullable|integer|min:0',
-            'size' => 'nullable|string',
-            'photo' => 'nullable|string',
-        ]);
-
-        if ($validated['size'])
-            $validated['amount'] = null;
-
-        $equipment->update($validated);
-
-        Log::info('Equipment updated', ['id' => $equipment->id, 'data' => $validated]);
-
-        return redirect()->route('equipments.index')->with('success', 'Equipment updated successfully.');
-    }
-
     public function destroy(WorkEquipment $equipment)
     {
         $equipment->delete();
@@ -73,7 +35,7 @@ class EquipmentController extends Controller
     }
 
     // 👇 NEW METHOD: Get employees for assign modal
-  public function getEmployeesForAssign(Request $request)
+public function getEmployeesForAssign(Request $request)
 {
     try {
         $equipmentId = $request->input('equipment_id');
@@ -98,37 +60,69 @@ class EquipmentController extends Controller
             ], 404);
         }
 
-        // Fix: Use correct relationship names
-        $employees = Employee::with(['handover' => function($q) use ($equipmentId, $selectedSize) {
+        // Fix: Use correct relationship names - subSections (plural)
+        $employees = Employee::with(['handovers' => function($q) use ($equipmentId, $selectedSize) {
                 $q->where('equipment_id', $equipmentId);
                 if ($selectedSize) {
                     $q->where('size', $selectedSize);
                 }
             }])
-            ->with(['subSections.section'])
+            ->with(['subSections.section']) // Fix: Use plural subSections
             ->when($search, function($q) use ($search) {
                 $q->where(function($query) use ($search) {
-                    $query->where('name', 'like', "%{$search}%")
-                          ->orWhere('nik', 'like', "%{$search}%");
+                    // Exact match for NIK if it looks like a number
+                    if (is_numeric($search)) {
+                        $query->where('nik', '=', $search)
+                              ->orWhere('name', 'like', "%{$search}%");
+                    } else {
+                        // Partial match for names
+                        $query->where('name', 'like', "%{$search}%")
+                              ->orWhere('nik', 'like', "%{$search}%");
+                    }
                 });
             })
             ->when($section, function($q) use ($section) {
+                // Handle both ID and name filtering
                 $q->whereHas('subSections.section', function($query) use ($section) {
-                    $query->where('id', $section);
+                    if (is_numeric($section)) {
+                        $query->where('id', $section);
+                    } else {
+                        $query->where('name', 'like', "%{$section}%");
+                    }
                 });
             })
             ->when($subsection, function($q) use ($subsection) {
                 $q->whereHas('subSections', function($query) use ($subsection) {
-                    $query->where('id', $subsection);
+                    if (is_numeric($subsection)) {
+                        $query->where('id', $subsection);
+                    } else {
+                        $query->where('name', 'like', "%{$subsection}%");
+                    }
                 });
             })
             ->paginate(10, ['*'], 'page', $page);
 
-        $sections = SubSection::with('section')->get()->groupBy('section.name');
+        // Fix sections data structure
+        $allSections = SubSection::with('section')->get();
+        $groupedSections = [];
+        
+        foreach ($allSections as $subSection) {
+            if ($subSection->section) {
+                $sectionName = $subSection->section->name;
+                if (!isset($groupedSections[$sectionName])) {
+                    $groupedSections[$sectionName] = [];
+                }
+                $groupedSections[$sectionName][] = [
+                    'id' => $subSection->id,
+                    'name' => $subSection->name,
+                    'section_id' => $subSection->section_id
+                ];
+            }
+        }
 
         return response()->json([
             'employees' => $employees,
-            'sections' => $sections,
+            'sections' => $groupedSections,
             'selectedSize' => $selectedSize,
         ]);
 
@@ -142,27 +136,139 @@ class EquipmentController extends Controller
 }
 
     // 👇 NEW METHOD: Store assignment from modal
+// In the store method, add uppercase validation:
+public function store(Request $request)
+{
+    $validated = $request->validate([
+        'type' => 'required|string|max:255',
+        'amount' => 'nullable|integer|min:0',
+        'size' => 'nullable|string',
+        'photo' => 'nullable|string',
+    ]);
+
+    // Auto-uppercase the type
+    $validated['type'] = strtoupper($validated['type']);
+
+    if ($validated['size'])
+        $validated['amount'] = null;
+
+    $equipment = WorkEquipment::create($validated);
+
+    Log::info('New equipment created', ['id' => $equipment->id, 'data' => $validated]);
+
+    return redirect()->route('equipments.index')->with('success', 'Equipment created successfully.');
+}
+
+// In the update method, add uppercase validation:
+public function update(Request $request, WorkEquipment $equipment)
+{
+    $validated = $request->validate([
+        'type' => 'required|string|max:255',
+        'amount' => 'nullable|integer|min:0',
+        'size' => 'nullable|string',
+        'photo' => 'nullable|string',
+    ]);
+
+    // Auto-uppercase the type
+    $validated['type'] = strtoupper($validated['type']);
+
+    if ($validated['size'])
+        $validated['amount'] = null;
+
+    $equipment->update($validated);
+
+    Log::info('Equipment updated', ['id' => $equipment->id, 'data' => $validated]);
+
+    return redirect()->route('equipments.index')->with('success', 'Equipment updated successfully.');
+}
+
+// Update the assignStoreModal method to handle multiple assignments better:
 public function assignStoreModal(Request $request)
 {
     try {
         $request->validate([
             'employee_id' => 'required|exists:employees,id',
             'equipment_id' => 'required|exists:work_equipments,id',
-            'photo' => 'nullable|string', // Make photo optional
+            'photo' => 'nullable|string',
             'size' => 'nullable|string',
         ]);
 
-        $handover = Handover::updateOrCreate(
-            [
-                'employee_id' => $request->employee_id,
-                'equipment_id' => $request->equipment_id,
-                'size' => $request->size,
-            ],
-            [
-                'date' => now(),
-                'photo' => $request->photo, // Can be null
-            ]
-        );
+        $equipment = WorkEquipment::findOrFail($request->equipment_id);
+
+        // Check if equipment has stock available
+        if ($equipment->size) {
+            // Equipment with sizes
+            if ($request->size) {
+                $sizes = explode(',', $equipment->size);
+                $updatedSizes = [];
+                $sizeFound = false;
+
+                foreach ($sizes as $sizeItem) {
+                    list($sizeName, $amount) = explode(':', $sizeItem);
+                    
+                    if ($sizeName === $request->size) {
+                        if ((int)$amount <= 0) {
+                            return response()->json([
+                                'success' => false,
+                                'message' => 'Stock for size ' . $request->size . ' is out of stock.'
+                            ], 400);
+                        }
+                        
+                        $newAmount = (int)$amount - 1;
+                        $updatedSizes[] = $sizeName . ':' . $newAmount;
+                        $sizeFound = true;
+                    } else {
+                        $updatedSizes[] = $sizeItem;
+                    }
+                }
+
+                if (!$sizeFound) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Size ' . $request->size . ' not found for this equipment.'
+                    ], 400);
+                }
+
+                $equipment->size = implode(',', $updatedSizes);
+            }
+        } else {
+            // Equipment without sizes
+            if ($equipment->amount <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Equipment is out of stock.'
+                ], 400);
+            }
+            
+            $equipment->amount = $equipment->amount - 1;
+        }
+
+        // Check if already assigned (prevent duplicates)
+        $existingHandover = Handover::where('employee_id', $request->employee_id)
+            ->where('equipment_id', $request->equipment_id)
+            ->when($request->size, function($q) use ($request) {
+                $q->where('size', $request->size);
+            })
+            ->first();
+
+        if ($existingHandover) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Equipment already assigned to this employee.'
+            ], 400);
+        }
+
+        // Create handover record
+        $handover = Handover::create([
+            'employee_id' => $request->employee_id,
+            'equipment_id' => $request->equipment_id,
+            'size' => $request->size,
+            'date' => now(),
+            'photo' => $request->photo,
+        ]);
+
+        // Save the equipment with updated stock
+        $equipment->save();
 
         return response()->json([
             'success' => true, 
@@ -178,68 +284,133 @@ public function assignStoreModal(Request $request)
         ], 500);
     }
 }
-
-    // 👇 KEEP EXISTING METHODS for backward compatibility
-public function assignPage(Request $request, $id)
+public function assignPage(Request $request, $equipment = null)
 {
-    $equipment = WorkEquipment::findOrFail($id);
-    $selectedSize = $request->input('size');
+    // If equipment ID is provided, use the old behavior
+    if ($equipment) {
+        $equipment = WorkEquipment::findOrFail($equipment);
+        $selectedSize = $request->input('size');
 
-    // Only get employees who already have handovers for this equipment
-    $employees = Employee::whereHas('handovers', function($q) use ($id, $selectedSize) {
-            $q->where('equipment_id', $id);
-            if ($selectedSize) {
-                $q->where('size', $selectedSize);
-            }
-        })
-        ->with(['handovers' => function($q) use ($id, $selectedSize) {
-            $q->where('equipment_id', $id);
-            if ($selectedSize) {
-                $q->where('size', $selectedSize);
-            }
-        }])
+        $employees = Employee::whereHas('handovers', function($q) use ($equipment, $selectedSize) {
+                $q->where('equipment_id', $equipment->id);
+                if ($selectedSize) {
+                    $q->where('size', $selectedSize);
+                }
+            })
+            ->with(['handovers' => function($q) use ($equipment, $selectedSize) {
+                $q->where('equipment_id', $equipment->id);
+                if ($selectedSize) {
+                    $q->where('size', $selectedSize);
+                }
+            }])
+            ->when($request->search, function($q) use ($request) {
+                $q->where(function($query) use ($request) {
+                    $query->where('name', 'like', "%{$request->search}%")
+                          ->orWhere('nik', 'like', "%{$request->search}%");
+                });
+            })
+            ->paginate(10)
+            ->withQueryString();
+
+        return inertia('apd/Assign', [
+            'equipment' => $equipment,
+            'employees' => $employees,
+            'selectedSize' => $selectedSize,
+            'filters' => $request->only('search'),
+        ]);
+    }
+
+    // New behavior: show all handovers
+    $handovers = Handover::with(['employee', 'equipment'])
         ->when($request->search, function($q) use ($request) {
             $q->where(function($query) use ($request) {
-                $query->where('name', 'like', "%{$request->search}%")
-                      ->orWhere('nik', 'like', "%{$request->search}%");
+                $query->whereHas('employee', function($empQuery) use ($request) {
+                    $empQuery->where('name', 'like', "%{$request->search}%")
+                            ->orWhere('nik', 'like', "%{$request->search}%");
+                })->orWhereHas('equipment', function($eqQuery) use ($request) {
+                    $eqQuery->where('type', 'like', "%{$request->search}%");
+                });
             });
         })
+        ->orderBy('date', 'desc')
         ->paginate(10)
         ->withQueryString();
 
     return inertia('apd/Assign', [
-        'equipment' => $equipment,
-        'employees' => $employees,
-        'selectedSize' => $selectedSize,
+        'handovers' => $handovers,
         'filters' => $request->only('search'),
     ]);
 }
 
-    public function assignStore(Request $request, $id)
-    {
-        $request->validate([
-            'employee_id' => 'required|exists:employees,id',
-            'photo' => 'nullable|string',
-            'size' => 'nullable|string',
-        ]);
+ public function assignStore(Request $request, $id)
+{
+    $request->validate([
+        'employee_id' => 'required|exists:employees,id',
+        'photo' => 'nullable|string',
+        'size' => 'nullable|string',
+    ]);
 
-        $handover = Handover::updateOrCreate(
-            [
-                'employee_id' => $request->employee_id,
-                'equipment_id' => $id,
-                'size' => $request->size,
-            ],
-            [
-                'date' => now(),
-                'photo' => $request->photo,
-            ]
-        );
+    $equipment = WorkEquipment::findOrFail($id);
 
-        return redirect()->route('equipments.assign.page', [
-            'equipment' => $id,
-            'size' => $request->size,
-        ])->with('success', 'Handover saved successfully.');
+    // Check if equipment has stock available
+    if ($equipment->size) {
+        // Equipment with sizes
+        if ($request->size) {
+            $sizes = explode(',', $equipment->size);
+            $updatedSizes = [];
+            $sizeFound = false;
+
+            foreach ($sizes as $sizeItem) {
+                list($sizeName, $amount) = explode(':', $sizeItem);
+                
+                if ($sizeName === $request->size) {
+                    if ((int)$amount <= 0) {
+                        return redirect()->back()->with('error', 'Stock for size ' . $request->size . ' is out of stock.');
+                    }
+                    
+                    $newAmount = (int)$amount - 1;
+                    $updatedSizes[] = $sizeName . ':' . $newAmount;
+                    $sizeFound = true;
+                } else {
+                    $updatedSizes[] = $sizeItem;
+                }
+            }
+
+            if (!$sizeFound) {
+                return redirect()->back()->with('error', 'Size ' . $request->size . ' not found for this equipment.');
+            }
+
+            $equipment->size = implode(',', $updatedSizes);
+        }
+    } else {
+        // Equipment without sizes
+        if ($equipment->amount <= 0) {
+            return redirect()->back()->with('error', 'Equipment is out of stock.');
+        }
+        
+        $equipment->amount = $equipment->amount - 1;
     }
+
+    $handover = Handover::updateOrCreate(
+        [
+            'employee_id' => $request->employee_id,
+            'equipment_id' => $id,
+            'size' => $request->size,
+        ],
+        [
+            'date' => now(),
+            'photo' => $request->photo,
+        ]
+    );
+
+    // Save the equipment with updated stock
+    $equipment->save();
+
+    return redirect()->route('equipments.assign.page', [
+        'equipment' => $id,
+        'size' => $request->size,
+    ])->with('success', 'Handover saved successfully.');
+}
 
     public function handoverUpdate(Request $request, Handover $handover)
     {
