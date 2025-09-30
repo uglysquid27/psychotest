@@ -424,9 +424,13 @@ Route::prefix('equipments')->name('equipments.')->middleware(['auth'])->group(fu
 });
 
 Route::prefix('handovers')->name('handovers.')->middleware(['auth'])->group(function () {
+    // Assign page route
+    Route::get('/assign', [HandoverController::class, 'assignPage'])->name('assign.page');
+    
+    // Existing routes
     Route::put('/{handover}', [HandoverController::class, 'update'])->name('update');
     Route::post('/{handover}/upload-photo', [HandoverController::class, 'uploadPhoto'])->name('upload-photo');
-    Route::post('/{handover}/upload-direct', [HandoverController::class, 'uploadPhotoDirect'])->name('upload-direct');
+    Route::post('/{handover}/update-with-date', [HandoverController::class, 'updateWithDate'])->name('update-with-date');
     Route::delete('/{handover}', [HandoverController::class, 'destroy'])->name('destroy');
 });
 

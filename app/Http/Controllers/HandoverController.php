@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Handover;
+use App\Models\WorkEquipment;
 use Illuminate\Http\Request;
 use ImageKit\ImageKit;
 use Illuminate\Support\Facades\Log;
@@ -149,4 +150,59 @@ public function uploadPhoto(Request $request, Handover $handover)
             ], 500);
         }
     }
+
+     /**
+     * Display assign page with grouped handovers
+     */
+    public function assignPage(Request $request)
+    {
+        // Get all equipments untuk available equipment list
+        $allEquipments = WorkEquipment::orderBy('type')->get();
+
+        // Get all handovers dengan relasi
+        $handovers = Handover::with(['employee', 'equipment'])
+            ->when($request->search, function($q) use ($request) {
+                $q->where(function($query) use ($request) {
+                    $query->whereHas('employee', function($empQuery) use ($request) {
+                        $empQuery->where('name', 'like', "%{$request->search}%")
+                                ->orWhere('nik', 'like', "%{$request->search}%");
+                    })->orWhereHas('equipment', function($eqQuery) use ($request) {
+                        $eqQuery->where('type', 'like', "%{$request->search}%");
+                    });
+                });
+            })
+            ->orderBy('date', 'desc')
+            ->paginate(10)
+            ->withQueryString();
+
+        return inertia('apd/Assign', [
+            'handovers' => $handovers,
+            'equipments' => $allEquipments, // ✅ Kirim semua equipment
+            'filters' => $request->only('search'),
+        ]);
+    }
+
+public function updateWithDate(Request $request, Handover $handover)
+{
+    $request->validate([
+        'date' => 'required|date',
+        'photo_url' => 'nullable|string', // Bisa nullable
+    ]);
+
+    $updateData = [
+        'date' => $request->date,
+    ];
+
+    // Only update photo if new photo is provided
+    if ($request->photo_url) {
+        $updateData['photo'] = $request->photo_url;
+    }
+
+    $handover->update($updateData);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Handover updated successfully.'
+    ]);
+}
 }
