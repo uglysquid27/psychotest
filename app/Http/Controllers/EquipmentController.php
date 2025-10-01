@@ -178,93 +178,92 @@ class EquipmentController extends Controller
         return redirect()->route('equipments.index')->with('success', 'Equipment updated successfully.');
     }
 
-    public function assignStoreModal(Request $request)
-    {
-        try {
-            $request->validate([
-                'employee_id' => 'required|exists:employees,id',
-                'equipment_id' => 'required|exists:work_equipments,id',
-                'photo' => 'nullable|string',
-                'size' => 'nullable|string',
-            ]);
+   public function assignStoreModal(Request $request)
+{
+    try {
+        $request->validate([
+            'employee_id' => 'required|exists:employees,id',
+            'equipment_id' => 'required|exists:work_equipments,id',
+            'photo' => 'nullable|string',
+            'size' => 'nullable|string',
+        ]);
 
-            $equipment = WorkEquipment::findOrFail($request->equipment_id);
+        $equipment = WorkEquipment::findOrFail($request->equipment_id);
 
-            // Check if equipment has stock available
-            if ($equipment->size) {
-                // Equipment with sizes
-                if ($request->size) {
-                    $sizes = explode(',', $equipment->size);
-                    $updatedSizes = [];
-                    $sizeFound = false;
+        // Check if equipment has stock available
+        if ($equipment->size) {
+            // Equipment with sizes
+            if ($request->size) {
+                $sizes = explode(',', $equipment->size);
+                $updatedSizes = [];
+                $sizeFound = false;
 
-                    foreach ($sizes as $sizeItem) {
-                        list($sizeName, $amount) = explode(':', $sizeItem);
-                        
-                        if ($sizeName === $request->size) {
-                            if ((int)$amount <= 0) {
-                                return response()->json([
-                                    'success' => false,
-                                    'message' => 'Stock for size ' . $request->size . ' is out of stock.'
-                                ], 400);
-                            }
-                            
-                            $newAmount = (int)$amount - 1;
-                            $updatedSizes[] = $sizeName . ':' . $newAmount;
-                            $sizeFound = true;
-                        } else {
-                            $updatedSizes[] = $sizeItem;
+                foreach ($sizes as $sizeItem) {
+                    list($sizeName, $amount) = explode(':', $sizeItem);
+                    
+                    if ($sizeName === $request->size) {
+                        if ((int)$amount <= 0) {
+                            return response()->json([
+                                'success' => false,
+                                'message' => 'Stock for size ' . $request->size . ' is out of stock.'
+                            ], 400);
                         }
+                        
+                        $newAmount = (int)$amount - 1;
+                        $updatedSizes[] = $sizeName . ':' . $newAmount;
+                        $sizeFound = true;
+                    } else {
+                        $updatedSizes[] = $sizeItem;
                     }
-
-                    if (!$sizeFound) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => 'Size ' . $request->size . ' not found for this equipment.'
-                        ], 400);
-                    }
-
-                    $equipment->size = implode(',', $updatedSizes);
                 }
-            } else {
-                // Equipment without sizes
-                if ($equipment->amount <= 0) {
+
+                if (!$sizeFound) {
                     return response()->json([
                         'success' => false,
-                        'message' => 'Equipment is out of stock.'
+                        'message' => 'Size ' . $request->size . ' not found for this equipment.'
                     ], 400);
                 }
-                
-                $equipment->amount = $equipment->amount - 1;
+
+                $equipment->size = implode(',', $updatedSizes);
             }
-
-            // REMOVED: Duplicate assignment check - allow multiple assignments to same employee
-            // Create handover record (allow duplicates)
-            $handover = Handover::create([
-                'employee_id' => $request->employee_id,
-                'equipment_id' => $request->equipment_id,
-                'size' => $request->size,
-                'date' => now(),
-                'photo' => $request->photo,
-            ]);
-
-            // Save the equipment with updated stock
-            $equipment->save();
-
-            return response()->json([
-                'success' => true, 
-                'message' => 'Equipment assigned successfully.',
-                'handover' => $handover
-            ]);
-
-        } catch (\Exception $e) {
-            \Log::error('Error in assignStoreModal: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to assign equipment: ' . $e->getMessage()
-            ], 500);
+        } else {
+            // Equipment without sizes
+            if ($equipment->amount <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Equipment is out of stock.'
+                ], 400);
+            }
+            
+            $equipment->amount = $equipment->amount - 1;
         }
+
+        // Create handover record
+        $handover = Handover::create([
+            'employee_id' => $request->employee_id,
+            'equipment_id' => $request->equipment_id,
+            'size' => $request->size,
+            'date' => now(),
+            'photo' => $request->photo,
+        ]);
+
+        // Save the equipment with updated stock
+        $equipment->save();
+
+        return response()->json([
+            'success' => true, 
+            'message' => 'Equipment assigned successfully.',
+            'handover' => $handover
+        ]);
+
+    } catch (\Exception $e) {
+        \Log::error('Error in assignStoreModal: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to assign equipment: ' . $e->getMessage()
+        ], 500);
     }
+}
 
     public function assignPage(Request $request, $equipment = null)
     {

@@ -423,15 +423,15 @@ Route::prefix('equipments')->name('equipments.')->middleware(['auth'])->group(fu
     Route::put('/handover/{handover}', [EquipmentController::class, 'handoverUpdate'])->name('handover.update');
 });
 
-Route::prefix('handovers')->name('handovers.')->middleware(['auth'])->group(function () {
-    // Assign page route
-    Route::get('/assign', [HandoverController::class, 'assignPage'])->name('assign.page');
+     Route::get('/handovers/assign', [HandoverController::class, 'assignPage'])->name('handovers.assign');
+    Route::post('/handovers/quick-assign', [HandoverController::class, 'quickAssign'])->name('handovers.quick-assign');
+    Route::post('/handovers/bulk-assign', [HandoverController::class, 'bulkAssign'])->name('handovers.bulk-assign');
+    Route::post('/handovers/{handover}/upload-photo', [HandoverController::class, 'uploadPhoto'])->name('handovers.upload-photo');
+    Route::put('/handovers/{handover}', [HandoverController::class, 'updateWithDate'])->name('handovers.update');
+    Route::delete('/handovers/{handover}', [HandoverController::class, 'destroy'])->name('handovers.destroy');
     
-    // Existing routes
-    Route::put('/{handover}', [HandoverController::class, 'update'])->name('update');
-    Route::post('/{handover}/upload-photo', [HandoverController::class, 'uploadPhoto'])->name('upload-photo');
-    Route::post('/{handover}/update-with-date', [HandoverController::class, 'updateWithDate'])->name('update-with-date');
-    Route::delete('/{handover}', [HandoverController::class, 'destroy'])->name('destroy');
-});
-
+    // Employee routes 
+    Route::get('/handovers/unassigned-employees', [HandoverController::class, 'getUnassignedEmployees'])->name('handovers.unassigned-employees');
+Route::get('/handovers/employee/{employee}/handovers', [HandoverController::class, 'getEmployeeHandovers'])->name('handovers.employee.handovers');
+Route::put('/handovers/employee/{employee}/update-handovers', [HandoverController::class, 'updateEmployeeHandovers'])->name('handovers.employee.update');   
 });

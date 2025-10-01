@@ -722,7 +722,7 @@ export default function Index() {
                     </div>
                     <div className="flex gap-3">
                         <Link
-                            href={route("handovers.assign.page")} // ✅ Ganti ke handovers.assign.page
+                            href={route("handovers.assign")} // ✅ Ganti ke handovers.assign.page
                             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-md hover:shadow-lg"
                         >
                             <svg
@@ -988,7 +988,7 @@ export default function Index() {
                                     </div>
 
                                     {/* Assign Button */}
-                                    <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+                                    {/* <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
                                         <button
                                             onClick={() => openAssignModal(eq)}
                                             disabled={
@@ -1015,7 +1015,7 @@ export default function Index() {
                                             </svg>
                                             Assign Equipment
                                         </button>
-                                    </div>
+                                    </div> */}
                                 </div>
                             </div>
                         ))}

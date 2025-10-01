@@ -295,7 +295,7 @@ export default function AuthenticatedLayout({ header, children, hideSidebar = fa
                                                     : 'text-gray-700 dark:text-gray-200'
                                                 }`}
                                         >
-                                            <span className="block">APD</span>
+                                            <span className="block">Inventory</span>
                                         </NavLink>
 
                                         <NavLink
