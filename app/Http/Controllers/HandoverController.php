@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Handover;
 use App\Models\WorkEquipment;
 use App\Models\Employee;
+use App\Models\Section;
+use App\Models\Subsection;
 use Illuminate\Http\Request;
 use ImageKit\ImageKit;
 use Illuminate\Support\Facades\Log;
@@ -154,37 +156,65 @@ class HandoverController extends Controller
     /**
      * Display assign page with grouped handovers
      */
-    public function assignPage(Request $request)
-    {
-        // Get all equipments untuk available equipment list
-        $allEquipments = WorkEquipment::orderBy('type')->get();
+/**
+ * Display assign page with grouped handovers
+ */
+public function assignPage(Request $request)
+{
+    // Get all equipments untuk available equipment list
+    $allEquipments = WorkEquipment::orderBy('type')->get();
 
-        // Get all active employees untuk employee selection
-        $allEmployees = Employee::active()->orderBy('name')->get();
+    // Get all active employees untuk employee selection with sections and subsections
+    $allEmployees = Employee::active()
+        ->with(['subSections.section'])
+        ->orderBy('name')
+        ->get();
 
-        // Get all handovers dengan relasi
-        $handovers = Handover::with(['employee', 'equipment'])
-            ->when($request->search, function($q) use ($request) {
-                $q->where(function($query) use ($request) {
-                    $query->whereHas('employee', function($empQuery) use ($request) {
-                        $empQuery->where('name', 'like', "%{$request->search}%")
-                                ->orWhere('nik', 'like', "%{$request->search}%");
-                    })->orWhereHas('equipment', function($eqQuery) use ($request) {
-                        $eqQuery->where('type', 'like', "%{$request->search}%");
-                    });
+    // Get all handovers dengan relasi
+    $handovers = Handover::with(['employee.subSections.section', 'equipment'])
+        ->when($request->search, function($q) use ($request) {
+            $q->where(function($query) use ($request) {
+                $query->whereHas('employee', function($empQuery) use ($request) {
+                    $empQuery->where('name', 'like', "%{$request->search}%")
+                            ->orWhere('nik', 'like', "%{$request->search}%");
+                })->orWhereHas('equipment', function($eqQuery) use ($request) {
+                    $eqQuery->where('type', 'like', "%{$request->search}%");
                 });
-            })
-            ->orderBy('date', 'desc')
-            ->paginate(10)
-            ->withQueryString();
+            });
+        })
+        ->when($request->section && $request->section !== 'All', function($q) use ($request) {
+            $q->whereHas('employee.subSections.section', function($sectionQuery) use ($request) {
+                $sectionQuery->where('name', $request->section);
+            });
+        })
+        ->when($request->sub_section && $request->sub_section !== 'All', function($q) use ($request) {
+            $q->whereHas('employee.subSections', function($subSectionQuery) use ($request) {
+                $subSectionQuery->where('name', $request->sub_section);
+            });
+        })
+        ->orderBy('date', 'desc')
+        ->paginate(10)
+        ->withQueryString();
 
-        return inertia('apd/Assign', [
-            'handovers' => $handovers,
-            'equipments' => $allEquipments,
-            'employees' => $allEmployees,
-            'filters' => $request->only('search'),
-        ]);
-    }
+    // Get unique sections and subsections for filters
+    $sections = Section::select('id', 'name')
+        ->orderBy('name')
+        ->get();
+    
+    $subSections = SubSection::select('id', 'name', 'section_id')
+        ->with('section')
+        ->orderBy('name')
+        ->get();
+
+    return inertia('apd/Assign', [
+        'handovers' => $handovers,
+        'equipments' => $allEquipments,
+        'employees' => $allEmployees,
+        'sections' => $sections,
+        'subSections' => $subSections,
+        'filters' => $request->only(['search', 'section', 'sub_section']),
+    ]);
+}
 
     /**
      * Quick assign equipment to employee
@@ -394,41 +424,58 @@ class HandoverController extends Controller
    /**
      * Get active employees without any equipment assignments with search filter
      */
-    public function getUnassignedEmployees(Request $request)
-    {
-        try {
-            $search = $request->input('search', '');
-            
-            \Log::info('Fetching unassigned employees', ['search' => $search]);
-            
-            // Get employees without handovers
-            $unassignedEmployees = Employee::active()
-                ->whereDoesntHave('handovers')
-                ->when($search, function($query) use ($search) {
-                    $query->where(function($q) use ($search) {
-                        $q->where('name', 'like', "%{$search}%")
-                          ->orWhere('nik', 'like', "%{$search}%")
-                          ->orWhere('email', 'like', "%{$search}%");
-                    });
-                })
-                ->orderBy('name')
-                ->get(['id', 'nik', 'name', 'email']); // Remove department
+  public function getUnassignedEmployees(Request $request)
+{
+    try {
+        $search = $request->input('search', '');
+        $section = $request->input('section', '');
+        $subSection = $request->input('sub_section', '');
+        
+        \Log::info('Fetching unassigned employees', [
+            'search' => $search,
+            'section' => $section,
+            'sub_section' => $subSection
+        ]);
+        
+        // Get employees without handovers
+        $unassignedEmployees = Employee::active()
+            ->with(['subSections.section'])
+            ->whereDoesntHave('handovers')
+            ->when($search, function($query) use ($search) {
+                $query->where(function($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('nik', 'like', "%{$search}%")
+                      ->orWhere('email', 'like', "%{$search}%");
+                });
+            })
+            ->when($section && $section !== 'All', function($query) use ($section) {
+                $query->whereHas('subSections.section', function($q) use ($section) {
+                    $q->where('name', $section);
+                });
+            })
+            ->when($subSection && $subSection !== 'All', function($query) use ($subSection) {
+                $query->whereHas('subSections', function($q) use ($subSection) {
+                    $q->where('name', $subSection);
+                });
+            })
+            ->orderBy('name')
+            ->get(['id', 'nik', 'name', 'email']);
 
-            \Log::info('Unassigned employees found', ['count' => $unassignedEmployees->count()]);
+        \Log::info('Unassigned employees found', ['count' => $unassignedEmployees->count()]);
 
-            return response()->json([
-                'success' => true,
-                'employees' => $unassignedEmployees
-            ]);
+        return response()->json([
+            'success' => true,
+            'employees' => $unassignedEmployees
+        ]);
 
-        } catch (\Exception $e) {
-            \Log::error('Get unassigned employees error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to get unassigned employees: ' . $e->getMessage()
-            ], 500);
-        }
+    } catch (\Exception $e) {
+        \Log::error('Get unassigned employees error: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to get unassigned employees: ' . $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * Get employee handovers
