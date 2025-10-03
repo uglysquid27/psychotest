@@ -90,7 +90,7 @@ Route::get('/api/imagekit/auth', function () {
         $token = uniqid();
         $expire = time() + 60 * 10; // 10 minutes
         $signature = hash_hmac('sha1', $token . $expire, $privateKey);
-        
+
         return response()->json([
             'token' => $token,
             'expire' => $expire,
@@ -148,7 +148,7 @@ Route::middleware(['auth:employee', 'prevent.back'])
         Route::post('/schedule/{schedule}/respond', [EmployeeDashboardController::class, 'respond'])->name('schedule.respond');
         Route::get('/schedule/{schedule}/same-day', [EmployeeDashboardController::class, 'sameDayEmployees'])
             ->name('schedule.same-day'); // Changed from 'employee.schedule.same-day'
-    
+
         Route::get('/employee/famday/check', [EmployeeDashboardController::class, 'checkFamdayAccount'])
             ->name('famday.check');
 
@@ -400,38 +400,39 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
         Route::post('/submit', [PersonalityTestController::class, 'submit'])->name('submit'); // tambah route submit
 
     });
-Route::prefix('equipments')->name('equipments.')->middleware(['auth'])->group(function () {
-    Route::get('/', [EquipmentController::class, 'index'])->name('index');
-    Route::get('/create', [EquipmentController::class, 'create'])->name('create');
-    Route::post('/', [EquipmentController::class, 'store'])->name('store');
-    Route::put('/{equipment}', [EquipmentController::class, 'update'])->name('update');
-    Route::delete('/{equipment}', [EquipmentController::class, 'destroy'])->name('destroy');
+    Route::prefix('equipments')->name('equipments.')->middleware(['auth'])->group(function () {
+        Route::get('/', [EquipmentController::class, 'index'])->name('index');
+        Route::get('/create', [EquipmentController::class, 'create'])->name('create');
+        Route::post('/', [EquipmentController::class, 'store'])->name('store');
+        Route::put('/{equipment}', [EquipmentController::class, 'update'])->name('update');
+        Route::delete('/{equipment}', [EquipmentController::class, 'destroy'])->name('destroy');
 
-    // ✅ CORRECT: Remove the duplicate 'equipments' prefix
-    Route::get('/assign', [EquipmentController::class, 'assignPage'])->name('assign.page'); // This becomes /equipments/assign
-    
-    // Keep the existing equipment-specific route
-    Route::get('/{equipment}/assign', [EquipmentController::class, 'assignPage'])->name('assign.page.id');
-    
-    Route::post('/{equipment}/assign', [EquipmentController::class, 'assignStore'])->name('assign.store');
+        // ✅ CORRECT: Remove the duplicate 'equipments' prefix
+        Route::get('/assign', [EquipmentController::class, 'assignPage'])->name('assign.page'); // This becomes /equipments/assign
 
-    // 👉 NEW modal-based assign routes (ADD THESE)
-    Route::post('/assign/employees', [EquipmentController::class, 'getEmployeesForAssign'])->name('assign.employees');
-    Route::post('/assign/store', [EquipmentController::class, 'assignStoreModal'])->name('assign.store.modal');
+        // Keep the existing equipment-specific route
+        Route::get('/{equipment}/assign', [EquipmentController::class, 'assignPage'])->name('assign.page.id');
 
-    // 👉 update handover
-    Route::put('/handover/{handover}', [EquipmentController::class, 'handoverUpdate'])->name('handover.update');
-});
+        Route::post('/{equipment}/assign', [EquipmentController::class, 'assignStore'])->name('assign.store');
 
-     Route::get('/handovers/assign', [HandoverController::class, 'assignPage'])->name('handovers.assign');
+        // 👉 NEW modal-based assign routes (ADD THESE)
+        Route::post('/assign/employees', [EquipmentController::class, 'getEmployeesForAssign'])->name('assign.employees');
+        Route::post('/assign/store', [EquipmentController::class, 'assignStoreModal'])->name('assign.store.modal');
+
+        // 👉 update handover
+        Route::put('/handover/{handover}', [EquipmentController::class, 'handoverUpdate'])->name('handover.update');
+    });
+
+    Route::get('/handovers/assign', [HandoverController::class, 'assignPage'])->name('handovers.assign');
     Route::post('/handovers/quick-assign', [HandoverController::class, 'quickAssign'])->name('handovers.quick-assign');
     Route::post('/handovers/bulk-assign', [HandoverController::class, 'bulkAssign'])->name('handovers.bulk-assign');
     Route::post('/handovers/{handover}/upload-photo', [HandoverController::class, 'uploadPhoto'])->name('handovers.upload-photo');
     Route::put('/handovers/{handover}', [HandoverController::class, 'updateWithDate'])->name('handovers.update');
     Route::delete('/handovers/{handover}', [HandoverController::class, 'destroy'])->name('handovers.destroy');
-    
+
     // Employee routes 
     Route::get('/handovers/unassigned-employees', [HandoverController::class, 'getUnassignedEmployees'])->name('handovers.unassigned-employees');
-Route::get('/handovers/employee/{employee}/handovers', [HandoverController::class, 'getEmployeeHandovers'])->name('handovers.employee.handovers');
-Route::put('/handovers/employee/{employee}/update-handovers', [HandoverController::class, 'updateEmployeeHandovers'])->name('handovers.employee.update');   
+    Route::get('/handovers/employee/{employee}/handovers', [HandoverController::class, 'getEmployeeHandovers'])->name('handovers.employee.handovers');
+    Route::put('/handovers/employee/{employee}/update-handovers', [HandoverController::class, 'updateEmployeeHandovers'])->name('handovers.employee.update');
+    Route::get('/handovers/employee-equipment-counts', [HandoverController::class, 'getEmployeeEquipmentCounts'])->name('handovers.employee.equipment-counts');
 });

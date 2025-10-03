@@ -786,4 +786,39 @@ public function assignPage(Request $request)
             ];
         }
     }
+
+    /**
+ * Get equipment counts for all employees
+ */
+public function getEmployeeEquipmentCounts()
+{
+    try {
+        $counts = Handover::with(['employee', 'equipment'])
+            ->select('employee_id', 'equipment_id', DB::raw('count(*) as total_count'))
+            ->groupBy('employee_id', 'equipment_id')
+            ->get()
+            ->groupBy('employee_id')
+            ->map(function ($employeeHandovers) {
+                return $employeeHandovers->map(function ($handover) {
+                    return [
+                        'equipment_type' => $handover->equipment->type,
+                        'total_count' => $handover->total_count
+                    ];
+                });
+            })
+            ->toArray();
+
+        return response()->json([
+            'success' => true,
+            'counts' => $counts
+        ]);
+
+    } catch (\Exception $e) {
+        \Log::error('Get employee equipment counts error: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to get equipment counts: ' . $e->getMessage()
+        ], 500);
+    }
+}
 }
