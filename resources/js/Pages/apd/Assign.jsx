@@ -1737,7 +1737,8 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
                                 )}
                             </div>
 
-                            <div className='flex-1 gap-6 grid grid-cols-1 lg:grid-cols-2 overflow-hidden'>
+                          <div className='flex-1 gap-6 grid grid-cols-1 lg:grid-cols-2 overflow-y-auto'>
+
                                 {/* Employee Selection */}
                                 <div className='flex flex-col'>
                                     <h3 className='mb-4 font-medium text-gray-900 dark:text-white text-lg'>
@@ -1851,149 +1852,151 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
                                     </div>
 
                                     {/* Employees List */}
-                                    <div className='flex-1 space-y-3 overflow-y-auto'>
-                                        {paginatedEmployees.map(employee => (
-                                            <div
-                                                key={employee.id}
-                                                className={`p-4 border rounded-lg cursor-pointer transition-all ${
-                                                    selectedEmployee?.id ===
-                                                    employee.id
-                                                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500/20'
-                                                        : 'border-gray-200 dark:border-gray-600 hover:border-blue-300 hover:bg-blue-50/50 dark:hover:bg-blue-900/10'
-                                                }`}
-                                                onClick={() =>
-                                                    handleEmployeeSelect(
-                                                        employee
-                                                    )
-                                                }
-                                            >
-                                                <div className='flex justify-between items-start'>
-                                                    <div className='flex-1'>
-                                                        <h4 className='font-medium text-gray-900 dark:text-white'>
-                                                            {employee.name}
-                                                        </h4>
-                                                        <p className='text-gray-600 dark:text-gray-400 text-sm'>
-                                                            NIK: {employee.nik}
-                                                        </p>
-                                                        <p className='mt-1 text-gray-500 dark:text-gray-500 text-sm'>
-                                                            {getEmployeeSectionInfo(
-                                                                employee
-                                                            )}
-                                                        </p>
-                                                    </div>
-                                                    <div className='ml-4 text-right'>
-                                                        <div className='mb-1 text-gray-500 dark:text-gray-400 text-xs'>
-                                                            Equipment Count:{' '}
+                                    <div className='flex-1 min-h-0 overflow-hidden flex flex-col'>
+                                        <div className='flex-1 overflow-y-auto'>
+                                            {paginatedEmployees.map(employee => (
+                                                <div
+                                                    key={employee.id}
+                                                    className={`p-4 border rounded-lg cursor-pointer transition-all mb-3 ${
+                                                        selectedEmployee?.id ===
+                                                        employee.id
+                                                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500/20'
+                                                            : 'border-gray-200 dark:border-gray-600 hover:border-blue-300 hover:bg-blue-50/50 dark:hover:bg-blue-900/10'
+                                                    }`}
+                                                    onClick={() =>
+                                                        handleEmployeeSelect(
+                                                            employee
+                                                        )
+                                                    }
+                                                >
+                                                    <div className='flex justify-between items-start'>
+                                                        <div className='flex-1'>
+                                                            <h4 className='font-medium text-gray-900 dark:text-white'>
+                                                                {employee.name}
+                                                            </h4>
+                                                            <p className='text-gray-600 dark:text-gray-400 text-sm'>
+                                                                NIK: {employee.nik}
+                                                            </p>
+                                                            <p className='mt-1 text-gray-500 dark:text-gray-500 text-sm'>
+                                                                {getEmployeeSectionInfo(
+                                                                    employee
+                                                                )}
+                                                            </p>
+                                                        </div>
+                                                        <div className='ml-4 text-right'>
+                                                            <div className='mb-1 text-gray-500 dark:text-gray-400 text-xs'>
+                                                                Equipment Count:{' '}
+                                                                {getTotalEmployeeEquipmentCount(
+                                                                    employee.id
+                                                                )}
+                                                            </div>
+                                                            <div className='space-y-1 max-h-20 overflow-y-auto'>
+                                                                {equipments
+                                                                    ?.map(
+                                                                        equipment => {
+                                                                            const count =
+                                                                                getEmployeeEquipmentCount(
+                                                                                    employee.id,
+                                                                                    equipment.type
+                                                                                )
+                                                                            if (
+                                                                                count >
+                                                                                0
+                                                                            ) {
+                                                                                return (
+                                                                                    <div
+                                                                                        key={
+                                                                                            equipment.id
+                                                                                        }
+                                                                                        className='text-xs'
+                                                                                    >
+                                                                                        <span className='text-gray-600 dark:text-gray-400'>
+                                                                                            {
+                                                                                                equipment.type
+                                                                                            }
+                                                                                            :{' '}
+                                                                                        </span>
+                                                                                        <span className='font-medium text-blue-600 dark:text-blue-400'>
+                                                                                            {
+                                                                                                count
+                                                                                            }
+                                                                                        </span>
+                                                                                    </div>
+                                                                                )
+                                                                            }
+                                                                            return null
+                                                                        }
+                                                                    )
+                                                                    .filter(
+                                                                        Boolean
+                                                                    )}
+                                                            </div>
                                                             {getTotalEmployeeEquipmentCount(
                                                                 employee.id
+                                                            ) === 0 && (
+                                                                <span className='text-gray-400 dark:text-gray-500 text-xs'>
+                                                                    No equipment
+                                                                </span>
                                                             )}
                                                         </div>
-                                                        <div className='space-y-1 max-h-20 overflow-y-auto'>
-                                                            {equipments
-                                                                ?.map(
-                                                                    equipment => {
-                                                                        const count =
-                                                                            getEmployeeEquipmentCount(
-                                                                                employee.id,
-                                                                                equipment.type
-                                                                            )
-                                                                        if (
-                                                                            count >
-                                                                            0
-                                                                        ) {
-                                                                            return (
-                                                                                <div
-                                                                                    key={
-                                                                                        equipment.id
-                                                                                    }
-                                                                                    className='text-xs'
-                                                                                >
-                                                                                    <span className='text-gray-600 dark:text-gray-400'>
-                                                                                        {
-                                                                                            equipment.type
-                                                                                        }
-                                                                                        :{' '}
-                                                                                    </span>
-                                                                                    <span className='font-medium text-blue-600 dark:text-blue-400'>
-                                                                                        {
-                                                                                            count
-                                                                                        }
-                                                                                    </span>
-                                                                                </div>
-                                                                            )
-                                                                        }
-                                                                        return null
-                                                                    }
-                                                                )
-                                                                .filter(
-                                                                    Boolean
-                                                                )}
-                                                        </div>
-                                                        {getTotalEmployeeEquipmentCount(
-                                                            employee.id
-                                                        ) === 0 && (
-                                                            <span className='text-gray-400 dark:text-gray-500 text-xs'>
-                                                                No equipment
-                                                            </span>
-                                                        )}
                                                     </div>
                                                 </div>
-                                            </div>
-                                        ))}
+                                            ))}
 
-                                        {paginatedEmployees.length === 0 && (
-                                            <div className='py-8 text-gray-500 dark:text-gray-400 text-center'>
-                                                <svg
-                                                    className='mx-auto mb-3 w-12 h-12 text-gray-300 dark:text-gray-600'
-                                                    fill='none'
-                                                    stroke='currentColor'
-                                                    viewBox='0 0 24 24'
+                                            {paginatedEmployees.length === 0 && (
+                                                <div className='py-8 text-gray-500 dark:text-gray-400 text-center'>
+                                                    <svg
+                                                        className='mx-auto mb-3 w-12 h-12 text-gray-300 dark:text-gray-600'
+                                                        fill='none'
+                                                        stroke='currentColor'
+                                                        viewBox='0 0 24 24'
+                                                    >
+                                                        <path
+                                                            strokeLinecap='round'
+                                                            strokeLinejoin='round'
+                                                            strokeWidth={1}
+                                                            d='M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z'
+                                                        />
+                                                    </svg>
+                                                    <p>No employees found</p>
+                                                    <p className='mt-1 text-sm'>
+                                                        Try adjusting your search or
+                                                        filters
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Pagination */}
+                                        {totalPages > 1 && (
+                                            <div className='flex-shrink-0 flex justify-center items-center space-x-2 mt-4 pt-4 border-t border-gray-200 dark:border-gray-600'>
+                                                <button
+                                                    onClick={() =>
+                                                        goToPage(currentPage - 1)
+                                                    }
+                                                    disabled={currentPage === 1}
+                                                    className='disabled:opacity-50 px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm disabled:cursor-not-allowed'
                                                 >
-                                                    <path
-                                                        strokeLinecap='round'
-                                                        strokeLinejoin='round'
-                                                        strokeWidth={1}
-                                                        d='M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z'
-                                                    />
-                                                </svg>
-                                                <p>No employees found</p>
-                                                <p className='mt-1 text-sm'>
-                                                    Try adjusting your search or
-                                                    filters
-                                                </p>
+                                                    Previous
+                                                </button>
+                                                <span className='text-gray-600 dark:text-gray-400 text-sm'>
+                                                    Page {currentPage} of{' '}
+                                                    {totalPages}
+                                                </span>
+                                                <button
+                                                    onClick={() =>
+                                                        goToPage(currentPage + 1)
+                                                    }
+                                                    disabled={
+                                                        currentPage === totalPages
+                                                    }
+                                                    className='disabled:opacity-50 px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm disabled:cursor-not-allowed'
+                                                >
+                                                    Next
+                                                </button>
                                             </div>
                                         )}
                                     </div>
-
-                                    {/* Pagination */}
-                                    {totalPages > 1 && (
-                                        <div className='flex justify-center items-center space-x-2 mt-4'>
-                                            <button
-                                                onClick={() =>
-                                                    goToPage(currentPage - 1)
-                                                }
-                                                disabled={currentPage === 1}
-                                                className='disabled:opacity-50 px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm disabled:cursor-not-allowed'
-                                            >
-                                                Previous
-                                            </button>
-                                            <span className='text-gray-600 dark:text-gray-400 text-sm'>
-                                                Page {currentPage} of{' '}
-                                                {totalPages}
-                                            </span>
-                                            <button
-                                                onClick={() =>
-                                                    goToPage(currentPage + 1)
-                                                }
-                                                disabled={
-                                                    currentPage === totalPages
-                                                }
-                                                className='disabled:opacity-50 px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm disabled:cursor-not-allowed'
-                                            >
-                                                Next
-                                            </button>
-                                        </div>
-                                    )}
                                 </div>
 
                                 {/* Equipment Selection */}
@@ -2004,166 +2007,168 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
                                     <h3 className='mb-4 font-medium text-gray-900 dark:text-white text-lg'>
                                         Select Equipment
                                     </h3>
-                                    <div className='flex-1 space-y-4 overflow-y-auto'>
-                                        {equipments?.map(equipment => (
-                                            <div
-                                                key={equipment.id}
-                                                className={`bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border cursor-pointer transition-all ${
-                                                    selectedEquipment?.id ===
-                                                    equipment.id
-                                                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500/20'
-                                                        : 'border-gray-200 dark:border-gray-600 hover:border-blue-300 hover:bg-blue-50/50 dark:hover:bg-blue-900/10'
-                                                }`}
-                                                onClick={() =>
-                                                    handleEquipmentSelect(
-                                                        equipment
-                                                    )
-                                                }
-                                            >
-                                                <div className='flex justify-between items-start mb-3'>
-                                                    <div className='flex items-start gap-3'>
-                                                        {equipment.photo && (
-                                                            <img
-                                                                src={
-                                                                    equipment.photo
-                                                                }
-                                                                alt={
-                                                                    equipment.type
-                                                                }
-                                                                className='border border-gray-200 dark:border-gray-600 rounded-lg w-16 h-16 object-cover'
-                                                            />
-                                                        )}
-                                                        <div>
-                                                            <h4 className='font-medium text-gray-900 dark:text-white'>
-                                                                {equipment.type}
-                                                            </h4>
-                                                            <p className='mt-1 text-gray-600 dark:text-gray-400 text-sm'>
-                                                                {equipment.description ||
-                                                                    'No description'}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <span
-                                                        className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                                            equipment.size ||
-                                                            equipment.amount > 0
-                                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                                                : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                                                        }`}
-                                                    >
-                                                        {equipment.size
-                                                            ? 'Multiple Sizes'
-                                                            : `${equipment.amount} available`}
-                                                    </span>
-                                                </div>
-
-                                                {/* Stock Information */}
-                                                <div className='space-y-2 text-gray-600 dark:text-gray-400 text-sm'>
-                                                    {equipment.size ? (
-                                                        <div>
-                                                            <div className='mb-1 font-medium'>
-                                                                Available Sizes:
-                                                            </div>
-                                                            <div className='space-y-1'>
-                                                                {equipment.size
-                                                                    .split(',')
-                                                                    .map(
-                                                                        (
-                                                                            sizeItem,
-                                                                            idx
-                                                                        ) => {
-                                                                            if (
-                                                                                !sizeItem ||
-                                                                                !sizeItem.includes(
-                                                                                    ':'
-                                                                                )
-                                                                            )
-                                                                                return null
-                                                                            const [
-                                                                                sizeName,
-                                                                                amount
-                                                                            ] =
-                                                                                sizeItem.split(
-                                                                                    ':'
-                                                                                )
-                                                                            const stock =
-                                                                                parseInt(
-                                                                                    amount
-                                                                                ) ||
-                                                                                0
-                                                                            return (
-                                                                                <div
-                                                                                    key={
-                                                                                        idx
-                                                                                    }
-                                                                                    className='flex justify-between items-center'
-                                                                                >
-                                                                                    <span>
-                                                                                        Size{' '}
-                                                                                        {
-                                                                                            sizeName
-                                                                                        }
-                                                                                    </span>
-                                                                                    <span
-                                                                                        className={`px-2 py-1 rounded text-xs ${
-                                                                                            stock >
-                                                                                            0
-                                                                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                                                                                : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                                                                                        }`}
-                                                                                    >
-                                                                                        {
-                                                                                            stock
-                                                                                        }{' '}
-                                                                                        available
-                                                                                    </span>
-                                                                                </div>
-                                                                            )
-                                                                        }
-                                                                    )}
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className='flex justify-between items-center'>
-                                                            <span>Stock:</span>
-                                                            <span
-                                                                className={`px-2 py-1 rounded text-xs ${
-                                                                    equipment.amount >
-                                                                    0
-                                                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                                                        : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                                                                }`}
-                                                            >
-                                                                {
-                                                                    equipment.amount
-                                                                }{' '}
-                                                                available
-                                                            </span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))}
-
-                                        {(!equipments ||
-                                            equipments.length === 0) && (
-                                            <div className='py-8 text-gray-500 dark:text-gray-400 text-center'>
-                                                <svg
-                                                    className='mx-auto mb-3 w-12 h-12 text-gray-300 dark:text-gray-600'
-                                                    fill='none'
-                                                    stroke='currentColor'
-                                                    viewBox='0 0 24 24'
+                                    <div className='flex-1 min-h-0 overflow-hidden'>
+                                        <div className='h-full overflow-y-auto space-y-4'>
+                                            {equipments?.map(equipment => (
+                                                <div
+                                                    key={equipment.id}
+                                                    className={`bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border cursor-pointer transition-all ${
+                                                        selectedEquipment?.id ===
+                                                        equipment.id
+                                                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500/20'
+                                                            : 'border-gray-200 dark:border-gray-600 hover:border-blue-300 hover:bg-blue-50/50 dark:hover:bg-blue-900/10'
+                                                    }`}
+                                                    onClick={() =>
+                                                        handleEquipmentSelect(
+                                                            equipment
+                                                        )
+                                                    }
                                                 >
-                                                    <path
-                                                        strokeLinecap='round'
-                                                        strokeLinejoin='round'
-                                                        strokeWidth={1}
-                                                        d='M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4'
-                                                    />
-                                                </svg>
-                                                <p>No equipment available</p>
-                                            </div>
-                                        )}
+                                                    <div className='flex justify-between items-start mb-3'>
+                                                        <div className='flex items-start gap-3'>
+                                                            {equipment.photo && (
+                                                                <img
+                                                                    src={
+                                                                        equipment.photo
+                                                                    }
+                                                                    alt={
+                                                                        equipment.type
+                                                                    }
+                                                                    className='border border-gray-200 dark:border-gray-600 rounded-lg w-16 h-16 object-cover'
+                                                                />
+                                                            )}
+                                                            <div>
+                                                                <h4 className='font-medium text-gray-900 dark:text-white'>
+                                                                    {equipment.type}
+                                                                </h4>
+                                                                <p className='mt-1 text-gray-600 dark:text-gray-400 text-sm'>
+                                                                    {equipment.description ||
+                                                                        'No description'}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <span
+                                                            className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                                                equipment.size ||
+                                                                equipment.amount > 0
+                                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                                                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                                            }`}
+                                                        >
+                                                            {equipment.size
+                                                                ? 'Multiple Sizes'
+                                                                : `${equipment.amount} available`}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Stock Information */}
+                                                    <div className='space-y-2 text-gray-600 dark:text-gray-400 text-sm'>
+                                                        {equipment.size ? (
+                                                            <div>
+                                                                <div className='mb-1 font-medium'>
+                                                                    Available Sizes:
+                                                                </div>
+                                                                <div className='space-y-1'>
+                                                                    {equipment.size
+                                                                        .split(',')
+                                                                        .map(
+                                                                            (
+                                                                                sizeItem,
+                                                                                idx
+                                                                            ) => {
+                                                                                if (
+                                                                                    !sizeItem ||
+                                                                                    !sizeItem.includes(
+                                                                                        ':'
+                                                                                    )
+                                                                                )
+                                                                                    return null
+                                                                                const [
+                                                                                    sizeName,
+                                                                                    amount
+                                                                                ] =
+                                                                                    sizeItem.split(
+                                                                                        ':'
+                                                                                    )
+                                                                                const stock =
+                                                                                    parseInt(
+                                                                                        amount
+                                                                                    ) ||
+                                                                                    0
+                                                                                return (
+                                                                                    <div
+                                                                                        key={
+                                                                                            idx
+                                                                                        }
+                                                                                        className='flex justify-between items-center'
+                                                                                    >
+                                                                                        <span>
+                                                                                            Size{' '}
+                                                                                            {
+                                                                                                sizeName
+                                                                                            }
+                                                                                        </span>
+                                                                                        <span
+                                                                                            className={`px-2 py-1 rounded text-xs ${
+                                                                                                stock >
+                                                                                                0
+                                                                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                                                                                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                                                                            }`}
+                                                                                        >
+                                                                                            {
+                                                                                                stock
+                                                                                            }{' '}
+                                                                                            available
+                                                                                        </span>
+                                                                                    </div>
+                                                                                )
+                                                                            }
+                                                                        )}
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className='flex justify-between items-center'>
+                                                                <span>Stock:</span>
+                                                                <span
+                                                                    className={`px-2 py-1 rounded text-xs ${
+                                                                        equipment.amount >
+                                                                        0
+                                                                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                                                            : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                                                    }`}
+                                                                >
+                                                                    {
+                                                                        equipment.amount
+                                                                    }{' '}
+                                                                    available
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+
+                                            {(!equipments ||
+                                                equipments.length === 0) && (
+                                                <div className='py-8 text-gray-500 dark:text-gray-400 text-center'>
+                                                    <svg
+                                                        className='mx-auto mb-3 w-12 h-12 text-gray-300 dark:text-gray-600'
+                                                        fill='none'
+                                                        stroke='currentColor'
+                                                        viewBox='0 0 24 24'
+                                                    >
+                                                        <path
+                                                            strokeLinecap='round'
+                                                            strokeLinejoin='round'
+                                                            strokeWidth={1}
+                                                            d='M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4'
+                                                        />
+                                                    </svg>
+                                                    <p>No equipment available</p>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
