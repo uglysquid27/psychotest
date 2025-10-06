@@ -148,7 +148,7 @@ Route::middleware(['auth:employee', 'prevent.back'])
         Route::post('/schedule/{schedule}/respond', [EmployeeDashboardController::class, 'respond'])->name('schedule.respond');
         Route::get('/schedule/{schedule}/same-day', [EmployeeDashboardController::class, 'sameDayEmployees'])
             ->name('schedule.same-day'); // Changed from 'employee.schedule.same-day'
-
+    
         Route::get('/employee/famday/check', [EmployeeDashboardController::class, 'checkFamdayAccount'])
             ->name('famday.check');
 
@@ -423,6 +423,9 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
         Route::put('/handover/{handover}', [EquipmentController::class, 'handoverUpdate'])->name('handover.update');
     });
 
+    Route::get('/equipments/export', [EquipmentController::class, 'exportEquipment'])
+    ->name('equipments.export');
+
     Route::get('/handovers/assign', [HandoverController::class, 'assignPage'])->name('handovers.assign');
     Route::post('/handovers/quick-assign', [HandoverController::class, 'quickAssign'])->name('handovers.quick-assign');
     Route::post('/handovers/bulk-assign', [HandoverController::class, 'bulkAssign'])->name('handovers.bulk-assign');
@@ -435,4 +438,6 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     Route::get('/handovers/employee/{employee}/handovers', [HandoverController::class, 'getEmployeeHandovers'])->name('handovers.employee.handovers');
     Route::put('/handovers/employee/{employee}/update-handovers', [HandoverController::class, 'updateEmployeeHandovers'])->name('handovers.employee.update');
     Route::get('/handovers/employee-equipment-counts', [HandoverController::class, 'getEmployeeEquipmentCounts'])->name('handovers.employee.equipment-counts');
+  Route::get('/handovers/export', [HandoverController::class, 'exportAssignments'])->name('handovers.export');
+
 });

@@ -403,4 +403,80 @@ class EquipmentController extends Controller
 
         return back()->with('success', 'Handover updated.');
     }
+
+public function exportEquipment()
+{
+    try {
+        $equipments = \App\Models\WorkEquipment::orderBy('type')->get();
+
+        $filename = 'equipment_' . date('Ymd_His') . '.xls';
+
+        $html = '<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />';
+        $html .= '<table border="1" cellspacing="0" cellpadding="4">';
+        $html .= '
+            <tr style="background:#e2e2e2;font-weight:bold;text-align:center;">
+                <th>No</th>
+                <th>Equipment Type</th>
+                <th>Stock Type</th>
+                <th>Available Sizes / Stock</th>
+                <th>Total Available</th>
+                <th>Created At</th>
+                <th>Updated At</th>
+            </tr>
+        ';
+
+        $no = 1;
+        foreach ($equipments as $equipment) {
+            $stockType = $equipment->size ? 'Multiple Sizes' : 'Single Size';
+            $availableInfo = '';
+            $totalStock = 0;
+
+            if ($equipment->size) {
+                $sizes = explode(',', $equipment->size);
+                foreach ($sizes as $sizeItem) {
+                    if (strpos($sizeItem, ':') !== false) {
+                        [$sizeName, $amount] = explode(':', $sizeItem);
+                        $availableInfo .= htmlentities(trim($sizeName)) . ': ' . htmlentities($amount) . '<br>';
+                        $totalStock += intval($amount);
+                    }
+                }
+            } else {
+                $availableInfo = htmlentities($equipment->amount ?? 0);
+                $totalStock = intval($equipment->amount ?? 0);
+            }
+
+            $html .= '<tr>';
+            $html .= '<td style="text-align:center;">' . $no++ . '</td>';
+            $html .= '<td>' . htmlentities($equipment->type ?? '-') . '</td>';
+            $html .= '<td>' . $stockType . '</td>';
+            $html .= '<td>' . $availableInfo . '</td>';
+            $html .= '<td style="text-align:center;">' . $totalStock . '</td>';
+            $html .= '<td>' . ($equipment->created_at ? $equipment->created_at->format('Y-m-d H:i') : '-') . '</td>';
+            $html .= '<td>' . ($equipment->updated_at ? $equipment->updated_at->format('Y-m-d H:i') : '-') . '</td>';
+            $html .= '</tr>';
+        }
+
+        $html .= '</table>';
+
+        // ✅ This ensures browser *downloads* the file, not open it
+        return response()->streamDownload(
+            function () use ($html) {
+                echo $html;
+            },
+            $filename,
+            [
+                'Content-Type' => 'application/vnd.ms-excel',
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+                'Pragma' => 'no-cache',
+                'Expires' => '0',
+                'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0, private',
+            ]
+        );
+    } catch (\Exception $e) {
+        \Log::error('Equipment export error: ' . $e->getMessage());
+        return back()->with('error', 'Failed to export equipment data.');
+    }
+}
+
+
 }
