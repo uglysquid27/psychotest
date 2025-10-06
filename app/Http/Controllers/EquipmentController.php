@@ -434,15 +434,30 @@ public function exportEquipment()
             if ($equipment->size) {
                 $sizes = explode(',', $equipment->size);
                 foreach ($sizes as $sizeItem) {
+                    $sizeItem = trim($sizeItem);
+
+                    // Case 1: format like "L:99" or "M:13"
                     if (strpos($sizeItem, ':') !== false) {
                         [$sizeName, $amount] = explode(':', $sizeItem);
-                        $availableInfo .= htmlentities(trim($sizeName)) . ': ' . htmlentities($amount) . '<br>';
-                        $totalStock += intval($amount);
+                        $amount = is_numeric($amount) ? intval($amount) : trim($amount);
+                        // ✅ Add an apostrophe so Excel treats it as text (e.g., '39)
+                        $availableInfo .= "'" . htmlentities(trim($sizeName)) . ': ' . htmlentities($amount) . "<br>";
+                        $totalStock += is_numeric($amount) ? intval($amount) : 0;
+                    }
+                    // Case 2: only sizes (like "39", "40", "41") → no stock info
+                    else {
+                        // ✅ Add apostrophe before numeric sizes to prevent Excel converting
+                        $displaySize = is_numeric($sizeItem)
+                            ? "'" . intval($sizeItem)
+                            : htmlentities($sizeItem);
+
+                        $availableInfo .= $displaySize . '<br>';
                     }
                 }
             } else {
-                $availableInfo = htmlentities($equipment->amount ?? 0);
-                $totalStock = intval($equipment->amount ?? 0);
+                $amount = is_numeric($equipment->amount) ? intval($equipment->amount) : $equipment->amount;
+                $availableInfo = htmlentities($amount);
+                $totalStock = is_numeric($equipment->amount) ? intval($equipment->amount) : 0;
             }
 
             $html .= '<tr>';
@@ -451,14 +466,13 @@ public function exportEquipment()
             $html .= '<td>' . $stockType . '</td>';
             $html .= '<td>' . $availableInfo . '</td>';
             $html .= '<td style="text-align:center;">' . $totalStock . '</td>';
-            $html .= '<td>' . ($equipment->created_at ? $equipment->created_at->format('Y-m-d H:i') : '-') . '</td>';
-            $html .= '<td>' . ($equipment->updated_at ? $equipment->updated_at->format('Y-m-d H:i') : '-') . '</td>';
+            $html .= '<td>' . ($equipment->created_at ? $equipment->created_at->format('d/m/Y H.i') : '-') . '</td>';
+            $html .= '<td>' . ($equipment->updated_at ? $equipment->updated_at->format('d/m/Y H.i') : '-') . '</td>';
             $html .= '</tr>';
         }
 
         $html .= '</table>';
 
-        // ✅ This ensures browser *downloads* the file, not open it
         return response()->streamDownload(
             function () use ($html) {
                 echo $html;
@@ -477,6 +491,8 @@ public function exportEquipment()
         return back()->with('error', 'Failed to export equipment data.');
     }
 }
+
+
 
 
 }
