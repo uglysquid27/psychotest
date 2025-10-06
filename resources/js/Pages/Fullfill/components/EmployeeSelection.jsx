@@ -1,4 +1,3 @@
-// In EmployeeSelection.jsx, add a warning for assigned employees
 export default function EmployeeSelection({
     request,
     selectedIds,

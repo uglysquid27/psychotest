@@ -10,7 +10,8 @@ export default function EmployeeModal({
     selectNewEmployee,
     handleMultiSelect,
     multiSelectMode,
-    toggleMultiSelectMode
+    toggleMultiSelectMode,
+    isBulkMode = false
 }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedSubSection, setSelectedSubSection] = useState('all');
@@ -18,14 +19,15 @@ export default function EmployeeModal({
     const [showIncompleteModal, setShowIncompleteModal] = useState(false);
     const [failedImages, setFailedImages] = useState(new Set());
 
+
     const availableSubSections = useMemo(() => {
         const subSectionMap = new Map();
 
         allSortedEligibleEmployees.forEach(emp => {
             emp.subSections.forEach(subSection => {
-                if (!subSectionMap.has(subSection.id)) {
-                    subSectionMap.set(subSection.id, {
-                        id: subSection.id,
+                if (!subSectionMap.has(String(subSection.id))) {
+                    subSectionMap.set(String(subSection.id), {
+                        id: String(subSection.id),
                         name: subSection.name,
                         section_name: subSection.section?.name || 'Unknown Section'
                     });
@@ -53,17 +55,24 @@ export default function EmployeeModal({
         }
 
         if (selectedSubSection !== 'all') {
-            const subSectionId = parseInt(selectedSubSection);
+            const subSectionId = selectedSubSection;
             filtered = filtered.filter(emp =>
-                emp.subSections.some(ss => ss.id === subSectionId)
+                emp.subSections.some(ss => String(ss.id) === subSectionId)
             );
         }
+
+        // console.log('📊 Filtered employees:', {
+        //     searchTerm,
+        //     selectedSubSection,
+        //     totalCount: filtered.length,
+        //     employees: filtered.map(e => ({ id: e.id, name: e.name, status: e.status }))
+        // });
 
         return filtered;
     }, [allSortedEligibleEmployees, searchTerm, selectedSubSection]);
 
     const sameSubSectionEmployees = useMemo(() => {
-        const reqSubId = request?.sub_section_id;
+        const reqSubId = String(request?.sub_section_id);
         if (!reqSubId) return [];
 
         return filteredEmployees.filter(emp => {
@@ -72,19 +81,14 @@ export default function EmployeeModal({
             return emp.subSections.some(ss => {
                 if (!ss || !ss.id) return false;
 
-                const ssId = ss.id;
-                const matches =
-                    ssId == reqSubId ||
-                    String(ssId) === String(reqSubId) ||
-                    Number(ssId) === Number(reqSubId);
-
-                return matches;
+                const ssId = String(ss.id);
+                return ssId === reqSubId;
             });
         });
     }, [filteredEmployees, request?.sub_section_id]);
 
     const otherSubSectionEmployees = useMemo(() => {
-        const reqSubId = request?.sub_section_id;
+        const reqSubId = String(request?.sub_section_id);
         if (!reqSubId) return filteredEmployees;
 
         return filteredEmployees.filter(emp => {
@@ -93,25 +97,17 @@ export default function EmployeeModal({
             return !emp.subSections.some(ss => {
                 if (!ss || !ss.id) return false;
 
-                const ssId = ss.id;
-                const matches =
-                    ssId == reqSubId ||
-                    String(ssId) === String(reqSubId) ||
-                    Number(ssId) === Number(reqSubId);
-
-                return matches;
+                const ssId = String(ss.id);
+                return ssId === reqSubId;
             });
         });
     }, [filteredEmployees, request?.sub_section_id]);
 
     const handleImageError = (employeeId, e) => {
-        // Prevent multiple error logs for the same image
         if (!failedImages.has(employeeId)) {
-            // console.log(`Image failed to load for employee ${employeeId}, using fallback icon`);
             setFailedImages(prev => new Set(prev).add(employeeId));
         }
         
-        // Hide the broken image and show the fallback
         e.target.style.display = 'none';
         const fallback = e.target.nextSibling;
         if (fallback) {
@@ -136,16 +132,13 @@ export default function EmployeeModal({
         </svg>
     );
 
-    // Enhanced image URL construction with error handling
     const getEmployeePhotoUrl = (employee) => {
         if (!employee.photo) return null;
         
-        // Check if the photo path is already a full URL or relative path
         if (employee.photo.startsWith('http')) {
             return employee.photo;
         }
         
-        // Handle different possible photo path formats
         let photoPath = employee.photo;
         if (!photoPath.startsWith('/')) {
             photoPath = `/storage/${photoPath}`;
@@ -155,50 +148,92 @@ export default function EmployeeModal({
     };
 
     const toggleEmployeeSelection = (employeeId) => {
+        // console.log('🖱️ Employee clicked:', {
+        //     employeeId,
+        //     employeeIdString: String(employeeId),
+        //     multiSelectMode,
+        //     isBulkMode,
+        //     tempSelectedIds,
+        //     selectedIds
+        // });
+
         if (!multiSelectMode) {
+            // console.log('🚀 Calling selectNewEmployee with:', employeeId);
             selectNewEmployee(employeeId);
             return;
         }
 
         setTempSelectedIds(prev => {
-            const isCurrentlySelected = prev.includes(employeeId);
-            const newEmployee = allSortedEligibleEmployees.find(e => e.id === employeeId);
+            const prevStr = prev.map(id => String(id));
+            const employeeIdStr = String(employeeId);
+            const isCurrentlySelected = prevStr.includes(employeeIdStr);
+            const newEmployee = allSortedEligibleEmployees.find(e => String(e.id) === employeeIdStr);
+
+            // console.log('📝 Multi-select state update:', {
+            //     previousIds: prev,
+            //     employeeIdStr,
+            //     isCurrentlySelected,
+            //     newEmployee: newEmployee ? { id: newEmployee.id, name: newEmployee.name } : 'NOT FOUND',
+            //     allEmployees: allSortedEligibleEmployees.map(e => ({ id: e.id, name: e.name }))
+            // });
 
             if (isCurrentlySelected) {
-                return prev.filter(id => id !== employeeId);
+                const newIds = prev.filter(id => String(id) !== employeeIdStr);
+                // console.log('➖ Removing employee, new IDs:', newIds);
+                return newIds;
             } else {
                 if (prev.length >= request.requested_amount) {
+                    // console.log('❌ Maximum reached:', prev.length, '>=', request.requested_amount);
                     alert(`Maksimum ${request.requested_amount} karyawan dapat dipilih`);
                     return prev;
                 }
 
-                const currentSelection = prev.map(id =>
-                    allSortedEligibleEmployees.find(e => e.id === id)
+                const currentSelection = prevStr.map(id =>
+                    allSortedEligibleEmployees.find(e => String(e.id) === id)
                 ).filter(Boolean);
 
                 const newSelectionWithEmployee = [...currentSelection, newEmployee];
                 const maleCount = newSelectionWithEmployee.filter(e => e.gender === 'male').length;
                 const femaleCount = newSelectionWithEmployee.filter(e => e.gender === 'female').length;
 
+                // console.log('👥 Gender validation:', {
+                //     maleCount,
+                //     femaleCount,
+                //     requiredMale: request.male_count,
+                //     requiredFemale: request.female_count
+                // });
+
                 if (request.male_count > 0 && maleCount > request.male_count) {
+                    // console.log('❌ Male limit exceeded');
                     alert(`Maksimum ${request.male_count} karyawan laki-laki diperbolehkan`);
                     return prev;
                 }
 
                 if (request.female_count > 0 && femaleCount > request.female_count) {
+                    // console.log('❌ Female limit exceeded');
                     alert(`Maksimum ${request.female_count} karyawan perempuan diperbolehkan`);
                     return prev;
                 }
 
-                return [...prev, employeeId];
+                const newIds = [...prev, employeeId];
+                // console.log('➕ Adding employee, new IDs:', newIds);
+                return newIds;
             }
         });
     };
 
     const applyMultiSelection = () => {
-        const finalSelection = tempSelectedIds.map(id =>
-            allSortedEligibleEmployees.find(e => e.id === id)
-        ).filter(Boolean);
+        // console.log('✅ Applying multi-selection:', {
+        //     tempSelectedIds,
+        //     tempSelectedIdsString: tempSelectedIds.map(id => String(id)),
+        //     requestId: request.id,
+        //     requestedAmount: request.requested_amount
+        // });
+
+        const finalSelection = tempSelectedIds.map(id => {
+            const idStr = String(id);
+            return allSortedEligibleEmployees.find(e => String(e.id) === idStr);
+        }).filter(Boolean);
 
         const maleCount = finalSelection.filter(e => e.gender === 'male').length;
         const femaleCount = finalSelection.filter(e => e.gender === 'female').length;
@@ -211,160 +246,206 @@ export default function EmployeeModal({
         const meetsGenderRequirements = maleCount >= (request.male_count || 0) && femaleCount >= (request.female_count || 0);
         const meetsTotalRequirements = tempSelectedIds.length >= request.requested_amount;
 
+        // console.log('📋 Selection validation:', {
+        //     maleCount,
+        //     femaleCount,
+        //     missingMale,
+        //     missingFemale,
+        //     missingTotal,
+        //     hasGenderRequirements,
+        //     meetsGenderRequirements,
+        //     meetsTotalRequirements,
+        //     finalSelection: finalSelection.map(e => ({ id: e.id, name: e.name, gender: e.gender }))
+        // });
+
         if (meetsGenderRequirements && meetsTotalRequirements) {
+            // console.log('🎯 All requirements met, calling handleMultiSelect');
             handleMultiSelect(tempSelectedIds);
             setShowModal(false);
         } else {
+            // console.log('⚠️ Requirements not met, showing incomplete modal');
             setShowIncompleteModal(true);
         }
     };
 
     const cancelMultiSelection = () => {
+        // console.log('❌ Canceling multi-selection');
         setTempSelectedIds([]);
         setShowModal(false);
     };
 
-const renderEmployeeCard = (emp) => {
-    const isSelectedInSingle = selectedIds.includes(emp.id);
-    const isSelectedInMulti = tempSelectedIds.includes(emp.id);
-    const isSelected = multiSelectMode ? isSelectedInMulti : isSelectedInSingle;
-    const isCurrentlyScheduled = emp.isCurrentlyScheduled;
-    const isDisabledInSingle = !multiSelectMode && isSelectedInSingle;
-    
-    const isAssigned = emp.status === 'assigned' && !isCurrentlyScheduled;
-    const isDisabled = isAssigned || isDisabledInSingle;
+    const handleSelectTopEmployees = () => {
+        const availableIds = filteredEmployees
+            .slice(0, request.requested_amount)
+            .map(emp => String(emp.id));
+        
+        // console.log('🎯 Selecting top employees:', {
+        //     availableIds,
+        //     filteredEmployeesCount: filteredEmployees.length,
+        //     requestedAmount: request.requested_amount
+        // });
+        
+        setTempSelectedIds(availableIds);
+    };
 
-    const imageFailed = failedImages.has(emp.id);
-    const photoUrl = getEmployeePhotoUrl(emp);
+    const renderEmployeeCard = (emp) => {
+        const empId = String(emp.id);
+        const selectedIdsStr = selectedIds.map(id => String(id));
+        const tempSelectedIdsStr = tempSelectedIds.map(id => String(id));
+        
+        const isSelectedInSingle = selectedIdsStr.includes(empId);
+        const isSelectedInMulti = tempSelectedIdsStr.includes(empId);
+        const isSelected = multiSelectMode ? isSelectedInMulti : isSelectedInSingle;
+        const isCurrentlyScheduled = emp.isCurrentlyScheduled;
+        const isDisabledInSingle = !multiSelectMode && isSelectedInSingle;
+        
+        const isAssigned = emp.status === 'assigned' && !isCurrentlyScheduled;
+        const isDisabled = isAssigned || isDisabledInSingle;
 
-    let displaySubSectionName = 'Tidak Ada Bagian';
-    if (emp.subSections && emp.subSections.length > 0) {
-        const sameSub = emp.subSections.find(ss => ss.id === request.sub_section_id);
-        if (sameSub) {
-            displaySubSectionName = sameSub.name;
-        } else {
-            displaySubSectionName = emp.subSections[0].name;
+        const imageFailed = failedImages.has(empId);
+        const photoUrl = getEmployeePhotoUrl(emp);
+
+        let displaySubSectionName = 'Tidak Ada Bagian';
+        if (emp.subSections && emp.subSections.length > 0) {
+            const sameSub = emp.subSections.find(ss => String(ss.id) === String(request.sub_section_id));
+            if (sameSub) {
+                displaySubSectionName = sameSub.name;
+            } else {
+                displaySubSectionName = emp.subSections[0].name;
+            }
         }
-    }
 
-    const isFemale = emp.gender === 'female';
+        const isFemale = emp.gender === 'female';
 
-    return (
-        <div
-            key={emp.id}
-            onClick={() => !isDisabled && toggleEmployeeSelection(emp.id)}
-            className={`cursor-pointer text-left p-3 rounded-md border transition relative ${
-                isSelected
-                    ? multiSelectMode
-                        ? 'bg-green-100 dark:bg-green-900/40 border-green-400 dark:border-green-600 ring-2 ring-green-500 dark:ring-green-400'
-                        : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'
-                    : isCurrentlyScheduled
-                        ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/40'
-                        : isAssigned
-                            ? 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 opacity-60'
-                            : isFemale
-                                ? 'hover:bg-pink-50 dark:hover:bg-pink-900/20 border-pink-200 dark:border-pink-700'
-                                : 'hover:bg-blue-50 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-700'
-            } ${isDisabled ? 'cursor-not-allowed opacity-60' : ''}`}
-        >
-            {multiSelectMode && (
-                <div className="absolute top-2 right-2">
-                    <input
-                        type="checkbox"
-                        checked={isSelectedInMulti}
-                        onChange={() => { }}
-                        className="w-5 h-5 text-green-600 bg-white border-gray-300 rounded focus:ring-green-500 focus:ring-2"
-                        disabled={isAssigned}
-                    />
-                </div>
-            )}
+        // console.log('👤 Employee card render:', {
+        //     empId,
+        //     name: emp.name,
+        //     isSelected,
+        //     isSelectedInMulti,
+        //     isSelectedInSingle,
+        //     isDisabled,
+        //     isAssigned,
+        //     isCurrentlyScheduled,
+        //     status: emp.status
+        // });
 
-            <div className="flex justify-between items-start">
-                <div className={`flex ${multiSelectMode ? 'pr-8' : ''}`}>
-                    {/* Employee Photo with robust error handling */}
-                    <div className="mr-3 flex-shrink-0 relative">
-                        {photoUrl && !imageFailed ? (
-                            <>
-                                <img
-                                    src={photoUrl}
-                                    alt={emp.name}
-                                    className="w-12 h-12 rounded-full object-cover border border-gray-300 dark:border-gray-600"
-                                    onError={(e) => handleImageError(emp.id, e)}
-                                    loading="lazy"
-                                />
-                                <div
-                                    className="w-12 h-12 rounded-full flex items-center justify-center border border-gray-300 dark:border-gray-600 bg-gray-200 dark:bg-gray-700 hidden"
-                                    style={{ display: 'none' }}
-                                >
-                                    <UserIcon className="w-6 h-6 text-gray-500 dark:text-gray-400" />
-                                </div>
-                            </>
-                        ) : (
-                            <div className="w-12 h-12 rounded-full flex items-center justify-center border border-gray-300 dark:border-gray-600 bg-gray-200 dark:bg-gray-700">
-                                <UserIcon className="w-6 h-6 text-gray-500 dark:text-gray-400" />
-                            </div>
-                        )}
-                    </div>
-
-                    <div>
-                        <strong className="text-gray-900 dark:text-gray-100">{emp.name}</strong>
-                        <div className="mt-1 text-gray-500 dark:text-gray-400 text-xs">
-                            <p>NIK: {emp.nik}</p>
-                            <p>Tipe: {emp.type}</p>
-                            <p>Status: {emp.status === 'assigned' ? 'Assigned' : 'Available'}</p>
-                            <p>Sub: {displaySubSectionName}</p>
-                            <p>Skor: {emp.total_score.toFixed(2)}</p>
-                            {emp.type === 'harian' && (
-                                <p>Bobot Kerja: {emp.working_day_weight}</p>
-                            )}
-                            <p>Beban Kerja: {emp.workload_points}</p>
-                            <p>Test Buta: {emp.blind_test_points}</p>
-                            <p>Rating: {emp.average_rating.toFixed(1)}</p>
-                        </div>
-                    </div>
-                </div>
-                {!multiSelectMode && (
-                    <div className="flex flex-col items-end">
-                        <span className={`text-xs px-1 rounded mb-1 ${
-                            isFemale
-                                ? 'bg-pink-100 dark:bg-pink-900/40 text-pink-800 dark:text-pink-300'
-                                : 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300'
-                        }`}>
-                            {isFemale ? 'P' : 'L'}
-                        </span>
-                        {isCurrentlyScheduled && (
-                            <span className="text-xs px-1 rounded bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300">
-                                Sudah dijadwalkan
-                            </span>
-                        )}
-                        {isAssigned && !isCurrentlyScheduled && (
-                            <span className="text-xs px-1 rounded bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300">
-                                Sudah ditugaskan
-                            </span>
-                        )}
+        return (
+            <div
+                key={empId}
+                onClick={() => {
+                    // console.log('🎯 Employee card clicked:', {
+                    //     empId,
+                    //     name: emp.name,
+                    //     isDisabled,
+                    //     multiSelectMode,
+                    //     isBulkMode
+                    // });
+                    
+                    if (!isDisabled) {
+                        toggleEmployeeSelection(empId);
+                    } else {
+                        // console.log('🚫 Employee disabled, cannot select');
+                    }
+                }}
+                className={`cursor-pointer text-left p-3 rounded-md border transition relative ${
+                    isSelected
+                        ? multiSelectMode
+                            ? 'bg-green-100 dark:bg-green-900/40 border-green-400 dark:border-green-600 ring-2 ring-green-500 dark:ring-green-400'
+                            : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'
+                        : isCurrentlyScheduled
+                            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700 hover:bg-green-100 dark:hover:bg-green-900/40'
+                            : isAssigned
+                                ? 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 opacity-60'
+                                : isFemale
+                                    ? 'hover:bg-pink-50 dark:hover:bg-pink-900/20 border-pink-200 dark:border-pink-700'
+                                    : 'hover:bg-blue-50 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-700'
+                } ${isDisabled ? 'cursor-not-allowed opacity-60' : ''}`}
+            >
+                {multiSelectMode && (
+                    <div className="absolute top-2 right-2">
+                        <input
+                            type="checkbox"
+                            checked={isSelectedInMulti}
+                            onChange={() => {
+                                // console.log('✅ Checkbox clicked for:', emp.name);
+                                if (!isAssigned) {
+                                    toggleEmployeeSelection(empId);
+                                }
+                            }}
+                            className="w-5 h-5 text-green-600 bg-white border-gray-300 rounded focus:ring-green-500 focus:ring-2"
+                            disabled={isAssigned}
+                        />
                     </div>
                 )}
+
+                <div className="flex justify-between items-start">
+                    <div className={`flex ${multiSelectMode ? 'pr-8' : ''}`}>
+                        <div>
+                            <strong className="text-gray-900 dark:text-gray-100">{emp.name}</strong>
+                            <div className="mt-1 text-gray-500 dark:text-gray-400 text-xs">
+                                <p>NIK: {emp.nik}</p>
+                                <p>Tipe: {emp.type}</p>
+                                <p>Status: {emp.status === 'assigned' ? 'Assigned' : 'Available'}</p>
+                                <p>Sub: {displaySubSectionName}</p>
+                                <p>Skor: {emp.total_score.toFixed(2)}</p>
+                                {emp.type === 'harian' && (
+                                    <p>Bobot Kerja: {emp.working_day_weight}</p>
+                                )}
+                                <p>Beban Kerja: {emp.workload_points}</p>
+                                <p>Test Buta: {emp.blind_test_points}</p>
+                                <p>Rating: {emp.average_rating.toFixed(1)}</p>
+                            </div>
+                        </div>
+                    </div>
+                    {!multiSelectMode && (
+                        <div className="flex flex-col items-end">
+                            <span className={`text-xs px-1 rounded mb-1 ${
+                                isFemale
+                                    ? 'bg-pink-100 dark:bg-pink-900/40 text-pink-800 dark:text-pink-300'
+                                    : 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300'
+                            }`}>
+                                {isFemale ? 'P' : 'L'}
+                            </span>
+                            {isCurrentlyScheduled && (
+                                <span className="text-xs px-1 rounded bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300">
+                                    Sudah dijadwalkan
+                                </span>
+                            )}
+                            {isAssigned && !isCurrentlyScheduled && (
+                                <span className="text-xs px-1 rounded bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300">
+                                    Sudah ditugaskan
+                                </span>
+                            )}
+                        </div>
+                    )}
+                </div>
             </div>
-        </div>
-    );
-};
+        );
+    };
 
     if (!showModal) return null;
 
     return (
         <div
             className="z-50 fixed inset-0 flex justify-center items-center bg-black bg-opacity-50 p-4"
-            onClick={() => setShowModal(false)}
+            onClick={() => {
+                // console.log('❌ Modal background clicked, closing modal');
+                setShowModal(false);
+            }}
         >
             <div
                 className="relative bg-white dark:bg-gray-800 shadow-xl rounded-lg w-full max-w-6xl max-h-[85vh] overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                    // console.log('🛑 Stopping modal content click propagation');
+                    e.stopPropagation();
+                }}
             >
                 {/* Header with close button */}
                 <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
                     <div className="flex items-center space-x-4">
                         <h3 className="font-bold text-xl text-gray-900 dark:text-gray-100">
                             {multiSelectMode ? 'Pilih Multiple Karyawan' : 'Pilih Karyawan Baru'}
+                            {isBulkMode && ' (Bulk Mode)'}
                         </h3>
                         {multiSelectMode && (
                             <span className="px-3 py-1 text-sm bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 rounded-full">
@@ -373,7 +454,10 @@ const renderEmployeeCard = (emp) => {
                         )}
                     </div>
                     <button
-                        onClick={() => setShowModal(false)}
+                        onClick={() => {
+                            // console.log('❌ Close button clicked');
+                            setShowModal(false);
+                        }}
                         className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -387,7 +471,10 @@ const renderEmployeeCard = (emp) => {
                     <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4">
                             <button
-                                onClick={toggleMultiSelectMode}
+                                onClick={() => {
+                                    // console.log('🔄 Toggling multi-select mode from:', multiSelectMode, 'to:', !multiSelectMode);
+                                    toggleMultiSelectMode();
+                                }}
                                 className={`px-4 py-2 rounded-md font-medium transition-colors ${multiSelectMode
                                     ? 'bg-green-600 hover:bg-green-700 text-white'
                                     : 'bg-blue-600 hover:bg-blue-700 text-white'
@@ -399,18 +486,16 @@ const renderEmployeeCard = (emp) => {
                             {multiSelectMode && (
                                 <div className="flex space-x-2">
                                     <button
-                                        onClick={() => setTempSelectedIds([])}
+                                        onClick={() => {
+                                            // console.log('🗑️ Clearing all selections');
+                                            setTempSelectedIds([]);
+                                        }}
                                         className="px-3 py-1 text-sm bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-900/60 text-red-800 dark:text-red-300 rounded-md"
                                     >
                                         🗑️ Clear All
                                     </button>
                                     <button
-                                        onClick={() => {
-                                            const availableIds = filteredEmployees
-                                                .slice(0, request.requested_amount)
-                                                .map(emp => emp.id);
-                                            setTempSelectedIds(availableIds);
-                                        }}
+                                        onClick={handleSelectTopEmployees}
                                         className="px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900/40 hover:bg-blue-200 dark:hover:bg-blue-900/60 text-blue-800 dark:text-blue-300 rounded-md"
                                     >
                                         ✅ Select Top {Math.min(request.requested_amount, filteredEmployees.length)}
@@ -450,7 +535,10 @@ const renderEmployeeCard = (emp) => {
                                 type="text"
                                 id="search"
                                 value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
+                                onChange={(e) => {
+                                    // console.log('🔍 Search term changed:', e.target.value);
+                                    setSearchTerm(e.target.value);
+                                }}
                                 placeholder="Ketik nama atau NIK karyawan..."
                                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             />
@@ -464,7 +552,10 @@ const renderEmployeeCard = (emp) => {
                             <select
                                 id="subsection"
                                 value={selectedSubSection}
-                                onChange={(e) => setSelectedSubSection(e.target.value)}
+                                onChange={(e) => {
+                                    // console.log('🏷️ Sub-section filter changed:', e.target.value);
+                                    setSelectedSubSection(e.target.value);
+                                }}
                                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             >
                                 <option value="all">Semua Sub-Bagian</option>
@@ -480,6 +571,7 @@ const renderEmployeeCard = (emp) => {
                         <div className="flex items-end">
                             <button
                                 onClick={() => {
+                                    // console.log('🔄 Resetting filters');
                                     setSearchTerm('');
                                     setSelectedSubSection('all');
                                 }}
@@ -494,7 +586,7 @@ const renderEmployeeCard = (emp) => {
                     <div className="mt-3 text-sm text-gray-600 dark:text-gray-400">
                         Menampilkan {filteredEmployees.length} dari {allSortedEligibleEmployees.length} karyawan
                         {searchTerm && ` • Pencarian: "${searchTerm}"`}
-                        {selectedSubSection !== 'all' && ` • Filter: ${availableSubSections.find(s => s.id === parseInt(selectedSubSection))?.section_name} - ${availableSubSections.find(s => s.id === parseInt(selectedSubSection))?.name}`}
+                        {selectedSubSection !== 'all' && ` • Filter: ${availableSubSections.find(s => s.id === selectedSubSection)?.section_name} - ${availableSubSections.find(s => s.id === selectedSubSection)?.name}`}
                     </div>
                 </div>
 
@@ -547,7 +639,10 @@ const renderEmployeeCard = (emp) => {
                     <div className="flex justify-end p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
                         <button
                             type="button"
-                            onClick={() => setShowModal(false)}
+                            onClick={() => {
+                                // console.log('❌ Closing modal from footer');
+                                setShowModal(false);
+                            }}
                             className="bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-700 px-6 py-2 rounded-lg text-gray-700 dark:text-gray-200 transition-colors"
                         >
                             Tutup
@@ -558,8 +653,12 @@ const renderEmployeeCard = (emp) => {
                 {showIncompleteModal && (
                     <IncompleteSelectionModal
                         show={showIncompleteModal}
-                        onClose={() => setShowIncompleteModal(false)}
+                        onClose={() => {
+                            // console.log('❌ Incomplete modal closed');
+                            setShowIncompleteModal(false);
+                        }}
                         onConfirm={() => {
+                            // console.log('✅ Incomplete modal confirmed');
                             handleMultiSelect(tempSelectedIds);
                             setShowIncompleteModal(false);
                             setShowModal(false);
@@ -569,11 +668,11 @@ const renderEmployeeCard = (emp) => {
                         requiredMale={request.male_count || 0}
                         requiredFemale={request.female_count || 0}
                         currentMaleCount={tempSelectedIds.filter(id => {
-                            const emp = allSortedEligibleEmployees.find(e => e.id === id);
+                            const emp = allSortedEligibleEmployees.find(e => String(e.id) === String(id));
                             return emp?.gender === 'male';
                         }).length}
                         currentFemaleCount={tempSelectedIds.filter(id => {
-                            const emp = allSortedEligibleEmployees.find(e => e.id === id);
+                            const emp = allSortedEligibleEmployees.find(e => String(e.id) === String(id));
                             return emp?.gender === 'female';
                         }).length}
                     />

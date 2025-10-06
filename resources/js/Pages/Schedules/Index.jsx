@@ -17,26 +17,26 @@ dayjs.locale('id');
 const ShiftDetailModal = ({ shift, onClose }) => {
     if (!shift) return null;
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50 p-4">
-            <div className="relative w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800 mx-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50 p-4 dark:bg-gray-900 dark:bg-opacity-70">
+            <div className="relative w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800 dark:shadow-2xl mx-2">
                 <button
                     onClick={onClose}
-                    className="absolute right-3 top-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                    className="absolute right-3 top-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
                     aria-label="Close"
                 >
                     <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
-                <h3 className="mb-4 text-xl font-bold text-gray-900 dark:text-gray-100">Detail Shift: {shift.name}</h3>
+                <h3 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">Detail Shift: {shift.name}</h3>
                 <div className="space-y-2 text-gray-700 dark:text-gray-300">
-                    <p><strong>Nama Shift:</strong> {shift.name}</p>
-                    <p><strong>Waktu Mulai:</strong> {shift.start_time}</p>
-                    <p><strong>Waktu Selesai:</strong> {shift.end_time}</p>
-                    <p><strong>Total Jam:</strong> {shift.hours} jam</p>
+                    <p><strong className="text-gray-900 dark:text-white">Nama Shift:</strong> {shift.name}</p>
+                    <p><strong className="text-gray-900 dark:text-white">Waktu Mulai:</strong> {shift.start_time}</p>
+                    <p><strong className="text-gray-900 dark:text-white">Waktu Selesai:</strong> {shift.end_time}</p>
+                    <p><strong className="text-gray-900 dark:text-white">Total Jam:</strong> {shift.hours} jam</p>
                 </div>
                 <div className="mt-6 flex justify-end">
                     <button
                         onClick={onClose}
-                        className="rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700"
+                        className="rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 dark:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors"
                     >
                         Tutup
                     </button>
@@ -55,28 +55,28 @@ const ManPowerRequestDetailModal = ({ request, assignedEmployees, onClose }) => 
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50 p-4">
-            <div className="relative w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800 mx-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-600 bg-opacity-50 p-4 dark:bg-gray-900 dark:bg-opacity-70">
+            <div className="relative w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800 dark:shadow-2xl mx-2">
                 <button
                     onClick={onClose}
-                    className="absolute right-3 top-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                    className="absolute right-3 top-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
                     aria-label="Close"
                 >
                     <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
-                <h3 className="mb-4 text-xl font-bold text-gray-900 dark:text-gray-100">Detail Man Power Request</h3>
+                <h3 className="mb-4 text-xl font-bold text-gray-900 dark:text-white">Detail Man Power Request</h3>
                 <div className="space-y-2 text-gray-700 dark:text-gray-300">
-                    <p><strong>Tanggal Dibutuhkan:</strong> {formatDate(request.date)}</p>
-                    <p><strong>Sub Section:</strong> {request.sub_section?.name || 'N/A'}</p>
-                    <p><strong>Section:</strong> {request.sub_section?.section?.name || 'N/A'}</p>
-                    <p><strong>Shift:</strong> {request.shift?.name || 'N/A'}</p>
-                    <p><strong>Jumlah Diminta:</strong> {request.requested_amount}</p>
-                    <p><strong>Status:</strong> {request.status}</p>
+                    <p><strong className="text-gray-900 dark:text-white">Tanggal Dibutuhkan:</strong> {formatDate(request.date)}</p>
+                    <p><strong className="text-gray-900 dark:text-white">Sub Section:</strong> {request.sub_section?.name || 'N/A'}</p>
+                    <p><strong className="text-gray-900 dark:text-white">Section:</strong> {request.sub_section?.section?.name || 'N/A'}</p>
+                    <p><strong className="text-gray-900 dark:text-white">Shift:</strong> {request.shift?.name || 'N/A'}</p>
+                    <p><strong className="text-gray-900 dark:text-white">Jumlah Diminta:</strong> {request.requested_amount}</p>
+                    <p><strong className="text-gray-900 dark:text-white">Status:</strong> {request.status}</p>
                 </div>
                 <div className="mt-6 flex justify-end">
                     <button
                         onClick={onClose}
-                        className="rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700"
+                        className="rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 dark:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors"
                     >
                         Tutup
                     </button>
@@ -103,11 +103,11 @@ const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility }) 
     const getStatusBadge = (status, rejectionReason) => {
         switch (status) {
             case 'accepted':
-                return <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">Diterima</span>;
+                return <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900 dark:text-green-200">Diterima</span>;
             case 'rejected':
                 return (
                     <div className="flex flex-col">
-                        <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800 mb-1">Ditolak</span>
+                        <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900 dark:text-red-200 mb-1">Ditolak</span>
                         {rejectionReason && (
                             <span className="text-xs text-red-600 dark:text-red-400" title={rejectionReason}>
                                 Alasan: {rejectionReason}
@@ -116,9 +116,9 @@ const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility }) 
                     </div>
                 );
             case 'pending':
-                return <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">Menunggu</span>;
+                return <span className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">Menunggu</span>;
             default:
-                return <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">Unknown</span>;
+                return <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800 dark:bg-gray-700 dark:text-gray-300">Unknown</span>;
         }
     };
 
@@ -174,8 +174,8 @@ const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility }) 
     );
 
     return (
-        <div className="rounded-lg bg-white p-4 shadow-md dark:bg-gray-800">
-            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-4">{title}</h2>
+        <div className="rounded-lg bg-white p-4 shadow-md dark:bg-gray-800 dark:shadow-lg border border-gray-200 dark:border-gray-700">
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">{title}</h2>
 
             {Object.keys(shifts).length === 0 ? (
                 <p className="italic text-gray-600 dark:text-gray-400">Tidak ada penjadwalan di bagian ini.</p>
@@ -203,8 +203,8 @@ const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility }) 
                                     </thead>
                                     <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
                                         {paginatedSchedules.map((item, index) => (
-                                            <tr key={index}>
-                                                <td className="px-3 py-2 text-sm font-medium text-gray-900 dark:text-gray-100">{item.employee.name}</td>
+                                            <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                                <td className="px-3 py-2 text-sm font-medium text-gray-900 dark:text-white">{item.employee.name}</td>
                                                 <td className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300">{item.employee.nik}</td>
                                                 <td className="hidden px-3 py-2 text-sm text-gray-700 dark:text-gray-300 sm:table-cell">{item.sub_section?.name || '-'}</td>
                                                 <td className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
@@ -222,7 +222,7 @@ const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility }) 
                                         <button
                                             onClick={() => changeShiftPage(shiftName, currentPage - 1)}
                                             disabled={currentPage === 1}
-                                            className="rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                                            className="rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:border dark:border-gray-600 transition-colors"
                                         >
                                             Prev
                                         </button>
@@ -231,9 +231,9 @@ const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility }) 
                                             <button
                                                 key={page}
                                                 onClick={() => changeShiftPage(shiftName, page)}
-                                                className={`rounded-md px-2 py-1 text-xs font-medium ${currentPage === page
-                                                    ? 'bg-indigo-600 text-white'
-                                                    : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                                                className={`rounded-md px-2 py-1 text-xs font-medium transition-colors ${currentPage === page
+                                                    ? 'bg-indigo-600 text-white dark:bg-indigo-700'
+                                                    : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:border dark:border-gray-600'
                                                     }`}
                                             >
                                                 {page}
@@ -243,7 +243,7 @@ const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility }) 
                                         <button
                                             onClick={() => changeShiftPage(shiftName, currentPage + 1)}
                                             disabled={currentPage === totalPages}
-                                            className="rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                                            className="rounded-md bg-white px-2 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:border dark:border-gray-600 transition-colors"
                                         >
                                             Next
                                         </button>
@@ -258,12 +258,12 @@ const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility }) 
             {Object.keys(shifts).length > 0 && (
                 <div className="mt-4 flex justify-between items-center">
                     <span className="text-sm text-gray-700 dark:text-gray-300">
-                        Visibility: <strong>{currentVisibility}</strong>
+                        Visibility: <strong className="text-gray-900 dark:text-white">{currentVisibility}</strong>
                     </span>
                     <button
                         onClick={toggleVisibility}
                         disabled={isToggling}
-                        className="rounded-md p-2 text-indigo-600 hover:bg-indigo-100 dark:text-indigo-400 dark:hover:bg-indigo-900 disabled:opacity-50"
+                        className="rounded-md p-2 text-indigo-600 hover:bg-indigo-100 dark:text-indigo-400 dark:hover:bg-indigo-900 disabled:opacity-50 transition-colors"
                         title="Toggle Visibility"
                     >
                         {isToggling ? (
@@ -377,36 +377,36 @@ const Index = () => {
     };
 
     return (
-        <AuthenticatedLayout header={<h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200">Agenda Penjadwalan</h2>}>
+        <AuthenticatedLayout header={<h2 className="text-xl font-semibold text-gray-800 dark:text-white">Agenda Penjadwalan</h2>}>
             <div className="mx-auto mt-4 max-w-7xl px-4">
-                <h1 className="mb-6 text-center text-2xl font-extrabold text-gray-900 dark:text-gray-100">Agenda Penjadwalan</h1>
+                <h1 className="mb-6 text-center text-2xl font-extrabold text-gray-900 dark:text-white">Agenda Penjadwalan</h1>
 
-                <div className="mb-6 rounded-lg bg-white p-4 shadow-md dark:bg-gray-800">
+                <div className="mb-6 rounded-lg bg-white p-4 shadow-md dark:bg-gray-800 dark:shadow-lg border border-gray-200 dark:border-gray-700">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                         <div>
-                            <label htmlFor="startDate" className="block text-sm font-medium">Dari Tanggal:</label>
+                            <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Dari Tanggal:</label>
                             <input
                                 type="date"
                                 id="startDate"
                                 value={startDate}
                                 onChange={(e) => setStartDate(e.target.value)}
-                                className="mt-1 block w-full rounded-md border px-3 py-2"
+                                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
                             />
                         </div>
 
                         <div>
-                            <label htmlFor="endDate" className="block text-sm font-medium">Sampai Tanggal:</label>
+                            <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sampai Tanggal:</label>
                             <input
                                 type="date"
                                 id="endDate"
                                 value={endDate}
                                 onChange={(e) => setEndDate(e.target.value)}
-                                className="mt-1 block w-full rounded-md border px-3 py-2"
+                                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
                             />
                         </div>
 
                         <div>
-                            <label htmlFor="section" className="block text-sm font-medium">Section:</label>
+                            <label htmlFor="section" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Section:</label>
                             <select
                                 id="section"
                                 value={selectedSection}
@@ -414,7 +414,7 @@ const Index = () => {
                                     setSelectedSection(e.target.value);
                                     setSelectedSubSection('');
                                 }}
-                                className="mt-1 block w-full rounded-md border px-3 py-2"
+                                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
                             >
                                 <option value="">Semua Section</option>
                                 {sections.map(section => (
@@ -424,12 +424,12 @@ const Index = () => {
                         </div>
 
                         <div>
-                            <label htmlFor="subSection" className="block text-sm font-medium">Sub Section:</label>
+                            <label htmlFor="subSection" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sub Section:</label>
                             <select
                                 id="subSection"
                                 value={selectedSubSection}
                                 onChange={(e) => setSelectedSubSection(e.target.value)}
-                                className="mt-1 block w-full rounded-md border px-3 py-2"
+                                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
                             >
                                 <option value="">Semua Sub Section</option>
                                 {filteredSubSections.map(subSection => (
@@ -442,7 +442,7 @@ const Index = () => {
                         <div className="flex items-end gap-2">
                             <button
                                 onClick={applyFilters}
-                                className="flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 w-full justify-center"
+                                className="flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 dark:bg-indigo-700 dark:hover:bg-indigo-600 w-full justify-center transition-colors"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707v5.172l-4 2V13.828a1 1 0 00-.293-.707L3.293 6.707A1 1 0 013 6V4z" />
@@ -451,7 +451,7 @@ const Index = () => {
 
                             <button
                                 onClick={clearFilters}
-                                className="flex items-center gap-2 rounded-md bg-gray-500 px-4 py-2 text-white hover:bg-gray-600 w-full justify-center"
+                                className="flex items-center gap-2 rounded-md bg-gray-500 px-4 py-2 text-white hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-500 w-full justify-center transition-colors"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582M20 20v-5h-.581M5.418 9A7.978 7.978 0 014 12c0 4.418 3.582 8 8 8a7.978 7.978 0 015.418-2M18.582 15A7.978 7.978 0 0020 12c0-4.418-3.582-8-8-8a7.978 7.978 0 00-5.418 2" />
@@ -461,8 +461,17 @@ const Index = () => {
                     </div>
                 </div>
 
-
-                {isLoading && <div className="p-4">Memuat...</div>}
+                {isLoading && (
+                    <div className="p-4 text-center text-gray-600 dark:text-gray-400">
+                        <div className="inline-flex items-center">
+                            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-indigo-600 dark:text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Memuat...
+                        </div>
+                    </div>
+                )}
 
                 {paginatedDates.map(dateKey => {
                     const dateData = groupedSchedulesByDateSectionShift[dateKey];
@@ -480,7 +489,7 @@ const Index = () => {
 
                     return (
                         <div key={dateKey}>
-                            <h2 className="mb-4 bg-gray-100 p-3 text-xl font-bold">{dateData.displayDate}</h2>
+                            <h2 className="mb-4 bg-gray-100 p-3 text-xl font-bold text-gray-800 dark:bg-gray-700 dark:text-white rounded-lg">{dateData.displayDate}</h2>
                             <div className={gridClasses}>
                                 {Object.entries(sectionsForDate).map(([sectionName, sectionData]) => (
                                     <ScheduleSection
@@ -503,7 +512,7 @@ const Index = () => {
                             <button
                                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                                 disabled={currentPage === 1}
-                                className="rounded-md bg-white px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                                className="rounded-md bg-white px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:border dark:border-gray-600 transition-colors"
                             >
                                 Previous
                             </button>
@@ -512,9 +521,9 @@ const Index = () => {
                                 <button
                                     key={page}
                                     onClick={() => setCurrentPage(page)}
-                                    className={`rounded-md px-3 py-2 text-sm font-medium ${currentPage === page
-                                        ? 'bg-indigo-600 text-white'
-                                        : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                                    className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${currentPage === page
+                                        ? 'bg-indigo-600 text-white dark:bg-indigo-700'
+                                        : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:border dark:border-gray-600'
                                         }`}
                                 >
                                     {page}
@@ -524,7 +533,7 @@ const Index = () => {
                             <button
                                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                                 disabled={currentPage === totalPages}
-                                className="rounded-md bg-white px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                                className="rounded-md bg-white px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:border dark:border-gray-600 transition-colors"
                             >
                                 Next
                             </button>

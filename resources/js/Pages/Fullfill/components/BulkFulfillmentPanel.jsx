@@ -23,63 +23,106 @@ export default function BulkFulfillmentPanel({
     }, []);
 
     // Get all requests from the same subsection including current request
-    const sameSubsectionRequests = sameDayRequests.filter(req =>
-        req.sub_section_id === currentRequest.sub_section_id &&
-        req.status !== 'fulfilled' // Only show belum selesai
-    );
+    const sameSubsectionRequests = useMemo(() => {
+        // console.log('🔍 Filtering same subsection requests:', {
+        //     sameDayRequestsCount: sameDayRequests.length,
+        //     currentRequestId: currentRequest.id,
+        //     currentRequestSubSectionId: currentRequest.sub_section_id
+        // });
 
-    // Ensure current request is included
-    const allRequests = [...sameSubsectionRequests];
-    if (!allRequests.some(req => req.id === currentRequest.id)) {
-        allRequests.push(currentRequest);
-    }
-
-    const nonFulfilledRequests = useMemo(() => {
-        const sameSubsectionRequests = sameDayRequests.filter(req =>
-            req.sub_section_id === currentRequest.sub_section_id &&
-            req.status !== 'fulfilled'
-        );
+        const sameSubRequests = sameDayRequests.filter(req => {
+            const matches = String(req.sub_section_id) === String(currentRequest.sub_section_id) &&
+                          req.status !== 'fulfilled';
+            
+            // console.log('📋 Request check:', {
+            //     reqId: req.id,
+            //     reqSubSectionId: req.sub_section_id,
+            //     currentSubSectionId: currentRequest.sub_section_id,
+            //     matches,
+            //     status: req.status
+            // });
+            
+            return matches;
+        });
 
         // Ensure current request is included if not fulfilled
-        const allRequests = [...sameSubsectionRequests];
-        if (currentRequest.status !== 'fulfilled' && !allRequests.some(req => req.id === currentRequest.id)) {
+        const allRequests = [...sameSubRequests];
+        const currentRequestIncluded = allRequests.some(req => String(req.id) === String(currentRequest.id));
+        
+        if (currentRequest.status !== 'fulfilled' && !currentRequestIncluded) {
+            // console.log('➕ Adding current request to same subsection requests');
             allRequests.push(currentRequest);
         }
+
+        // console.log('✅ Final same subsection requests:', allRequests.map(req => ({
+        //     id: req.id,
+        //     name: req.sub_section?.name,
+        //     status: req.status
+        // })));
 
         return allRequests;
     }, [sameDayRequests, currentRequest]);
 
-    const totalRequests = nonFulfilledRequests.length;
-    const totalEmployeesNeeded = nonFulfilledRequests.reduce((total, req) => total + req.requested_amount, 0);
+    const totalRequests = sameSubsectionRequests.length;
+    const totalEmployeesNeeded = sameSubsectionRequests.reduce((total, req) => total + req.requested_amount, 0);
 
     // Calculate how many requests have been fully assigned
     const fullyAssignedRequests = useMemo(() => {
         return Object.keys(bulkSelectedEmployees).filter(
             requestId => {
                 const employees = bulkSelectedEmployees[requestId] || [];
-                const request = nonFulfilledRequests.find(req => req.id.toString() === requestId);
+                const request = sameSubsectionRequests.find(req => String(req.id) === requestId);
                 return request && employees.length === request.requested_amount && employees.every(id => id);
             }
         ).length;
-    }, [bulkSelectedEmployees, nonFulfilledRequests]);
+    }, [bulkSelectedEmployees, sameSubsectionRequests]);
 
     const allRequestsFullyAssigned = useMemo(() => {
         return selectedBulkRequests.every(requestId => {
             const employees = bulkSelectedEmployees[requestId] || [];
-            const request = nonFulfilledRequests.find(req => req.id.toString() === requestId);
+            const request = sameSubsectionRequests.find(req => String(req.id) === requestId);
             return request && employees.length === request.requested_amount;
         });
-    }, [selectedBulkRequests, bulkSelectedEmployees, nonFulfilledRequests]);
-
+    }, [selectedBulkRequests, bulkSelectedEmployees, sameSubsectionRequests]);
 
     // Check if all selected requests are fully assigned
     const hasIncompleteAssignments = useMemo(() => {
         return selectedBulkRequests.some(requestId => {
             const employees = bulkSelectedEmployees[requestId] || [];
-            const request = nonFulfilledRequests.find(req => req.id.toString() === requestId);
+            const request = sameSubsectionRequests.find(req => String(req.id) === requestId);
             return request && employees.length < request.requested_amount;
         });
-    }, [selectedBulkRequests, bulkSelectedEmployees, nonFulfilledRequests]);
+    }, [selectedBulkRequests, bulkSelectedEmployees, sameSubsectionRequests]);
+
+    // Calculate statistics for display
+    const assignmentStats = useMemo(() => {
+        const stats = {
+            totalSelected: 0,
+            totalAssigned: 0,
+            byRequest: {}
+        };
+
+        selectedBulkRequests.forEach(requestId => {
+            const request = sameSubsectionRequests.find(req => String(req.id) === requestId);
+            if (request) {
+                const employees = bulkSelectedEmployees[requestId] || [];
+                const assignedCount = employees.filter(id => id).length;
+                
+                stats.totalSelected += request.requested_amount;
+                stats.totalAssigned += assignedCount;
+                stats.byRequest[requestId] = {
+                    requested: request.requested_amount,
+                    assigned: assignedCount,
+                    shift: request.shift?.name || 'No Shift',
+                    name: request.sub_section?.name || 'Unknown'
+                };
+            } else {
+                console.warn('❌ Selected bulk request not found in sameSubsectionRequests:', requestId);
+            }
+        });
+
+        return stats;
+    }, [selectedBulkRequests, bulkSelectedEmployees, sameSubsectionRequests]);
 
     return (
         <div className="bg-gradient-to-br from-blue-50 dark:from-blue-900/20 to-indigo-100 dark:to-indigo-900/20 shadow-lg mb-6 p-6 border border-blue-200 dark:border-blue-700 rounded-xl">
@@ -100,7 +143,7 @@ export default function BulkFulfillmentPanel({
                     <h4 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">📊 Ringkasan</h4>
                     <div className="space-y-2">
                         <div className="flex justify-between">
-                            <span className="text-gray-600 dark:text-gray-400">Total Request:</span>
+                            <span className="text-gray-600 dark:text-gray-400">Total Request Tersedia:</span>
                             <span className="font-medium text-gray-900 dark:text-gray-100">{totalRequests}</span>
                         </div>
                         <div className="flex justify-between">
@@ -112,12 +155,18 @@ export default function BulkFulfillmentPanel({
                             <span className="font-medium text-gray-900 dark:text-gray-100">{selectedBulkRequests.length}</span>
                         </div>
                         <div className="flex justify-between">
+                            <span className="text-gray-600 dark:text-gray-400">Karyawan Terisi:</span>
+                            <span className="font-medium text-gray-900 dark:text-gray-100">
+                                {assignmentStats.totalAssigned} / {assignmentStats.totalSelected}
+                            </span>
+                        </div>
+                        <div className="flex justify-between">
                             <span className="text-gray-600 dark:text-gray-400">Request Terisi Penuh:</span>
                             <span className="font-medium text-gray-900 dark:text-gray-100">
                                 {fullyAssignedRequests} / {selectedBulkRequests.length}
                             </span>
                         </div>
-                        {hasIncompleteAssignments && (
+                        {hasIncompleteAssignments && selectedBulkRequests.length > 0 && (
                             <div className="flex justify-between">
                                 <span className="text-yellow-600 dark:text-yellow-400">Status:</span>
                                 <span className="font-medium text-yellow-600 dark:text-yellow-400">
@@ -196,209 +245,292 @@ export default function BulkFulfillmentPanel({
                 </div>
             </div>
 
-
+            {/* Request Selection Section */}
             <div className="bg-white dark:bg-gray-800 mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-                <h4 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">Daftar Request untuk Sub-Bagian "{currentRequest.sub_section?.name}"</h4>
-                <div className="max-h-60 overflow-y-auto">
-                    {allRequests.length > 0 ? (
-                        allRequests.map((req) => {
+                <div className="flex justify-between items-center mb-4">
+                    <h4 className="font-semibold text-gray-900 dark:text-gray-100">
+                        Daftar Request untuk Sub-Bagian "{currentRequest.sub_section?.name}"
+                    </h4>
+                    {sameSubsectionRequests.length > 0 && (
+                        <div className="flex items-center space-x-2">
+                            <button
+                                onClick={() => {
+                                    // Select all requests
+                                    const allRequestIds = sameSubsectionRequests.map(req => String(req.id));
+                                    setSelectedBulkRequests(allRequestIds);
+                                }}
+                                className="px-3 py-1 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-900/60 text-blue-800 dark:text-blue-300 text-sm rounded-md transition-colors"
+                            >
+                                Pilih Semua
+                            </button>
+                            <button
+                                onClick={() => setSelectedBulkRequests([])}
+                                className="px-3 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded-md transition-colors"
+                            >
+                                Hapus Semua
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                <div className="max-h-96 overflow-y-auto">
+                    {sameSubsectionRequests.length > 0 ? (
+                        sameSubsectionRequests.map((req) => {
                             const maleCount = req.male_count || 0;
                             const femaleCount = req.female_count || 0;
-                            const isCurrentRequest = req.id === currentRequest.id;
+                            const isCurrentRequest = String(req.id) === String(currentRequest.id);
+                            const isSelected = selectedBulkRequests.includes(String(req.id));
+                            const assignedEmployees = bulkSelectedEmployees[String(req.id)] || [];
+                            const assignedCount = assignedEmployees.filter(id => id).length;
 
                             return (
                                 <div
                                     key={req.id}
-                                    className={`p-3 rounded-md mb-2 cursor-pointer transition-colors ${selectedBulkRequests.includes(req.id)
-                                            ? 'bg-blue-100 dark:bg-blue-900/40 border border-blue-300 dark:border-blue-600'
+                                    className={`p-4 rounded-md mb-3 cursor-pointer transition-all ${
+                                        isSelected
+                                            ? 'bg-blue-100 dark:bg-blue-900/40 border-2 border-blue-300 dark:border-blue-600'
                                             : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
-                                        } ${isCurrentRequest ? 'ring-2 ring-yellow-400 dark:ring-yellow-500' : ''}`}
+                                    } ${isCurrentRequest ? 'ring-2 ring-yellow-400 dark:ring-yellow-500' : ''}`}
                                     onClick={() => toggleBulkRequestSelection(req.id)}
                                 >
-                                    <div className="flex justify-between items-center">
-                                        <div className="flex items-center">
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex items-start space-x-3 flex-1">
                                             <input
                                                 type="checkbox"
-                                                checked={selectedBulkRequests.includes(req.id)}
-                                                onChange={() => { }}
-                                                className="mr-3"
+                                                checked={isSelected}
+                                                onChange={() => {}}
+                                                className="mt-1"
                                             />
-                                            <div>
-                                                <div className="font-medium text-gray-900 dark:text-gray-100">
-                                                    {req.shift?.name || 'No Shift'} - {req.requested_amount} orang
+                                            <div className="flex-1">
+                                                <div className="flex items-center space-x-2 mb-2">
+                                                    <div className="font-medium text-gray-900 dark:text-gray-100">
+                                                        {req.shift?.name || 'No Shift'} - {req.requested_amount} orang
+                                                    </div>
                                                     {isCurrentRequest && (
-                                                        <span className="bg-yellow-100 dark:bg-yellow-800 ml-2 px-2 py-1 rounded-full text-yellow-800 dark:text-yellow-200 text-xs">
+                                                        <span className="bg-yellow-100 dark:bg-yellow-800 px-2 py-1 rounded-full text-yellow-800 dark:text-yellow-200 text-xs">
                                                             Request Saat Ini
                                                         </span>
                                                     )}
+                                                    {req.status === 'fulfilled' && (
+                                                        <span className="bg-green-100 dark:bg-green-800 px-2 py-1 rounded-full text-green-800 dark:text-green-200 text-xs">
+                                                            Sudah Dipenuhi
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                <div className="text-gray-600 dark:text-gray-400 text-sm">
-                                                    Status: <span className={`px-2 py-1 text-xs rounded-full ${req.status === 'fulfilled'
-                                                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-                                                        }`}>
-                                                        {req.status === 'fulfilled' ? 'Sudah dipenuhi' : 'Belum dipenuhi'}
-                                                    </span>
+                                                
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                                    {/* Requirements */}
+                                                    <div>
+                                                        <div className="text-gray-600 dark:text-gray-400 mb-1">
+                                                            <strong>Kebutuhan:</strong>
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {maleCount > 0 && (
+                                                                <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 px-2 py-1 rounded text-xs">
+                                                                    L: {maleCount}
+                                                                </span>
+                                                            )}
+                                                            {femaleCount > 0 && (
+                                                                <span className="bg-pink-100 dark:bg-pink-900/40 text-pink-800 dark:text-pink-300 px-2 py-1 rounded text-xs">
+                                                                    P: {femaleCount}
+                                                                </span>
+                                                            )}
+                                                            <span className="bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300 px-2 py-1 rounded text-xs">
+                                                                Total: {req.requested_amount}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Assignment Progress */}
+                                                    <div>
+                                                        <div className="text-gray-600 dark:text-gray-400 mb-1">
+                                                            <strong>Penugasan:</strong>
+                                                        </div>
+                                                        <div className="flex items-center space-x-2">
+                                                            <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                                                                <div 
+                                                                    className="bg-green-500 h-2 rounded-full transition-all"
+                                                                    style={{ 
+                                                                        width: `${(assignedCount / req.requested_amount) * 100}%` 
+                                                                    }}
+                                                                ></div>
+                                                            </div>
+                                                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                                {assignedCount}/{req.requested_amount}
+                                                            </span>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="text-gray-600 dark:text-gray-400 text-sm">
-                                                {maleCount > 0 && `L: ${maleCount} `}
-                                                {femaleCount > 0 && `P: ${femaleCount}`}
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Employee Selection for Bulk Request */}
-                                  {selectedBulkRequests.includes(req.id) && (
-        <div className="mt-3 pt-3 border-gray-200 dark:border-gray-600 border-t">
-            <div className="flex justify-between items-center mb-2">
-                <h5 className="font-medium text-gray-700 dark:text-gray-300 text-sm">
-                    Karyawan Terpilih:
-                </h5>
-                <span className={`text-xs px-2 py-1 rounded-full ${(bulkSelectedEmployees[req.id]?.length || 0) === req.requested_amount
-                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                        : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-                    }`}>
-                    {(bulkSelectedEmployees[req.id]?.length || 0)} / {req.requested_amount}
-                </span>
-            </div>
-            
-            {/* Tampilkan informasi line assignment untuk putway */}
-            {isPutwayRequest(req) && (
-                <div className="mb-3 p-2 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-200 dark:border-purple-700">
-                    <div className="flex items-center text-purple-700 dark:text-purple-300 text-xs">
-                        <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                        </svg>
-                        Penugasan Line: Karyawan akan ditugaskan bergantian ke Line 1 dan Line 2
-                    </div>
-                </div>
-            )}
-            
-            <div className="gap-2 grid grid-cols-1 sm:grid-cols-2">
-                {Array.from({ length: req.requested_amount }).map((_, index) => {
-                    const employeeIds = bulkSelectedEmployees[req.id] || [];
-                    const employeeId = employeeIds[index];
-                    const employee = employeeId ? getEmployeeDetails(employeeId) : null;
-                    const lineAssignment = isPutwayRequest(req) && employeeId ? 
-                        getBulkLineAssignment(req.id, employeeId) : null;
+                                    {isSelected && (
+                                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                                            <div className="flex justify-between items-center mb-3">
+                                                <h5 className="font-medium text-gray-700 dark:text-gray-300 text-sm">
+                                                    Karyawan Terpilih:
+                                                </h5>
+                                                <span className={`text-xs px-2 py-1 rounded-full ${
+                                                    assignedCount === req.requested_amount
+                                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                                        : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
+                                                }`}>
+                                                    {assignedCount} / {req.requested_amount}
+                                                </span>
+                                            </div>
+                                            
+                                            {/* Tampilkan informasi line assignment untuk putway */}
+                                            {isPutwayRequest(req) && (
+                                                <div className="mb-3 p-2 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-200 dark:border-purple-700">
+                                                    <div className="flex items-center text-purple-700 dark:text-purple-300 text-xs">
+                                                        <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                                        </svg>
+                                                        Penugasan Line: Karyawan akan ditugaskan bergantian ke Line 1 dan Line 2
+                                                    </div>
+                                                </div>
+                                            )}
+                                            
+                                            <div className="gap-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                                                {Array.from({ length: req.requested_amount }).map((_, index) => {
+                                                    const employeeId = assignedEmployees[index];
+                                                    const employee = employeeId ? getEmployeeDetails(employeeId) : null;
+                                                    const lineAssignment = isPutwayRequest(req) && employeeId ? 
+                                                        getBulkLineAssignment(String(req.id), employeeId) : null;
 
-                    return (
-                        <div
-                            key={index}
-                            className={`p-2 rounded border ${employee
-                                    ? 'border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
-                                    : 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700'
-                                }`}
-                        >
-                            <div className="flex justify-between items-center">
-                                <span className="text-gray-500 dark:text-gray-400 text-xs">
-                                    #{index + 1}
-                                    {lineAssignment && (
-                                        <span className="ml-1 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 px-1 rounded">
-                                            Line {lineAssignment}
-                                        </span>
+                                                    return (
+                                                        <div
+                                                            key={index}
+                                                            className={`p-3 rounded border ${
+                                                                employee
+                                                                    ? 'border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
+                                                                    : 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700'
+                                                            }`}
+                                                        >
+                                                            <div className="flex justify-between items-center mb-2">
+                                                                <span className="text-gray-500 dark:text-gray-400 text-xs">
+                                                                    #{index + 1}
+                                                                    {lineAssignment && (
+                                                                        <span className="ml-1 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 px-1 rounded">
+                                                                            Line {lineAssignment}
+                                                                        </span>
+                                                                    )}
+                                                                </span>
+                                                                {employee && (
+                                                                    <span className={`text-xs px-1 rounded ${
+                                                                        employee.gender === 'female'
+                                                                            ? 'bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300'
+                                                                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                                                                    }`}>
+                                                                        {employee.gender === 'female' ? 'P' : 'L'}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+
+                                                            {employee ? (
+                                                                <div className="mb-2">
+                                                                    <div className="font-medium text-gray-900 dark:text-gray-100 text-sm">
+                                                                        {employee.name}
+                                                                    </div>
+                                                                    <div className="text-gray-500 dark:text-gray-400 text-xs">
+                                                                        {employee.type} - {employee.subSections?.[0]?.name || '-'}
+                                                                    </div>
+                                                                    <div className="text-gray-400 dark:text-gray-500 text-xs mt-1">
+                                                                        Score: {employee.total_score?.toFixed(2)}
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-gray-500 dark:text-gray-400 text-xs italic mb-2">
+                                                                    Belum dipilih
+                                                                </div>
+                                                            )}
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    openBulkChangeModal(String(req.id), index);
+                                                                }}
+                                                                className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 w-full py-1 rounded text-gray-700 dark:text-gray-300 text-xs transition-colors"
+                                                            >
+                                                                {employee ? 'Ganti' : 'Pilih'} Karyawan
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                            
+                                            {/* Tampilkan summary line assignment untuk putway */}
+                                            {isPutwayRequest(req) && assignedCount > 0 && (
+                                                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                                                    <h6 className="font-medium text-gray-700 dark:text-gray-300 text-sm mb-2">
+                                                        Preview Penugasan Line:
+                                                    </h6>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                                                        <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded">
+                                                            <div className="font-medium text-purple-700 dark:text-purple-300 mb-2">Line 1</div>
+                                                            {assignedEmployees
+                                                                .filter((_, idx) => (idx % 2) === 0)
+                                                                .map((id, idx) => {
+                                                                    const emp = getEmployeeDetails(id);
+                                                                    return emp ? (
+                                                                        <div key={id} className="text-purple-600 dark:text-purple-400 py-1">
+                                                                            {idx * 2 + 1}. {emp.name} ({emp.gender === 'female' ? 'P' : 'L'})
+                                                                        </div>
+                                                                    ) : null;
+                                                                })}
+                                                        </div>
+                                                        <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded">
+                                                            <div className="font-medium text-purple-700 dark:text-purple-300 mb-2">Line 2</div>
+                                                            {assignedEmployees
+                                                                .filter((_, idx) => (idx % 2) === 1)
+                                                                .map((id, idx) => {
+                                                                    const emp = getEmployeeDetails(id);
+                                                                    return emp ? (
+                                                                        <div key={id} className="text-purple-600 dark:text-purple-400 py-1">
+                                                                            {idx * 2 + 2}. {emp.name} ({emp.gender === 'female' ? 'P' : 'L'})
+                                                                        </div>
+                                                                    ) : null;
+                                                                })}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
                                     )}
-                                </span>
-                                {employee && (
-                                    <span className={`text-xs px-1 rounded ${employee.gender === 'female'
-                                            ? 'bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300'
-                                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
-                                        }`}>
-                                        {employee.gender === 'female' ? 'P' : 'L'}
-                                    </span>
-                                )}
-                            </div>
-
-                            {employee ? (
-                                <div className="mt-1">
-                                    <div className="font-medium text-gray-900 dark:text-gray-100 text-sm">
-                                        {employee.name}
-                                    </div>
-                                    <div className="text-gray-500 dark:text-gray-400 text-xs">
-                                        {employee.type} - {employee.subSections?.[0]?.name || '-'}
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="text-gray-500 dark:text-gray-400 text-xs italic">
-                                    Belum dipilih
-                                </div>
-                            )}
-
-                            <button
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    openBulkChangeModal(req.id, index);
-                                }}
-                                className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 mt-2 px-2 py-1 rounded w-full text-gray-700 dark:text-gray-300 text-xs transition-colors"
-                            >
-                                {employee ? 'Ganti' : 'Pilih'} Karyawan
-                            </button>
-                        </div>
-                    );
-                })}
-            </div>
-            
-            {/* Tampilkan summary line assignment untuk putway */}
-            {isPutwayRequest(req) && bulkSelectedEmployees[req.id]?.length > 0 && (
-                <div className="mt-3 pt-3 border-gray-200 dark:border-gray-600 border-t">
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="bg-purple-50 dark:bg-purple-900/20 p-2 rounded">
-                            <div className="font-medium text-purple-700 dark:text-purple-300">Line 1</div>
-                            {bulkSelectedEmployees[req.id]
-                                .filter((_, idx) => (idx % 2) === 0)
-                                .map((id, idx) => {
-                                    const emp = getEmployeeDetails(id);
-                                    return emp ? (
-                                        <div key={id} className="text-purple-600 dark:text-purple-400">
-                                            {idx * 2 + 1}. {emp.name}
-                                        </div>
-                                    ) : null;
-                                })}
-                        </div>
-                        <div className="bg-purple-50 dark:bg-purple-900/20 p-2 rounded">
-                            <div className="font-medium text-purple-700 dark:text-purple-300">Line 2</div>
-                            {bulkSelectedEmployees[req.id]
-                                .filter((_, idx) => (idx % 2) === 1)
-                                .map((id, idx) => {
-                                    const emp = getEmployeeDetails(id);
-                                    return emp ? (
-                                        <div key={id} className="text-purple-600 dark:text-purple-400">
-                                            {idx * 2 + 2}. {emp.name}
-                                        </div>
-                                    ) : null;
-                                })}
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    )}
                                 </div>
                             );
                         })
                     ) : (
-                        <div className="py-4 text-gray-500 dark:text-gray-400 text-center">
-                            Tidak ada request untuk sub-bagian ini.
+                        <div className="py-8 text-center">
+                            <div className="text-gray-400 dark:text-gray-500 text-4xl mb-2">📋</div>
+                            <p className="text-gray-500 dark:text-gray-400">
+                                Tidak ada request untuk sub-bagian ini pada tanggal yang sama.
+                            </p>
+                            <p className="text-gray-400 dark:text-gray-500 text-sm mt-1">
+                                Semua request mungkin sudah terpenuhi atau tidak ada request lain dengan sub-bagian yang sama.
+                            </p>
                         </div>
                     )}
                 </div>
             </div>
 
+            {/* Action Buttons */}
             <div className="flex justify-between items-center">
                 <div className="text-gray-600 dark:text-gray-400 text-sm">
-                    {selectedBulkRequests.length} request terpilih dari {totalRequests}
+                    {selectedBulkRequests.length} request terpilih dari {totalRequests} • 
+                    {assignmentStats.totalAssigned} dari {assignmentStats.totalSelected} karyawan terisi
                 </div>
                 <button
                     onClick={() => handleBulkSubmit(strategy, visibility)}
                     disabled={processing || selectedBulkRequests.length === 0 || hasIncompleteAssignments}
-                    className={`px-6 py-3 rounded-lg font-semibold text-white transition-colors ${processing || selectedBulkRequests.length === 0 || hasIncompleteAssignments
+                    className={`px-6 py-3 rounded-lg font-semibold text-white transition-colors ${
+                        processing || selectedBulkRequests.length === 0 || hasIncompleteAssignments
                             ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
                             : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700'
-                        }`}
+                    }`}
                 >
                     {processing ? (
                         <span className="flex items-center">
@@ -409,7 +541,7 @@ export default function BulkFulfillmentPanel({
                             Memproses...
                         </span>
                     ) : (
-                        `Penuhi ${selectedBulkRequests.length} Request`
+                        `🚀 Penuhi ${selectedBulkRequests.length} Request`
                     )}
                 </button>
             </div>
