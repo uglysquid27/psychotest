@@ -45,7 +45,7 @@ class HandoverController extends Controller
                 'url' => $request->photo_url,
                 'message' => 'Photo saved successfully'
             ]);
-            
+
         } catch (\Exception $e) {
             Log::error('Handover photo update error: ' . $e->getMessage());
             return response()->json([
@@ -91,7 +91,7 @@ class HandoverController extends Controller
             $employeeName = $handover->employee->name;
             $equipmentType = $handover->equipment->type;
             $equipment = $handover->equipment;
-            
+
             // Restore stock if equipment doesn't have sizes
             if (empty($equipment->size)) {
                 $equipment->amount = $equipment->amount + 1;
@@ -105,7 +105,7 @@ class HandoverController extends Controller
                 // Restore stock for specific size
                 $sizes = explode(',', $equipment->size);
                 $newSizes = [];
-                
+
                 foreach ($sizes as $sizeItem) {
                     if (strpos($sizeItem, ':') !== false) {
                         list($sizeName, $amount) = explode(':', $sizeItem);
@@ -115,10 +115,10 @@ class HandoverController extends Controller
                         $newSizes[] = $sizeName . ':' . $amount;
                     }
                 }
-                
+
                 $equipment->size = implode(',', $newSizes);
                 $equipment->save();
-                
+
                 Log::info('Stock restored for equipment with size', [
                     'equipment_id' => $equipment->id,
                     'equipment_type' => $equipment->type,
@@ -126,7 +126,7 @@ class HandoverController extends Controller
                     'new_sizes' => $equipment->size
                 ]);
             }
-            
+
             $handover->delete();
 
             DB::commit();
@@ -142,7 +142,7 @@ class HandoverController extends Controller
                 'success' => true,
                 'message' => 'Assignment deleted successfully and stock restored'
             ]);
-            
+
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Handover deletion error: ' . $e->getMessage());
@@ -156,184 +156,139 @@ class HandoverController extends Controller
     /**
      * Display assign page with grouped handovers
      */
-/**
- * Display assign page with grouped handovers
- */
-public function assignPage(Request $request)
-{
-    // Get all equipments untuk available equipment list
-    $allEquipments = WorkEquipment::orderBy('type')->get();
+    /**
+     * Display assign page with grouped handovers
+     */
+    public function assignPage(Request $request)
+    {
+        // Get all equipments untuk available equipment list
+        $allEquipments = WorkEquipment::orderBy('type')->get();
 
-    // Get all active employees untuk employee selection with sections and subsections
-    $allEmployees = Employee::active()
-        ->with(['subSections.section'])
-        ->orderBy('name')
-        ->get();
+        // Get all active employees untuk employee selection with sections and subsections
+        $allEmployees = Employee::active()
+            ->with(['subSections.section'])
+            ->orderBy('name')
+            ->get();
 
-    // Get all handovers dengan relasi
-    $handovers = Handover::with(['employee.subSections.section', 'equipment'])
-        ->when($request->search, function($q) use ($request) {
-            $q->where(function($query) use ($request) {
-                $query->whereHas('employee', function($empQuery) use ($request) {
-                    $empQuery->where('name', 'like', "%{$request->search}%")
+        // Get all handovers dengan relasi
+        $handovers = Handover::with(['employee.subSections.section', 'equipment'])
+            ->when($request->search, function ($q) use ($request) {
+                $q->where(function ($query) use ($request) {
+                    $query->whereHas('employee', function ($empQuery) use ($request) {
+                        $empQuery->where('name', 'like', "%{$request->search}%")
                             ->orWhere('nik', 'like', "%{$request->search}%");
-                })->orWhereHas('equipment', function($eqQuery) use ($request) {
-                    $eqQuery->where('type', 'like', "%{$request->search}%");
+                    })->orWhereHas('equipment', function ($eqQuery) use ($request) {
+                        $eqQuery->where('type', 'like', "%{$request->search}%");
+                    });
                 });
-            });
-        })
-        ->when($request->section && $request->section !== 'All', function($q) use ($request) {
-            $q->whereHas('employee.subSections.section', function($sectionQuery) use ($request) {
-                $sectionQuery->where('name', $request->section);
-            });
-        })
-        ->when($request->sub_section && $request->sub_section !== 'All', function($q) use ($request) {
-            $q->whereHas('employee.subSections', function($subSectionQuery) use ($request) {
-                $subSectionQuery->where('name', $request->sub_section);
-            });
-        })
-        ->orderBy('date', 'desc')
-        ->paginate(10)
-        ->withQueryString();
+            })
+            ->when($request->section && $request->section !== 'All', function ($q) use ($request) {
+                $q->whereHas('employee.subSections.section', function ($sectionQuery) use ($request) {
+                    $sectionQuery->where('name', $request->section);
+                });
+            })
+            ->when($request->sub_section && $request->sub_section !== 'All', function ($q) use ($request) {
+                $q->whereHas('employee.subSections', function ($subSectionQuery) use ($request) {
+                    $subSectionQuery->where('name', $request->sub_section);
+                });
+            })
+            ->orderBy('date', 'desc')
+            ->paginate(10)
+            ->withQueryString();
 
-    // Get unique sections and subsections for filters
-    $sections = Section::select('id', 'name')
-        ->orderBy('name')
-        ->get();
-    
-    $subSections = SubSection::select('id', 'name', 'section_id')
-        ->with('section')
-        ->orderBy('name')
-        ->get();
+        // Get unique sections and subsections for filters
+        $sections = Section::select('id', 'name')
+            ->orderBy('name')
+            ->get();
 
-    return inertia('apd/Assign', [
-        'handovers' => $handovers,
-        'equipments' => $allEquipments,
-        'employees' => $allEmployees,
-        'sections' => $sections,
-        'subSections' => $subSections,
-        'filters' => $request->only(['search', 'section', 'sub_section']),
-    ]);
-}
+        $subSections = SubSection::select('id', 'name', 'section_id')
+            ->with('section')
+            ->orderBy('name')
+            ->get();
+
+        return inertia('apd/Assign', [
+            'handovers' => $handovers,
+            'equipments' => $allEquipments,
+            'employees' => $allEmployees,
+            'sections' => $sections,
+            'subSections' => $subSections,
+            'filters' => $request->only(['search', 'section', 'sub_section']),
+        ]);
+    }
 
     /**
      * Quick assign equipment to employee
      */
-    public function quickAssign(Request $request)
-    {
-        \Log::info('QuickAssign request received', $request->all());
+public function quickAssign(Request $request)
+{
+    \Log::info('=== QUICK ASSIGN START ===');
+    \Log::info('Request data:', $request->all());
 
-        try {
-            $validated = $request->validate([
-                'employee_id' => 'required|exists:employees,id',
-                'equipment_id' => 'required|exists:work_equipments,id',
-                'size' => 'nullable|string|max:255',
-                'quantity' => 'nullable|integer|min:1|max:10',
-                'photo_url' => 'nullable|url',
-            ]);
+    try {
+        $validated = $request->validate([
+            'employee_id' => 'required|exists:employees,id',
+            'equipment_id' => 'required|exists:work_equipments,id',
+            'size' => 'nullable|string|max:255',
+            'quantity' => 'nullable|integer|min:1|max:10',
+            'photo_url' => 'nullable|url',
+        ]);
 
-            $employeeId = $validated['employee_id'];
-            $equipmentId = $validated['equipment_id'];
-            $size = $validated['size'] ?? null;
-            $quantity = $validated['quantity'] ?? 1;
-            $photoUrl = $validated['photo_url'] ?? null;
+        \Log::info('Validation passed:', $validated);
 
-            \Log::info('Processing assignment', [
-                'employee_id' => $employeeId,
-                'equipment_id' => $equipmentId,
-                'size' => $size,
-                'quantity' => $quantity,
-                'photo_url' => $photoUrl
-            ]);
+        DB::beginTransaction();
 
-            DB::beginTransaction();
+        $equipment = WorkEquipment::findOrFail($validated['equipment_id']);
+        \Log::info('Equipment found:', [$equipment->id, $equipment->type, $equipment->amount, $equipment->size]);
 
-            $equipment = WorkEquipment::findOrFail($equipmentId);
+        // ... existing stock management code ...
 
-            // Check stock availability
-            if ($equipment->size && $size) {
-                // Check stock for specific size
-                $sizeFound = false;
-                $sizes = explode(',', $equipment->size);
-                $newSizes = [];
-                
-                foreach ($sizes as $sizeItem) {
-                    if (strpos($sizeItem, ':') !== false) {
-                        list($sizeName, $amount) = explode(':', $sizeItem);
-                        if ($sizeName === $size) {
-                            $sizeFound = true;
-                            if (intval($amount) < $quantity) {
-                                throw new \Exception("Insufficient stock for {$equipment->type} (Size: {$size}). Available: {$amount}, Requested: {$quantity}");
-                            }
-                            $amount = intval($amount) - $quantity;
-                        }
-                        $newSizes[] = $sizeName . ':' . $amount;
-                    }
-                }
-                
-                if (!$sizeFound) {
-                    throw new \Exception("Size {$size} not found for {$equipment->type}");
-                }
-                
-                $equipment->size = implode(',', $newSizes);
-                $equipment->save();
-                
-            } else if (empty($equipment->size)) {
-                // Check stock for equipment without sizes
-                if ($equipment->amount < $quantity) {
-                    throw new \Exception("Insufficient stock for {$equipment->type}. Available: {$equipment->amount}, Requested: {$quantity}");
-                }
-                $equipment->amount = $equipment->amount - $quantity;
-                $equipment->save();
-            }
-
-            // Create handover records
-            $handovers = [];
-            for ($i = 0; $i < $quantity; $i++) {
-                $handover = Handover::create([
-                    'employee_id' => $employeeId,
-                    'equipment_id' => $equipmentId,
-                    'size' => $size,
-                    'date' => now(),
-                    'photo' => $photoUrl,
-                ]);
-                $handovers[] = $handover;
-            }
-
-            DB::commit();
-
-            \Log::info('Quick assignment completed successfully', [
-                'handovers_created' => count($handovers),
-                'employee_id' => $employeeId,
-                'equipment_id' => $equipmentId,
-                'quantity' => $quantity
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => "Successfully assigned {$quantity} item(s)" . ($size ? " (Size: {$size})" : ""),
-                'handovers' => $handovers
-            ]);
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            DB::rollBack();
-            \Log::error('Validation error in quickAssign', ['errors' => $e->errors()]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $e->errors()
-            ], 422);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            \Log::error('Quick assign error: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString()
-            ]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to assign equipment: ' . $e->getMessage()
-            ], 500);
+        // Create handover records
+        $handovers = [];
+        for ($i = 0; $i < $validated['quantity']; $i++) {
+            $handoverData = [
+                'employee_id' => $validated['employee_id'],
+                'equipment_id' => $validated['equipment_id'],
+                'size' => $validated['size'] ?? null,
+                'date' => now(),
+                'photo' => $validated['photo_url'] ?? null,
+            ];
+            
+            \Log::info("Creating handover {$i}:", $handoverData);
+            
+            $handover = Handover::create($handoverData);
+            $handovers[] = $handover;
+            
+            \Log::info("Handover created with ID: {$handover->id}");
         }
+
+        DB::commit();
+
+        \Log::info('=== QUICK ASSIGN SUCCESS ===');
+
+        \Log::info('Quick assignment completed successfully', [
+            'handovers_created' => count($handovers),
+            'employee_id' => $validated['employee_id'],
+            'equipment_id' => $validated['equipment_id'],
+            'quantity' => $validated['quantity']
+        ]);
+
+        // FIX: Return Inertia response instead of JSON
+        return back()->with([
+            'success' => 'Successfully assigned ' . $validated['quantity'] . ' item(s)' . ($validated['size'] ? " (Size: {$validated['size']})" : "")
+        ]);
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        DB::rollBack();
+        \Log::error('Validation error in quickAssign', ['errors' => $e->errors()]);
+        return back()->withErrors($e->errors());
+    } catch (\Exception $e) {
+        DB::rollBack();
+        \Log::error('Quick assign error: ' . $e->getMessage(), [
+            'trace' => $e->getTraceAsString()
+        ]);
+        return back()->withErrors(['error' => 'Failed to assign equipment: ' . $e->getMessage()]);
     }
+}
 
     /**
      * Bulk assign multiple equipment to an employee
@@ -421,61 +376,61 @@ public function assignPage(Request $request)
         }
     }
 
-   /**
+    /**
      * Get active employees without any equipment assignments with search filter
      */
-  public function getUnassignedEmployees(Request $request)
-{
-    try {
-        $search = $request->input('search', '');
-        $section = $request->input('section', '');
-        $subSection = $request->input('sub_section', '');
-        
-        \Log::info('Fetching unassigned employees', [
-            'search' => $search,
-            'section' => $section,
-            'sub_section' => $subSection
-        ]);
-        
-        // Get employees without handovers
-        $unassignedEmployees = Employee::active()
-            ->with(['subSections.section'])
-            ->whereDoesntHave('handovers')
-            ->when($search, function($query) use ($search) {
-                $query->where(function($q) use ($search) {
-                    $q->where('name', 'like', "%{$search}%")
-                      ->orWhere('nik', 'like', "%{$search}%")
-                      ->orWhere('email', 'like', "%{$search}%");
-                });
-            })
-            ->when($section && $section !== 'All', function($query) use ($section) {
-                $query->whereHas('subSections.section', function($q) use ($section) {
-                    $q->where('name', $section);
-                });
-            })
-            ->when($subSection && $subSection !== 'All', function($query) use ($subSection) {
-                $query->whereHas('subSections', function($q) use ($subSection) {
-                    $q->where('name', $subSection);
-                });
-            })
-            ->orderBy('name')
-            ->get(['id', 'nik', 'name', 'email']);
+    public function getUnassignedEmployees(Request $request)
+    {
+        try {
+            $search = $request->input('search', '');
+            $section = $request->input('section', '');
+            $subSection = $request->input('sub_section', '');
 
-        \Log::info('Unassigned employees found', ['count' => $unassignedEmployees->count()]);
+            \Log::info('Fetching unassigned employees', [
+                'search' => $search,
+                'section' => $section,
+                'sub_section' => $subSection
+            ]);
 
-        return response()->json([
-            'success' => true,
-            'employees' => $unassignedEmployees
-        ]);
+            // Get employees without handovers
+            $unassignedEmployees = Employee::active()
+                ->with(['subSections.section'])
+                ->whereDoesntHave('handovers')
+                ->when($search, function ($query) use ($search) {
+                    $query->where(function ($q) use ($search) {
+                        $q->where('name', 'like', "%{$search}%")
+                            ->orWhere('nik', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%");
+                    });
+                })
+                ->when($section && $section !== 'All', function ($query) use ($section) {
+                    $query->whereHas('subSections.section', function ($q) use ($section) {
+                        $q->where('name', $section);
+                    });
+                })
+                ->when($subSection && $subSection !== 'All', function ($query) use ($subSection) {
+                    $query->whereHas('subSections', function ($q) use ($subSection) {
+                        $q->where('name', $subSection);
+                    });
+                })
+                ->orderBy('name')
+                ->get(['id', 'nik', 'name', 'email']);
 
-    } catch (\Exception $e) {
-        \Log::error('Get unassigned employees error: ' . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to get unassigned employees: ' . $e->getMessage()
-        ], 500);
+            \Log::info('Unassigned employees found', ['count' => $unassignedEmployees->count()]);
+
+            return response()->json([
+                'success' => true,
+                'employees' => $unassignedEmployees
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Get unassigned employees error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get unassigned employees: ' . $e->getMessage()
+            ], 500);
+        }
     }
-}
 
     /**
      * Get employee handovers
@@ -505,7 +460,7 @@ public function assignPage(Request $request)
     /**
      * Update multiple handovers for an employee
      */
-      public function updateEmployeeHandovers(Request $request, $employeeId)
+    public function updateEmployeeHandovers(Request $request, $employeeId)
     {
         \Log::info('UpdateEmployeeHandovers request received', $request->all());
 
@@ -679,7 +634,7 @@ public function assignPage(Request $request)
     {
         $sizes = explode(',', $equipment->size);
         $newSizes = [];
-        
+
         foreach ($sizes as $sizeItem) {
             if (strpos($sizeItem, ':') !== false) {
                 list($sizeName, $amount) = explode(':', $sizeItem);
@@ -689,7 +644,7 @@ public function assignPage(Request $request)
                 $newSizes[] = $sizeName . ':' . $amount;
             }
         }
-        
+
         $equipment->size = implode(',', $newSizes);
         $equipment->save();
 
@@ -708,7 +663,7 @@ public function assignPage(Request $request)
         $sizes = explode(',', $equipment->size);
         $newSizes = [];
         $sizeFound = false;
-        
+
         foreach ($sizes as $sizeItem) {
             if (strpos($sizeItem, ':') !== false) {
                 list($sizeName, $amount) = explode(':', $sizeItem);
@@ -722,11 +677,11 @@ public function assignPage(Request $request)
                 $newSizes[] = $sizeName . ':' . $amount;
             }
         }
-        
+
         if (!$sizeFound) {
             throw new \Exception("Size {$size} not found for {$equipment->type}");
         }
-        
+
         $equipment->size = implode(',', $newSizes);
         $equipment->save();
 
@@ -788,101 +743,129 @@ public function assignPage(Request $request)
     }
 
     /**
- * Get equipment counts for all employees
- */
-public function getEmployeeEquipmentCounts()
-{
-    try {
-        $counts = Handover::with(['employee', 'equipment'])
-            ->select('employee_id', 'equipment_id', DB::raw('count(*) as total_count'))
-            ->groupBy('employee_id', 'equipment_id')
-            ->get()
-            ->groupBy('employee_id')
-            ->map(function ($employeeHandovers) {
-                return $employeeHandovers->map(function ($handover) {
-                    return [
-                        'equipment_type' => $handover->equipment->type,
-                        'total_count' => $handover->total_count
-                    ];
-                });
-            })
-            ->toArray();
+     * Get equipment counts for all employees
+     */
+    public function getEmployeeEquipmentCounts()
+    {
+        try {
+            $counts = Handover::with(['employee', 'equipment'])
+                ->select('employee_id', 'equipment_id', DB::raw('count(*) as total_count'))
+                ->groupBy('employee_id', 'equipment_id')
+                ->get()
+                ->groupBy('employee_id')
+                ->map(function ($employeeHandovers) {
+                    return $employeeHandovers->map(function ($handover) {
+                        return [
+                            'equipment_type' => $handover->equipment->type,
+                            'total_count' => $handover->total_count
+                        ];
+                    });
+                })
+                ->toArray();
 
-        return response()->json([
-            'success' => true,
-            'counts' => $counts
-        ]);
+            return response()->json([
+                'success' => true,
+                'counts' => $counts
+            ]);
 
-    } catch (\Exception $e) {
-        \Log::error('Get employee equipment counts error: ' . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to get equipment counts: ' . $e->getMessage()
-        ], 500);
+        } catch (\Exception $e) {
+            \Log::error('Get employee equipment counts error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to get equipment counts: ' . $e->getMessage()
+            ], 500);
+        }
     }
-}
 
-// Add to HandoverController.php
+    // Add to HandoverController.php
 public function exportAssignments()
 {
     try {
-        $handovers = Handover::with(['employee.subSections.section', 'equipment'])
+        $handovers = \App\Models\Handover::with(['employee.subSections.section', 'equipment'])
             ->orderBy('date', 'desc')
             ->get();
-        
-        $fileName = 'equipment_assignments_' . date('Y-m-d_H-i-s') . '.csv';
-        
-        $headers = [
-            'Content-Type' => 'text/csv',
-            'Content-Disposition' => 'attachment; filename="' . $fileName . '"',
-        ];
-        
-        $callback = function() use ($handovers) {
-            $file = fopen('php://output', 'w');
-            
-            // Add BOM for UTF-8
-            fputs($file, $bom = (chr(0xEF) . chr(0xBB) . chr(0xBF)));
-            
-            // Headers
-            fputcsv($file, [
-                'Employee Name',
-                'Employee NIK',
-                'Section',
-                'Subsection',
-                'Equipment Type',
-                'Size',
-                'Assignment Date',
-                'Has Photo',
-                'Created At'
-            ]);
-            
-            foreach ($handovers as $handover) {
-                $section = $handover->employee->subSections->first()->section->name ?? 'N/A';
-                $subsection = $handover->employee->subSections->first()->name ?? 'N/A';
-                $hasPhoto = $handover->photo ? 'Yes' : 'No';
-                
-                fputcsv($file, [
-                    $handover->employee->name,
-                    $handover->employee->nik,
-                    $section,
-                    $subsection,
-                    $handover->equipment->type,
-                    $handover->size ?? 'N/A',
-                    $handover->date,
-                    $hasPhoto,
-                    $handover->created_at->format('Y-m-d H:i:s')
-                ]);
+
+        $filename = 'handovers_' . date('Ymd_His') . '.xls';
+
+        $html = '<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />';
+        $html .= '<table border="1" cellspacing="0" cellpadding="4">';
+        $html .= '
+            <tr style="background:#e2e2e2;font-weight:bold;text-align:center;">
+                <th>No</th>
+                <th>Employee Name</th>
+                <th>NIK</th>
+                <th>Section</th>
+                <th>Subsection</th>
+                <th>Equipment</th>
+                <th>Size</th>
+                <th>Handover Date</th>
+                <th>Has Photo</th>
+                <th>Created At</th>
+            </tr>
+        ';
+
+        $no = 1;
+        foreach ($handovers as $handover) {
+            $employee = $handover->employee;
+            $section = $employee->subSections->first()->section->name ?? '-';
+            $subsection = $employee->subSections->first()->name ?? '-';
+            $equipment = $handover->equipment->type ?? '-';
+            $hasPhoto = $handover->photo ? 'Yes' : 'No';
+
+            // 🧩 Handle date safely even if it's a string
+            $handoverDate = '-';
+            if (!empty($handover->date)) {
+                try {
+                    $handoverDate = \Carbon\Carbon::parse($handover->date)->format('Y-m-d');
+                } catch (\Exception $e) {
+                    $handoverDate = $handover->date; // fallback to raw string
+                }
             }
-            
-            fclose($file);
-        };
-        
-        return response()->stream($callback, 200, $headers);
-        
+
+            $createdAt = '-';
+            if (!empty($handover->created_at)) {
+                try {
+                    $createdAt = \Carbon\Carbon::parse($handover->created_at)->format('Y-m-d H:i');
+                } catch (\Exception $e) {
+                    $createdAt = $handover->created_at;
+                }
+            }
+
+            $html .= '<tr>';
+            $html .= '<td style="text-align:center;">' . $no++ . '</td>';
+            $html .= '<td>' . htmlentities($employee->name ?? '-') . '</td>';
+            $html .= '<td>' . htmlentities($employee->nik ?? '-') . '</td>';
+            $html .= '<td>' . htmlentities($section) . '</td>';
+            $html .= '<td>' . htmlentities($subsection) . '</td>';
+            $html .= '<td>' . htmlentities($equipment) . '</td>';
+            $html .= '<td>' . htmlentities($handover->size ?? '-') . '</td>';
+            $html .= '<td>' . htmlentities($handoverDate) . '</td>';
+            $html .= '<td>' . $hasPhoto . '</td>';
+            $html .= '<td>' . htmlentities($createdAt) . '</td>';
+            $html .= '</tr>';
+        }
+
+        $html .= '</table>';
+
+        // ✅ Force Excel download (no preview)
+        return response()->streamDownload(
+            function () use ($html) {
+                echo $html;
+            },
+            $filename,
+            [
+                'Content-Type' => 'application/vnd.ms-excel',
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+                'Pragma' => 'no-cache',
+                'Expires' => '0',
+                'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0, private',
+            ]
+        );
     } catch (\Exception $e) {
-        \Log::error('Assignments export error: ' . $e->getMessage());
-        return back()->with('error', 'Failed to export assignments data.');
+        \Log::error('Handover export error: ' . $e->getMessage());
+        return back()->with('error', 'Failed to export handover data.');
     }
 }
+
 
 }

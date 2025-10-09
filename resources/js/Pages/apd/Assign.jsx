@@ -169,28 +169,27 @@ function QuickAssign ({ employee, show, onClose, equipments }) {
         }
     }
 
-    const handleSizeSelect = size => {
-        console.log('Size selected:', size)
-        setSelectedSize(size)
-        setShowSizeModal(false)
+const handleSizeSelect = async (size) => {
+    console.log('Size selected:', size)
+    setSelectedSize(size)
+    setShowSizeModal(false)
+    
+    // Automatically assign after size selection
+    await handleAssign()
+}
+
+const handleEquipmentSelect = (equipment) => {
+    console.log('Equipment selected:', equipment.type, 'Has size:', !!equipment.size)
+    setSelectedEquipment(equipment)
+
+    if (equipment.size) {
+        setShowSizeModal(true)
+        setSelectedSize('') // Reset selected size when changing equipment
+    } else {
+        setSelectedSize(null)
+        // For equipment without size, assign immediately
         handleAssign()
     }
-
-    const handleEquipmentSelect = equipment => {
-        console.log(
-            'Equipment selected:',
-            equipment.type,
-            'Has size:',
-            !!equipment.size
-        )
-        setSelectedEquipment(equipment)
-
-        if (equipment.size) {
-            setShowSizeModal(true)
-        } else {
-            setSelectedSize(null)
-            handleAssign()
-        }
     }
 
     const handleAssign = async () => {
@@ -705,173 +704,197 @@ function UpdateEmployeeModal ({ employee, show, onClose, equipments }) {
         )
     }
 
-    const handleFileSelect = async e => {
-        const file = e.target.files[0]
-        if (!file) return
+   const handleFileSelect = async e => {
+    const file = e.target.files[0]
+    if (!file) return
 
-        try {
-            setUploadStatus('Uploading...')
+    try {
+        setUploadStatus('Uploading...')
 
-            const validTypes = [
-                'image/jpeg',
-                'image/jpg',
-                'image/png',
-                'image/gif',
-                'image/webp',
-                'image/bmp'
-            ]
-            if (!validTypes.includes(file.type)) {
-                throw new Error('Please select a valid image file')
-            }
-
-            if (file.size > 10 * 1024 * 1024) {
-                throw new Error('File size must be less than 10MB')
-            }
-
-            const authResponse = await fetch('/api/imagekit/auth')
-
-            if (!authResponse.ok) {
-                throw new Error('ImageKit authentication failed')
-            }
-
-            const authData = await authResponse.json()
-
-            const fileName = `handover_update_${
-                employee.id
-            }_${Date.now()}.${file.name.split('.').pop()}`
-
-            const formData = new FormData()
-            formData.append('file', file)
-            formData.append('fileName', fileName)
-            formData.append('folder', '/handovers')
-            formData.append('useUniqueFileName', 'true')
-            formData.append(
-                'publicKey',
-                import.meta.env.VITE_IMAGEKIT_PUBLIC_KEY
-            )
-            formData.append('signature', authData.signature)
-            formData.append('token', authData.token)
-            formData.append('expire', authData.expire)
-
-            const uploadResponse = await fetch(
-                'https://upload.imagekit.io/api/v1/files/upload',
-                {
-                    method: 'POST',
-                    body: formData
-                }
-            )
-
-            const uploadResult = await uploadResponse.json()
-
-            if (uploadResponse.ok && uploadResult.url) {
-                setPhoto(uploadResult.url)
-                setUploadStatus('success')
-                showNotification(
-                    'success',
-                    'Upload Successful',
-                    'Photo uploaded successfully'
-                )
-            } else {
-                throw new Error(uploadResult.message || 'Upload failed')
-            }
-        } catch (error) {
-            console.error('Upload error:', error)
-            setUploadStatus('error')
-            showNotification(
-                'error',
-                'Upload Failed',
-                'Upload failed: ' + error.message
-            )
-            e.target.value = ''
+        const validTypes = [
+            'image/jpeg',
+            'image/jpg',
+            'image/png',
+            'image/gif',
+            'image/webp',
+            'image/bmp'
+        ]
+        if (!validTypes.includes(file.type)) {
+            throw new Error('Please select a valid image file')
         }
+
+        if (file.size > 10 * 1024 * 1024) {
+            throw new Error('File size must be less than 10MB')
+        }
+
+        const authResponse = await fetch('/api/imagekit/auth')
+
+        if (!authResponse.ok) {
+            throw new Error('ImageKit authentication failed')
+        }
+
+        const authData = await authResponse.json()
+
+        const fileName = `handover_update_${
+            employee.id
+        }_${Date.now()}.${file.name.split('.').pop()}`
+
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('fileName', fileName)
+        formData.append('folder', '/handovers')
+        formData.append('useUniqueFileName', 'true')
+        formData.append(
+            'publicKey',
+            import.meta.env.VITE_IMAGEKIT_PUBLIC_KEY
+        )
+        formData.append('signature', authData.signature)
+        formData.append('token', authData.token)
+        formData.append('expire', authData.expire)
+
+        const uploadResponse = await fetch(
+            'https://upload.imagekit.io/api/v1/files/upload',
+            {
+                method: 'POST',
+                body: formData
+            }
+        )
+
+        const uploadResult = await uploadResponse.json()
+
+        if (uploadResponse.ok && uploadResult.url) {
+            setPhoto(uploadResult.url)
+            setUploadStatus('success')
+            
+            // REMOVE the notification here - just update status
+            console.log('Photo uploaded successfully:', uploadResult.url)
+            
+            // Optional: Show a simple success message without modal
+            // You can use a toast or inline message instead
+            setUploadStatus('Upload successful!')
+            
+            // Auto-clear the success status after 2 seconds
+            setTimeout(() => {
+                setUploadStatus('')
+            }, 2000)
+            
+        } else {
+            throw new Error(uploadResult.message || 'Upload failed')
+        }
+    } catch (error) {
+        console.error('Upload error:', error)
+        setUploadStatus('error')
+        
+        // Only show notification for errors, not for successes
+        showNotification(
+            'error',
+            'Upload Failed',
+            'Upload failed: ' + error.message
+        )
+        e.target.value = ''
+    }
+}
+
+   const handleSubmit = async e => {
+    e.preventDefault()
+
+    if (!selectedDate) {
+        showNotification('warning', 'Date Required', 'Please select date')
+        return
     }
 
-    const handleSubmit = async e => {
-        e.preventDefault()
+    if (handovers.length === 0) {
+        showNotification('warning', 'No Handovers', 'No handovers to update')
+        return
+    }
 
-        if (!selectedDate) {
-            showNotification('warning', 'Date Required', 'Please select date')
-            return
+    setIsSubmitting(true)
+
+    try {
+        const updateData = {
+            date: selectedDate,
+            photo_url: photo,
+            handovers: handovers.map(handover => {
+                const originalHandover = originalHandovers.find(
+                    oh => oh.id === handover.id
+                )
+                return {
+                    id: handover.id,
+                    size: handover.size,
+                    original_size: originalHandover?.size,
+                    equipment_id: handover.equipment.id
+                }
+            })
         }
 
-        if (handovers.length === 0) {
-            showNotification(
-                'warning',
-                'No Handovers',
-                'No handovers to update'
-            )
-            return
+        console.log('Update data dengan stock management:', updateData)
+
+        // FIX: Get CSRF token properly
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+        if (!csrfToken) {
+            throw new Error('CSRF token not found')
         }
 
-        setIsSubmitting(true)
+        console.log('CSRF Token:', csrfToken) // Debug log
 
-        try {
-            const updateData = {
-                date: selectedDate,
-                photo_url: photo,
-                handovers: handovers.map(handover => {
-                    const originalHandover = originalHandovers.find(
-                        oh => oh.id === handover.id
-                    )
-                    return {
-                        id: handover.id,
-                        size: handover.size,
-                        original_size: originalHandover?.size,
-                        equipment_id: handover.equipment.id
+        const response = await fetch(
+            route('handovers.employee.update', { employee: employee.id }),
+            {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken, // Use the token variable
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(updateData)
+            }
+        )
+
+        // Check if response is ok before parsing JSON
+        if (!response.ok) {
+            let errorMessage = `HTTP ${response.status}`
+            try {
+                const errorData = await response.json()
+                errorMessage = errorData.message || errorMessage
+            } catch (e) {
+                errorMessage = response.statusText || errorMessage
+            }
+            throw new Error(errorMessage)
+        }
+
+        const data = await response.json()
+
+        if (data.success) {
+            let message = data.message
+
+            if (data.stock_changes) {
+                message += '\n\nStock changes:'
+                data.stock_changes.forEach(change => {
+                    if (change.type === 'returned') {
+                        message += `\n✅ Returned 1 ${change.equipment_type} (Size: ${change.old_size}) to stock`
+                    } else if (change.type === 'assigned') {
+                        message += `\n📦 Assigned 1 ${change.equipment_type} (Size: ${change.new_size}) from stock`
                     }
                 })
             }
 
-            console.log('Update data dengan stock management:', updateData)
-
-            const response = await fetch(
-                route('handovers.employee.update', { employee: employee.id }),
-                {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector(
-                            'meta[name="csrf-token"]'
-                        ).content,
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify(updateData)
-                }
-            )
-
-            const data = await response.json()
-
-            if (data.success) {
-                let message = data.message
-
-                if (data.stock_changes) {
-                    message += '\n\nStock changes:'
-                    data.stock_changes.forEach(change => {
-                        if (change.type === 'returned') {
-                            message += `\n✅ Returned 1 ${change.equipment_type} (Size: ${change.old_size}) to stock`
-                        } else if (change.type === 'assigned') {
-                            message += `\n📦 Assigned 1 ${change.equipment_type} (Size: ${change.new_size}) from stock`
-                        }
-                    })
-                }
-
-                showNotification('success', 'Update Successful', message)
-                onClose()
-                router.reload()
-            } else {
-                throw new Error(data.message || 'Update failed')
-            }
-        } catch (error) {
-            console.error('Update error:', error)
-            showNotification(
-                'error',
-                'Update Failed',
-                'Update failed: ' + error.message
-            )
-        } finally {
-            setIsSubmitting(false)
+            showNotification('success', 'Update Successful', message)
+            onClose()
+            router.reload()
+        } else {
+            throw new Error(data.message || 'Update failed')
         }
+    } catch (error) {
+        console.error('Update error:', error)
+        showNotification(
+            'error',
+            'Update Failed',
+            'Update failed: ' + error.message
+        )
+    } finally {
+        setIsSubmitting(false)
     }
+}
 
     const getAvailableSizes = equipment => {
         if (!equipment.size) return []
@@ -1082,19 +1105,20 @@ function UpdateEmployeeModal ({ employee, show, onClose, equipments }) {
                                     </div>
                                 )}
 
-                                {uploadStatus && (
-                                    <div
-                                        className={`mt-3 text-sm font-medium ${
-                                            uploadStatus === 'success'
-                                                ? 'text-green-600 dark:text-green-400'
-                                                : uploadStatus === 'error'
-                                                ? 'text-red-600 dark:text-red-400'
-                                                : 'text-blue-600 dark:text-blue-400'
-                                        }`}
-                                    >
-                                        {uploadStatus}
-                                    </div>
-                                )}
+                             {uploadStatus && (
+    <div className={`mt-3 text-sm font-medium ${
+        uploadStatus.includes('success') || uploadStatus.includes('successful')
+            ? 'text-green-600 dark:text-green-400'
+            : uploadStatus === 'error' || uploadStatus.includes('Failed')
+            ? 'text-red-600 dark:text-red-400'
+            : 'text-blue-600 dark:text-blue-400'
+    }`}>
+        {uploadStatus}
+        {uploadStatus === 'Uploading...' && (
+            <span className="ml-2 inline-block animate-spin">⏳</span>
+        )}
+    </div>
+)}
                             </div>
 
                             {/* Equipment List with Size Selection */}
@@ -1356,6 +1380,7 @@ function UpdateEmployeeModal ({ employee, show, onClose, equipments }) {
 }
 
 // New Assign Modal Component with Section/Subsection Filters and Pagination
+// New Assign Modal Component with Section/Subsection Filters and Pagination
 function NewAssignModal ({ show, onClose, employees, equipments }) {
     const { sections, subSections } = usePage().props
     const [selectedEmployee, setSelectedEmployee] = useState(null)
@@ -1372,6 +1397,8 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
         message: ''
     })
     const [employeeEquipmentCounts, setEmployeeEquipmentCounts] = useState({})
+    const [photo, setPhoto] = useState('') // ADD THIS LINE - photo state
+    const [uploadStatus, setUploadStatus] = useState('') // ADD THIS LINE - upload status
 
     // Filter states
     const [searchTerm, setSearchTerm] = useState('')
@@ -1427,6 +1454,8 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
             setSelectedSection('')
             setSelectedSubSection('')
             setCurrentPage(1)
+            setPhoto('') // ADD THIS LINE - reset photo
+            setUploadStatus('') // ADD THIS LINE - reset upload status
         }
     }, [show])
 
@@ -1449,7 +1478,7 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
         }
     }, [selectedSection, selectedSubSection, subSections])
 
-    // Use all employees instead of just unassigned ones
+    // Use all employees
     const availableEmployees = employees || []
 
     // Filter employees based on search and filters
@@ -1513,6 +1542,91 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
         }`
     }
 
+    // ADD THIS FUNCTION - Handle file upload
+    const handleFileSelect = async e => {
+        const file = e.target.files[0]
+        if (!file) return
+
+        try {
+            setUploadStatus('Uploading...')
+
+            const validTypes = [
+                'image/jpeg',
+                'image/jpg',
+                'image/png',
+                'image/gif',
+                'image/webp',
+                'image/bmp'
+            ]
+            if (!validTypes.includes(file.type)) {
+                throw new Error('Please select a valid image file')
+            }
+
+            if (file.size > 10 * 1024 * 1024) {
+                throw new Error('File size must be less than 10MB')
+            }
+
+            const authResponse = await fetch('/api/imagekit/auth')
+
+            if (!authResponse.ok) {
+                throw new Error('ImageKit authentication failed')
+            }
+
+            const authData = await authResponse.json()
+
+            const fileName = `handover_new_${Date.now()}.${file.name.split('.').pop()}`
+
+            const formData = new FormData()
+            formData.append('file', file)
+            formData.append('fileName', fileName)
+            formData.append('folder', '/handovers')
+            formData.append('useUniqueFileName', 'true')
+            formData.append(
+                'publicKey',
+                import.meta.env.VITE_IMAGEKIT_PUBLIC_KEY
+            )
+            formData.append('signature', authData.signature)
+            formData.append('token', authData.token)
+            formData.append('expire', authData.expire)
+
+            const uploadResponse = await fetch(
+                'https://upload.imagekit.io/api/v1/files/upload',
+                {
+                    method: 'POST',
+                    body: formData
+                }
+            )
+
+            const uploadResult = await uploadResponse.json()
+
+            if (uploadResponse.ok && uploadResult.url) {
+                setPhoto(uploadResult.url)
+                setUploadStatus('Upload successful!')
+                
+                console.log('Photo uploaded successfully:', uploadResult.url)
+                
+                // Auto-clear success message after 2 seconds
+                setTimeout(() => {
+                    setUploadStatus('')
+                }, 2000)
+                
+            } else {
+                throw new Error(uploadResult.message || 'Upload failed')
+            }
+        } catch (error) {
+            console.error('Upload error:', error)
+            setUploadStatus('Upload failed')
+            
+            // Only show modal notification for errors
+            showNotification(
+                'error',
+                'Upload Failed',
+                'Upload failed: ' + error.message
+            )
+            e.target.value = ''
+        }
+    }
+
     const handleEmployeeSelect = employee => {
         setSelectedEmployee(employee)
         // Auto-open equipment selection
@@ -1529,130 +1643,71 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
     const handleEquipmentSelect = equipment => {
         setSelectedEquipment(equipment)
 
+        // If equipment has size, open size modal - but don't assign yet
         if (equipment.size) {
+            setSelectedSize('')
             setShowSizeModal(true)
         } else {
+            // If no size, assign immediately
             setSelectedSize(null)
-            handleAssign()
+            handleAssign(equipment, null)
         }
     }
 
     const handleSizeSelect = size => {
+        if (!selectedEquipment || !selectedEmployee) return
+
         setSelectedSize(size)
         setShowSizeModal(false)
-        handleAssign()
+
+        // Assign after size is properly set
+        setTimeout(() => {
+            handleAssign(selectedEquipment, size)
+        }, 100)
     }
 
-    const handleAssign = async () => {
-        if (!selectedEmployee || !selectedEquipment) return
+   const handleAssign = async (equipment = selectedEquipment, size = selectedSize) => {
+    if (!selectedEmployee || !equipment) return
 
-        if (selectedEquipment.size && !selectedSize) {
-            showNotification(
-                'warning',
-                'Size Required',
-                'Please select a size for this equipment'
-            )
-            setShowSizeModal(true)
-            return
+    if (equipment.size && !size) {
+        showNotification('warning', 'Size Required', 'Please select a size for this equipment')
+        setShowSizeModal(false)
+        return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+        const body = {
+            employee_id: selectedEmployee.id,
+            equipment_id: equipment.id,
+            size: size,
+            quantity: assignMultiple ? quantity : 1,
+            photo_url: photo
         }
 
-        setIsSubmitting(true)
+        console.log('Assignment request body:', body)
 
-        try {
-            const assignments = []
-            const totalToAssign = assignMultiple ? quantity : 1
-
-            for (let i = 0; i < totalToAssign; i++) {
-                assignments.push(
-                    fetch(route('handovers.quick-assign'), {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': document.querySelector(
-                                'meta[name="csrf-token"]'
-                            ).content,
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
-                        body: JSON.stringify({
-                            employee_id: selectedEmployee.id,
-                            equipment_id: selectedEquipment.id,
-                            size: selectedSize,
-                            quantity: assignMultiple ? quantity : 1
-                        })
-                    })
-                )
-            }
-
-            const results = await Promise.allSettled(assignments)
-
-            const successful = []
-            const failed = []
-
-            for (const result of results) {
-                if (result.status === 'fulfilled' && result.value.ok) {
-                    const data = await result.value.json()
-                    if (data.success) {
-                        successful.push(data)
-                    } else {
-                        failed.push({
-                            error: data.message || 'Assignment failed',
-                            response: data
-                        })
-                    }
-                } else if (result.status === 'fulfilled' && !result.value.ok) {
-                    try {
-                        const errorData = await result.value.json()
-                        failed.push({
-                            error:
-                                errorData.message ||
-                                `HTTP ${result.value.status}`,
-                            response: errorData
-                        })
-                    } catch (e) {
-                        const errorText = await result.value.text()
-                        failed.push({
-                            error: `HTTP ${result.value.status}: ${errorText}`
-                        })
-                    }
-                } else {
-                    failed.push({
-                        error: result.reason?.message || 'Request failed'
-                    })
-                }
-            }
-
-            if (successful.length > 0) {
-                const totalAssigned = successful.reduce(
-                    (sum, res) => sum + (res.handovers?.length || 1),
-                    0
-                )
-                let message = `Successfully assigned ${totalAssigned} item(s) to ${selectedEmployee.name}`
-
-                if (failed.length > 0) {
-                    message += `, but ${failed.length} failed: ${failed[0].error}`
-                }
-
-                showNotification('success', 'Assignment Successful', message)
+        // Use Inertia's router.post which automatically handles CSRF
+        const response = await router.post(route('handovers.quick-assign'), body, {
+            onSuccess: () => {
+                showNotification('success', 'Assignment Successful', 
+                    `Successfully assigned ${assignMultiple ? quantity : 1} item(s) to ${selectedEmployee.name}`)
                 onClose()
-                router.reload()
-            } else {
-                const firstError = failed[0]?.error || 'All assignments failed'
-                const errorDetails = failed[0]?.response
-                    ? ` (Details: ${JSON.stringify(failed[0].response)})`
-                    : ''
-                throw new Error(firstError + errorDetails)
+            },
+            onError: (errors) => {
+                const errorMessage = Object.values(errors).join(', ') || 'Assignment failed'
+                throw new Error(errorMessage)
             }
-        } catch (error) {
-            console.error('Assignment error:', error)
-            showNotification(
-                'error',
-                'Assignment Failed',
-                'Assignment failed: ' + error.message
-            )
-        } finally {
-            setIsSubmitting(false)
-        }
+        })
+
+    } catch (err) {
+        console.error('Assign error:', err)
+        showNotification('error', 'Assignment Failed', err.message)
+    } finally {
+        setIsSubmitting(false)
     }
+}
 
     const clearFilters = () => {
         setSearchTerm('')
@@ -1737,7 +1792,111 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
                                 )}
                             </div>
 
-                          <div className='flex-1 gap-6 grid grid-cols-1 lg:grid-cols-2 overflow-y-auto'>
+                            {/* ADD PHOTO UPLOAD SECTION HERE */}
+                            <div className="mb-6">
+                                <label className="block mb-3 font-medium text-gray-700 dark:text-gray-300 text-sm">
+                                    Handover Photo (Optional)
+                                </label>
+
+                                {photo ? (
+                                    <div className="flex flex-col items-center space-y-4">
+                                        <img
+                                            src={photo}
+                                            alt="Handover photo"
+                                            className="shadow-md border-2 border-green-200 dark:border-green-800 rounded-lg w-32 h-32 object-cover"
+                                        />
+                                        <div className="flex gap-2">
+                                            <label className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-medium text-white transition-colors cursor-pointer">
+                                                <svg
+                                                    className="w-4 h-4"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    viewBox="0 0 24 24"
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        strokeWidth={2}
+                                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                                                    />
+                                                </svg>
+                                                Change Photo
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={handleFileSelect}
+                                                    className="hidden"
+                                                />
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => setPhoto('')}
+                                                className="bg-red-100 hover:bg-red-200 dark:bg-red-900/20 dark:hover:bg-red-900/30 px-4 py-2 rounded-lg font-medium text-red-600 dark:text-red-400 transition-colors"
+                                            >
+                                                Remove Photo
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="p-6 border-2 border-gray-300 hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-500 border-dashed rounded-lg text-center transition-colors">
+                                        <svg
+                                            className="mx-auto mb-4 w-12 h-12 text-gray-400"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                        >
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={1}
+                                                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                                            />
+                                        </svg>
+                                        <p className="mb-4 text-gray-500 dark:text-gray-400">
+                                            No photo uploaded (optional)
+                                        </p>
+                                        <label className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-medium text-white transition-colors cursor-pointer">
+                                            <svg
+                                                className="w-4 h-4"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    strokeWidth={2}
+                                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                                                />
+                                            </svg>
+                                            Upload Photo
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={handleFileSelect}
+                                                className="hidden"
+                                            />
+                                        </label>
+                                    </div>
+                                )}
+
+                                {uploadStatus && (
+                                    <div className={`mt-3 text-sm font-medium ${
+                                        uploadStatus.includes('success') || uploadStatus.includes('successful')
+                                            ? 'text-green-600 dark:text-green-400'
+                                            : uploadStatus === 'Uploading...'
+                                            ? 'text-blue-600 dark:text-blue-400'
+                                            : 'text-red-600 dark:text-red-400'
+                                    }`}>
+                                        {uploadStatus}
+                                        {uploadStatus === 'Uploading...' && (
+                                            <span className="ml-2 inline-block animate-spin">⏳</span>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className='flex-1 gap-6 grid grid-cols-1 lg:grid-cols-2 overflow-y-auto'>
 
                                 {/* Employee Selection */}
                                 <div className='flex flex-col'>
@@ -2214,6 +2373,16 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
                                                 </span>
                                             </div>
                                         )}
+                                        {photo && (
+                                            <div className='md:col-span-2'>
+                                                <span className='text-gray-600 dark:text-gray-400'>
+                                                    Photo:{' '}
+                                                </span>
+                                                <span className='font-medium text-green-600 dark:text-green-400'>
+                                                    Ready to upload
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             )}
@@ -2226,42 +2395,6 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
                             className='px-4 py-2 font-medium text-gray-700 hover:text-gray-900 dark:hover:text-white dark:text-gray-300 transition-colors'
                         >
                             Cancel
-                        </button>
-                        <button
-                            onClick={handleAssign}
-                            disabled={
-                                !selectedEmployee ||
-                                !selectedEquipment ||
-                                isSubmitting
-                            }
-                            className='flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 px-6 py-2 rounded-lg font-medium text-white transition-colors'
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <svg
-                                        className='w-4 h-4 animate-spin'
-                                        fill='none'
-                                        viewBox='0 0 24 24'
-                                    >
-                                        <circle
-                                            className='opacity-25'
-                                            cx='12'
-                                            cy='12'
-                                            r='10'
-                                            stroke='currentColor'
-                                            strokeWidth='4'
-                                        ></circle>
-                                        <path
-                                            className='opacity-75'
-                                            fill='currentColor'
-                                            d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
-                                        ></path>
-                                    </svg>
-                                    Assigning...
-                                </>
-                            ) : (
-                                'Assign Equipment'
-                            )}
                         </button>
                     </div>
                 </div>
@@ -2294,9 +2427,9 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
                                         onClick={() =>
                                             handleSizeSelect(sizeName)
                                         }
-                                        disabled={stock <= 0}
+                                        disabled={stock <= 0 || isSubmitting}
                                         className={`w-full p-4 text-left rounded-lg border transition-all ${
-                                            stock > 0
+                                            stock > 0 && !isSubmitting
                                                 ? 'border-gray-200 dark:border-gray-600 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer'
                                                 : 'border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                                         }`}
@@ -2317,15 +2450,48 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
                                                     : 'Out of stock'}
                                             </span>
                                         </div>
+                                        {isSubmitting && (
+                                            <div className='mt-2 text-blue-600 dark:text-blue-400 text-sm'>
+                                                Assigning...
+                                            </div>
+                                        )}
                                     </button>
                                 )
                             })}
                     </div>
 
+                    {isSubmitting && (
+                        <div className='mt-4 text-center'>
+                            <div className='inline-flex items-center gap-2 text-blue-600 dark:text-blue-400'>
+                                <svg
+                                    className='w-4 h-4 animate-spin'
+                                    fill='none'
+                                    viewBox='0 0 24 24'
+                                >
+                                    <circle
+                                        className='opacity-25'
+                                        cx='12'
+                                        cy='12'
+                                        r='10'
+                                        stroke='currentColor'
+                                        strokeWidth='4'
+                                    ></circle>
+                                    <path
+                                        className='opacity-75'
+                                        fill='currentColor'
+                                        d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
+                                    ></path>
+                                </svg>
+                                Assigning equipment...
+                            </div>
+                        </div>
+                    )}
+
                     <div className='flex justify-end gap-3 mt-6 pt-4 border-gray-200 dark:border-gray-700 border-t'>
                         <button
                             onClick={() => setShowSizeModal(false)}
-                            className='px-4 py-2 font-medium text-gray-700 hover:text-gray-900 dark:hover:text-white dark:text-gray-300 transition-colors'
+                            disabled={isSubmitting}
+                            className='px-4 py-2 font-medium text-gray-700 hover:text-gray-900 dark:hover:text-white dark:text-gray-300 transition-colors disabled:opacity-50'
                         >
                             Cancel
                         </button>
