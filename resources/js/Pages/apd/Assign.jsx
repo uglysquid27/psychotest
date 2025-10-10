@@ -1,108 +1,108 @@
-import React, { useState, useEffect } from 'react'
-import { usePage, router, Link } from '@inertiajs/react'
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout'
-import Modal from '@/Components/Modal'
+import React, { useState, useEffect } from "react";
+import { usePage, router, Link } from "@inertiajs/react";
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
+import Modal from "@/Components/Modal";
 
 // Notification Modal Component
-function NotificationModal ({ show, type, title, message, onClose }) {
-    if (!show) return null
+function NotificationModal({ show, type, title, message, onClose }) {
+    if (!show) return null;
 
     const icons = {
         success: (
-            <div className='flex justify-center items-center bg-green-100 dark:bg-green-900/20 rounded-full w-12 h-12'>
+            <div className="flex justify-center items-center bg-green-100 dark:bg-green-900/20 rounded-full w-12 h-12">
                 <svg
-                    className='w-6 h-6 text-green-600 dark:text-green-400'
-                    fill='none'
-                    stroke='currentColor'
-                    viewBox='0 0 24 24'
+                    className="w-6 h-6 text-green-600 dark:text-green-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                 >
                     <path
-                        strokeLinecap='round'
-                        strokeLinejoin='round'
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
                         strokeWidth={2}
-                        d='M5 13l4 4L19 7'
+                        d="M5 13l4 4L19 7"
                     />
                 </svg>
             </div>
         ),
         error: (
-            <div className='flex justify-center items-center bg-red-100 dark:bg-red-900/20 rounded-full w-12 h-12'>
+            <div className="flex justify-center items-center bg-red-100 dark:bg-red-900/20 rounded-full w-12 h-12">
                 <svg
-                    className='w-6 h-6 text-red-600 dark:text-red-400'
-                    fill='none'
-                    stroke='currentColor'
-                    viewBox='0 0 24 24'
+                    className="w-6 h-6 text-red-600 dark:text-red-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                 >
                     <path
-                        strokeLinecap='round'
-                        strokeLinejoin='round'
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
                         strokeWidth={2}
-                        d='M6 18L18 6M6 6l12 12'
+                        d="M6 18L18 6M6 6l12 12"
                     />
                 </svg>
             </div>
         ),
         warning: (
-            <div className='flex justify-center items-center bg-yellow-100 dark:bg-yellow-900/20 rounded-full w-12 h-12'>
+            <div className="flex justify-center items-center bg-yellow-100 dark:bg-yellow-900/20 rounded-full w-12 h-12">
                 <svg
-                    className='w-6 h-6 text-yellow-600 dark:text-yellow-400'
-                    fill='none'
-                    stroke='currentColor'
-                    viewBox='0 0 24 24'
+                    className="w-6 h-6 text-yellow-600 dark:text-yellow-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                 >
                     <path
-                        strokeLinecap='round'
-                        strokeLinejoin='round'
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
                         strokeWidth={2}
-                        d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
                     />
                 </svg>
             </div>
         ),
         info: (
-            <div className='flex justify-center items-center bg-blue-100 dark:bg-blue-900/20 rounded-full w-12 h-12'>
+            <div className="flex justify-center items-center bg-blue-100 dark:bg-blue-900/20 rounded-full w-12 h-12">
                 <svg
-                    className='w-6 h-6 text-blue-600 dark:text-blue-400'
-                    fill='none'
-                    stroke='currentColor'
-                    viewBox='0 0 24 24'
+                    className="w-6 h-6 text-blue-600 dark:text-blue-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                 >
                     <path
-                        strokeLinecap='round'
-                        strokeLinejoin='round'
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
                         strokeWidth={2}
-                        d='M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                     />
                 </svg>
             </div>
-        )
-    }
+        ),
+    };
 
     const bgColors = {
         success:
-            'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800',
-        error: 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800',
+            "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800",
+        error: "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800",
         warning:
-            'bg-yellow-50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-800',
-        info: 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800'
-    }
+            "bg-yellow-50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-800",
+        info: "bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800",
+    };
 
     return (
-        <Modal show={show} onClose={onClose} maxWidth='md'>
+        <Modal show={show} onClose={onClose} maxWidth="md">
             <div className={`p-6 rounded-lg border ${bgColors[type]}`}>
-                <div className='flex items-start gap-4'>
+                <div className="flex items-start gap-4">
                     {icons[type]}
-                    <div className='flex-1'>
-                        <h3 className='mb-2 font-semibold text-gray-900 dark:text-white text-lg'>
+                    <div className="flex-1">
+                        <h3 className="mb-2 font-semibold text-gray-900 dark:text-white text-lg">
                             {title}
                         </h3>
-                        <p className='text-gray-600 dark:text-gray-300 whitespace-pre-line'>
+                        <p className="text-gray-600 dark:text-gray-300 whitespace-pre-line">
                             {message}
                         </p>
-                        <div className='flex justify-end mt-4'>
+                        <div className="flex justify-end mt-4">
                             <button
                                 onClick={onClose}
-                                className='bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg font-medium text-white transition-colors'
+                                className="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg font-medium text-white transition-colors"
                             >
                                 OK
                             </button>
@@ -111,171 +111,176 @@ function NotificationModal ({ show, type, title, message, onClose }) {
                 </div>
             </div>
         </Modal>
-    )
+    );
 }
 
 // Quick Assign Component
-function QuickAssign ({ employee, show, onClose, equipments }) {
-    const [selectedEquipment, setSelectedEquipment] = useState(null)
-    const [selectedSize, setSelectedSize] = useState('')
-    const [showSizeModal, setShowSizeModal] = useState(false)
-    const [isSubmitting, setIsSubmitting] = useState(false)
-    const [assignMultiple, setAssignMultiple] = useState(false)
-    const [quantity, setQuantity] = useState(1)
+function QuickAssign({ employee, show, onClose, equipments }) {
+    const [selectedEquipment, setSelectedEquipment] = useState(null);
+    const [selectedSize, setSelectedSize] = useState("");
+    const [showSizeModal, setShowSizeModal] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [assignMultiple, setAssignMultiple] = useState(false);
+    const [quantity, setQuantity] = useState(1);
     const [notification, setNotification] = useState({
         show: false,
-        type: '',
-        title: '',
-        message: ''
-    })
-    const [employeeEquipmentCounts, setEmployeeEquipmentCounts] = useState({})
+        type: "",
+        title: "",
+        message: "",
+    });
+    const [employeeEquipmentCounts, setEmployeeEquipmentCounts] = useState({});
 
     const showNotification = (type, title, message) => {
-        setNotification({ show: true, type, title, message })
-    }
+        setNotification({ show: true, type, title, message });
+    };
 
     // Reset state ketika modal dibuka/tutup
     useEffect(() => {
         if (show) {
-            setSelectedEquipment(null)
-            setSelectedSize('')
-            setShowSizeModal(false)
-            setAssignMultiple(false)
-            setQuantity(1)
+            setSelectedEquipment(null);
+            setSelectedSize("");
+            setShowSizeModal(false);
+            setAssignMultiple(false);
+            setQuantity(1);
         }
-    }, [show])
+    }, [show]);
 
     useEffect(() => {
-        loadEmployeeEquipmentCounts()
-    }, [])
+        loadEmployeeEquipmentCounts();
+    }, []);
 
     const loadEmployeeEquipmentCounts = async () => {
         try {
             const response = await fetch(
-                route('handovers.employee.equipment-counts')
-            )
-            const data = await response.json()
+                route("handovers.employee.equipment-counts")
+            );
+            const data = await response.json();
 
             if (data.success) {
-                setEmployeeEquipmentCounts(data.counts)
+                setEmployeeEquipmentCounts(data.counts);
             } else {
                 console.error(
-                    'Failed to load employee equipment counts:',
+                    "Failed to load employee equipment counts:",
                     data.message
-                )
+                );
             }
         } catch (error) {
-            console.error('Error loading employee equipment counts:', error)
+            console.error("Error loading employee equipment counts:", error);
         }
-    }
+    };
 
-const handleSizeSelect = async (size) => {
-    console.log('Size selected:', size)
-    setSelectedSize(size)
-    setShowSizeModal(false)
-    
-    // Automatically assign after size selection
-    await handleAssign()
-}
+    const handleSizeSelect = async (size) => {
+        console.log("Size selected:", size);
+        setSelectedSize(size);
+        setShowSizeModal(false);
 
-const handleEquipmentSelect = (equipment) => {
-    console.log('Equipment selected:', equipment.type, 'Has size:', !!equipment.size)
-    setSelectedEquipment(equipment)
+        // Automatically assign after size selection
+        await handleAssign();
+    };
 
-    if (equipment.size) {
-        setShowSizeModal(true)
-        setSelectedSize('') // Reset selected size when changing equipment
-    } else {
-        setSelectedSize(null)
-        // For equipment without size, assign immediately
-        handleAssign()
-    }
-    }
+    const handleEquipmentSelect = (equipment) => {
+        console.log(
+            "Equipment selected:",
+            equipment.type,
+            "Has size:",
+            !!equipment.size
+        );
+        setSelectedEquipment(equipment);
+
+        if (equipment.size) {
+            setShowSizeModal(true);
+            setSelectedSize(""); // Reset selected size when changing equipment
+        } else {
+            setSelectedSize(null);
+            // For equipment without size, assign immediately
+            handleAssign();
+        }
+    };
 
     const handleAssign = async () => {
-        if (!selectedEquipment || !employee) return
+        if (!selectedEquipment || !employee) return;
 
-        console.log('Debug - Assignment data:', {
+        console.log("Debug - Assignment data:", {
             employee_id: employee.id,
             equipment_id: selectedEquipment.id,
             size: selectedSize,
             quantity: assignMultiple ? quantity : 1,
             equipmentHasSize: !!selectedEquipment.size,
-            selectedSize: selectedSize
-        })
+            selectedSize: selectedSize,
+        });
 
         if (selectedEquipment.size && !selectedSize) {
             showNotification(
-                'warning',
-                'Size Required',
-                'Please select a size for this equipment'
-            )
-            setShowSizeModal(true)
-            return
+                "warning",
+                "Size Required",
+                "Please select a size for this equipment"
+            );
+            setShowSizeModal(true);
+            return;
         }
 
-        setIsSubmitting(true)
+        setIsSubmitting(true);
 
         try {
-            const assignments = []
-            const totalToAssign = assignMultiple ? quantity : 1
+            const assignments = [];
+            const totalToAssign = assignMultiple ? quantity : 1;
 
             for (let i = 0; i < totalToAssign; i++) {
                 assignments.push(
-                    fetch(route('handovers.quick-assign'), {
-                        method: 'POST',
+                    fetch(route("handovers.quick-assign"), {
+                        method: "POST",
                         headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': document.querySelector(
+                            "Content-Type": "application/json",
+                            "X-CSRF-TOKEN": document.querySelector(
                                 'meta[name="csrf-token"]'
                             ).content,
-                            'X-Requested-With': 'XMLHttpRequest'
+                            "X-Requested-With": "XMLHttpRequest",
                         },
                         body: JSON.stringify({
                             employee_id: employee.id,
                             equipment_id: selectedEquipment.id,
                             size: selectedSize,
-                            quantity: assignMultiple ? quantity : 1
-                        })
+                            quantity: assignMultiple ? quantity : 1,
+                        }),
                     })
-                )
+                );
             }
 
-            const results = await Promise.allSettled(assignments)
+            const results = await Promise.allSettled(assignments);
 
-            const successful = []
-            const failed = []
+            const successful = [];
+            const failed = [];
 
             for (const result of results) {
-                if (result.status === 'fulfilled' && result.value.ok) {
-                    const data = await result.value.json()
+                if (result.status === "fulfilled" && result.value.ok) {
+                    const data = await result.value.json();
                     if (data.success) {
-                        successful.push(data)
+                        successful.push(data);
                     } else {
                         failed.push({
-                            error: data.message || 'Assignment failed',
-                            response: data
-                        })
+                            error: data.message || "Assignment failed",
+                            response: data,
+                        });
                     }
-                } else if (result.status === 'fulfilled' && !result.value.ok) {
+                } else if (result.status === "fulfilled" && !result.value.ok) {
                     try {
-                        const errorData = await result.value.json()
+                        const errorData = await result.value.json();
                         failed.push({
                             error:
                                 errorData.message ||
                                 `HTTP ${result.value.status}`,
-                            response: errorData
-                        })
+                            response: errorData,
+                        });
                     } catch (e) {
-                        const errorText = await result.value.text()
+                        const errorText = await result.value.text();
                         failed.push({
-                            error: `HTTP ${result.value.status}: ${errorText}`
-                        })
+                            error: `HTTP ${result.value.status}: ${errorText}`,
+                        });
                     }
                 } else {
                     failed.push({
-                        error: result.reason?.message || 'Request failed'
-                    })
+                        error: result.reason?.message || "Request failed",
+                    });
                 }
             }
 
@@ -283,123 +288,123 @@ const handleEquipmentSelect = (equipment) => {
                 const totalAssigned = successful.reduce(
                     (sum, res) => sum + (res.handovers?.length || 1),
                     0
-                )
-                let message = `Successfully assigned ${totalAssigned} item(s) to ${employee.name}`
+                );
+                let message = `Successfully assigned ${totalAssigned} item(s) to ${employee.name}`;
 
                 if (failed.length > 0) {
-                    message += `, but ${failed.length} failed: ${failed[0].error}`
+                    message += `, but ${failed.length} failed: ${failed[0].error}`;
                 }
 
-                showNotification('success', 'Assignment Successful', message)
-                onClose()
-                router.reload()
+                showNotification("success", "Assignment Successful", message);
+                onClose();
+                router.reload();
             } else {
-                const firstError = failed[0]?.error || 'All assignments failed'
+                const firstError = failed[0]?.error || "All assignments failed";
                 const errorDetails = failed[0]?.response
                     ? ` (Details: ${JSON.stringify(failed[0].response)})`
-                    : ''
-                throw new Error(firstError + errorDetails)
+                    : "";
+                throw new Error(firstError + errorDetails);
             }
         } catch (error) {
-            console.error('Assignment error:', error)
+            console.error("Assignment error:", error);
             showNotification(
-                'error',
-                'Assignment Failed',
-                'Assignment failed: ' + error.message
-            )
+                "error",
+                "Assignment Failed",
+                "Assignment failed: " + error.message
+            );
         } finally {
-            setIsSubmitting(false)
+            setIsSubmitting(false);
         }
-    }
+    };
 
     return (
         <>
             {/* Main Assign Modal */}
-            <Modal show={show} onClose={onClose} maxWidth='4xl'>
-                <div className='bg-white dark:bg-gray-800 shadow-xl rounded-lg'>
-                    <div className='p-6 border-gray-200 dark:border-gray-700 border-b'>
-                        <h2 className='font-semibold text-gray-900 dark:text-white text-xl'>
+            <Modal show={show} onClose={onClose} maxWidth="4xl">
+                <div className="bg-white dark:bg-gray-800 shadow-xl rounded-lg">
+                    <div className="p-6 border-gray-200 dark:border-gray-700 border-b">
+                        <h2 className="font-semibold text-gray-900 dark:text-white text-xl">
                             Quick Assign to {employee?.name}
                         </h2>
-                        <p className='mt-1 text-gray-600 dark:text-gray-400 text-sm'>
+                        <p className="mt-1 text-gray-600 dark:text-gray-400 text-sm">
                             NIK: {employee?.nik}
                         </p>
                     </div>
 
-                    <div className='p-6'>
+                    <div className="p-6">
                         {/* Multiple Assignment Toggle */}
-                        <div className='flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 mb-6 p-4 rounded-lg'>
-                            <label className='flex items-center cursor-pointer'>
-                                <div className='relative'>
+                        <div className="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 mb-6 p-4 rounded-lg">
+                            <label className="flex items-center cursor-pointer">
+                                <div className="relative">
                                     <input
-                                        type='checkbox'
+                                        type="checkbox"
                                         checked={assignMultiple}
-                                        onChange={e =>
+                                        onChange={(e) =>
                                             setAssignMultiple(e.target.checked)
                                         }
-                                        className='sr-only'
+                                        className="sr-only"
                                     />
                                     <div
                                         className={`w-12 h-6 rounded-full transition-colors ${
                                             assignMultiple
-                                                ? 'bg-blue-600'
-                                                : 'bg-gray-300 dark:bg-gray-600'
+                                                ? "bg-blue-600"
+                                                : "bg-gray-300 dark:bg-gray-600"
                                         }`}
                                     ></div>
                                     <div
                                         className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
                                             assignMultiple
-                                                ? 'transform translate-x-6'
-                                                : ''
+                                                ? "transform translate-x-6"
+                                                : ""
                                         }`}
                                     ></div>
                                 </div>
                             </label>
-                            <span className='font-medium text-gray-700 dark:text-gray-300 text-sm'>
+                            <span className="font-medium text-gray-700 dark:text-gray-300 text-sm">
                                 Assign multiple items
                             </span>
 
                             {assignMultiple && (
-                                <div className='flex items-center gap-2 ml-4'>
-                                    <label className='text-gray-600 dark:text-gray-400 text-sm'>
+                                <div className="flex items-center gap-2 ml-4">
+                                    <label className="text-gray-600 dark:text-gray-400 text-sm">
                                         Quantity:
                                     </label>
                                     <input
-                                        type='number'
-                                        min='1'
-                                        max='10'
+                                        type="number"
+                                        min="1"
+                                        max="10"
                                         value={quantity}
-                                        onChange={e =>
+                                        onChange={(e) =>
                                             setQuantity(
                                                 parseInt(e.target.value) || 1
                                             )
                                         }
-                                        className='dark:bg-gray-700 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded w-20 dark:text-white text-sm'
+                                        className="dark:bg-gray-700 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded w-20 dark:text-white text-sm"
                                     />
                                 </div>
                             )}
                         </div>
 
                         {/* Equipment Grid */}
-                        <div className='gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 max-h-96 overflow-y-auto'>
-                            {equipments?.map(equipment => (
+                        <div className="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 max-h-96 overflow-y-auto">
+                            {equipments?.map((equipment) => (
                                 <div
                                     key={equipment.id}
-                                    className='bg-gray-50 hover:bg-blue-50 dark:bg-gray-700/50 dark:hover:bg-blue-900/20 p-4 border border-gray-200 dark:border-gray-600 hover:border-blue-500 rounded-lg transition-all cursor-pointer'
+                                    className="bg-gray-50 hover:bg-blue-50 dark:bg-gray-700/50 dark:hover:bg-blue-900/20 p-4 border border-gray-200 dark:border-gray-600 hover:border-blue-500 rounded-lg transition-all cursor-pointer"
                                     onClick={() =>
                                         handleEquipmentSelect(equipment)
                                     }
                                 >
-                                    <div className='flex justify-between items-start mb-3'>
+                                    <div className="flex justify-between items-start mb-3">
                                         <div>
-                                            <h3 className='font-medium text-gray-900 dark:text-white'>
+                                            <h3 className="font-medium text-gray-900 dark:text-white">
                                                 {equipment.type}
                                             </h3>
                                             {equipment.photo && (
                                                 <img
                                                     src={equipment.photo}
                                                     alt={equipment.type}
-                                                    className='mt-2 border border-gray-200 dark:border-gray-600 rounded-lg w-16 h-16 object-cover'
+                                                    className="mt-2 border border-gray-200 dark:border-gray-600 rounded-lg w-16 h-16 object-cover"
                                                 />
                                             )}
                                         </div>
@@ -407,55 +412,55 @@ const handleEquipmentSelect = (equipment) => {
                                             className={`px-2 py-1 rounded-full text-xs font-medium ${
                                                 equipment.size ||
                                                 equipment.amount > 0
-                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                                    ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                                                    : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
                                             }`}
                                         >
                                             {equipment.size
-                                                ? 'Multiple Sizes'
+                                                ? "Multiple Sizes"
                                                 : `${equipment.amount} available`}
                                         </span>
                                     </div>
 
                                     {/* Stock Information */}
-                                    <div className='space-y-2 text-gray-600 dark:text-gray-400 text-sm'>
+                                    <div className="space-y-2 text-gray-600 dark:text-gray-400 text-sm">
                                         {equipment.size ? (
                                             <div>
-                                                <div className='mb-1 font-medium'>
+                                                <div className="mb-1 font-medium">
                                                     Available Sizes:
                                                 </div>
-                                                <div className='space-y-1'>
+                                                <div className="space-y-1">
                                                     {equipment.size
-                                                        .split(',')
+                                                        .split(",")
                                                         .map(
                                                             (sizeItem, idx) => {
                                                                 if (
                                                                     !sizeItem ||
                                                                     !sizeItem.includes(
-                                                                        ':'
+                                                                        ":"
                                                                     )
                                                                 )
-                                                                    return null
+                                                                    return null;
                                                                 const [
                                                                     sizeName,
-                                                                    amount
+                                                                    amount,
                                                                 ] =
                                                                     sizeItem.split(
-                                                                        ':'
-                                                                    )
+                                                                        ":"
+                                                                    );
                                                                 const stock =
                                                                     parseInt(
                                                                         amount
-                                                                    ) || 0
+                                                                    ) || 0;
                                                                 return (
                                                                     <div
                                                                         key={
                                                                             idx
                                                                         }
-                                                                        className='flex justify-between items-center'
+                                                                        className="flex justify-between items-center"
                                                                     >
                                                                         <span>
-                                                                            Size{' '}
+                                                                            Size{" "}
                                                                             {
                                                                                 sizeName
                                                                             }
@@ -464,29 +469,29 @@ const handleEquipmentSelect = (equipment) => {
                                                                             className={`px-2 py-1 rounded text-xs ${
                                                                                 stock >
                                                                                 0
-                                                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                                                                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                                                                    ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                                                                                    : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
                                                                             }`}
                                                                         >
                                                                             {
                                                                                 stock
-                                                                            }{' '}
+                                                                            }{" "}
                                                                             available
                                                                         </span>
                                                                     </div>
-                                                                )
+                                                                );
                                                             }
                                                         )}
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className='flex justify-between items-center'>
+                                            <div className="flex justify-between items-center">
                                                 <span>Stock:</span>
                                                 <span
                                                     className={`px-2 py-1 rounded text-xs ${
                                                         equipment.amount > 0
-                                                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                                            : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                                                            : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
                                                     }`}
                                                 >
                                                     {equipment.amount} available
@@ -499,18 +504,18 @@ const handleEquipmentSelect = (equipment) => {
                         </div>
 
                         {(!equipments || equipments.length === 0) && (
-                            <div className='py-8 text-gray-500 dark:text-gray-400 text-center'>
+                            <div className="py-8 text-gray-500 dark:text-gray-400 text-center">
                                 <svg
-                                    className='mx-auto mb-3 w-12 h-12 text-gray-300 dark:text-gray-600'
-                                    fill='none'
-                                    stroke='currentColor'
-                                    viewBox='0 0 24 24'
+                                    className="mx-auto mb-3 w-12 h-12 text-gray-300 dark:text-gray-600"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
                                 >
                                     <path
-                                        strokeLinecap='round'
-                                        strokeLinejoin='round'
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
                                         strokeWidth={1}
-                                        d='M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4'
+                                        d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
                                     />
                                 </svg>
                                 <p>No equipment available</p>
@@ -518,10 +523,10 @@ const handleEquipmentSelect = (equipment) => {
                         )}
                     </div>
 
-                    <div className='flex justify-end gap-3 p-6 border-gray-200 dark:border-gray-700 border-t'>
+                    <div className="flex justify-end gap-3 p-6 border-gray-200 dark:border-gray-700 border-t">
                         <button
                             onClick={onClose}
-                            className='px-4 py-2 font-medium text-gray-700 hover:text-gray-900 dark:hover:text-white dark:text-gray-300 transition-colors'
+                            className="px-4 py-2 font-medium text-gray-700 hover:text-gray-900 dark:hover:text-white dark:text-gray-300 transition-colors"
                         >
                             Cancel
                         </button>
@@ -533,22 +538,22 @@ const handleEquipmentSelect = (equipment) => {
             <Modal
                 show={showSizeModal}
                 onClose={() => setShowSizeModal(false)}
-                maxWidth='sm'
+                maxWidth="sm"
             >
-                <div className='bg-white dark:bg-gray-800 shadow-xl p-6 rounded-lg'>
-                    <h3 className='mb-4 font-semibold text-gray-900 dark:text-white text-lg'>
+                <div className="bg-white dark:bg-gray-800 shadow-xl p-6 rounded-lg">
+                    <h3 className="mb-4 font-semibold text-gray-900 dark:text-white text-lg">
                         Select Size for {selectedEquipment?.type}
                     </h3>
 
-                    <div className='space-y-3'>
+                    <div className="space-y-3">
                         {selectedEquipment?.size
-                            ?.split(',')
+                            ?.split(",")
                             .map((sizeItem, index) => {
-                                if (!sizeItem || !sizeItem.includes(':'))
-                                    return null
+                                if (!sizeItem || !sizeItem.includes(":"))
+                                    return null;
 
-                                const [sizeName, amount] = sizeItem.split(':')
-                                const stock = parseInt(amount) || 0
+                                const [sizeName, amount] = sizeItem.split(":");
+                                const stock = parseInt(amount) || 0;
 
                                 return (
                                     <button
@@ -559,35 +564,35 @@ const handleEquipmentSelect = (equipment) => {
                                         disabled={stock <= 0}
                                         className={`w-full p-4 text-left rounded-lg border transition-all ${
                                             stock > 0
-                                                ? 'border-gray-200 dark:border-gray-600 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer'
-                                                : 'border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                                                ? "border-gray-200 dark:border-gray-600 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer"
+                                                : "border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed"
                                         }`}
                                     >
-                                        <div className='flex justify-between items-center'>
-                                            <span className='font-medium text-gray-900 dark:text-white'>
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-medium text-gray-900 dark:text-white">
                                                 {sizeName}
                                             </span>
                                             <span
                                                 className={`px-2 py-1 rounded-full text-xs font-medium ${
                                                     stock > 0
-                                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                                        : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                                        ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                                                        : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
                                                 }`}
                                             >
                                                 {stock > 0
                                                     ? `${stock} available`
-                                                    : 'Out of stock'}
+                                                    : "Out of stock"}
                                             </span>
                                         </div>
                                     </button>
-                                )
+                                );
                             })}
                     </div>
 
-                    <div className='flex justify-end gap-3 mt-6 pt-4 border-gray-200 dark:border-gray-700 border-t'>
+                    <div className="flex justify-end gap-3 mt-6 pt-4 border-gray-200 dark:border-gray-700 border-t">
                         <button
                             onClick={() => setShowSizeModal(false)}
-                            className='px-4 py-2 font-medium text-gray-700 hover:text-gray-900 dark:hover:text-white dark:text-gray-300 transition-colors'
+                            className="px-4 py-2 font-medium text-gray-700 hover:text-gray-900 dark:hover:text-white dark:text-gray-300 transition-colors"
                         >
                             Cancel
                         </button>
@@ -604,388 +609,397 @@ const handleEquipmentSelect = (equipment) => {
                 onClose={() =>
                     setNotification({
                         show: false,
-                        type: '',
-                        title: '',
-                        message: ''
+                        type: "",
+                        title: "",
+                        message: "",
                     })
                 }
             />
         </>
-    )
+    );
 }
 
 // Update Employee Handovers Modal
-function UpdateEmployeeModal ({ employee, show, onClose, equipments }) {
-    const [handovers, setHandovers] = useState([])
-    const [originalHandovers, setOriginalHandovers] = useState([])
-    const [photo, setPhoto] = useState('')
-    const [selectedDate, setSelectedDate] = useState('')
-    const [isSubmitting, setIsSubmitting] = useState(false)
-    const [isLoading, setIsLoading] = useState(false)
-    const [uploadStatus, setUploadStatus] = useState('')
-    const [availableSizes, setAvailableSizes] = useState({})
+function UpdateEmployeeModal({ employee, show, onClose, equipments }) {
+    const [handovers, setHandovers] = useState([]);
+    const [originalHandovers, setOriginalHandovers] = useState([]);
+    const [photo, setPhoto] = useState("");
+    const [selectedDate, setSelectedDate] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [uploadStatus, setUploadStatus] = useState("");
+    const [availableSizes, setAvailableSizes] = useState({});
     const [notification, setNotification] = useState({
         show: false,
-        type: '',
-        title: '',
-        message: ''
-    })
+        type: "",
+        title: "",
+        message: "",
+    });
 
     const showNotification = (type, title, message) => {
-        setNotification({ show: true, type, title, message })
-    }
+        setNotification({ show: true, type, title, message });
+    };
 
     useEffect(() => {
         if (show && employee) {
-            loadEmployeeHandovers()
+            loadEmployeeHandovers();
         }
-    }, [show, employee])
+    }, [show, employee]);
 
     const loadEmployeeHandovers = async () => {
-        setIsLoading(true)
+        setIsLoading(true);
         try {
             const response = await fetch(
-                route('handovers.employee.handovers', { employee: employee.id })
-            )
-            const data = await response.json()
+                route("handovers.employee.handovers", { employee: employee.id })
+            );
+            const data = await response.json();
 
             if (data.success) {
-                setHandovers(data.handovers)
-                setOriginalHandovers(JSON.parse(JSON.stringify(data.handovers)))
+                setHandovers(data.handovers);
+                setOriginalHandovers(
+                    JSON.parse(JSON.stringify(data.handovers))
+                );
                 if (data.handovers.length > 0) {
-                    setSelectedDate(data.handovers[0].date.split('T')[0])
-                    setPhoto(data.handovers[0].photo || '')
+                    setSelectedDate(data.handovers[0].date.split("T")[0]);
+                    setPhoto(data.handovers[0].photo || "");
                 }
 
-                loadAvailableSizes(data.handovers)
+                loadAvailableSizes(data.handovers);
             } else {
-                throw new Error(data.message || 'Failed to load handovers')
+                throw new Error(data.message || "Failed to load handovers");
             }
         } catch (error) {
-            console.error('Error loading handovers:', error)
+            console.error("Error loading handovers:", error);
             showNotification(
-                'error',
-                'Load Failed',
-                'Failed to load handovers: ' + error.message
-            )
+                "error",
+                "Load Failed",
+                "Failed to load handovers: " + error.message
+            );
         } finally {
-            setIsLoading(false)
+            setIsLoading(false);
         }
-    }
+    };
 
-    const loadAvailableSizes = handoversData => {
-        const sizes = {}
+    const loadAvailableSizes = (handoversData) => {
+        const sizes = {};
 
-        handoversData.forEach(handover => {
-            const equipment = handover.equipment
+        handoversData.forEach((handover) => {
+            const equipment = handover.equipment;
             if (equipment.size) {
-                const sizeData = {}
-                equipment.size.split(',').forEach(sizeItem => {
-                    if (sizeItem && sizeItem.includes(':')) {
-                        const [sizeName, amount] = sizeItem.split(':')
-                        const stock = parseInt(amount) || 0
-                        sizeData[sizeName] = stock
+                const sizeData = {};
+                equipment.size.split(",").forEach((sizeItem) => {
+                    if (sizeItem && sizeItem.includes(":")) {
+                        const [sizeName, amount] = sizeItem.split(":");
+                        const stock = parseInt(amount) || 0;
+                        sizeData[sizeName] = stock;
                     }
-                })
-                sizes[equipment.id] = sizeData
+                });
+                sizes[equipment.id] = sizeData;
             }
-        })
+        });
 
-        setAvailableSizes(sizes)
-    }
+        setAvailableSizes(sizes);
+    };
 
     const handleSizeChange = (handoverId, newSize) => {
-        setHandovers(prev =>
-            prev.map(handover =>
+        setHandovers((prev) =>
+            prev.map((handover) =>
                 handover.id === handoverId
                     ? { ...handover, size: newSize }
                     : handover
             )
-        )
-    }
+        );
+    };
 
-   const handleFileSelect = async e => {
-    const file = e.target.files[0]
-    if (!file) return
+    const handleFileSelect = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
 
-    try {
-        setUploadStatus('Uploading...')
+        try {
+            setUploadStatus("Uploading...");
 
-        const validTypes = [
-            'image/jpeg',
-            'image/jpg',
-            'image/png',
-            'image/gif',
-            'image/webp',
-            'image/bmp'
-        ]
-        if (!validTypes.includes(file.type)) {
-            throw new Error('Please select a valid image file')
-        }
-
-        if (file.size > 10 * 1024 * 1024) {
-            throw new Error('File size must be less than 10MB')
-        }
-
-        const authResponse = await fetch('/api/imagekit/auth')
-
-        if (!authResponse.ok) {
-            throw new Error('ImageKit authentication failed')
-        }
-
-        const authData = await authResponse.json()
-
-        const fileName = `handover_update_${
-            employee.id
-        }_${Date.now()}.${file.name.split('.').pop()}`
-
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('fileName', fileName)
-        formData.append('folder', '/handovers')
-        formData.append('useUniqueFileName', 'true')
-        formData.append(
-            'publicKey',
-            import.meta.env.VITE_IMAGEKIT_PUBLIC_KEY
-        )
-        formData.append('signature', authData.signature)
-        formData.append('token', authData.token)
-        formData.append('expire', authData.expire)
-
-        const uploadResponse = await fetch(
-            'https://upload.imagekit.io/api/v1/files/upload',
-            {
-                method: 'POST',
-                body: formData
+            const validTypes = [
+                "image/jpeg",
+                "image/jpg",
+                "image/png",
+                "image/gif",
+                "image/webp",
+                "image/bmp",
+            ];
+            if (!validTypes.includes(file.type)) {
+                throw new Error("Please select a valid image file");
             }
-        )
 
-        const uploadResult = await uploadResponse.json()
+            if (file.size > 10 * 1024 * 1024) {
+                throw new Error("File size must be less than 10MB");
+            }
 
-        if (uploadResponse.ok && uploadResult.url) {
-            setPhoto(uploadResult.url)
-            setUploadStatus('success')
-            
-            // REMOVE the notification here - just update status
-            console.log('Photo uploaded successfully:', uploadResult.url)
-            
-            // Optional: Show a simple success message without modal
-            // You can use a toast or inline message instead
-            setUploadStatus('Upload successful!')
-            
-            // Auto-clear the success status after 2 seconds
-            setTimeout(() => {
-                setUploadStatus('')
-            }, 2000)
-            
-        } else {
-            throw new Error(uploadResult.message || 'Upload failed')
-        }
-    } catch (error) {
-        console.error('Upload error:', error)
-        setUploadStatus('error')
-        
-        // Only show notification for errors, not for successes
-        showNotification(
-            'error',
-            'Upload Failed',
-            'Upload failed: ' + error.message
-        )
-        e.target.value = ''
-    }
-}
+            const authResponse = await fetch("/api/imagekit/auth");
 
-   const handleSubmit = async e => {
-    e.preventDefault()
+            if (!authResponse.ok) {
+                throw new Error("ImageKit authentication failed");
+            }
 
-    if (!selectedDate) {
-        showNotification('warning', 'Date Required', 'Please select date')
-        return
-    }
+            const authData = await authResponse.json();
 
-    if (handovers.length === 0) {
-        showNotification('warning', 'No Handovers', 'No handovers to update')
-        return
-    }
+            const fileName = `handover_update_${
+                employee.id
+            }_${Date.now()}.${file.name.split(".").pop()}`;
 
-    setIsSubmitting(true)
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("fileName", fileName);
+            formData.append("folder", "/handovers");
+            formData.append("useUniqueFileName", "true");
+            formData.append(
+                "publicKey",
+                import.meta.env.VITE_IMAGEKIT_PUBLIC_KEY
+            );
+            formData.append("signature", authData.signature);
+            formData.append("token", authData.token);
+            formData.append("expire", authData.expire);
 
-    try {
-        const updateData = {
-            date: selectedDate,
-            photo_url: photo,
-            handovers: handovers.map(handover => {
-                const originalHandover = originalHandovers.find(
-                    oh => oh.id === handover.id
-                )
-                return {
-                    id: handover.id,
-                    size: handover.size,
-                    original_size: originalHandover?.size,
-                    equipment_id: handover.equipment.id
+            const uploadResponse = await fetch(
+                "https://upload.imagekit.io/api/v1/files/upload",
+                {
+                    method: "POST",
+                    body: formData,
                 }
-            })
-        }
+            );
 
-        console.log('Update data dengan stock management:', updateData)
+            const uploadResult = await uploadResponse.json();
 
-        // FIX: Get CSRF token properly
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-        if (!csrfToken) {
-            throw new Error('CSRF token not found')
-        }
+            if (uploadResponse.ok && uploadResult.url) {
+                setPhoto(uploadResult.url);
+                setUploadStatus("success");
 
-        console.log('CSRF Token:', csrfToken) // Debug log
+                // REMOVE the notification here - just update status
+                console.log("Photo uploaded successfully:", uploadResult.url);
 
-        const response = await fetch(
-            route('handovers.employee.update', { employee: employee.id }),
-            {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken, // Use the token variable
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify(updateData)
+                // Optional: Show a simple success message without modal
+                // You can use a toast or inline message instead
+                setUploadStatus("Upload successful!");
+
+                // Auto-clear the success status after 2 seconds
+                setTimeout(() => {
+                    setUploadStatus("");
+                }, 2000);
+            } else {
+                throw new Error(uploadResult.message || "Upload failed");
             }
-        )
+        } catch (error) {
+            console.error("Upload error:", error);
+            setUploadStatus("error");
 
-        // Check if response is ok before parsing JSON
-        if (!response.ok) {
-            let errorMessage = `HTTP ${response.status}`
-            try {
-                const errorData = await response.json()
-                errorMessage = errorData.message || errorMessage
-            } catch (e) {
-                errorMessage = response.statusText || errorMessage
-            }
-            throw new Error(errorMessage)
+            // Only show notification for errors, not for successes
+            showNotification(
+                "error",
+                "Upload Failed",
+                "Upload failed: " + error.message
+            );
+            e.target.value = "";
+        }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+
+        if (!selectedDate) {
+            showNotification("warning", "Date Required", "Please select date");
+            return;
         }
 
-        const data = await response.json()
+        if (handovers.length === 0) {
+            showNotification(
+                "warning",
+                "No Handovers",
+                "No handovers to update"
+            );
+            return;
+        }
 
-        if (data.success) {
-            let message = data.message
+        setIsSubmitting(true);
 
-            if (data.stock_changes) {
-                message += '\n\nStock changes:'
-                data.stock_changes.forEach(change => {
-                    if (change.type === 'returned') {
-                        message += `\n✅ Returned 1 ${change.equipment_type} (Size: ${change.old_size}) to stock`
-                    } else if (change.type === 'assigned') {
-                        message += `\n📦 Assigned 1 ${change.equipment_type} (Size: ${change.new_size}) from stock`
-                    }
-                })
+        try {
+            const updateData = {
+                date: selectedDate,
+                photo_url: photo,
+                handovers: handovers.map((handover) => {
+                    const originalHandover = originalHandovers.find(
+                        (oh) => oh.id === handover.id
+                    );
+                    return {
+                        id: handover.id,
+                        size: handover.size,
+                        original_size: originalHandover?.size,
+                        equipment_id: handover.equipment.id,
+                    };
+                }),
+            };
+
+            console.log("Update data dengan stock management:", updateData);
+
+            // FIX: Get CSRF token properly
+            const csrfToken = document
+                .querySelector('meta[name="csrf-token"]')
+                ?.getAttribute("content");
+            if (!csrfToken) {
+                throw new Error("CSRF token not found");
             }
 
-            showNotification('success', 'Update Successful', message)
-            onClose()
-            router.reload()
-        } else {
-            throw new Error(data.message || 'Update failed')
+            console.log("CSRF Token:", csrfToken); // Debug log
+
+            const response = await fetch(
+                route("handovers.employee.update", { employee: employee.id }),
+                {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRF-TOKEN": csrfToken, // Use the token variable
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                    body: JSON.stringify(updateData),
+                }
+            );
+
+            // Check if response is ok before parsing JSON
+            if (!response.ok) {
+                let errorMessage = `HTTP ${response.status}`;
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.message || errorMessage;
+                } catch (e) {
+                    errorMessage = response.statusText || errorMessage;
+                }
+                throw new Error(errorMessage);
+            }
+
+            const data = await response.json();
+
+            if (data.success) {
+                let message = data.message;
+
+                if (data.stock_changes) {
+                    message += "\n\nStock changes:";
+                    data.stock_changes.forEach((change) => {
+                        if (change.type === "returned") {
+                            message += `\n✅ Returned 1 ${change.equipment_type} (Size: ${change.old_size}) to stock`;
+                        } else if (change.type === "assigned") {
+                            message += `\n📦 Assigned 1 ${change.equipment_type} (Size: ${change.new_size}) from stock`;
+                        }
+                    });
+                }
+
+                showNotification("success", "Update Successful", message);
+                onClose();
+                router.reload();
+            } else {
+                throw new Error(data.message || "Update failed");
+            }
+        } catch (error) {
+            console.error("Update error:", error);
+            showNotification(
+                "error",
+                "Update Failed",
+                "Update failed: " + error.message
+            );
+        } finally {
+            setIsSubmitting(false);
         }
-    } catch (error) {
-        console.error('Update error:', error)
-        showNotification(
-            'error',
-            'Update Failed',
-            'Update failed: ' + error.message
-        )
-    } finally {
-        setIsSubmitting(false)
-    }
-}
+    };
 
-    const getAvailableSizes = equipment => {
-        if (!equipment.size) return []
+    const getAvailableSizes = (equipment) => {
+        if (!equipment.size) return [];
 
-        const sizes = []
-        equipment.size.split(',').forEach(sizeItem => {
-            if (sizeItem && sizeItem.includes(':')) {
-                const [sizeName, amount] = sizeItem.split(':')
-                const stock = parseInt(amount) || 0
+        const sizes = [];
+        equipment.size.split(",").forEach((sizeItem) => {
+            if (sizeItem && sizeItem.includes(":")) {
+                const [sizeName, amount] = sizeItem.split(":");
+                const stock = parseInt(amount) || 0;
                 sizes.push({
                     name: sizeName,
-                    stock: stock
-                })
+                    stock: stock,
+                });
             }
-        })
+        });
 
-        return sizes
-    }
+        return sizes;
+    };
 
     const isSizeAvailable = (
         equipmentId,
         sizeName,
         currentHandoverId = null
     ) => {
-        if (!availableSizes[equipmentId]) return false
+        if (!availableSizes[equipmentId]) return false;
 
-        const stock = availableSizes[equipmentId][sizeName] || 0
+        const stock = availableSizes[equipmentId][sizeName] || 0;
 
         if (currentHandoverId) {
             const currentHandover = handovers.find(
-                h => h.id === currentHandoverId
-            )
+                (h) => h.id === currentHandoverId
+            );
             if (currentHandover && currentHandover.size === sizeName) {
-                return true
+                return true;
             }
         }
 
-        return stock > 0
-    }
+        return stock > 0;
+    };
 
     const getSizeStock = (equipmentId, sizeName, currentHandoverId = null) => {
-        if (!availableSizes[equipmentId]) return 0
+        if (!availableSizes[equipmentId]) return 0;
 
-        const stock = availableSizes[equipmentId][sizeName] || 0
+        const stock = availableSizes[equipmentId][sizeName] || 0;
 
         if (currentHandoverId) {
             const currentHandover = handovers.find(
-                h => h.id === currentHandoverId
-            )
+                (h) => h.id === currentHandoverId
+            );
             if (currentHandover && currentHandover.size === sizeName) {
-                return stock + 1
+                return stock + 1;
             }
         }
 
-        return stock
-    }
+        return stock;
+    };
 
     const hasStockAffectingChanges = () => {
-        return handovers.some(handover => {
-            const original = originalHandovers.find(oh => oh.id === handover.id)
-            return original && original.size !== handover.size
-        })
-    }
+        return handovers.some((handover) => {
+            const original = originalHandovers.find(
+                (oh) => oh.id === handover.id
+            );
+            return original && original.size !== handover.size;
+        });
+    };
 
     return (
         <>
-            <Modal show={show} onClose={onClose} maxWidth='4xl'>
-                <div className='bg-white dark:bg-gray-800 shadow-xl rounded-lg'>
-                    <div className='p-6 border-gray-200 dark:border-gray-700 border-b'>
-                        <h2 className='font-semibold text-gray-900 dark:text-white text-xl'>
+            <Modal show={show} onClose={onClose} maxWidth="4xl">
+                <div className="bg-white dark:bg-gray-800 shadow-xl rounded-lg">
+                    <div className="p-6 border-gray-200 dark:border-gray-700 border-b">
+                        <h2 className="font-semibold text-gray-900 dark:text-white text-xl">
                             Update Assignments for {employee?.name}
                         </h2>
-                        <p className='mt-1 text-gray-600 dark:text-gray-400 text-sm'>
+                        <p className="mt-1 text-gray-600 dark:text-gray-400 text-sm">
                             NIK: {employee?.nik} | Update date and sizes for all
                             equipment
                         </p>
 
                         {hasStockAffectingChanges() && (
-                            <div className='bg-yellow-50 dark:bg-yellow-900/20 mt-3 p-3 border border-yellow-200 dark:border-yellow-800 rounded-lg'>
-                                <div className='flex items-center gap-2 text-yellow-800 dark:text-yellow-200 text-sm'>
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 mt-3 p-3 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                                <div className="flex items-center gap-2 text-yellow-800 dark:text-yellow-200 text-sm">
                                     <svg
-                                        className='w-4 h-4'
-                                        fill='none'
-                                        stroke='currentColor'
-                                        viewBox='0 0 24 24'
+                                        className="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
                                     >
                                         <path
-                                            strokeLinecap='round'
-                                            strokeLinejoin='round'
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
                                             strokeWidth={2}
-                                            d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
+                                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
                                         />
                                     </svg>
                                     <span>
@@ -1000,172 +1014,180 @@ function UpdateEmployeeModal ({ employee, show, onClose, equipments }) {
                     </div>
 
                     <form onSubmit={handleSubmit}>
-                        <div className='space-y-6 p-6'>
+                        <div className="space-y-6 p-6">
                             {/* Date Selection */}
                             <div>
-                                <label className='block mb-2 font-medium text-gray-700 dark:text-gray-300 text-sm'>
+                                <label className="block mb-2 font-medium text-gray-700 dark:text-gray-300 text-sm">
                                     Assignment Date *
                                 </label>
                                 <input
-                                    type='date'
+                                    type="date"
                                     value={selectedDate}
-                                    onChange={e =>
+                                    onChange={(e) =>
                                         setSelectedDate(e.target.value)
                                     }
-                                    className='dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 focus:border-transparent rounded-lg focus:ring-2 focus:ring-blue-500 w-full dark:text-white transition-colors'
+                                    className="dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 focus:border-transparent rounded-lg focus:ring-2 focus:ring-blue-500 w-full dark:text-white transition-colors"
                                     required
                                 />
                             </div>
 
                             {/* Photo Upload Section */}
                             <div>
-                                <label className='block mb-3 font-medium text-gray-700 dark:text-gray-300 text-sm'>
+                                <label className="block mb-3 font-medium text-gray-700 dark:text-gray-300 text-sm">
                                     Handover Photo (Optional)
                                 </label>
 
                                 {photo ? (
-                                    <div className='flex flex-col items-center space-y-4'>
+                                    <div className="flex flex-col items-center space-y-4">
                                         <img
                                             src={photo}
-                                            alt='Current handover'
-                                            className='shadow-md border-2 border-green-200 dark:border-green-800 rounded-lg w-48 h-48 object-cover'
+                                            alt="Current handover"
+                                            className="shadow-md border-2 border-green-200 dark:border-green-800 rounded-lg w-48 h-48 object-cover"
                                         />
-                                        <div className='flex gap-2'>
-                                            <label className='inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-medium text-white transition-colors cursor-pointer'>
+                                        <div className="flex gap-2">
+                                            <label className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-medium text-white transition-colors cursor-pointer">
                                                 <svg
-                                                    className='w-4 h-4'
-                                                    fill='none'
-                                                    stroke='currentColor'
-                                                    viewBox='0 0 24 24'
+                                                    className="w-4 h-4"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    viewBox="0 0 24 24"
                                                 >
                                                     <path
-                                                        strokeLinecap='round'
-                                                        strokeLinejoin='round'
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
                                                         strokeWidth={2}
-                                                        d='M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12'
+                                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
                                                     />
                                                 </svg>
                                                 Change Photo
                                                 <input
-                                                    type='file'
-                                                    accept='image/*'
+                                                    type="file"
+                                                    accept="image/*"
                                                     onChange={handleFileSelect}
-                                                    className='hidden'
+                                                    className="hidden"
                                                 />
                                             </label>
                                             <button
-                                                type='button'
-                                                onClick={() => setPhoto('')}
-                                                className='bg-red-100 hover:bg-red-200 dark:bg-red-900/20 dark:hover:bg-red-900/30 px-4 py-2 rounded-lg font-medium text-red-600 dark:text-red-400 transition-colors'
+                                                type="button"
+                                                onClick={() => setPhoto("")}
+                                                className="bg-red-100 hover:bg-red-200 dark:bg-red-900/20 dark:hover:bg-red-900/30 px-4 py-2 rounded-lg font-medium text-red-600 dark:text-red-400 transition-colors"
                                             >
                                                 Remove Photo
                                             </button>
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className='p-8 border-2 border-gray-300 hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-500 border-dashed rounded-lg text-center transition-colors'>
+                                    <div className="p-8 border-2 border-gray-300 hover:border-gray-400 dark:border-gray-600 dark:hover:border-gray-500 border-dashed rounded-lg text-center transition-colors">
                                         <svg
-                                            className='mx-auto mb-4 w-12 h-12 text-gray-400'
-                                            fill='none'
-                                            stroke='currentColor'
-                                            viewBox='0 0 24 24'
+                                            className="mx-auto mb-4 w-12 h-12 text-gray-400"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
                                         >
                                             <path
-                                                strokeLinecap='round'
-                                                strokeLinejoin='round'
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
                                                 strokeWidth={1}
-                                                d='M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'
+                                                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                                             />
                                         </svg>
-                                        <p className='mb-4 text-gray-500 dark:text-gray-400'>
+                                        <p className="mb-4 text-gray-500 dark:text-gray-400">
                                             No photo uploaded yet
                                         </p>
-                                        <label className='inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-medium text-white transition-colors cursor-pointer'>
+                                        <label className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-medium text-white transition-colors cursor-pointer">
                                             <svg
-                                                className='w-4 h-4'
-                                                fill='none'
-                                                stroke='currentColor'
-                                                viewBox='0 0 24 24'
+                                                className="w-4 h-4"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
                                             >
                                                 <path
-                                                    strokeLinecap='round'
-                                                    strokeLinejoin='round'
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
                                                     strokeWidth={2}
-                                                    d='M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12'
+                                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
                                                 />
                                             </svg>
                                             Upload Photo
                                             <input
-                                                type='file'
-                                                accept='image/*'
+                                                type="file"
+                                                accept="image/*"
                                                 onChange={handleFileSelect}
-                                                className='hidden'
+                                                className="hidden"
                                             />
                                         </label>
                                     </div>
                                 )}
 
-                             {uploadStatus && (
-    <div className={`mt-3 text-sm font-medium ${
-        uploadStatus.includes('success') || uploadStatus.includes('successful')
-            ? 'text-green-600 dark:text-green-400'
-            : uploadStatus === 'error' || uploadStatus.includes('Failed')
-            ? 'text-red-600 dark:text-red-400'
-            : 'text-blue-600 dark:text-blue-400'
-    }`}>
-        {uploadStatus}
-        {uploadStatus === 'Uploading...' && (
-            <span className="ml-2 inline-block animate-spin">⏳</span>
-        )}
-    </div>
-)}
+                                {uploadStatus && (
+                                    <div
+                                        className={`mt-3 text-sm font-medium ${
+                                            uploadStatus.includes("success") ||
+                                            uploadStatus.includes("successful")
+                                                ? "text-green-600 dark:text-green-400"
+                                                : uploadStatus === "error" ||
+                                                  uploadStatus.includes(
+                                                      "Failed"
+                                                  )
+                                                ? "text-red-600 dark:text-red-400"
+                                                : "text-blue-600 dark:text-blue-400"
+                                        }`}
+                                    >
+                                        {uploadStatus}
+                                        {uploadStatus === "Uploading..." && (
+                                            <span className="ml-2 inline-block animate-spin">
+                                                ⏳
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Equipment List with Size Selection */}
                             <div>
-                                <label className='block mb-3 font-medium text-gray-700 dark:text-gray-300 text-sm'>
-                                    Equipment Assignments ({handovers.length}{' '}
+                                <label className="block mb-3 font-medium text-gray-700 dark:text-gray-300 text-sm">
+                                    Equipment Assignments ({handovers.length}{" "}
                                     items)
                                 </label>
 
                                 {isLoading ? (
-                                    <div className='py-8 text-center'>
-                                        <div className='inline-flex items-center gap-2 text-blue-600 dark:text-blue-400'>
+                                    <div className="py-8 text-center">
+                                        <div className="inline-flex items-center gap-2 text-blue-600 dark:text-blue-400">
                                             <svg
-                                                className='w-5 h-5 animate-spin'
-                                                fill='none'
-                                                viewBox='0 0 24 24'
+                                                className="w-5 h-5 animate-spin"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
                                             >
                                                 <circle
-                                                    className='opacity-25'
-                                                    cx='12'
-                                                    cy='12'
-                                                    r='10'
-                                                    stroke='currentColor'
-                                                    strokeWidth='4'
+                                                    className="opacity-25"
+                                                    cx="12"
+                                                    cy="12"
+                                                    r="10"
+                                                    stroke="currentColor"
+                                                    strokeWidth="4"
                                                 ></circle>
                                                 <path
-                                                    className='opacity-75'
-                                                    fill='currentColor'
-                                                    d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
+                                                    className="opacity-75"
+                                                    fill="currentColor"
+                                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                                                 ></path>
                                             </svg>
                                             Loading handovers...
                                         </div>
                                     </div>
                                 ) : handovers.length === 0 ? (
-                                    <div className='py-8 text-gray-500 dark:text-gray-400 text-center'>
+                                    <div className="py-8 text-gray-500 dark:text-gray-400 text-center">
                                         <svg
-                                            className='mx-auto mb-3 w-12 h-12 text-gray-300 dark:text-gray-600'
-                                            fill='none'
-                                            stroke='currentColor'
-                                            viewBox='0 0 24 24'
+                                            className="mx-auto mb-3 w-12 h-12 text-gray-300 dark:text-gray-600"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
                                         >
                                             <path
-                                                strokeLinecap='round'
-                                                strokeLinejoin='round'
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
                                                 strokeWidth={1}
-                                                d='M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4'
+                                                d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
                                             />
                                         </svg>
                                         <p>
@@ -1174,20 +1196,21 @@ function UpdateEmployeeModal ({ employee, show, onClose, equipments }) {
                                         </p>
                                     </div>
                                 ) : (
-                                    <div className='space-y-4 max-h-96 overflow-y-auto'>
-                                        {handovers.map(handover => {
-                                            const equipment = handover.equipment
+                                    <div className="space-y-4 max-h-96 overflow-y-auto">
+                                        {handovers.map((handover) => {
+                                            const equipment =
+                                                handover.equipment;
                                             const sizes =
-                                                getAvailableSizes(equipment)
-                                            const hasSizes = sizes.length > 0
+                                                getAvailableSizes(equipment);
+                                            const hasSizes = sizes.length > 0;
 
                                             return (
                                                 <div
                                                     key={handover.id}
-                                                    className='bg-gray-50 dark:bg-gray-700/50 p-4 border border-gray-200 dark:border-gray-600 rounded-lg'
+                                                    className="bg-gray-50 dark:bg-gray-700/50 p-4 border border-gray-200 dark:border-gray-600 rounded-lg"
                                                 >
-                                                    <div className='flex justify-between items-start mb-3'>
-                                                        <div className='flex items-start gap-3'>
+                                                    <div className="flex justify-between items-start mb-3">
+                                                        <div className="flex items-start gap-3">
                                                             {equipment.photo && (
                                                                 <img
                                                                     src={
@@ -1196,33 +1219,33 @@ function UpdateEmployeeModal ({ employee, show, onClose, equipments }) {
                                                                     alt={
                                                                         equipment.type
                                                                     }
-                                                                    className='border border-gray-200 dark:border-gray-600 rounded-lg w-12 h-12 object-cover'
+                                                                    className="border border-gray-200 dark:border-gray-600 rounded-lg w-12 h-12 object-cover"
                                                                 />
                                                             )}
                                                             <div>
-                                                                <h3 className='font-medium text-gray-900 dark:text-white'>
+                                                                <h3 className="font-medium text-gray-900 dark:text-white">
                                                                     {
                                                                         equipment.type
                                                                     }
                                                                 </h3>
-                                                                <p className='text-gray-600 dark:text-gray-400 text-sm'>
-                                                                    Serial:{' '}
+                                                                <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                                                    Serial:{" "}
                                                                     {handover.serial_number ||
-                                                                        'N/A'}
+                                                                        "N/A"}
                                                                 </p>
                                                             </div>
                                                         </div>
-                                                        <span className='bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded-full font-medium text-blue-800 dark:text-blue-300 text-xs'>
+                                                        <span className="bg-blue-100 dark:bg-blue-900/30 px-2 py-1 rounded-full font-medium text-blue-800 dark:text-blue-300 text-xs">
                                                             Assigned
                                                         </span>
                                                     </div>
 
                                                     {hasSizes ? (
                                                         <div>
-                                                            <label className='block mb-2 font-medium text-gray-700 dark:text-gray-300 text-sm'>
+                                                            <label className="block mb-2 font-medium text-gray-700 dark:text-gray-300 text-sm">
                                                                 Select Size *
                                                             </label>
-                                                            <div className='gap-2 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4'>
+                                                            <div className="gap-2 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                                                                 {sizes.map(
                                                                     (
                                                                         size,
@@ -1233,13 +1256,13 @@ function UpdateEmployeeModal ({ employee, show, onClose, equipments }) {
                                                                                 equipment.id,
                                                                                 size.name,
                                                                                 handover.id
-                                                                            )
+                                                                            );
                                                                         const stock =
                                                                             getSizeStock(
                                                                                 equipment.id,
                                                                                 size.name,
                                                                                 handover.id
-                                                                            )
+                                                                            );
 
                                                                         return (
                                                                             <label
@@ -1249,14 +1272,14 @@ function UpdateEmployeeModal ({ employee, show, onClose, equipments }) {
                                                                                 className={`relative flex flex-col items-center p-3 border rounded-lg cursor-pointer transition-all ${
                                                                                     handover.size ===
                                                                                     size.name
-                                                                                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500/20'
+                                                                                        ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500/20"
                                                                                         : isAvailable
-                                                                                        ? 'border-gray-200 dark:border-gray-600 hover:border-blue-300 hover:bg-blue-50/50 dark:hover:bg-blue-900/10'
-                                                                                        : 'border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                                                                                        ? "border-gray-200 dark:border-gray-600 hover:border-blue-300 hover:bg-blue-50/50 dark:hover:bg-blue-900/10"
+                                                                                        : "border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed"
                                                                                 }`}
                                                                             >
                                                                                 <input
-                                                                                    type='radio'
+                                                                                    type="radio"
                                                                                     name={`size-${handover.id}`}
                                                                                     value={
                                                                                         size.name
@@ -1265,7 +1288,9 @@ function UpdateEmployeeModal ({ employee, show, onClose, equipments }) {
                                                                                         handover.size ===
                                                                                         size.name
                                                                                     }
-                                                                                    onChange={e =>
+                                                                                    onChange={(
+                                                                                        e
+                                                                                    ) =>
                                                                                         handleSizeChange(
                                                                                             handover.id,
                                                                                             e
@@ -1276,9 +1301,9 @@ function UpdateEmployeeModal ({ employee, show, onClose, equipments }) {
                                                                                     disabled={
                                                                                         !isAvailable
                                                                                     }
-                                                                                    className='sr-only'
+                                                                                    className="sr-only"
                                                                                 />
-                                                                                <span className='font-medium text-gray-900 dark:text-white'>
+                                                                                <span className="font-medium text-gray-900 dark:text-white">
                                                                                     {
                                                                                         size.name
                                                                                     }
@@ -1286,73 +1311,73 @@ function UpdateEmployeeModal ({ employee, show, onClose, equipments }) {
                                                                                 <span
                                                                                     className={`text-xs mt-1 px-2 py-1 rounded-full ${
                                                                                         isAvailable
-                                                                                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                                                                            : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                                                                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                                                                                            : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
                                                                                     }`}
                                                                                 >
                                                                                     {isAvailable
                                                                                         ? `${stock} available`
-                                                                                        : 'Out of stock'}
+                                                                                        : "Out of stock"}
                                                                                 </span>
                                                                             </label>
-                                                                        )
+                                                                        );
                                                                     }
                                                                 )}
                                                             </div>
                                                         </div>
                                                     ) : (
-                                                        <div className='text-gray-600 dark:text-gray-400 text-sm'>
+                                                        <div className="text-gray-600 dark:text-gray-400 text-sm">
                                                             No size variations
                                                             available for this
                                                             equipment
                                                         </div>
                                                     )}
                                                 </div>
-                                            )
+                                            );
                                         })}
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        <div className='flex justify-end gap-3 p-6 border-gray-200 dark:border-gray-700 border-t'>
+                        <div className="flex justify-end gap-3 p-6 border-gray-200 dark:border-gray-700 border-t">
                             <button
-                                type='button'
+                                type="button"
                                 onClick={onClose}
-                                className='px-4 py-2 font-medium text-gray-700 hover:text-gray-900 dark:hover:text-white dark:text-gray-300 transition-colors'
+                                className="px-4 py-2 font-medium text-gray-700 hover:text-gray-900 dark:hover:text-white dark:text-gray-300 transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
-                                type='submit'
+                                type="submit"
                                 disabled={isSubmitting || !selectedDate}
-                                className='flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 px-6 py-2 rounded-lg font-medium text-white transition-colors'
+                                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 px-6 py-2 rounded-lg font-medium text-white transition-colors"
                             >
                                 {isSubmitting ? (
                                     <>
                                         <svg
-                                            className='w-4 h-4 animate-spin'
-                                            fill='none'
-                                            viewBox='0 0 24 24'
+                                            className="w-4 h-4 animate-spin"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
                                         >
                                             <circle
-                                                className='opacity-25'
-                                                cx='12'
-                                                cy='12'
-                                                r='10'
-                                                stroke='currentColor'
-                                                strokeWidth='4'
+                                                className="opacity-25"
+                                                cx="12"
+                                                cy="12"
+                                                r="10"
+                                                stroke="currentColor"
+                                                strokeWidth="4"
                                             ></circle>
                                             <path
-                                                className='opacity-75'
-                                                fill='currentColor'
-                                                d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
+                                                className="opacity-75"
+                                                fill="currentColor"
+                                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                                             ></path>
                                         </svg>
                                         Updating...
                                     </>
                                 ) : (
-                                    'Update Assignments'
+                                    "Update Assignments"
                                 )}
                             </button>
                         </div>
@@ -1369,356 +1394,355 @@ function UpdateEmployeeModal ({ employee, show, onClose, equipments }) {
                 onClose={() =>
                     setNotification({
                         show: false,
-                        type: '',
-                        title: '',
-                        message: ''
+                        type: "",
+                        title: "",
+                        message: "",
                     })
                 }
             />
         </>
-    )
+    );
 }
 
 // New Assign Modal Component with Section/Subsection Filters and Pagination
 // New Assign Modal Component with Section/Subsection Filters and Pagination
-function NewAssignModal ({ show, onClose, employees, equipments }) {
-    const { sections, subSections } = usePage().props
-    const [selectedEmployee, setSelectedEmployee] = useState(null)
-    const [selectedEquipment, setSelectedEquipment] = useState(null)
-    const [selectedSize, setSelectedSize] = useState('')
-    const [showSizeModal, setShowSizeModal] = useState(false)
-    const [isSubmitting, setIsSubmitting] = useState(false)
-    const [assignMultiple, setAssignMultiple] = useState(false)
-    const [quantity, setQuantity] = useState(1)
+function NewAssignModal({ show, onClose, employees, equipments }) {
+    const { sections, subSections } = usePage().props;
+    const [selectedEmployee, setSelectedEmployee] = useState(null);
+    const [selectedItems, setSelectedItems] = useState([]);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [notification, setNotification] = useState({
         show: false,
-        type: '',
-        title: '',
-        message: ''
-    })
-    const [employeeEquipmentCounts, setEmployeeEquipmentCounts] = useState({})
-    const [photo, setPhoto] = useState('') // ADD THIS LINE - photo state
-    const [uploadStatus, setUploadStatus] = useState('') // ADD THIS LINE - upload status
+        type: "",
+        title: "",
+        message: "",
+    });
+    const [employeeEquipmentCounts, setEmployeeEquipmentCounts] = useState({});
+    const [photo, setPhoto] = useState("");
+    const [uploadStatus, setUploadStatus] = useState("");
 
     // Filter states
-    const [searchTerm, setSearchTerm] = useState('')
-    const [selectedSection, setSelectedSection] = useState('')
-    const [selectedSubSection, setSelectedSubSection] = useState('')
-    const [filteredSubSections, setFilteredSubSections] = useState([])
+    const [searchTerm, setSearchTerm] = useState("");
+    const [selectedSection, setSelectedSection] = useState("");
+    const [selectedSubSection, setSelectedSubSection] = useState("");
+    const [filteredSubSections, setFilteredSubSections] = useState([]);
 
-    // Pagination states
-    const [currentPage, setCurrentPage] = useState(1)
-    const itemsPerPage = 10
+    // Pagination states - for employees only
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
 
     const showNotification = (type, title, message) => {
-        setNotification({ show: true, type, title, message })
-    }
+        setNotification({ show: true, type, title, message });
+    };
 
     // Load employee equipment counts
     useEffect(() => {
         if (show) {
-            loadEmployeeEquipmentCounts()
+            loadEmployeeEquipmentCounts();
         }
-    }, [show])
+    }, [show]);
 
     const loadEmployeeEquipmentCounts = async () => {
         try {
             const response = await fetch(
-                route('handovers.employee.equipment-counts')
-            )
-            const data = await response.json()
+                route("handovers.employee.equipment-counts")
+            );
+            const data = await response.json();
 
             if (data.success) {
-                setEmployeeEquipmentCounts(data.counts)
+                setEmployeeEquipmentCounts(data.counts);
             } else {
                 console.error(
-                    'Failed to load employee equipment counts:',
+                    "Failed to load employee equipment counts:",
                     data.message
-                )
+                );
             }
         } catch (error) {
-            console.error('Error loading employee equipment counts:', error)
+            console.error("Error loading employee equipment counts:", error);
         }
-    }
+    };
 
     // Reset state ketika modal dibuka/tutup
     useEffect(() => {
         if (show) {
-            setSelectedEmployee(null)
-            setSelectedEquipment(null)
-            setSelectedSize('')
-            setShowSizeModal(false)
-            setAssignMultiple(false)
-            setQuantity(1)
-            setSearchTerm('')
-            setSelectedSection('')
-            setSelectedSubSection('')
-            setCurrentPage(1)
-            setPhoto('') // ADD THIS LINE - reset photo
-            setUploadStatus('') // ADD THIS LINE - reset upload status
+            setSelectedEmployee(null);
+            setSelectedItems([]);
+            setSearchTerm("");
+            setSelectedSection("");
+            setSelectedSubSection("");
+            setCurrentPage(1);
+            setPhoto("");
+            setUploadStatus("");
         }
-    }, [show])
+    }, [show]);
 
     // Filter subsections based on selected section
     useEffect(() => {
         if (selectedSection) {
             const filtered = subSections.filter(
-                sub => sub.section_id == selectedSection
-            )
-            setFilteredSubSections(filtered)
+                (sub) => sub.section_id == selectedSection
+            );
+            setFilteredSubSections(filtered);
             if (
                 selectedSubSection &&
-                !filtered.some(sub => sub.id == selectedSubSection)
+                !filtered.some((sub) => sub.id == selectedSubSection)
             ) {
-                setSelectedSubSection('')
+                setSelectedSubSection("");
             }
         } else {
-            setFilteredSubSections([])
-            setSelectedSubSection('')
+            setFilteredSubSections([]);
+            setSelectedSubSection("");
         }
-    }, [selectedSection, selectedSubSection, subSections])
+    }, [selectedSection, selectedSubSection, subSections]);
 
     // Use all employees
-    const availableEmployees = employees || []
+    const availableEmployees = employees || [];
 
     // Filter employees based on search and filters
     const filteredEmployees =
-        availableEmployees?.filter(employee => {
+        availableEmployees?.filter((employee) => {
             const matchesSearch =
                 !searchTerm ||
                 employee.name
                     .toLowerCase()
                     .includes(searchTerm.toLowerCase()) ||
-                employee.nik.toLowerCase().includes(searchTerm.toLowerCase())
+                employee.nik.toLowerCase().includes(searchTerm.toLowerCase());
 
             const matchesSection =
                 !selectedSection ||
                 employee.sub_sections?.some(
-                    sub => sub.section_id == selectedSection
-                )
+                    (sub) => sub.section_id == selectedSection
+                );
 
             const matchesSubSection =
                 !selectedSubSection ||
-                employee.sub_sections?.some(sub => sub.id == selectedSubSection)
+                employee.sub_sections?.some(
+                    (sub) => sub.id == selectedSubSection
+                );
 
-            return matchesSearch && matchesSection && matchesSubSection
-        }) || []
+            return matchesSearch && matchesSection && matchesSubSection;
+        }) || [];
 
-    // Pagination
-    const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage)
-    const startIndex = (currentPage - 1) * itemsPerPage
+    // Pagination for employees only
+    const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
     const paginatedEmployees = filteredEmployees.slice(
         startIndex,
         startIndex + itemsPerPage
-    )
+    );
 
     // Equipment count functions
     const getEmployeeEquipmentCount = (employeeId, equipmentType) => {
-        if (!employeeEquipmentCounts[employeeId]) return 0
+        if (!employeeEquipmentCounts[employeeId]) return 0;
 
         const equipmentCount = employeeEquipmentCounts[employeeId].find(
-            item => item.equipment_type === equipmentType
-        )
+            (item) => item.equipment_type === equipmentType
+        );
 
-        return equipmentCount ? equipmentCount.total_count : 0
-    }
+        return equipmentCount ? equipmentCount.total_count : 0;
+    };
 
-    const getTotalEmployeeEquipmentCount = employeeId => {
-        if (!employeeEquipmentCounts[employeeId]) return 0
+    const getTotalEmployeeEquipmentCount = (employeeId) => {
+        if (!employeeEquipmentCounts[employeeId]) return 0;
 
         return employeeEquipmentCounts[employeeId].reduce((total, item) => {
-            return total + item.total_count
-        }, 0)
-    }
+            return total + item.total_count;
+        }, 0);
+    };
 
-    const getEmployeeSectionInfo = employee => {
+    const getEmployeeSectionInfo = (employee) => {
         if (!employee.sub_sections || employee.sub_sections.length === 0) {
-            return 'No section'
+            return "No section";
         }
 
-        const subSection = employee.sub_sections[0]
-        return `${subSection.section?.name || 'No section'}${
-            subSection.name ? ` / ${subSection.name}` : ''
-        }`
-    }
+        const subSection = employee.sub_sections[0];
+        return `${subSection.section?.name || "No section"}${
+            subSection.name ? ` / ${subSection.name}` : ""
+        }`;
+    };
 
-    // ADD THIS FUNCTION - Handle file upload
-    const handleFileSelect = async e => {
-        const file = e.target.files[0]
-        if (!file) return
+    const handleFileSelect = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
 
         try {
-            setUploadStatus('Uploading...')
+            setUploadStatus("Uploading...");
 
             const validTypes = [
-                'image/jpeg',
-                'image/jpg',
-                'image/png',
-                'image/gif',
-                'image/webp',
-                'image/bmp'
-            ]
+                "image/jpeg",
+                "image/jpg",
+                "image/png",
+                "image/gif",
+                "image/webp",
+                "image/bmp",
+            ];
             if (!validTypes.includes(file.type)) {
-                throw new Error('Please select a valid image file')
+                throw new Error("Please select a valid image file");
             }
 
             if (file.size > 10 * 1024 * 1024) {
-                throw new Error('File size must be less than 10MB')
+                throw new Error("File size must be less than 10MB");
             }
 
-            const authResponse = await fetch('/api/imagekit/auth')
+            const authResponse = await fetch("/api/imagekit/auth");
 
             if (!authResponse.ok) {
-                throw new Error('ImageKit authentication failed')
+                throw new Error("ImageKit authentication failed");
             }
 
-            const authData = await authResponse.json()
+            const authData = await authResponse.json();
 
-            const fileName = `handover_new_${Date.now()}.${file.name.split('.').pop()}`
+            const fileName = `handover_new_${Date.now()}.${file.name
+                .split(".")
+                .pop()}`;
 
-            const formData = new FormData()
-            formData.append('file', file)
-            formData.append('fileName', fileName)
-            formData.append('folder', '/handovers')
-            formData.append('useUniqueFileName', 'true')
+            const formData = new FormData();
+            formData.append("file", file);
+            formData.append("fileName", fileName);
+            formData.append("folder", "/handovers");
+            formData.append("useUniqueFileName", "true");
             formData.append(
-                'publicKey',
+                "publicKey",
                 import.meta.env.VITE_IMAGEKIT_PUBLIC_KEY
-            )
-            formData.append('signature', authData.signature)
-            formData.append('token', authData.token)
-            formData.append('expire', authData.expire)
+            );
+            formData.append("signature", authData.signature);
+            formData.append("token", authData.token);
+            formData.append("expire", authData.expire);
 
             const uploadResponse = await fetch(
-                'https://upload.imagekit.io/api/v1/files/upload',
+                "https://upload.imagekit.io/api/v1/files/upload",
                 {
-                    method: 'POST',
-                    body: formData
+                    method: "POST",
+                    body: formData,
                 }
-            )
+            );
 
-            const uploadResult = await uploadResponse.json()
+            const uploadResult = await uploadResponse.json();
 
             if (uploadResponse.ok && uploadResult.url) {
-                setPhoto(uploadResult.url)
-                setUploadStatus('Upload successful!')
-                
-                console.log('Photo uploaded successfully:', uploadResult.url)
-                
-                // Auto-clear success message after 2 seconds
+                setPhoto(uploadResult.url);
+                setUploadStatus("Upload successful!");
+
                 setTimeout(() => {
-                    setUploadStatus('')
-                }, 2000)
-                
+                    setUploadStatus("");
+                }, 2000);
             } else {
-                throw new Error(uploadResult.message || 'Upload failed')
+                throw new Error(uploadResult.message || "Upload failed");
             }
         } catch (error) {
-            console.error('Upload error:', error)
-            setUploadStatus('Upload failed')
-            
-            // Only show modal notification for errors
-            showNotification(
-                'error',
-                'Upload Failed',
-                'Upload failed: ' + error.message
-            )
-            e.target.value = ''
-        }
-    }
+            console.error("Upload error:", error);
+            setUploadStatus("Upload failed");
 
-    const handleEmployeeSelect = employee => {
-        setSelectedEmployee(employee)
-        // Auto-open equipment selection
+            showNotification(
+                "error",
+                "Upload Failed",
+                "Upload failed: " + error.message
+            );
+            e.target.value = "";
+        }
+    };
+
+    const handleEmployeeSelect = (employee) => {
+        setSelectedEmployee(employee);
         setTimeout(() => {
             const equipmentSection = document.getElementById(
-                'equipment-selection'
-            )
+                "equipment-selection"
+            );
             if (equipmentSection) {
-                equipmentSection.scrollIntoView({ behavior: 'smooth' })
+                equipmentSection.scrollIntoView({ behavior: "smooth" });
             }
-        }, 100)
-    }
+        }, 100);
+    };
 
-    const handleEquipmentSelect = equipment => {
-        setSelectedEquipment(equipment)
-
-        // If equipment has size, open size modal - but don't assign yet
-        if (equipment.size) {
-            setSelectedSize('')
-            setShowSizeModal(true)
-        } else {
-            // If no size, assign immediately
-            setSelectedSize(null)
-            handleAssign(equipment, null)
+    const handleAddItem = (equipment, size = null) => {
+        if (!selectedEmployee) {
+            showNotification('warning', 'Select Employee First', 'Please select an employee first');
+            return;
         }
-    }
 
-    const handleSizeSelect = size => {
-        if (!selectedEquipment || !selectedEmployee) return
-
-        setSelectedSize(size)
-        setShowSizeModal(false)
-
-        // Assign after size is properly set
-        setTimeout(() => {
-            handleAssign(selectedEquipment, size)
-        }, 100)
-    }
-
-   const handleAssign = async (equipment = selectedEquipment, size = selectedSize) => {
-    if (!selectedEmployee || !equipment) return
-
-    if (equipment.size && !size) {
-        showNotification('warning', 'Size Required', 'Please select a size for this equipment')
-        setShowSizeModal(false)
-        return
-    }
-
-    setIsSubmitting(true)
-
-    try {
-        const body = {
-            employee_id: selectedEmployee.id,
+        const newItem = {
             equipment_id: equipment.id,
+            equipment_type: equipment.type,
             size: size,
-            quantity: assignMultiple ? quantity : 1,
-            photo_url: photo
+            photo: equipment.photo
+        };
+
+        // Check if item already exists
+        const existingIndex = selectedItems.findIndex(item => 
+            item.equipment_id === equipment.id && item.size === size
+        );
+
+        if (existingIndex >= 0) {
+            // Remove if already selected
+            setSelectedItems(prev => prev.filter((_, index) => index !== existingIndex));
+        } else {
+            // Add new item
+            setSelectedItems(prev => [...prev, newItem]);
+        }
+    };
+
+    const handleRemoveItem = (index) => {
+        setSelectedItems(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const isItemSelected = (equipment, size = null) => {
+        return selectedItems.some(item => 
+            item.equipment_id === equipment.id && item.size === size
+        );
+    };
+
+    const handleFinalSubmit = async () => {
+        if (!selectedEmployee) {
+            showNotification('warning', 'Employee Required', 'Please select an employee');
+            return;
         }
 
-        console.log('Assignment request body:', body)
+        if (selectedItems.length === 0) {
+            showNotification('warning', 'Items Required', 'Please select at least one equipment item');
+            return;
+        }
 
-        // Use Inertia's router.post which automatically handles CSRF
-        const response = await router.post(route('handovers.quick-assign'), body, {
-            onSuccess: () => {
-                showNotification('success', 'Assignment Successful', 
-                    `Successfully assigned ${assignMultiple ? quantity : 1} item(s) to ${selectedEmployee.name}`)
-                onClose()
-            },
-            onError: (errors) => {
-                const errorMessage = Object.values(errors).join(', ') || 'Assignment failed'
-                throw new Error(errorMessage)
-            }
-        })
+        setIsSubmitting(true);
 
-    } catch (err) {
-        console.error('Assign error:', err)
-        showNotification('error', 'Assignment Failed', err.message)
-    } finally {
-        setIsSubmitting(false)
-    }
-}
+        try {
+            const body = {
+                employee_id: selectedEmployee.id,
+                items: selectedItems,
+                photo_url: photo
+            };
+
+            console.log('Bulk assignment request body:', body);
+
+            await router.post(route('handovers.bulk-assign'), body, {
+                onSuccess: () => {
+                    showNotification('success', 'Assignment Successful', 
+                        `Successfully assigned ${selectedItems.length} item(s) to ${selectedEmployee.name}`);
+                    onClose();
+                },
+                onError: (errors) => {
+                    const errorMessage = Object.values(errors).join(', ') || 'Assignment failed';
+                    throw new Error(errorMessage);
+                }
+            });
+
+        } catch (err) {
+            console.error('Assign error:', err);
+            showNotification('error', 'Assignment Failed', err.message);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     const clearFilters = () => {
-        setSearchTerm('')
-        setSelectedSection('')
-        setSelectedSubSection('')
-        setCurrentPage(1)
-    }
+        setSearchTerm("");
+        setSelectedSection("");
+        setSelectedSubSection("");
+        setCurrentPage(1);
+    };
 
-    const goToPage = page => {
-        setCurrentPage(page)
-    }
+    const goToPage = (page) => {
+        setCurrentPage(page);
+    };
 
     return (
         <>
@@ -1736,63 +1760,7 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
 
                     <div className='flex-1 overflow-hidden'>
                         <div className='flex flex-col p-6 h-full'>
-                            {/* Multiple Assignment Toggle */}
-                            <div className='flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 mb-6 p-4 rounded-lg'>
-                                <label className='flex items-center cursor-pointer'>
-                                    <div className='relative'>
-                                        <input
-                                            type='checkbox'
-                                            checked={assignMultiple}
-                                            onChange={e =>
-                                                setAssignMultiple(
-                                                    e.target.checked
-                                                )
-                                            }
-                                            className='sr-only'
-                                        />
-                                        <div
-                                            className={`w-12 h-6 rounded-full transition-colors ${
-                                                assignMultiple
-                                                    ? 'bg-blue-600'
-                                                    : 'bg-gray-300 dark:bg-gray-600'
-                                            }`}
-                                        ></div>
-                                        <div
-                                            className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                                                assignMultiple
-                                                    ? 'transform translate-x-6'
-                                                    : ''
-                                            }`}
-                                        ></div>
-                                    </div>
-                                </label>
-                                <span className='font-medium text-gray-700 dark:text-gray-300 text-sm'>
-                                    Assign multiple items
-                                </span>
-
-                                {assignMultiple && (
-                                    <div className='flex items-center gap-2 ml-4'>
-                                        <label className='text-gray-600 dark:text-gray-400 text-sm'>
-                                            Quantity:
-                                        </label>
-                                        <input
-                                            type='number'
-                                            min='1'
-                                            max='10'
-                                            value={quantity}
-                                            onChange={e =>
-                                                setQuantity(
-                                                    parseInt(e.target.value) ||
-                                                        1
-                                                )
-                                            }
-                                            className='dark:bg-gray-700 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded w-20 dark:text-white text-sm'
-                                        />
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* ADD PHOTO UPLOAD SECTION HERE */}
+                            {/* Photo Upload Section */}
                             <div className="mb-6">
                                 <label className="block mb-3 font-medium text-gray-700 dark:text-gray-300 text-sm">
                                     Handover Photo (Optional)
@@ -1861,7 +1829,7 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
                                                 fill="none"
                                                 stroke="currentColor"
                                                 viewBox="0 0 24 24"
-                                            >
+                                                >
                                                 <path
                                                     strokeLinecap="round"
                                                     strokeLinejoin="round"
@@ -2126,7 +2094,7 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
                                             )}
                                         </div>
 
-                                        {/* Pagination */}
+                                        {/* Pagination for employees */}
                                         {totalPages > 1 && (
                                             <div className='flex-shrink-0 flex justify-center items-center space-x-2 mt-4 pt-4 border-t border-gray-200 dark:border-gray-600'>
                                                 <button
@@ -2158,30 +2126,20 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
                                     </div>
                                 </div>
 
-                                {/* Equipment Selection */}
+                                {/* Equipment Selection - No pagination, show all equipment */}
                                 <div
                                     id='equipment-selection'
                                     className='flex flex-col'
                                 >
                                     <h3 className='mb-4 font-medium text-gray-900 dark:text-white text-lg'>
-                                        Select Equipment
+                                        Select Equipment ({selectedItems.length} selected)
                                     </h3>
                                     <div className='flex-1 min-h-0 overflow-hidden'>
                                         <div className='h-full overflow-y-auto space-y-4'>
                                             {equipments?.map(equipment => (
                                                 <div
                                                     key={equipment.id}
-                                                    className={`bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border cursor-pointer transition-all ${
-                                                        selectedEquipment?.id ===
-                                                        equipment.id
-                                                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500/20'
-                                                            : 'border-gray-200 dark:border-gray-600 hover:border-blue-300 hover:bg-blue-50/50 dark:hover:bg-blue-900/10'
-                                                    }`}
-                                                    onClick={() =>
-                                                        handleEquipmentSelect(
-                                                            equipment
-                                                        )
-                                                    }
+                                                    className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 border border-gray-200 dark:border-gray-600"
                                                 >
                                                     <div className='flex justify-between items-start mb-3'>
                                                         <div className='flex items-start gap-3'>
@@ -2224,10 +2182,10 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
                                                     <div className='space-y-2 text-gray-600 dark:text-gray-400 text-sm'>
                                                         {equipment.size ? (
                                                             <div>
-                                                                <div className='mb-1 font-medium'>
+                                                                <div className='mb-2 font-medium'>
                                                                     Available Sizes:
                                                                 </div>
-                                                                <div className='space-y-1'>
+                                                                <div className='flex flex-wrap gap-2'>
                                                                     {equipment.size
                                                                         .split(',')
                                                                         .map(
@@ -2254,54 +2212,66 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
                                                                                         amount
                                                                                     ) ||
                                                                                     0
+                                                                                const isSelected = isItemSelected(equipment, sizeName)
+                                                                                
                                                                                 return (
-                                                                                    <div
-                                                                                        key={
-                                                                                            idx
-                                                                                        }
-                                                                                        className='flex justify-between items-center'
+                                                                                    <button
+                                                                                        key={idx}
+                                                                                        onClick={() => handleAddItem(equipment, sizeName)}
+                                                                                        disabled={stock <= 0}
+                                                                                        className={`px-3 py-2 rounded-lg border transition-all ${
+                                                                                            isSelected
+                                                                                                ? 'bg-blue-100 border-blue-500 text-blue-800 dark:bg-blue-900/30 dark:border-blue-400 dark:text-blue-300'
+                                                                                                : stock > 0
+                                                                                                ? 'bg-white border-gray-300 text-gray-700 hover:border-blue-500 hover:bg-blue-50 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 dark:hover:border-blue-400 dark:hover:bg-blue-900/20'
+                                                                                                : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-800 dark:border-gray-700 dark:text-gray-500'
+                                                                                        }`}
                                                                                     >
-                                                                                        <span>
-                                                                                            Size{' '}
-                                                                                            {
-                                                                                                sizeName
-                                                                                            }
-                                                                                        </span>
-                                                                                        <span
-                                                                                            className={`px-2 py-1 rounded text-xs ${
-                                                                                                stock >
-                                                                                                0
-                                                                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                                                                                    : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                                                                                            }`}
-                                                                                        >
-                                                                                            {
-                                                                                                stock
-                                                                                            }{' '}
-                                                                                            available
-                                                                                        </span>
-                                                                                    </div>
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <span className="font-medium">{sizeName}</span>
+                                                                                            <span
+                                                                                                className={`px-1.5 py-0.5 rounded-full text-xs ${
+                                                                                                    stock > 0
+                                                                                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                                                                                        : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                                                                                }`}
+                                                                                            >
+                                                                                                {stock}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    </button>
                                                                                 )
                                                                             }
                                                                         )}
                                                                 </div>
                                                             </div>
                                                         ) : (
-                                                            <div className='flex justify-between items-center'>
+                                                            <div className="flex justify-between items-center">
                                                                 <span>Stock:</span>
-                                                                <span
-                                                                    className={`px-2 py-1 rounded text-xs ${
-                                                                        equipment.amount >
-                                                                        0
-                                                                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                                                            : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                                                                    }`}
-                                                                >
-                                                                    {
-                                                                        equipment.amount
-                                                                    }{' '}
-                                                                    available
-                                                                </span>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span
+                                                                        className={`px-2 py-1 rounded text-xs ${
+                                                                            equipment.amount > 0
+                                                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                                                                : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                                                        }`}
+                                                                    >
+                                                                        {equipment.amount} available
+                                                                    </span>
+                                                                    <button
+                                                                        onClick={() => handleAddItem(equipment)}
+                                                                        disabled={equipment.amount <= 0}
+                                                                        className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                                                                            isItemSelected(equipment)
+                                                                                ? 'bg-red-600 hover:bg-red-700 text-white'
+                                                                                : equipment.amount > 0
+                                                                                ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                                                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                                        }`}
+                                                                    >
+                                                                        {isItemSelected(equipment) ? 'Remove' : 'Add'}
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                         )}
                                                     </div>
@@ -2332,51 +2302,62 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
                                 </div>
                             </div>
 
-                            {/* Selected Summary */}
-                            {(selectedEmployee || selectedEquipment) && (
-                                <div className='bg-gray-50 dark:bg-gray-700/50 mt-6 p-4 border border-gray-200 dark:border-gray-600 rounded-lg'>
-                                    <h4 className='mb-2 font-medium text-gray-900 dark:text-white'>
+                            {/* Assignment Summary - Always visible at bottom */}
+                            {(selectedEmployee || selectedItems.length > 0) && (
+                                <div className='bg-blue-50 dark:bg-blue-900/20 mt-6 p-4 border border-blue-200 dark:border-blue-800 rounded-lg'>
+                                    <h4 className='mb-3 font-semibold text-gray-900 dark:text-white text-lg'>
                                         Assignment Summary
                                     </h4>
-                                    <div className='gap-4 grid grid-cols-1 md:grid-cols-2 text-sm'>
+                                    <div className='space-y-3'>
                                         {selectedEmployee && (
+                                            <div className="flex justify-between items-center">
+                                                <span className='text-gray-600 dark:text-gray-400'>
+                                                    Employee:
+                                                </span>
+                                                <span className='font-medium text-gray-900 dark:text-white'>
+                                                    {selectedEmployee.name} (NIK: {selectedEmployee.nik})
+                                                </span>
+                                            </div>
+                                        )}
+                                        
+                                        {selectedItems.length > 0 && (
                                             <div>
-                                                <span className='text-gray-600 dark:text-gray-400'>
-                                                    Employee:{' '}
-                                                </span>
-                                                <span className='font-medium text-gray-900 dark:text-white'>
-                                                    {selectedEmployee.name}{' '}
-                                                    (NIK: {selectedEmployee.nik}
-                                                    )
-                                                </span>
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <span className='text-gray-600 dark:text-gray-400'>
+                                                        Selected Items ({selectedItems.length}):
+                                                    </span>
+                                                </div>
+                                                <div className="space-y-2 max-h-32 overflow-y-auto">
+                                                    {selectedItems.map((item, index) => (
+                                                        <div key={index} className="flex justify-between items-center bg-white dark:bg-gray-800 p-2 rounded border">
+                                                            <div>
+                                                                <span className="font-medium text-gray-900 dark:text-white">
+                                                                    {item.equipment_type}
+                                                                </span>
+                                                                {item.size && (
+                                                                    <span className="ml-2 text-sm text-gray-500 dark:text-gray-400">
+                                                                        (Size: {item.size})
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <button
+                                                                onClick={() => handleRemoveItem(index)}
+                                                                className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                                                            >
+                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                                </svg>
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
                                         )}
-                                        {selectedEquipment && (
-                                            <div>
-                                                <span className='text-gray-600 dark:text-gray-400'>
-                                                    Equipment:{' '}
-                                                </span>
-                                                <span className='font-medium text-gray-900 dark:text-white'>
-                                                    {selectedEquipment.type}
-                                                    {selectedSize &&
-                                                        ` - Size: ${selectedSize}`}
-                                                </span>
-                                            </div>
-                                        )}
-                                        {assignMultiple && (
-                                            <div className='md:col-span-2'>
-                                                <span className='text-gray-600 dark:text-gray-400'>
-                                                    Quantity:{' '}
-                                                </span>
-                                                <span className='font-medium text-gray-900 dark:text-white'>
-                                                    {quantity} item(s)
-                                                </span>
-                                            </div>
-                                        )}
+                                        
                                         {photo && (
-                                            <div className='md:col-span-2'>
+                                            <div className="flex justify-between items-center">
                                                 <span className='text-gray-600 dark:text-gray-400'>
-                                                    Photo:{' '}
+                                                    Photo:
                                                 </span>
                                                 <span className='font-medium text-green-600 dark:text-green-400'>
                                                     Ready to upload
@@ -2396,229 +2377,36 @@ function NewAssignModal ({ show, onClose, employees, equipments }) {
                         >
                             Cancel
                         </button>
-                    </div>
-                </div>
-            </Modal>
-
-            {/* Size Selection Modal */}
-            <Modal
-                show={showSizeModal}
-                onClose={() => setShowSizeModal(false)}
-                maxWidth='sm'
-            >
-                <div className='bg-white dark:bg-gray-800 shadow-xl p-6 rounded-lg'>
-                    <h3 className='mb-4 font-semibold text-gray-900 dark:text-white text-lg'>
-                        Select Size for {selectedEquipment?.type}
-                    </h3>
-
-                    <div className='space-y-3'>
-                        {selectedEquipment?.size
-                            ?.split(',')
-                            .map((sizeItem, index) => {
-                                if (!sizeItem || !sizeItem.includes(':'))
-                                    return null
-
-                                const [sizeName, amount] = sizeItem.split(':')
-                                const stock = parseInt(amount) || 0
-
-                                return (
-                                    <button
-                                        key={index}
-                                        onClick={() =>
-                                            handleSizeSelect(sizeName)
-                                        }
-                                        disabled={stock <= 0 || isSubmitting}
-                                        className={`w-full p-4 text-left rounded-lg border transition-all ${
-                                            stock > 0 && !isSubmitting
-                                                ? 'border-gray-200 dark:border-gray-600 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer'
-                                                : 'border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                                        }`}
-                                    >
-                                        <div className='flex justify-between items-center'>
-                                            <span className='font-medium text-gray-900 dark:text-white'>
-                                                {sizeName}
-                                            </span>
-                                            <span
-                                                className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                                    stock > 0
-                                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                                        : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                                                }`}
-                                            >
-                                                {stock > 0
-                                                    ? `${stock} available`
-                                                    : 'Out of stock'}
-                                            </span>
-                                        </div>
-                                        {isSubmitting && (
-                                            <div className='mt-2 text-blue-600 dark:text-blue-400 text-sm'>
-                                                Assigning...
-                                            </div>
-                                        )}
-                                    </button>
-                                )
-                            })}
-                    </div>
-
-                    {isSubmitting && (
-                        <div className='mt-4 text-center'>
-                            <div className='inline-flex items-center gap-2 text-blue-600 dark:text-blue-400'>
-                                <svg
-                                    className='w-4 h-4 animate-spin'
-                                    fill='none'
-                                    viewBox='0 0 24 24'
-                                >
-                                    <circle
-                                        className='opacity-25'
-                                        cx='12'
-                                        cy='12'
-                                        r='10'
-                                        stroke='currentColor'
-                                        strokeWidth='4'
-                                    ></circle>
-                                    <path
-                                        className='opacity-75'
-                                        fill='currentColor'
-                                        d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
-                                    ></path>
-                                </svg>
-                                Assigning equipment...
-                            </div>
-                        </div>
-                    )}
-
-                    <div className='flex justify-end gap-3 mt-6 pt-4 border-gray-200 dark:border-gray-700 border-t'>
                         <button
-                            onClick={() => setShowSizeModal(false)}
-                            disabled={isSubmitting}
-                            className='px-4 py-2 font-medium text-gray-700 hover:text-gray-900 dark:hover:text-white dark:text-gray-300 transition-colors disabled:opacity-50'
+                            onClick={handleFinalSubmit}
+                            disabled={isSubmitting || !selectedEmployee || selectedItems.length === 0}
+                            className='flex items-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 px-6 py-2 rounded-lg font-medium text-white transition-colors'
                         >
-                            Cancel
-                        </button>
-                    </div>
-                </div>
-            </Modal>
-
-            {/* Notification Modal */}
-            <NotificationModal
-                show={notification.show}
-                type={notification.type}
-                title={notification.title}
-                message={notification.message}
-                onClose={() =>
-                    setNotification({
-                        show: false,
-                        type: '',
-                        title: '',
-                        message: ''
-                    })
-                }
-            />
-        </>
-    )
-}
-
-// Delete Confirmation Modal
-function DeleteConfirmationModal ({ show, onClose, handover, onConfirm }) {
-    const [isDeleting, setIsDeleting] = useState(false)
-    const [notification, setNotification] = useState({
-        show: false,
-        type: '',
-        title: '',
-        message: ''
-    })
-
-    const showNotification = (type, title, message) => {
-        setNotification({ show: true, type, title, message })
-    }
-
-    const handleDelete = async () => {
-        setIsDeleting(true)
-        try {
-            await onConfirm()
-            onClose()
-        } catch (error) {
-            console.error('Delete error:', error)
-            showNotification(
-                'error',
-                'Delete Failed',
-                'Delete failed: ' + error.message
-            )
-        } finally {
-            setIsDeleting(false)
-        }
-    }
-
-    return (
-        <>
-            <Modal show={show} onClose={onClose} maxWidth='md'>
-                <div className='bg-white dark:bg-gray-800 shadow-xl p-6 rounded-lg'>
-                    <div className='flex items-center gap-3 mb-4'>
-                        <div className='flex justify-center items-center bg-red-100 dark:bg-red-900/20 rounded-full w-10 h-10'>
-                            <svg
-                                className='w-5 h-5 text-red-600 dark:text-red-400'
-                                fill='none'
-                                stroke='currentColor'
-                                viewBox='0 0 24 24'
-                            >
-                                <path
-                                    strokeLinecap='round'
-                                    strokeLinejoin='round'
-                                    strokeWidth={2}
-                                    d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
-                                />
-                            </svg>
-                        </div>
-                        <h3 className='font-semibold text-gray-900 dark:text-white text-lg'>
-                            Delete Assignment
-                        </h3>
-                    </div>
-
-                    <p className='mb-6 text-gray-600 dark:text-gray-300'>
-                        Are you sure you want to delete the assignment of{' '}
-                        <strong>{handover?.equipment?.type}</strong> to{' '}
-                        <strong>{handover?.employee?.name}</strong>? This action
-                        cannot be undone.
-                    </p>
-
-                    <div className='flex justify-end gap-3'>
-                        <button
-                            onClick={onClose}
-                            disabled={isDeleting}
-                            className='disabled:opacity-50 px-4 py-2 font-medium text-gray-700 hover:text-gray-900 dark:hover:text-white dark:text-gray-300 transition-colors'
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleDelete}
-                            disabled={isDeleting}
-                            className='flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 px-6 py-2 rounded-lg font-medium text-white transition-colors'
-                        >
-                            {isDeleting ? (
+                            {isSubmitting ? (
                                 <>
                                     <svg
-                                        className='w-4 h-4 animate-spin'
-                                        fill='none'
-                                        viewBox='0 0 24 24'
+                                        className="w-4 h-4 animate-spin"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
                                     >
                                         <circle
-                                            className='opacity-25'
-                                            cx='12'
-                                            cy='12'
-                                            r='10'
-                                            stroke='currentColor'
-                                            strokeWidth='4'
+                                            className="opacity-25"
+                                            cx="12"
+                                            cy="12"
+                                            r="10"
+                                            stroke="currentColor"
+                                            strokeWidth="4"
                                         ></circle>
                                         <path
-                                            className='opacity-75'
-                                            fill='currentColor'
-                                            d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
+                                            className="opacity-75"
+                                            fill="currentColor"
+                                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                                         ></path>
                                     </svg>
-                                    Deleting...
+                                    Assigning...
                                 </>
                             ) : (
-                                'Delete Assignment'
+                                `Assign ${selectedItems.length} Item${selectedItems.length !== 1 ? 's' : ''}`
                             )}
                         </button>
                     </div>
@@ -2634,55 +2422,181 @@ function DeleteConfirmationModal ({ show, onClose, handover, onConfirm }) {
                 onClose={() =>
                     setNotification({
                         show: false,
-                        type: '',
-                        title: '',
-                        message: ''
+                        type: "",
+                        title: "",
+                        message: "",
                     })
                 }
             />
         </>
-    )
+    );
+}
+
+// Delete Confirmation Modal
+function DeleteConfirmationModal({ show, onClose, handover, onConfirm }) {
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [notification, setNotification] = useState({
+        show: false,
+        type: "",
+        title: "",
+        message: "",
+    });
+
+    const showNotification = (type, title, message) => {
+        setNotification({ show: true, type, title, message });
+    };
+
+    const handleDelete = async () => {
+        setIsDeleting(true);
+        try {
+            await onConfirm();
+            onClose();
+        } catch (error) {
+            console.error("Delete error:", error);
+            showNotification(
+                "error",
+                "Delete Failed",
+                "Delete failed: " + error.message
+            );
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    return (
+        <>
+            <Modal show={show} onClose={onClose} maxWidth="md">
+                <div className="bg-white dark:bg-gray-800 shadow-xl p-6 rounded-lg">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="flex justify-center items-center bg-red-100 dark:bg-red-900/20 rounded-full w-10 h-10">
+                            <svg
+                                className="w-5 h-5 text-red-600 dark:text-red-400"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                                />
+                            </svg>
+                        </div>
+                        <h3 className="font-semibold text-gray-900 dark:text-white text-lg">
+                            Delete Assignment
+                        </h3>
+                    </div>
+
+                    <p className="mb-6 text-gray-600 dark:text-gray-300">
+                        Are you sure you want to delete the assignment of{" "}
+                        <strong>{handover?.equipment?.type}</strong> to{" "}
+                        <strong>{handover?.employee?.name}</strong>? This action
+                        cannot be undone.
+                    </p>
+
+                    <div className="flex justify-end gap-3">
+                        <button
+                            onClick={onClose}
+                            disabled={isDeleting}
+                            className="disabled:opacity-50 px-4 py-2 font-medium text-gray-700 hover:text-gray-900 dark:hover:text-white dark:text-gray-300 transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={handleDelete}
+                            disabled={isDeleting}
+                            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 px-6 py-2 rounded-lg font-medium text-white transition-colors"
+                        >
+                            {isDeleting ? (
+                                <>
+                                    <svg
+                                        className="w-4 h-4 animate-spin"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <circle
+                                            className="opacity-25"
+                                            cx="12"
+                                            cy="12"
+                                            r="10"
+                                            stroke="currentColor"
+                                            strokeWidth="4"
+                                        ></circle>
+                                        <path
+                                            className="opacity-75"
+                                            fill="currentColor"
+                                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                        ></path>
+                                    </svg>
+                                    Deleting...
+                                </>
+                            ) : (
+                                "Delete Assignment"
+                            )}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Notification Modal */}
+            <NotificationModal
+                show={notification.show}
+                type={notification.type}
+                title={notification.title}
+                message={notification.message}
+                onClose={() =>
+                    setNotification({
+                        show: false,
+                        type: "",
+                        title: "",
+                        message: "",
+                    })
+                }
+            />
+        </>
+    );
 }
 
 // Main Component
-export default function Assign ({
+export default function Assign({
     handovers,
     filters,
     equipments,
     employees,
     sections,
-    subSections
+    subSections,
 }) {
-    const { auth } = usePage().props
-    const [search, setSearch] = useState(filters.search || '')
+    const { auth } = usePage().props;
+    const [search, setSearch] = useState(filters.search || "");
     const [selectedSection, setSelectedSection] = useState(
-        filters.section || ''
-    )
+        filters.section || ""
+    );
     const [selectedSubSection, setSelectedSubSection] = useState(
-        filters.sub_section || ''
-    )
-    const [filteredSubSections, setFilteredSubSections] = useState([])
-    const [groupedHandovers, setGroupedHandovers] = useState({})
-    const [expandedEmployees, setExpandedEmployees] = useState(new Set())
+        filters.sub_section || ""
+    );
+    const [filteredSubSections, setFilteredSubSections] = useState([]);
+    const [groupedHandovers, setGroupedHandovers] = useState({});
+    const [expandedEmployees, setExpandedEmployees] = useState(new Set());
 
     // Modal states
-    const [showQuickAssign, setShowQuickAssign] = useState(false)
-    const [showNewAssign, setShowNewAssign] = useState(false)
-    const [showUpdateModal, setShowUpdateModal] = useState(false)
-    const [showDeleteModal, setShowDeleteModal] = useState(false)
-    const [selectedEmployee, setSelectedEmployee] = useState(null)
-    const [handoverToDelete, setHandoverToDelete] = useState(null)
-    const [unassignedEmployees, setUnassignedEmployees] = useState([])
+    const [showQuickAssign, setShowQuickAssign] = useState(false);
+    const [showNewAssign, setShowNewAssign] = useState(false);
+    const [showUpdateModal, setShowUpdateModal] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [selectedEmployee, setSelectedEmployee] = useState(null);
+    const [handoverToDelete, setHandoverToDelete] = useState(null);
+    const [unassignedEmployees, setUnassignedEmployees] = useState([]);
     const [notification, setNotification] = useState({
         show: false,
-        type: '',
-        title: '',
-        message: ''
-    })
+        type: "",
+        title: "",
+        message: "",
+    });
 
     const showNotification = (type, title, message) => {
-        setNotification({ show: true, type, title, message })
-    }
+        setNotification({ show: true, type, title, message });
+    };
 
     // Safe data handling
     const safeHandovers = handovers || {
@@ -2690,275 +2604,288 @@ export default function Assign ({
         total: 0,
         from: 0,
         to: 0,
-        last_page: 1
-    }
+        last_page: 1,
+    };
 
     // Filter subsections based on selected section
     useEffect(() => {
         if (selectedSection) {
             const filtered = subSections.filter(
-                sub => sub.section_id == selectedSection
-            )
-            setFilteredSubSections(filtered)
+                (sub) => sub.section_id == selectedSection
+            );
+            setFilteredSubSections(filtered);
             if (
                 selectedSubSection &&
-                !filtered.some(sub => sub.id == selectedSubSection)
+                !filtered.some((sub) => sub.id == selectedSubSection)
             ) {
-                setSelectedSubSection('')
+                setSelectedSubSection("");
             }
         } else {
-            setFilteredSubSections([])
-            setSelectedSubSection('')
+            setFilteredSubSections([]);
+            setSelectedSubSection("");
         }
-    }, [selectedSection, selectedSubSection, subSections])
+    }, [selectedSection, selectedSubSection, subSections]);
 
     // Group handovers by employee
     useEffect(() => {
         if (!safeHandovers.data) {
-            setGroupedHandovers({})
-            return
+            setGroupedHandovers({});
+            return;
         }
 
         // Filter handovers based on search and section filters
-        const filteredHandovers = safeHandovers.data.filter(handover => {
-            if (!handover?.employee) return false
+        const filteredHandovers = safeHandovers.data.filter((handover) => {
+            if (!handover?.employee) return false;
 
-            const employee = handover.employee
+            const employee = handover.employee;
 
             // Search filter
             const matchesSearch =
                 !search ||
                 employee.name.toLowerCase().includes(search.toLowerCase()) ||
-                employee.nik.toLowerCase().includes(search.toLowerCase())
+                employee.nik.toLowerCase().includes(search.toLowerCase());
 
             // Section filter
             const matchesSection =
                 !selectedSection ||
                 employee.sub_sections?.some(
-                    sub => sub.section_id == selectedSection
-                )
+                    (sub) => sub.section_id == selectedSection
+                );
 
             // Subsection filter
             const matchesSubSection =
                 !selectedSubSection ||
-                employee.sub_sections?.some(sub => sub.id == selectedSubSection)
+                employee.sub_sections?.some(
+                    (sub) => sub.id == selectedSubSection
+                );
 
-            return matchesSearch && matchesSection && matchesSubSection
-        })
+            return matchesSearch && matchesSection && matchesSubSection;
+        });
 
         // Group filtered handovers by employee
-        const grouped = {}
-        filteredHandovers.forEach(handover => {
+        const grouped = {};
+        filteredHandovers.forEach((handover) => {
             if (handover?.employee) {
-                const employeeId = handover.employee.id
+                const employeeId = handover.employee.id;
                 if (!grouped[employeeId]) {
                     grouped[employeeId] = {
                         employee: handover.employee,
                         assignments: [],
-                        totalAssignments: 0
-                    }
+                        totalAssignments: 0,
+                    };
                 }
-                grouped[employeeId].assignments.push(handover)
-                grouped[employeeId].totalAssignments++
+                grouped[employeeId].assignments.push(handover);
+                grouped[employeeId].totalAssignments++;
             }
-        })
+        });
 
-        setGroupedHandovers(grouped)
-    }, [safeHandovers, search, selectedSection, selectedSubSection])
+        setGroupedHandovers(grouped);
+    }, [safeHandovers, search, selectedSection, selectedSubSection]);
 
     // Load unassigned employees
     useEffect(() => {
         if (showNewAssign) {
-            loadUnassignedEmployees()
+            loadUnassignedEmployees();
         }
-    }, [showNewAssign])
+    }, [showNewAssign]);
 
     const loadUnassignedEmployees = async () => {
         try {
             const response = await fetch(
-                route('handovers.unassigned-employees')
-            )
-            const data = await response.json()
+                route("handovers.unassigned-employees")
+            );
+            const data = await response.json();
 
             if (data.success) {
-                setUnassignedEmployees(data.employees)
+                setUnassignedEmployees(data.employees);
             } else {
                 console.error(
-                    'Failed to load unassigned employees:',
+                    "Failed to load unassigned employees:",
                     data.message
-                )
-                setUnassignedEmployees([])
+                );
+                setUnassignedEmployees([]);
             }
         } catch (error) {
-            console.error('Error loading unassigned employees:', error)
-            setUnassignedEmployees([])
+            console.error("Error loading unassigned employees:", error);
+            setUnassignedEmployees([]);
         }
-    }
+    };
 
-    const toggleEmployeeExpansion = employeeId => {
-        const newExpanded = new Set(expandedEmployees)
+    const toggleEmployeeExpansion = (employeeId) => {
+        const newExpanded = new Set(expandedEmployees);
         if (newExpanded.has(employeeId)) {
-            newExpanded.delete(employeeId)
+            newExpanded.delete(employeeId);
         } else {
-            newExpanded.add(employeeId)
+            newExpanded.add(employeeId);
         }
-        setExpandedEmployees(newExpanded)
-    }
+        setExpandedEmployees(newExpanded);
+    };
 
-    const getAvailableEquipmentsForEmployee = employeeId => {
+    const getAvailableEquipmentsForEmployee = (employeeId) => {
         const employeeAssignments =
-            groupedHandovers[employeeId]?.assignments || []
+            groupedHandovers[employeeId]?.assignments || [];
         const assignedEquipmentIds = new Set(
-            employeeAssignments.map(assignment => assignment.equipment.id)
-        )
+            employeeAssignments.map((assignment) => assignment.equipment.id)
+        );
 
         return (
             equipments?.filter(
-                equipment => !assignedEquipmentIds.has(equipment.id)
+                (equipment) => !assignedEquipmentIds.has(equipment.id)
             ) || []
-        )
-    }
+        );
+    };
 
-    const handleQuickAssign = employee => {
-        setSelectedEmployee(employee)
-        setShowQuickAssign(true)
-    }
+    const handleQuickAssign = (employee) => {
+        setSelectedEmployee(employee);
+        setShowQuickAssign(true);
+    };
 
     const handleNewAssign = () => {
-        setShowNewAssign(true)
-    }
+        setShowNewAssign(true);
+    };
 
-    const handleUpdate = employee => {
-        setSelectedEmployee(employee)
-        setShowUpdateModal(true)
-    }
+    const handleUpdate = (employee) => {
+        setSelectedEmployee(employee);
+        setShowUpdateModal(true);
+    };
 
-    const openDeleteModal = handover => {
-        setHandoverToDelete(handover)
-        setShowDeleteModal(true)
-    }
+    const openDeleteModal = (handover) => {
+        setHandoverToDelete(handover);
+        setShowDeleteModal(true);
+    };
 
     const handleDelete = async () => {
-        if (!handoverToDelete) return
+        if (!handoverToDelete) return;
 
         try {
             const response = await fetch(
-                route('handovers.destroy', {
-                    handover: handoverToDelete.id
+                route("handovers.destroy", {
+                    handover: handoverToDelete.id,
                 }),
                 {
-                    method: 'DELETE',
+                    method: "DELETE",
                     headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector(
+                        "Content-Type": "application/json",
+                        "X-CSRF-TOKEN": document.querySelector(
                             'meta[name="csrf-token"]'
                         ).content,
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
                 }
-            )
+            );
 
-            const data = await response.json()
+            const data = await response.json();
 
             if (data.success) {
                 showNotification(
-                    'success',
-                    'Delete Successful',
-                    'Assignment deleted successfully'
-                )
-                router.reload()
+                    "success",
+                    "Delete Successful",
+                    "Assignment deleted successfully"
+                );
+                router.reload();
             } else {
-                throw new Error(data.error || 'Delete failed')
+                throw new Error(data.error || "Delete failed");
             }
         } catch (error) {
-            console.error('Delete error:', error)
+            console.error("Delete error:", error);
             showNotification(
-                'error',
-                'Delete Failed',
-                'Delete failed: ' + error.message
-            )
+                "error",
+                "Delete Failed",
+                "Delete failed: " + error.message
+            );
         }
-    }
+    };
 
-    const handleSearch = e => {
-        e.preventDefault()
-        router.get(route('handovers.assign'), {
+    const handleSearch = (e) => {
+        e.preventDefault();
+        router.get(route("handovers.assign"), {
             search,
-            section: selectedSection !== '' ? selectedSection : undefined,
+            section: selectedSection !== "" ? selectedSection : undefined,
             sub_section:
-                selectedSubSection !== '' ? selectedSubSection : undefined
-        })
-    }
+                selectedSubSection !== "" ? selectedSubSection : undefined,
+        });
+    };
 
     const clearSearch = () => {
-        setSearch('')
-        setSelectedSection('')
-        setSelectedSubSection('')
-        router.get(route('handovers.assign'), {
-            search: '',
-            section: '',
-            sub_section: ''
-        })
-    }
+        setSearch("");
+        setSelectedSection("");
+        setSelectedSubSection("");
+        router.get(route("handovers.assign"), {
+            search: "",
+            section: "",
+            sub_section: "",
+        });
+    };
 
     return (
         <AuthenticatedLayout
             header={
-                <div className='flex sm:flex-row flex-col justify-between sm:items-center gap-4'>
+                <div className="flex sm:flex-row flex-col justify-between sm:items-center gap-4">
                     <div>
-                        <h2 className='font-semibold text-gray-800 dark:text-white text-xl'>
+                        <h2 className="font-semibold text-gray-800 dark:text-white text-xl">
                             Employee Equipment Assignments
                         </h2>
-                        <p className='mt-1 text-gray-600 dark:text-gray-400 text-sm'>
+                        <p className="mt-1 text-gray-600 dark:text-gray-400 text-sm">
                             Manage equipment assignments grouped by employee
                         </p>
                     </div>
-                    <div className='flex gap-3'>
+                    <div className="flex gap-3">
                         <a
-  href={route('handovers.export')}
-  className="flex items-center justify-center gap-1 bg-green-600 hover:bg-green-700 px-2 py-1.5 sm:px-3 sm:py-2 rounded-md font-medium text-white text-xs sm:text-sm transition-colors duration-200"
-  title="Export to Excel"
->
-  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-  </svg>
-  <span className="hidden sm:inline">Export</span>
-</a>
+                            href={route("handovers.export")}
+                            className="flex items-center justify-center gap-1 bg-green-600 hover:bg-green-700 px-2 py-1.5 sm:px-3 sm:py-2 rounded-md font-medium text-white text-xs sm:text-sm transition-colors duration-200"
+                            title="Export to Excel"
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-4 w-4"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                />
+                            </svg>
+                            <span className="hidden sm:inline">Export</span>
+                        </a>
 
                         <button
                             onClick={handleNewAssign}
-                            className='inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 shadow-sm hover:shadow px-4 py-2 rounded-lg font-medium text-white transition-colors'
+                            className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 shadow-sm hover:shadow px-4 py-2 rounded-lg font-medium text-white transition-colors"
                         >
                             <svg
-                                className='w-4 h-4'
-                                fill='none'
-                                stroke='currentColor'
-                                viewBox='0 0 24 24'
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
                             >
                                 <path
-                                    strokeLinecap='round'
-                                    strokeLinejoin='round'
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
                                     strokeWidth={2}
-                                    d='M12 4v16m8-8H4'
+                                    d="M12 4v16m8-8H4"
                                 />
                             </svg>
                             New Assign
                         </button>
                         <Link
-                            href={route('equipments.index')}
-                            className='inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 px-4 py-2 rounded-lg font-medium text-gray-700 dark:text-gray-300 transition-colors'
+                            href={route("equipments.index")}
+                            className="inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 px-4 py-2 rounded-lg font-medium text-gray-700 dark:text-gray-300 transition-colors"
                         >
                             <svg
-                                className='w-4 h-4'
-                                fill='none'
-                                stroke='currentColor'
-                                viewBox='0 0 24 24'
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
                             >
                                 <path
-                                    strokeLinecap='round'
-                                    strokeLinejoin='round'
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
                                     strokeWidth={2}
-                                    d='M10 19l-7-7m0 0l7-7m-7 7h18'
+                                    d="M10 19l-7-7m0 0l7-7m-7 7h18"
                                 />
                             </svg>
                             Back to Equipment
@@ -2967,27 +2894,27 @@ export default function Assign ({
                 </div>
             }
         >
-            <div className='py-6'>
-                <div className='mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl'>
+            <div className="py-6">
+                <div className="mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
                     {/* Header Card */}
-                    <div className='bg-gradient-to-r from-blue-50 dark:from-gray-800 to-indigo-50 dark:to-gray-900 shadow-lg mb-6 rounded-xl overflow-hidden'>
-                        <div className='p-6'>
-                            <div className='flex lg:flex-row flex-col justify-between items-start lg:items-center gap-4'>
+                    <div className="bg-gradient-to-r from-blue-50 dark:from-gray-800 to-indigo-50 dark:to-gray-900 shadow-lg mb-6 rounded-xl overflow-hidden">
+                        <div className="p-6">
+                            <div className="flex lg:flex-row flex-col justify-between items-start lg:items-center gap-4">
                                 <div>
-                                    <h1 className='mb-2 font-bold text-gray-800 dark:text-white text-2xl'>
+                                    <h1 className="mb-2 font-bold text-gray-800 dark:text-white text-2xl">
                                         Employee Assignments Overview
                                     </h1>
-                                    <p className='text-gray-600 dark:text-gray-300'>
+                                    <p className="text-gray-600 dark:text-gray-300">
                                         View and manage equipment assignments
                                         for each employee
                                     </p>
                                 </div>
-                                <div className='flex items-center gap-3'>
-                                    <span className='bg-blue-100 dark:bg-blue-900/30 px-3 py-1 rounded-full font-medium text-blue-600 dark:text-blue-400 text-sm'>
-                                        {Object.keys(groupedHandovers).length}{' '}
+                                <div className="flex items-center gap-3">
+                                    <span className="bg-blue-100 dark:bg-blue-900/30 px-3 py-1 rounded-full font-medium text-blue-600 dark:text-blue-400 text-sm">
+                                        {Object.keys(groupedHandovers).length}{" "}
                                         employees
                                     </span>
-                                    <span className='bg-green-100 dark:bg-green-900/30 px-3 py-1 rounded-full font-medium text-green-600 dark:text-green-400 text-sm'>
+                                    <span className="bg-green-100 dark:bg-green-900/30 px-3 py-1 rounded-full font-medium text-green-600 dark:text-green-400 text-sm">
                                         {safeHandovers.total} total assignments
                                     </span>
                                 </div>
@@ -2996,54 +2923,54 @@ export default function Assign ({
                     </div>
 
                     {/* Search Section with Section/Subsection Filters */}
-                    <div className='bg-white dark:bg-gray-800 shadow-md mb-6 p-6 rounded-xl'>
-                        <form onSubmit={handleSearch} className='space-y-4'>
-                            <div className='gap-4 grid grid-cols-1 md:grid-cols-4'>
+                    <div className="bg-white dark:bg-gray-800 shadow-md mb-6 p-6 rounded-xl">
+                        <form onSubmit={handleSearch} className="space-y-4">
+                            <div className="gap-4 grid grid-cols-1 md:grid-cols-4">
                                 {/* Search Input */}
-                                <div className='md:col-span-1'>
-                                    <label className='block mb-2 font-medium text-gray-700 dark:text-gray-300 text-sm'>
+                                <div className="md:col-span-1">
+                                    <label className="block mb-2 font-medium text-gray-700 dark:text-gray-300 text-sm">
                                         Search
                                     </label>
-                                    <div className='relative'>
+                                    <div className="relative">
                                         <svg
-                                            className='top-1/2 left-3 absolute w-4 h-4 text-gray-400 -translate-y-1/2 transform'
-                                            fill='none'
-                                            stroke='currentColor'
-                                            viewBox='0 0 24 24'
+                                            className="top-1/2 left-3 absolute w-4 h-4 text-gray-400 -translate-y-1/2 transform"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
                                         >
                                             <path
-                                                strokeLinecap='round'
-                                                strokeLinejoin='round'
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
                                                 strokeWidth={2}
-                                                d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'
+                                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                                             />
                                         </svg>
                                         <input
-                                            type='text'
-                                            placeholder='Search employees by name or NIK...'
+                                            type="text"
+                                            placeholder="Search employees by name or NIK..."
                                             value={search}
-                                            onChange={e =>
+                                            onChange={(e) =>
                                                 setSearch(e.target.value)
                                             }
-                                            className='dark:bg-gray-700 py-3 pr-4 pl-10 border border-gray-300 dark:border-gray-600 focus:border-transparent rounded-lg focus:ring-2 focus:ring-indigo-500 w-full dark:text-white transition-colors'
+                                            className="dark:bg-gray-700 py-3 pr-4 pl-10 border border-gray-300 dark:border-gray-600 focus:border-transparent rounded-lg focus:ring-2 focus:ring-indigo-500 w-full dark:text-white transition-colors"
                                         />
                                     </div>
                                 </div>
 
                                 {/* Section Filter */}
                                 <div>
-                                    <label className='block mb-2 font-medium text-gray-700 dark:text-gray-300 text-sm'>
+                                    <label className="block mb-2 font-medium text-gray-700 dark:text-gray-300 text-sm">
                                         Section
                                     </label>
                                     <select
                                         value={selectedSection}
-                                        onChange={e =>
+                                        onChange={(e) =>
                                             setSelectedSection(e.target.value)
                                         }
-                                        className='dark:bg-gray-700 px-3 py-3 border border-gray-300 dark:border-gray-600 focus:border-transparent rounded-lg focus:ring-2 focus:ring-indigo-500 w-full dark:text-white transition-colors'
+                                        className="dark:bg-gray-700 px-3 py-3 border border-gray-300 dark:border-gray-600 focus:border-transparent rounded-lg focus:ring-2 focus:ring-indigo-500 w-full dark:text-white transition-colors"
                                     >
-                                        <option value=''>All Sections</option>
-                                        {sections.map(section => (
+                                        <option value="">All Sections</option>
+                                        {sections.map((section) => (
                                             <option
                                                 key={section.id}
                                                 value={section.id}
@@ -3056,38 +2983,40 @@ export default function Assign ({
 
                                 {/* Subsection Filter */}
                                 <div>
-                                    <label className='block mb-2 font-medium text-gray-700 dark:text-gray-300 text-sm'>
+                                    <label className="block mb-2 font-medium text-gray-700 dark:text-gray-300 text-sm">
                                         Subsection
                                     </label>
                                     <select
                                         value={selectedSubSection}
-                                        onChange={e =>
+                                        onChange={(e) =>
                                             setSelectedSubSection(
                                                 e.target.value
                                             )
                                         }
                                         disabled={!selectedSection}
-                                        className='disabled:bg-gray-100 dark:bg-gray-700 dark:disabled:bg-gray-800 px-3 py-3 border border-gray-300 dark:border-gray-600 focus:border-transparent rounded-lg focus:ring-2 focus:ring-indigo-500 w-full dark:text-white transition-colors disabled:cursor-not-allowed'
+                                        className="disabled:bg-gray-100 dark:bg-gray-700 dark:disabled:bg-gray-800 px-3 py-3 border border-gray-300 dark:border-gray-600 focus:border-transparent rounded-lg focus:ring-2 focus:ring-indigo-500 w-full dark:text-white transition-colors disabled:cursor-not-allowed"
                                     >
-                                        <option value=''>
+                                        <option value="">
                                             All Subsections
                                         </option>
-                                        {filteredSubSections.map(subsection => (
-                                            <option
-                                                key={subsection.id}
-                                                value={subsection.id}
-                                            >
-                                                {subsection.name}
-                                            </option>
-                                        ))}
+                                        {filteredSubSections.map(
+                                            (subsection) => (
+                                                <option
+                                                    key={subsection.id}
+                                                    value={subsection.id}
+                                                >
+                                                    {subsection.name}
+                                                </option>
+                                            )
+                                        )}
                                     </select>
                                 </div>
 
                                 {/* Action Buttons */}
-                                <div className='flex items-end gap-2'>
+                                <div className="flex items-end gap-2">
                                     <button
-                                        type='submit'
-                                        className='flex-1 bg-indigo-600 hover:bg-indigo-700 shadow-md hover:shadow-lg px-6 py-3 rounded-lg font-medium text-white transition-colors'
+                                        type="submit"
+                                        className="flex-1 bg-indigo-600 hover:bg-indigo-700 shadow-md hover:shadow-lg px-6 py-3 rounded-lg font-medium text-white transition-colors"
                                     >
                                         Search
                                     </button>
@@ -3095,9 +3024,9 @@ export default function Assign ({
                                         selectedSection ||
                                         selectedSubSection) && (
                                         <button
-                                            type='button'
+                                            type="button"
                                             onClick={clearSearch}
-                                            className='flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 px-6 py-3 rounded-lg font-medium text-gray-700 dark:text-gray-300 transition-colors'
+                                            className="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 px-6 py-3 rounded-lg font-medium text-gray-700 dark:text-gray-300 transition-colors"
                                         >
                                             Clear
                                         </button>
@@ -3108,40 +3037,40 @@ export default function Assign ({
                     </div>
 
                     {/* Employee Assignment Cards */}
-                    <div className='space-y-6'>
+                    <div className="space-y-6">
                         {Object.keys(groupedHandovers).length > 0 ? (
-                            Object.values(groupedHandovers).map(group => (
+                            Object.values(groupedHandovers).map((group) => (
                                 <div
                                     key={group.employee.id}
-                                    className='bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden'
+                                    className="bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden"
                                 >
                                     {/* Employee Header */}
                                     <div
-                                        className='hover:bg-gray-50 dark:hover:bg-gray-700/50 p-6 transition-colors cursor-pointer'
+                                        className="hover:bg-gray-50 dark:hover:bg-gray-700/50 p-6 transition-colors cursor-pointer"
                                         onClick={() =>
                                             toggleEmployeeExpansion(
                                                 group.employee.id
                                             )
                                         }
                                     >
-                                        <div className='flex sm:flex-row flex-col justify-between sm:items-center gap-4'>
-                                            <div className='flex flex-1 items-center gap-4'>
-                                                <div className='flex justify-center items-center bg-gradient-to-br from-blue-500 to-purple-500 rounded-full w-12 h-12 font-medium text-white text-lg'>
+                                        <div className="flex sm:flex-row flex-col justify-between sm:items-center gap-4">
+                                            <div className="flex flex-1 items-center gap-4">
+                                                <div className="flex justify-center items-center bg-gradient-to-br from-blue-500 to-purple-500 rounded-full w-12 h-12 font-medium text-white text-lg">
                                                     {group.employee.name.charAt(
                                                         0
                                                     )}
                                                 </div>
-                                                <div className='flex-1'>
-                                                    <h3 className='font-semibold text-gray-900 dark:text-white text-lg'>
+                                                <div className="flex-1">
+                                                    <h3 className="font-semibold text-gray-900 dark:text-white text-lg">
                                                         {group.employee.name}
                                                     </h3>
-                                                    <div className='flex flex-wrap gap-4 mt-1 text-gray-600 dark:text-gray-400 text-sm'>
+                                                    <div className="flex flex-wrap gap-4 mt-1 text-gray-600 dark:text-gray-400 text-sm">
                                                         <span>
-                                                            NIK:{' '}
+                                                            NIK:{" "}
                                                             {group.employee.nik}
                                                         </span>
                                                         <span>
-                                                            Assignments:{' '}
+                                                            Assignments:{" "}
                                                             {
                                                                 group.totalAssignments
                                                             }
@@ -3169,51 +3098,51 @@ export default function Assign ({
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className='flex items-center gap-3'>
+                                            <div className="flex items-center gap-3">
                                                 <button
-                                                    onClick={e => {
-                                                        e.stopPropagation()
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
                                                         handleUpdate(
                                                             group.employee
-                                                        )
+                                                        );
                                                     }}
-                                                    className='inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 shadow-sm hover:shadow px-4 py-2 rounded-lg font-medium text-white transition-colors'
+                                                    className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 shadow-sm hover:shadow px-4 py-2 rounded-lg font-medium text-white transition-colors"
                                                 >
                                                     <svg
-                                                        className='w-4 h-4'
-                                                        fill='none'
-                                                        stroke='currentColor'
-                                                        viewBox='0 0 24 24'
+                                                        className="w-4 h-4"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
                                                     >
                                                         <path
-                                                            strokeLinecap='round'
-                                                            strokeLinejoin='round'
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
                                                             strokeWidth={2}
-                                                            d='M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z'
+                                                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
                                                         />
                                                     </svg>
                                                     Update
                                                 </button>
                                                 <button
-                                                    onClick={e => {
-                                                        e.stopPropagation()
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
                                                         handleQuickAssign(
                                                             group.employee
-                                                        )
+                                                        );
                                                     }}
-                                                    className='inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 shadow-sm hover:shadow px-4 py-2 rounded-lg font-medium text-white transition-colors'
+                                                    className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 shadow-sm hover:shadow px-4 py-2 rounded-lg font-medium text-white transition-colors"
                                                 >
                                                     <svg
-                                                        className='w-4 h-4'
-                                                        fill='none'
-                                                        stroke='currentColor'
-                                                        viewBox='0 0 24 24'
+                                                        className="w-4 h-4"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
                                                     >
                                                         <path
-                                                            strokeLinecap='round'
-                                                            strokeLinejoin='round'
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
                                                             strokeWidth={2}
-                                                            d='M12 4v16m8-8H4'
+                                                            d="M12 4v16m8-8H4"
                                                         />
                                                     </svg>
                                                     Assign More
@@ -3222,11 +3151,11 @@ export default function Assign ({
                                                     className={`px-3 py-1 rounded-full text-xs font-medium ${
                                                         group.totalAssignments >
                                                         0
-                                                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                                            : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                                                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                                                            : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
                                                     }`}
                                                 >
-                                                    {group.totalAssignments}{' '}
+                                                    {group.totalAssignments}{" "}
                                                     equipment assigned
                                                 </span>
                                                 <svg
@@ -3234,18 +3163,18 @@ export default function Assign ({
                                                         expandedEmployees.has(
                                                             group.employee.id
                                                         )
-                                                            ? 'rotate-180'
-                                                            : ''
+                                                            ? "rotate-180"
+                                                            : ""
                                                     }`}
-                                                    fill='none'
-                                                    stroke='currentColor'
-                                                    viewBox='0 0 24 24'
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    viewBox="0 0 24 24"
                                                 >
                                                     <path
-                                                        strokeLinecap='round'
-                                                        strokeLinejoin='round'
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
                                                         strokeWidth={2}
-                                                        d='M19 9l-7 7-7-7'
+                                                        d="M19 9l-7 7-7-7"
                                                     />
                                                 </svg>
                                             </div>
@@ -3256,10 +3185,10 @@ export default function Assign ({
                                     {expandedEmployees.has(
                                         group.employee.id
                                     ) && (
-                                        <div className='border-gray-200 dark:border-gray-700 border-t'>
-                                            <div className='p-6'>
-                                                <div className='flex justify-between items-center mb-4'>
-                                                    <h4 className='font-semibold text-gray-900 text-md dark:text-white'>
+                                        <div className="border-gray-200 dark:border-gray-700 border-t">
+                                            <div className="p-6">
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <h4 className="font-semibold text-gray-900 text-md dark:text-white">
                                                         Assigned Equipment (
                                                         {
                                                             group.assignments
@@ -3268,18 +3197,18 @@ export default function Assign ({
                                                         )
                                                     </h4>
                                                 </div>
-                                                <div className='gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3'>
+                                                <div className="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
                                                     {group.assignments.map(
-                                                        assignment => (
+                                                        (assignment) => (
                                                             <div
                                                                 key={
                                                                     assignment.id
                                                                 }
-                                                                className='bg-gray-50 dark:bg-gray-700/50 p-4 border border-gray-200 dark:border-gray-600 rounded-lg'
+                                                                className="bg-gray-50 dark:bg-gray-700/50 p-4 border border-gray-200 dark:border-gray-600 rounded-lg"
                                                             >
-                                                                <div className='flex justify-between items-start mb-3'>
+                                                                <div className="flex justify-between items-start mb-3">
                                                                     <div>
-                                                                        <h5 className='font-medium text-gray-900 dark:text-white'>
+                                                                        <h5 className="font-medium text-gray-900 dark:text-white">
                                                                             {
                                                                                 assignment
                                                                                     .equipment
@@ -3287,8 +3216,8 @@ export default function Assign ({
                                                                             }
                                                                         </h5>
                                                                         {assignment.size && (
-                                                                            <span className='inline-block bg-blue-100 dark:bg-blue-900/30 mt-1 px-2 py-1 rounded-full font-medium text-blue-800 dark:text-blue-300 text-xs'>
-                                                                                Size:{' '}
+                                                                            <span className="inline-block bg-blue-100 dark:bg-blue-900/30 mt-1 px-2 py-1 rounded-full font-medium text-blue-800 dark:text-blue-300 text-xs">
+                                                                                Size:{" "}
                                                                                 {
                                                                                     assignment.size
                                                                                 }
@@ -3300,51 +3229,51 @@ export default function Assign ({
                                                                             src={
                                                                                 assignment.photo
                                                                             }
-                                                                            alt='handover'
-                                                                            className='border border-gray-200 dark:border-gray-600 rounded-lg w-12 h-12 object-cover'
+                                                                            alt="handover"
+                                                                            className="border border-gray-200 dark:border-gray-600 rounded-lg w-12 h-12 object-cover"
                                                                         />
                                                                     ) : (
-                                                                        <span className='text-gray-400 text-xs'>
+                                                                        <span className="text-gray-400 text-xs">
                                                                             No
                                                                             photo
                                                                         </span>
                                                                     )}
                                                                 </div>
-                                                                <div className='mb-3 text-gray-600 dark:text-gray-400 text-sm'>
-                                                                    Assigned:{' '}
+                                                                <div className="mb-3 text-gray-600 dark:text-gray-400 text-sm">
+                                                                    Assigned:{" "}
                                                                     {new Date(
                                                                         assignment.date
                                                                     ).toLocaleDateString(
-                                                                        'id-ID',
+                                                                        "id-ID",
                                                                         {
-                                                                            year: 'numeric',
-                                                                            month: 'long',
-                                                                            day: 'numeric'
+                                                                            year: "numeric",
+                                                                            month: "long",
+                                                                            day: "numeric",
                                                                         }
                                                                     )}
                                                                 </div>
-                                                                <div className='flex gap-2'>
+                                                                <div className="flex gap-2">
                                                                     <button
                                                                         onClick={() =>
                                                                             openDeleteModal(
                                                                                 assignment
                                                                             )
                                                                         }
-                                                                        className='inline-flex flex-1 justify-center items-center gap-1 bg-red-100 hover:bg-red-200 dark:bg-red-900/20 dark:hover:bg-red-900/30 px-3 py-2 rounded-lg font-medium text-red-600 dark:text-red-400 text-sm transition-colors'
+                                                                        className="inline-flex flex-1 justify-center items-center gap-1 bg-red-100 hover:bg-red-200 dark:bg-red-900/20 dark:hover:bg-red-900/30 px-3 py-2 rounded-lg font-medium text-red-600 dark:text-red-400 text-sm transition-colors"
                                                                     >
                                                                         <svg
-                                                                            className='w-4 h-4'
-                                                                            fill='none'
-                                                                            stroke='currentColor'
-                                                                            viewBox='0 0 24 24'
+                                                                            className="w-4 h-4"
+                                                                            fill="none"
+                                                                            stroke="currentColor"
+                                                                            viewBox="0 0 24 24"
                                                                         >
                                                                             <path
-                                                                                strokeLinecap='round'
-                                                                                strokeLinejoin='round'
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
                                                                                 strokeWidth={
                                                                                     2
                                                                                 }
-                                                                                d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
+                                                                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                                                                             />
                                                                         </svg>
                                                                         Delete
@@ -3360,39 +3289,39 @@ export default function Assign ({
                                 </div>
                             ))
                         ) : (
-                            <div className='bg-white dark:bg-gray-800 shadow-md p-12 rounded-xl text-center'>
+                            <div className="bg-white dark:bg-gray-800 shadow-md p-12 rounded-xl text-center">
                                 <svg
-                                    className='mx-auto mb-4 w-16 h-16 text-gray-300 dark:text-gray-600'
-                                    fill='none'
-                                    stroke='currentColor'
-                                    viewBox='0 0 24 24'
+                                    className="mx-auto mb-4 w-16 h-16 text-gray-300 dark:text-gray-600"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
                                 >
                                     <path
-                                        strokeLinecap='round'
-                                        strokeLinejoin='round'
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
                                         strokeWidth={1}
-                                        d='M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z'
+                                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
                                     />
                                 </svg>
-                                <h3 className='mb-2 font-medium text-gray-900 dark:text-white text-lg'>
+                                <h3 className="mb-2 font-medium text-gray-900 dark:text-white text-lg">
                                     No assignments found
                                 </h3>
-                                <p className='mb-4 text-gray-500 dark:text-gray-400'>
+                                <p className="mb-4 text-gray-500 dark:text-gray-400">
                                     {search
-                                        ? 'Try adjusting your search terms'
-                                        : 'Start by assigning equipment to employees'}
+                                        ? "Try adjusting your search terms"
+                                        : "Start by assigning equipment to employees"}
                                 </p>
                                 {search ? (
                                     <button
                                         onClick={clearSearch}
-                                        className='bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg font-medium text-white transition-colors'
+                                        className="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg font-medium text-white transition-colors"
                                     >
                                         Clear Search
                                     </button>
                                 ) : (
                                     <button
                                         onClick={handleNewAssign}
-                                        className='bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-medium text-white transition-colors'
+                                        className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-medium text-white transition-colors"
                                     >
                                         New Assign
                                     </button>
@@ -3403,23 +3332,23 @@ export default function Assign ({
 
                     {/* Pagination */}
                     {safeHandovers.last_page > 1 && (
-                        <div className='flex justify-center mt-8'>
-                            <nav className='flex items-center gap-2'>
+                        <div className="flex justify-center mt-8">
+                            <nav className="flex items-center gap-2">
                                 {safeHandovers.links?.map((link, index) => (
                                     <Link
                                         key={index}
-                                        href={link.url || '#'}
+                                        href={link.url || "#"}
                                         className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                                             link.active
-                                                ? 'bg-indigo-600 text-white shadow-md'
-                                                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600'
+                                                ? "bg-indigo-600 text-white shadow-md"
+                                                : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-600"
                                         } ${
                                             !link.url
-                                                ? 'opacity-50 cursor-not-allowed'
-                                                : ''
+                                                ? "opacity-50 cursor-not-allowed"
+                                                : ""
                                         }`}
                                         dangerouslySetInnerHTML={{
-                                            __html: link.label
+                                            __html: link.label,
                                         }}
                                     />
                                 ))}
@@ -3471,12 +3400,12 @@ export default function Assign ({
                 onClose={() =>
                     setNotification({
                         show: false,
-                        type: '',
-                        title: '',
-                        message: ''
+                        type: "",
+                        title: "",
+                        message: "",
                     })
                 }
             />
         </AuthenticatedLayout>
-    )
+    );
 }

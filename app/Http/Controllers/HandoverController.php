@@ -216,9 +216,6 @@ class HandoverController extends Controller
         ]);
     }
 
-    /**
-     * Quick assign equipment to employee
-     */
 public function quickAssign(Request $request)
 {
     \Log::info('=== QUICK ASSIGN START ===');
@@ -240,7 +237,26 @@ public function quickAssign(Request $request)
         $equipment = WorkEquipment::findOrFail($validated['equipment_id']);
         \Log::info('Equipment found:', [$equipment->id, $equipment->type, $equipment->amount, $equipment->size]);
 
-        // ... existing stock management code ...
+        // Handle stock management for equipment with sizes
+        if (!empty($equipment->size) && $validated['size']) {
+            $this->assignSizeFromStock($equipment, $validated['size']);
+            \Log::info('Stock managed for equipment with size', [
+                'equipment_id' => $equipment->id,
+                'size' => $validated['size'],
+                'new_sizes' => $equipment->size
+            ]);
+        } else if (empty($equipment->size)) {
+            // Equipment without sizes
+            if ($equipment->amount < $validated['quantity']) {
+                throw new \Exception("Insufficient stock for {$equipment->type}. Available: {$equipment->amount}, Requested: {$validated['quantity']}");
+            }
+            $equipment->amount = $equipment->amount - $validated['quantity'];
+            $equipment->save();
+            \Log::info('Stock managed for equipment without size', [
+                'equipment_id' => $equipment->id,
+                'new_amount' => $equipment->amount
+            ]);
+        }
 
         // Create handover records
         $handovers = [];
@@ -272,7 +288,7 @@ public function quickAssign(Request $request)
             'quantity' => $validated['quantity']
         ]);
 
-        // FIX: Return Inertia response instead of JSON
+        // Return Inertia response
         return back()->with([
             'success' => 'Successfully assigned ' . $validated['quantity'] . ' item(s)' . ($validated['size'] ? " (Size: {$validated['size']})" : "")
         ]);
@@ -290,91 +306,88 @@ public function quickAssign(Request $request)
     }
 }
 
-    /**
-     * Bulk assign multiple equipment to an employee
-     */
-    public function bulkAssign(Request $request)
-    {
-        \Log::info('BulkAssign request received', $request->all());
+/**
+ * Bulk assign multiple equipment to an employee
+ */
+public function bulkAssign(Request $request)
+{
+    \Log::info('BulkAssign request received', $request->all());
 
-        try {
-            $validated = $request->validate([
-                'employee_id' => 'required|exists:employees,id',
-                'equipment_ids' => 'required|array',
-                'equipment_ids.*' => 'exists:work_equipments,id',
-                'photo_url' => 'nullable|url',
-            ]);
+    try {
+        $validated = $request->validate([
+            'employee_id' => 'required|exists:employees,id',
+            'items' => 'required|array',
+            'items.*.equipment_id' => 'required|exists:work_equipments,id',
+            'items.*.size' => 'nullable|string|max:255',
+            'photo_url' => 'nullable|url',
+        ]);
 
-            $employeeId = $validated['employee_id'];
-            $equipmentIds = $validated['equipment_ids'];
-            $photoUrl = $validated['photo_url'] ?? null;
+        $employeeId = $validated['employee_id'];
+        $items = $validated['items'];
+        $photoUrl = $validated['photo_url'] ?? null;
 
-            \Log::info('Processing bulk assignment', [
-                'employee_id' => $employeeId,
-                'equipment_ids' => $equipmentIds,
-                'photo_url' => $photoUrl
-            ]);
+        \Log::info('Processing bulk assignment', [
+            'employee_id' => $employeeId,
+            'items_count' => count($items),
+            'photo_url' => $photoUrl
+        ]);
 
-            DB::beginTransaction();
+        DB::beginTransaction();
 
-            $handovers = [];
-            $currentDate = now();
+        $handovers = [];
+        $currentDate = now();
 
-            foreach ($equipmentIds as $equipmentId) {
-                $equipment = WorkEquipment::findOrFail($equipmentId);
+        foreach ($items as $item) {
+            $equipment = WorkEquipment::findOrFail($item['equipment_id']);
 
-                // Check stock for equipment without sizes
-                if (empty($equipment->size)) {
-                    if ($equipment->amount <= 0) {
-                        throw new \Exception("Insufficient stock for {$equipment->type}");
-                    }
-                    $equipment->amount = $equipment->amount - 1;
-                    $equipment->save();
+            // Check stock and manage based on equipment type
+            if (empty($equipment->size)) {
+                // Equipment without sizes
+                if ($equipment->amount <= 0) {
+                    throw new \Exception("Insufficient stock for {$equipment->type}");
                 }
-
-                $handover = Handover::create([
-                    'employee_id' => $employeeId,
-                    'equipment_id' => $equipmentId,
-                    'size' => null,
-                    'date' => $currentDate,
-                    'photo' => $photoUrl,
-                ]);
-
-                $handovers[] = $handover;
+                $equipment->amount = $equipment->amount - 1;
+                $equipment->save();
+            } else if ($item['size']) {
+                // Equipment with sizes
+                $this->assignSizeFromStock($equipment, $item['size']);
             }
 
-            DB::commit();
-
-            \Log::info('Bulk assignment completed successfully', [
-                'handovers_created' => count($handovers),
-                'employee_id' => $employeeId
+            $handover = Handover::create([
+                'employee_id' => $employeeId,
+                'equipment_id' => $item['equipment_id'],
+                'size' => $item['size'] ?? null,
+                'date' => $currentDate,
+                'photo' => $photoUrl,
             ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => "Successfully assigned " . count($equipmentIds) . " equipment(s) to employee",
-                'handovers' => $handovers
-            ]);
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            DB::rollBack();
-            \Log::error('Validation error in bulkAssign', ['errors' => $e->errors()]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $e->errors()
-            ], 422);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            \Log::error('Bulk assign error: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString()
-            ]);
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to assign equipment: ' . $e->getMessage()
-            ], 500);
+            $handovers[] = $handover;
         }
+
+        DB::commit();
+
+        \Log::info('Bulk assignment completed successfully', [
+            'handovers_created' => count($handovers),
+            'employee_id' => $employeeId
+        ]);
+
+        // Return Inertia response instead of JSON
+        return back()->with([
+            'success' => 'Successfully assigned ' . count($items) . ' equipment item(s) to employee'
+        ]);
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        DB::rollBack();
+        \Log::error('Validation error in bulkAssign', ['errors' => $e->errors()]);
+        return back()->withErrors($e->errors());
+    } catch (\Exception $e) {
+        DB::rollBack();
+        \Log::error('Bulk assign error: ' . $e->getMessage(), [
+            'trace' => $e->getTraceAsString()
+        ]);
+        return back()->withErrors(['error' => 'Failed to assign equipment: ' . $e->getMessage()]);
     }
+}
 
     /**
      * Get active employees without any equipment assignments with search filter
@@ -866,6 +879,8 @@ public function exportAssignments()
         return back()->with('error', 'Failed to export handover data.');
     }
 }
+
+
 
 
 }

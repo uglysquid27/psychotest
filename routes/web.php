@@ -421,13 +421,14 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
 
         // 👉 update handover
         Route::put('/handover/{handover}', [EquipmentController::class, 'handoverUpdate'])->name('handover.update');
+        
     });
 
     Route::get('/equipments/export', [EquipmentController::class, 'exportEquipment'])
     ->name('equipments.export');
 
     Route::get('/handovers/assign', [HandoverController::class, 'assignPage'])->name('handovers.assign');
-    Route::post('/handovers/quick-assign', [HandoverController::class, 'quickAssign'])->name('handovers.quick-assign');
+    Route::post('/handovers/bulk-assign', [HandoverController::class, 'bulkAssign'])->name('handovers.bulk-assign');
     Route::post('/handovers/bulk-assign', [HandoverController::class, 'bulkAssign'])->name('handovers.bulk-assign');
     Route::post('/handovers/{handover}/upload-photo', [HandoverController::class, 'uploadPhoto'])->name('handovers.upload-photo');
     Route::put('/handovers/{handover}', [HandoverController::class, 'updateWithDate'])->name('handovers.update');
