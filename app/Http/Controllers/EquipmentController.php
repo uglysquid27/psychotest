@@ -17,14 +17,14 @@ class EquipmentController extends Controller
     {
         $equipments = WorkEquipment::orderBy('type')->get();
 
-        return Inertia::render('apd/Index', [
+        return Inertia::render('InventoryIndex', [
             'equipments' => $equipments,
         ]);
     }
 
     public function create()
     {
-        return Inertia::render('apd/Create');
+        return Inertia::render('InventoryCreate');
     }
 
     public function destroy(WorkEquipment $equipment)
@@ -293,7 +293,7 @@ class EquipmentController extends Controller
                 ->paginate(10)
                 ->withQueryString();
 
-            return inertia('apd/Assign', [
+            return inertia('InventoryAssign', [
                 'equipment' => $equipment,
                 'employees' => $employees,
                 'selectedSize' => $selectedSize,
@@ -317,7 +317,7 @@ class EquipmentController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        return inertia('apd/Assign', [
+        return inertia('InventoryAssign', [
             'handovers' => $handovers,
             'filters' => $request->only('search'),
         ]);

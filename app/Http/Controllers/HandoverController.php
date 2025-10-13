@@ -206,7 +206,7 @@ class HandoverController extends Controller
             ->orderBy('name')
             ->get();
 
-        return inertia('apd/Assign', [
+        return inertia('Inventory/Assign', [
             'handovers' => $handovers,
             'equipments' => $allEquipments,
             'employees' => $allEmployees,
