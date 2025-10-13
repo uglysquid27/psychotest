@@ -187,111 +187,112 @@ export default function UpdateEmployeeModal({ employee, show, onClose, equipment
     };
 
     const handleSubmit = async (e) => {
-        e.preventDefault();
+    e.preventDefault();
 
-        if (!selectedDate) {
-            showNotification("warning", "Date Required", "Please select date");
-            return;
+    if (!selectedDate) {
+        showNotification("warning", "Date Required", "Please select date");
+        return;
+    }
+
+    if (handovers.length === 0) {
+        showNotification(
+            "warning",
+            "No Handovers",
+            "No handovers to update"
+        );
+        return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+        const updateData = {
+            date: selectedDate,
+            photo_url: photo,
+            handovers: handovers.map((handover) => {
+                const originalHandover = originalHandovers.find(
+                    (oh) => oh.id === handover.id
+                );
+                return {
+                    id: handover.id,
+                    size: handover.size,
+                    original_size: originalHandover?.size,
+                    equipment_id: handover.equipment.id,
+                };
+            }),
+        };
+
+        console.log("Update data dengan stock management:", updateData);
+
+        // FIX: Get CSRF token properly - same as in Assign.jsx
+        const csrfToken = document
+            .querySelector('meta[name="csrf-token"]')
+            ?.getAttribute("content");
+        
+        if (!csrfToken) {
+            throw new Error("CSRF token not found");
         }
 
-        if (handovers.length === 0) {
-            showNotification(
-                "warning",
-                "No Handovers",
-                "No handovers to update"
-            );
-            return;
+        console.log("CSRF Token:", csrfToken);
+
+        const response = await fetch(
+            route("handovers.employee.update", { employee: employee.id }),
+            {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRF-TOKEN": csrfToken,
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: JSON.stringify(updateData),
+            }
+        );
+
+        // Check if response is ok before parsing JSON
+        if (!response.ok) {
+            let errorMessage = `HTTP ${response.status}`;
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.message || errorMessage;
+            } catch (e) {
+                errorMessage = response.statusText || errorMessage;
+            }
+            throw new Error(errorMessage);
         }
 
-        setIsSubmitting(true);
+        const data = await response.json();
 
-        try {
-            const updateData = {
-                date: selectedDate,
-                photo_url: photo,
-                handovers: handovers.map((handover) => {
-                    const originalHandover = originalHandovers.find(
-                        (oh) => oh.id === handover.id
-                    );
-                    return {
-                        id: handover.id,
-                        size: handover.size,
-                        original_size: originalHandover?.size,
-                        equipment_id: handover.equipment.id,
-                    };
-                }),
-            };
+        if (data.success) {
+            let message = data.message;
 
-            console.log("Update data dengan stock management:", updateData);
-
-            // FIX: Get CSRF token properly
-            const csrfToken = document
-                .querySelector('meta[name="csrf-token"]')
-                ?.getAttribute("content");
-            if (!csrfToken) {
-                throw new Error("CSRF token not found");
+            if (data.stock_changes) {
+                message += "\n\nStock changes:";
+                data.stock_changes.forEach((change) => {
+                    if (change.type === "returned") {
+                        message += `\n✅ Returned 1 ${change.equipment_type} (Size: ${change.old_size}) to stock`;
+                    } else if (change.type === "assigned") {
+                        message += `\n📦 Assigned 1 ${change.equipment_type} (Size: ${change.new_size}) from stock`;
+                    }
+                });
             }
 
-            console.log("CSRF Token:", csrfToken); // Debug log
-
-            const response = await fetch(
-                route("handovers.employee.update", { employee: employee.id }),
-                {
-                    method: "PUT",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "X-CSRF-TOKEN": csrfToken, // Use the token variable
-                        "X-Requested-With": "XMLHttpRequest",
-                    },
-                    body: JSON.stringify(updateData),
-                }
-            );
-
-            // Check if response is ok before parsing JSON
-            if (!response.ok) {
-                let errorMessage = `HTTP ${response.status}`;
-                try {
-                    const errorData = await response.json();
-                    errorMessage = errorData.message || errorMessage;
-                } catch (e) {
-                    errorMessage = response.statusText || errorMessage;
-                }
-                throw new Error(errorMessage);
-            }
-
-            const data = await response.json();
-
-            if (data.success) {
-                let message = data.message;
-
-                if (data.stock_changes) {
-                    message += "\n\nStock changes:";
-                    data.stock_changes.forEach((change) => {
-                        if (change.type === "returned") {
-                            message += `\n✅ Returned 1 ${change.equipment_type} (Size: ${change.old_size}) to stock`;
-                        } else if (change.type === "assigned") {
-                            message += `\n📦 Assigned 1 ${change.equipment_type} (Size: ${change.new_size}) from stock`;
-                        }
-                    });
-                }
-
-                showNotification("success", "Update Successful", message);
-                onClose();
-                router.reload();
-            } else {
-                throw new Error(data.message || "Update failed");
-            }
-        } catch (error) {
-            console.error("Update error:", error);
-            showNotification(
-                "error",
-                "Update Failed",
-                "Update failed: " + error.message
-            );
-        } finally {
-            setIsSubmitting(false);
+            showNotification("success", "Update Successful", message);
+            onClose();
+            router.reload();
+        } else {
+            throw new Error(data.message || "Update failed");
         }
-    };
+    } catch (error) {
+        console.error("Update error:", error);
+        showNotification(
+            "error",
+            "Update Failed",
+            "Update failed: " + error.message
+        );
+    } finally {
+        setIsSubmitting(false);
+    }
+};
 
     const getAvailableSizes = (equipment) => {
         if (!equipment.size) return [];

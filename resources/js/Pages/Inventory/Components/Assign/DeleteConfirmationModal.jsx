@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import Modal from "@/Components/Modal";
+import Modal from "../../../../Components/Modal";
 import NotificationModal from "./NotificationModal";
 
 export default function DeleteConfirmationModal({ show, onClose, handover, onConfirm }) {
@@ -18,7 +18,16 @@ export default function DeleteConfirmationModal({ show, onClose, handover, onCon
     const handleDelete = async () => {
         setIsDeleting(true);
         try {
-            await onConfirm();
+            // FIX: Get CSRF token properly
+            const csrfToken = document
+                .querySelector('meta[name="csrf-token"]')
+                ?.getAttribute("content");
+            
+            if (!csrfToken) {
+                throw new Error("CSRF token not found");
+            }
+
+            await onConfirm(csrfToken);
             onClose();
         } catch (error) {
             console.error("Delete error:", error);
