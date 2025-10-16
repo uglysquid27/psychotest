@@ -265,6 +265,20 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
         ->name('manpower-requests.fulfill.store');
     Route::post('/manpower-requests/{manpower_request}/request-revision', [ManPowerRequestController::class, 'requestRevision'])
         ->name('manpower-requests.request-revision');
+    Route::post('/manpower-requests/bulk-fulfill-multi-subsection', [ManPowerRequestController::class, 'bulkFulfillMultiSubsection'])
+        ->name('manpower-requests.bulk-fulfill-multi-subsection');
+    Route::post('/manpower-requests/bulk-preview-multi-subsection', [ManPowerRequestController::class, 'bulkPreviewMultiSubsection'])
+        ->name('manpower-requests.bulk-preview-multi-subsection');
+    Route::post('/manpower-requests/bulk-preview-multi-subsection', [ManPowerRequestController::class, 'bulkPreviewMultiSubsection'])
+        ->name('manpower-requests.bulk-preview-multi-subsection');
+    Route::get('/employees/available-for-request/{requestId}', [ManPowerRequestController::class, 'getAvailableEmployeesForRequest'])
+    ->name('employees.available-for-request')
+    ->where('requestId', '[0-9]+'); // Ensure it's a numeric ID
+      Route::get('/manpower-requests/{requestId}/available-employees', [ManPowerRequestController::class, 'getAvailableEmployeesForRequest'])
+    ->name('manpower-requests.get-available-employees');
+    // Make sure this route is added
+Route::get('/manpower-requests/{requestId}/bulk-available-employees', [ManPowerRequestController::class, 'bulkGetAvailableEmployees'])
+    ->name('manpower-requests.bulk-get-available-employees');
     Route::get('/manpower-requests/{manpower_request}/revision', [ManPowerRequestController::class, 'edit'])
         ->name('manpower-requests.revision.edit');
     Route::post('/manpower-requests/check-dulicates', [ManPowerRequestController::class, 'checkDuplicates'])

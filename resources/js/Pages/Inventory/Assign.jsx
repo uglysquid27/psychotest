@@ -19,7 +19,7 @@ export default function Assign({
     filters,
     equipments,
     employees,
-    sections,
+    sections, 
     subSections,
 }) {
     const { auth } = usePage().props;

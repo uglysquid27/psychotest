@@ -47,6 +47,11 @@ class ManPowerRequest extends Model
         return $this->belongsTo(Shift::class);
     }
 
+        public function section()
+    {
+        return $this->belongsTo(Section::class);
+    }
+
     public function schedules()
     {
         return $this->hasMany(Schedule::class);

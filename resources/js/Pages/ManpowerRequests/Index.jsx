@@ -5,11 +5,9 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useState, useMemo, useEffect } from 'react';
 import SectionGroup from './Components/ManpowerRequests/SectionGroup';
 import axios from 'axios';
-import FulfillModal from './FulfillModal';
-import BulkFulfillReviewModal from './BulkFulfillReviewModal';
+import BulkFulfillPreviewModal from './BulkFulfillReviewModal';
 
 export default function Index({ sections: initialSections, auth }) {
-  const { reload } = usePage();
   const { delete: destroy } = useForm({});
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -17,35 +15,17 @@ export default function Index({ sections: initialSections, auth }) {
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
   const [currentPage, setCurrentPage] = useState(1);
-  const [showReviewModal, setShowReviewModal] = useState(false);
-  const itemsPerPage = 10;
-
-  // Manage sections in local state for dynamic updates
+  const [showBulkPreviewModal, setShowBulkPreviewModal] = useState(false);
+  const [dateFilter, setDateFilter] = useState('current');
   const [localSections, setLocalSections] = useState(initialSections);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-
-  // Bulk fulfillment states
   const [selectedRequests, setSelectedRequests] = useState([]);
   const [fulfillStrategy, setFulfillStrategy] = useState('optimal');
   const [processingRequests, setProcessingRequests] = useState([]);
-  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [showBulkResultModal, setShowBulkResultModal] = useState(false);
+const [bulkResult, setBulkResult] = useState(null);
 
-  const handleBulkFulfillInit = () => {
-    setShowBulkModal(false);
-    setShowReviewModal(true);
-  };
-
-  useEffect(() => {
-    if (showDetailsModal || showBulkModal) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'auto';
-    }
-    return () => {
-      document.body.style.overflow = 'auto';
-    };
-  }, [showDetailsModal, showBulkModal]);
-
+  const itemsPerPage = 10;
   const user = auth?.user || null;
 
   const statusClasses = {
@@ -73,7 +53,23 @@ export default function Index({ sections: initialSections, auth }) {
     }
   };
 
-  // Get all requests for bulk operations - using localSections
+  const getDateRange = () => {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    return {
+      yesterday: yesterday.toISOString().slice(0, 10),
+      today: today.toISOString().slice(0, 10),
+      tomorrow: tomorrow.toISOString().slice(0, 10)
+    };
+  };
+
+  const dateRange = getDateRange();
+
+  // Get all requests for bulk operations
   const allRequests = useMemo(() => {
     if (!localSections?.data) return [];
     const requests = [];
@@ -91,72 +87,53 @@ export default function Index({ sections: initialSections, auth }) {
     return requests;
   }, [localSections, refreshTrigger]);
 
-  // Filter unfulfilled requests for bulk operations
   const unfulfilledRequests = useMemo(() => {
     return allRequests.filter(req => req.status !== 'fulfilled' && req.status !== 'fulfilling');
   }, [allRequests]);
 
-const getDateRange = () => {
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  
-  return {
-    yesterday: yesterday.toISOString().slice(0, 10),
-    today: today.toISOString().slice(0, 10),
-    tomorrow: tomorrow.toISOString().slice(0, 10)
-  };
-};
+  // Group requests by section and date
+  const sectionDateGroups = useMemo(() => {
+    if (!localSections?.data) return [];
+    const groups = [];
 
-// Add state for date filter
-const [dateFilter, setDateFilter] = useState('current'); // 'current' or 'all'
-const dateRange = getDateRange();
-
-// Modify the sectionDateGroups to include date filtering
-const sectionDateGroups = useMemo(() => {
-  if (!localSections?.data) return [];
-  const groups = [];
-
-  localSections.data.forEach((section) => {
-    const dateMap = {};
-    (section.sub_sections || []).forEach((sub) => {
-      (sub.man_power_requests || []).forEach((req) => {
-        const dateKey = new Date(req.date).toISOString().slice(0, 10);
-        
-        // Apply date filter
-        if (dateFilter === 'current') {
-          if (dateKey !== dateRange.yesterday && 
-              dateKey !== dateRange.today && 
-              dateKey !== dateRange.tomorrow) {
-            return; // Skip dates outside the 3-day range
+    localSections.data.forEach((section) => {
+      const dateMap = {};
+      (section.sub_sections || []).forEach((sub) => {
+        (sub.man_power_requests || []).forEach((req) => {
+          const dateKey = new Date(req.date).toISOString().slice(0, 10);
+          
+          // Apply date filter
+          if (dateFilter === 'current') {
+            if (dateKey !== dateRange.yesterday && 
+                dateKey !== dateRange.today && 
+                dateKey !== dateRange.tomorrow) {
+              return; // Skip dates outside the 3-day range
+            }
           }
-        }
-        
-        if (!dateMap[dateKey]) {
-          dateMap[dateKey] = [];
-        }
-        dateMap[dateKey].push({ ...req, sub_section: { id: sub.id, name: sub.name } });
+          
+          if (!dateMap[dateKey]) {
+            dateMap[dateKey] = [];
+          }
+          dateMap[dateKey].push({ ...req, sub_section: { id: sub.id, name: sub.name } });
+        });
+      });
+
+      Object.keys(dateMap).forEach((dateKey) => {
+        const reqs = dateMap[dateKey];
+        groups.push({
+          sectionId: section.id,
+          sectionName: section.name,
+          date: dateKey,
+          requests: reqs,
+          totalRequests: reqs.length,
+          totalWorkers: reqs.reduce((sum, r) => sum + (r.requested_amount || 0), 0),
+          statuses: [...new Set(reqs.map((r) => r.status))],
+        });
       });
     });
 
-    Object.keys(dateMap).forEach((dateKey) => {
-      const reqs = dateMap[dateKey];
-      groups.push({
-        sectionId: section.id,
-        sectionName: section.name,
-        date: dateKey,
-        requests: reqs,
-        totalRequests: reqs.length,
-        totalWorkers: reqs.reduce((sum, r) => sum + (r.requested_amount || 0), 0),
-        statuses: [...new Set(reqs.map((r) => r.status))],
-      });
-    });
-  });
-
-  return groups;
-}, [localSections, refreshTrigger, dateFilter]); 
+    return groups;
+  }, [localSections, refreshTrigger, dateFilter]);
 
   // Sorting
   const sortedGroups = useMemo(() => {
@@ -194,15 +171,12 @@ const sectionDateGroups = useMemo(() => {
   const quickFulfill = async (requestId) => {
     try {
       setProcessingRequests(prev => [...prev, requestId]);
-
-      const response = await axios.post(
+      await axios.post(
         route('manpower-requests.quick-fulfill', { manpower_request: requestId }),
         { strategy: fulfillStrategy }
       );
-
       toast.success('Request fulfilled successfully');
-      setRefreshTrigger(prev => prev + 1); // Refresh data
-
+      setRefreshTrigger(prev => prev + 1);
     } catch (error) {
       console.error('Quick fulfill error:', error);
       toast.error(error.response?.data?.message || 'Failed to fulfill request');
@@ -211,33 +185,57 @@ const sectionDateGroups = useMemo(() => {
     }
   };
 
-  // Bulk fulfill selected requests
-  const bulkFulfill = async () => {
-    if (selectedRequests.length === 0) {
-      toast.warning('Please select requests to fulfill');
-      return;
-    }
+  const handleBulkResultClose = () => {
+  setShowBulkResultModal(false);
+  setBulkResult(null);
+  setSelectedRequests([]);
+  
+  // Refresh the page data
+  setRefreshTrigger(prev => prev + 1);
+};
 
-    try {
-      setProcessingRequests(prev => [...prev, ...selectedRequests]);
-      setShowReviewModal(false);
-
-      const response = await axios.post(route('manpower-requests.bulk-fulfill'), {
-        request_ids: selectedRequests,
-        strategy: fulfillStrategy
+  const handleBulkFulfillConfirm = async (result) => {
+  try {
+    if (result.success) {
+      // Success case
+      setBulkResult({
+        type: 'success',
+        title: 'Bulk Fulfillment Successful',
+        message: result.message,
+        data: result.data
       });
-
-      toast.success(`Successfully fulfilled ${selectedRequests.length} requests`);
-      setSelectedRequests([]);
-      setRefreshTrigger(prev => prev + 1); // Refresh data
-
-    } catch (error) {
-      console.error('Bulk fulfill error:', error);
-      toast.error(error.response?.data?.message || 'Failed to fulfill some requests');
-    } finally {
-      setProcessingRequests([]);
+    } else if (result.isWarning) {
+      // Warning case (partial success)
+      setBulkResult({
+        type: 'warning',
+        title: 'Bulk Fulfillment Completed',
+        message: result.message,
+        data: result.data
+      });
+    } else {
+      // Error case
+      setBulkResult({
+        type: 'error',
+        title: 'Bulk Fulfillment Failed',
+        message: result.message,
+        error: result.error
+      });
     }
-  };
+    
+    setShowBulkResultModal(true);
+    setShowBulkPreviewModal(false);
+    
+  } catch (error) {
+    console.error('Error handling bulk fulfill result:', error);
+    setBulkResult({
+      type: 'error',
+      title: 'Unexpected Error',
+      message: 'An unexpected error occurred while processing the fulfillment.'
+    });
+    setShowBulkResultModal(true);
+    setShowBulkPreviewModal(false);
+  }
+};
 
   // Handle request selection for bulk operations
   const handleRequestSelect = (requestId, checked) => {
@@ -258,14 +256,6 @@ const sectionDateGroups = useMemo(() => {
     }
   };
 
-  // Toggle individual request selection
-  const toggleSelect = (id) => {
-    setSelectedRequests(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    );
-  };
-
-  // Calculate selected requirements
   const selectedRequirements = useMemo(() => {
     const selected = allRequests.filter(req => selectedRequests.includes(req.id));
     return {
@@ -276,10 +266,8 @@ const sectionDateGroups = useMemo(() => {
     };
   }, [selectedRequests, allRequests]);
 
-  // Delete request function
   const requestDelete = (id) => {
     setRequestToDelete(id);
-    // setShowDeleteModal(true);
   };
 
   const confirmDelete = () => {
@@ -299,13 +287,11 @@ const sectionDateGroups = useMemo(() => {
           return updated;
         });
 
-        setRefreshTrigger(prev => prev + 1); // Refresh memoized groups
-
+        setRefreshTrigger(prev => prev + 1);
         toast.success('Request deleted');
         setShowDeleteModal(false);
         setRequestToDelete(null);
       },
-
       onError: () => {
         toast.error('Failed to delete');
         setShowDeleteModal(false);
@@ -326,6 +312,17 @@ const sectionDateGroups = useMemo(() => {
         : { key, direction: 'asc' }
     );
   };
+
+  useEffect(() => {
+    if (showDetailsModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'auto';
+    }
+    return () => {
+      document.body.style.overflow = 'auto';
+    };
+  }, [showDetailsModal]);
 
   return (
     <AuthenticatedLayout
@@ -356,35 +353,35 @@ const sectionDateGroups = useMemo(() => {
                     Manpower Requests
                   </h1>
                   <div className="flex items-center space-x-3 mb-4 sm:mb-0">
-    <span className="text-sm text-gray-600 dark:text-gray-400">Show:</span>
-    <div className="flex bg-gray-200 dark:bg-gray-700 rounded-md p-1">
-      <button
-        onClick={() => setDateFilter('current')}
-        className={`px-3 py-1 text-sm rounded-md transition-colors ${
-          dateFilter === 'current'
-            ? 'bg-indigo-600 text-white'
-            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-        }`}
-      >
-        3 Days
-      </button>
-      <button
-        onClick={() => setDateFilter('all')}
-        className={`px-3 py-1 text-sm rounded-md transition-colors ${
-          dateFilter === 'all'
-            ? 'bg-indigo-600 text-white'
-            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-        }`}
-      >
-        All Dates
-      </button>
-    </div>
-  </div>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Show:</span>
+                    <div className="flex bg-gray-200 dark:bg-gray-700 rounded-md p-1">
+                      <button
+                        onClick={() => setDateFilter('current')}
+                        className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                          dateFilter === 'current'
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        }`}
+                      >
+                        3 Days
+                      </button>
+                      <button
+                        onClick={() => setDateFilter('all')}
+                        className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                          dateFilter === 'all'
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+                        }`}
+                      >
+                        All Dates
+                      </button>
+                    </div>
+                  </div>
                   <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
                     {/* Show bulk fulfill button when requests are selected */}
                     {selectedRequests.length > 0 && (
                       <button
-                        onClick={() => setShowBulkModal(true)}
+                        onClick={() => setShowBulkPreviewModal(true)}
                         className="px-4 py-2 bg-green-600 dark:bg-green-500 text-white rounded-md hover:bg-green-700 dark:hover:bg-green-600"
                       >
                         Bulk Fulfill ({selectedRequests.length})
@@ -439,12 +436,6 @@ const sectionDateGroups = useMemo(() => {
                             className="px-3 py-1 text-sm bg-gray-500 dark:bg-gray-600 text-white rounded-md hover:bg-gray-600 dark:hover:bg-gray-700"
                           >
                             Clear
-                          </button>
-                          <button
-                            onClick={() => setShowBulkModal(true)}
-                            className="px-4 py-1 text-sm bg-green-600 dark:bg-green-500 text-white rounded-md hover:bg-green-700 dark:hover:bg-green-600"
-                          >
-                            Fulfill Selected ({selectedRequests.length})
                           </button>
                         </div>
                       </div>
@@ -659,7 +650,7 @@ const sectionDateGroups = useMemo(() => {
                       setShowDetailsModal(false);
                       setTimeout(() => {
                         window.location.reload();
-                      }, 100); // Small delay to ensure modal closes first
+                      }, 100);
                     }}
                   >
                     <span className="sr-only">Close</span>
@@ -683,7 +674,7 @@ const sectionDateGroups = useMemo(() => {
                     bulkMode={true}
                     selectedRequests={selectedRequests}
                     handleRequestSelect={handleRequestSelect}
-                    canRevise={true} // Add this prop
+                    canRevise={true}
                   />
                 </div>
               </div>
@@ -695,7 +686,7 @@ const sectionDateGroups = useMemo(() => {
                     setShowDetailsModal(false);
                     setTimeout(() => {
                       window.location.reload();
-                    }, 100); // Small delay to ensure modal closes first
+                    }, 100);
                   }}
                 >
                   Close
@@ -707,28 +698,70 @@ const sectionDateGroups = useMemo(() => {
       )}
 
       {/* Bulk Fulfill Modal */}
-      {showBulkModal && (
-        <FulfillModal
-          open={showBulkModal}
-          onClose={() => setShowBulkModal(false)}
-          strategy={fulfillStrategy}
-          setStrategy={setFulfillStrategy}
-          onConfirm={handleBulkFulfillInit}
-          loading={processingRequests.length > 0}
-          selectedRequests={selectedRequests}
-        />
-      )}
+    {showBulkPreviewModal && (
+  <BulkFulfillPreviewModal
+    open={showBulkPreviewModal}
+    onClose={() => {
+      setShowBulkPreviewModal(false);
+      setSelectedRequests([]);
+    }}
+    strategy={fulfillStrategy}
+    selectedRequests={selectedRequests}
+    onConfirm={handleBulkFulfillConfirm} // This now receives the result object
+    loading={processingRequests.length > 0}
+    allRequests={allRequests}
+  />
+)}
 
-      {showReviewModal && (
-        <BulkFulfillReviewModal
-          open={showReviewModal}
-          onClose={() => setShowReviewModal(false)}
-          strategy={fulfillStrategy}
-          selectedRequests={selectedRequests}
-          onConfirm={bulkFulfill}
-          loading={processingRequests.length > 0}
-        />
-      )}
+      {showBulkResultModal && bulkResult && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md">
+      <div className="flex items-center p-6">
+        <div className={`flex-shrink-0 w-12 h-12 flex items-center justify-center rounded-full ${
+          bulkResult.type === 'success' 
+            ? 'bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400' 
+            : bulkResult.type === 'warning'
+            ? 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400'
+            : 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400'
+        }`}>
+          {bulkResult.type === 'success' ? (
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : bulkResult.type === 'warning' ? (
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          ) : (
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+        </div>
+        <div className="ml-4">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+            {bulkResult.title}
+          </h3>
+          <div className="mt-2">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {bulkResult.message}
+            </p>
+          </div>
+        </div>
+      </div>
+      <div className="bg-gray-50 dark:bg-gray-700 px-6 py-3 rounded-b-lg">
+        <div className="flex justify-end">
+          <button
+            onClick={handleBulkResultClose}
+            className="px-4 py-2 bg-indigo-600 dark:bg-indigo-500 text-white rounded-md hover:bg-indigo-700 dark:hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
     </AuthenticatedLayout>
   );
 }
