@@ -22,46 +22,28 @@ export default function BulkFulfillmentPanel({
                request?.subSection?.name?.toLowerCase() === 'putway';
     }, []);
 
-    // Get all requests from the same subsection including current request
-    const sameSubsectionRequests = useMemo(() => {
-        // console.log('🔍 Filtering same subsection requests:', {
-        //     sameDayRequestsCount: sameDayRequests.length,
-        //     currentRequestId: currentRequest.id,
-        //     currentRequestSubSectionId: currentRequest.sub_section_id
-        // });
-
-        const sameSubRequests = sameDayRequests.filter(req => {
-            const matches = String(req.sub_section_id) === String(currentRequest.sub_section_id) &&
-                          req.status !== 'fulfilled';
-            
-            // console.log('📋 Request check:', {
-            //     reqId: req.id,
-            //     reqSubSectionId: req.sub_section_id,
-            //     currentSubSectionId: currentRequest.sub_section_id,
-            //     matches,
-            //     status: req.status
-            // });
-            
-            return matches;
-        });
-
-        // Ensure current request is included if not fulfilled
-        const allRequests = [...sameSubRequests];
-        const currentRequestIncluded = allRequests.some(req => String(req.id) === String(currentRequest.id));
+const sameSubsectionRequests = useMemo(() => {
+    // Get requests from same subsection that are not fulfilled
+    const sameSubRequests = sameDayRequests.filter(req => {
+        const reqSubSectionId = req.sub_section_id || req.subSection?.id;
+        const currentSubSectionId = currentRequest.sub_section_id || currentRequest.subSection?.id;
         
-        if (currentRequest.status !== 'fulfilled' && !currentRequestIncluded) {
-            // console.log('➕ Adding current request to same subsection requests');
-            allRequests.push(currentRequest);
-        }
+        return String(reqSubSectionId) === String(currentSubSectionId) &&
+               req.status !== 'fulfilled';
+    });
 
-        // console.log('✅ Final same subsection requests:', allRequests.map(req => ({
-        //     id: req.id,
-        //     name: req.sub_section?.name,
-        //     status: req.status
-        // })));
+    // CRITICAL: Always include current request in bulk mode if not fulfilled
+    const allRequests = [...sameSubRequests];
+    const currentRequestIncluded = allRequests.some(req => 
+        String(req.id) === String(currentRequest.id)
+    );
+    
+    if (currentRequest.status !== 'fulfilled' && !currentRequestIncluded) { 
+        allRequests.unshift(currentRequest); // Add at beginning for visibility
+    }
 
-        return allRequests;
-    }, [sameDayRequests, currentRequest]);
+    return allRequests;
+}, [sameDayRequests, currentRequest]);
 
     const totalRequests = sameSubsectionRequests.length;
     const totalEmployeesNeeded = sameSubsectionRequests.reduce((total, req) => total + req.requested_amount, 0);

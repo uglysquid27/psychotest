@@ -21,7 +21,7 @@ export default function EmployeeSelection({
                 <h3 className="font-bold text-gray-900 dark:text-gray-100 text-lg">
                     Karyawan Terpilih ({selectedIds.length}/{request.requested_amount})
                 </h3>
-                <button
+                {/* <button
                     type="button"
                     onClick={toggleMultiSelectMode}
                     className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
@@ -31,7 +31,7 @@ export default function EmployeeSelection({
                     }`}
                 >
                     {multiSelectMode ? '✖️ Tutup Multi Select' : '🔍 Mode Multi Select'}
-                </button>
+                </button> */}
             </div>
 
             {/* Warning for assigned employees */}
