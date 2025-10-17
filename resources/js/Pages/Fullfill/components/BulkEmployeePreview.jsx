@@ -1,3 +1,4 @@
+// BulkEmployeePreview.jsx
 import React, { useMemo } from 'react';
 
 export default function BulkEmployeePreview({
@@ -66,14 +67,14 @@ export default function BulkEmployeePreview({
                         {request.shift?.name || 'No Shift'} • {request.requested_amount} orang • Sub: {request.sub_section?.name}
                     </h4>
 
-                    <div className="gap-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+                    <div className="gap-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                         {employees.map(emp => (
                             <div
                                 key={emp.id}
                                 className="bg-gray-50 dark:bg-gray-700 p-3 border border-gray-200 dark:border-gray-600 rounded-md"
                             >
-                                <div className="font-medium text-gray-900 dark:text-gray-100">{emp.name}</div>
-                                <div className="text-gray-600 dark:text-gray-400 text-sm">
+                                <div className="font-medium text-gray-900 dark:text-gray-100 text-sm sm:text-base">{emp.name}</div>
+                                <div className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm">
                                     {emp.gender === 'female' ? '♀ Perempuan' : '♂ Laki-laki'} • {emp.type}
                                 </div>
                                 <div className="text-gray-500 dark:text-gray-400 text-xs">

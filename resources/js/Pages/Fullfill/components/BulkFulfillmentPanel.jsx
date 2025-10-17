@@ -22,28 +22,28 @@ export default function BulkFulfillmentPanel({
                request?.subSection?.name?.toLowerCase() === 'putway';
     }, []);
 
-const sameSubsectionRequests = useMemo(() => {
-    // Get requests from same subsection that are not fulfilled
-    const sameSubRequests = sameDayRequests.filter(req => {
-        const reqSubSectionId = req.sub_section_id || req.subSection?.id;
-        const currentSubSectionId = currentRequest.sub_section_id || currentRequest.subSection?.id;
+    const sameSubsectionRequests = useMemo(() => {
+        // Get requests from same subsection that are not fulfilled
+        const sameSubRequests = sameDayRequests.filter(req => {
+            const reqSubSectionId = req.sub_section_id || req.subSection?.id;
+            const currentSubSectionId = currentRequest.sub_section_id || currentRequest.subSection?.id;
+            
+            return String(reqSubSectionId) === String(currentSubSectionId) &&
+                   req.status !== 'fulfilled';
+        });
+
+        // CRITICAL: Always include current request in bulk mode if not fulfilled
+        const allRequests = [...sameSubRequests];
+        const currentRequestIncluded = allRequests.some(req => 
+            String(req.id) === String(currentRequest.id)
+        );
         
-        return String(reqSubSectionId) === String(currentSubSectionId) &&
-               req.status !== 'fulfilled';
-    });
+        if (currentRequest.status !== 'fulfilled' && !currentRequestIncluded) { 
+            allRequests.unshift(currentRequest); // Add at beginning for visibility
+        }
 
-    // CRITICAL: Always include current request in bulk mode if not fulfilled
-    const allRequests = [...sameSubRequests];
-    const currentRequestIncluded = allRequests.some(req => 
-        String(req.id) === String(currentRequest.id)
-    );
-    
-    if (currentRequest.status !== 'fulfilled' && !currentRequestIncluded) { 
-        allRequests.unshift(currentRequest); // Add at beginning for visibility
-    }
-
-    return allRequests;
-}, [sameDayRequests, currentRequest]);
+        return allRequests;
+    }, [sameDayRequests, currentRequest]);
 
     const totalRequests = sameSubsectionRequests.length;
     const totalEmployeesNeeded = sameSubsectionRequests.reduce((total, req) => total + req.requested_amount, 0);
@@ -107,23 +107,23 @@ const sameSubsectionRequests = useMemo(() => {
     }, [selectedBulkRequests, bulkSelectedEmployees, sameSubsectionRequests]);
 
     return (
-        <div className="bg-gradient-to-br from-blue-50 dark:from-blue-900/20 to-indigo-100 dark:to-indigo-900/20 shadow-lg mb-6 p-6 border border-blue-200 dark:border-blue-700 rounded-xl">
-            <div className="flex items-center mb-4">
-                <div className="bg-blue-100 dark:bg-blue-800/40 mr-4 p-3 rounded-full">
-                    <svg className="w-8 h-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="bg-gradient-to-br from-blue-50 dark:from-blue-900/20 to-indigo-100 dark:to-indigo-900/20 shadow-lg mb-6 p-4 sm:p-6 border border-blue-200 dark:border-blue-700 rounded-xl">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center mb-4">
+                <div className="bg-blue-100 dark:bg-blue-800/40 mr-0 sm:mr-4 mb-3 sm:mb-0 p-3 rounded-full">
+                    <svg className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                 </div>
                 <div>
-                    <h3 className="font-bold text-blue-800 dark:text-blue-300 text-2xl">Bulk Fulfillment</h3>
-                    <p className="text-blue-600 dark:text-blue-400">Penuhi semua request untuk sub-bagian "{currentRequest.sub_section?.name}" secara sekaligus</p>
+                    <h3 className="font-bold text-blue-800 dark:text-blue-300 text-xl sm:text-2xl">Bulk Fulfillment</h3>
+                    <p className="text-blue-600 dark:text-blue-400 text-sm sm:text-base">Penuhi semua request untuk sub-bagian "{currentRequest.sub_section?.name}" secara sekaligus</p>
                 </div>
             </div>
 
-            <div className="gap-6 grid grid-cols-1 md:grid-cols-2 mb-6">
+            <div className="gap-4 sm:gap-6 grid grid-cols-1 md:grid-cols-2 mb-6">
                 <div className="bg-white dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-                    <h4 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">📊 Ringkasan</h4>
-                    <div className="space-y-2">
+                    <h4 className="mb-3 font-semibold text-gray-900 dark:text-gray-100 text-base sm:text-lg">📊 Ringkasan</h4>
+                    <div className="space-y-2 text-sm sm:text-base">
                         <div className="flex justify-between">
                             <span className="text-gray-600 dark:text-gray-400">Total Request Tersedia:</span>
                             <span className="font-medium text-gray-900 dark:text-gray-100">{totalRequests}</span>
@@ -151,7 +151,7 @@ const sameSubsectionRequests = useMemo(() => {
                         {hasIncompleteAssignments && selectedBulkRequests.length > 0 && (
                             <div className="flex justify-between">
                                 <span className="text-yellow-600 dark:text-yellow-400">Status:</span>
-                                <span className="font-medium text-yellow-600 dark:text-yellow-400">
+                                <span className="font-medium text-yellow-600 dark:text-yellow-400 text-xs sm:text-sm">
                                     ⚠️ Beberapa request belum terisi penuh
                                 </span>
                             </div>
@@ -159,7 +159,7 @@ const sameSubsectionRequests = useMemo(() => {
                         {allRequestsFullyAssigned && selectedBulkRequests.length > 0 && (
                             <div className="flex justify-between">
                                 <span className="text-green-600 dark:text-green-400">Status:</span>
-                                <span className="font-medium text-green-600 dark:text-green-400">
+                                <span className="font-medium text-green-600 dark:text-green-400 text-xs sm:text-sm">
                                     ✅ Semua request terisi penuh
                                 </span>
                             </div>
@@ -180,16 +180,16 @@ const sameSubsectionRequests = useMemo(() => {
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-                    <h4 className="mb-3 font-semibold text-gray-900 dark:text-gray-100">⚙️ Pengaturan</h4>
+                    <h4 className="mb-3 font-semibold text-gray-900 dark:text-gray-100 text-base sm:text-lg">⚙️ Pengaturan</h4>
                     <div className="space-y-4">
                         <div>
-                            <label className="block mb-1 font-medium text-gray-700 dark:text-gray-300 text-sm">
+                            <label className="block mb-1 font-medium text-gray-700 dark:text-gray-300 text-xs sm:text-sm">
                                 Strategi Penugasan:
                             </label>
                             <select
                                 value={strategy}
                                 onChange={(e) => setStrategy(e.target.value)}
-                                className="bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md w-full text-gray-900 dark:text-gray-100"
+                                className="bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md w-full text-gray-900 dark:text-gray-100 text-sm sm:text-base"
                             >
                                 <option value="optimal">Optimal (Prioritas Sub-Bagian + Score)</option>
                                 <option value="same_section">Same Section (Prioritas Section Sama)</option>
@@ -197,10 +197,10 @@ const sameSubsectionRequests = useMemo(() => {
                             </select>
                         </div>
                         <div>
-                            <label className="block mb-1 font-medium text-gray-700 dark:text-gray-300 text-sm">
+                            <label className="block mb-1 font-medium text-gray-700 dark:text-gray-300 text-xs sm:text-sm">
                                 Visibility:
                             </label>
-                            <div className="flex space-x-4">
+                            <div className="flex flex-col sm:flex-row sm:space-x-4 space-y-2 sm:space-y-0">
                                 <label className="flex items-center">
                                     <input
                                         type="radio"
@@ -209,7 +209,7 @@ const sameSubsectionRequests = useMemo(() => {
                                         onChange={() => setVisibility('private')}
                                         className="mr-2"
                                     />
-                                    <span className="text-gray-700 dark:text-gray-300">Private</span>
+                                    <span className="text-gray-700 dark:text-gray-300 text-sm">Private</span>
                                 </label>
                                 <label className="flex items-center">
                                     <input
@@ -219,7 +219,7 @@ const sameSubsectionRequests = useMemo(() => {
                                         onChange={() => setVisibility('public')}
                                         className="mr-2"
                                     />
-                                    <span className="text-gray-700 dark:text-gray-300">Public</span>
+                                    <span className="text-gray-700 dark:text-gray-300 text-sm">Public</span>
                                 </label>
                             </div>
                         </div>
@@ -229,8 +229,8 @@ const sameSubsectionRequests = useMemo(() => {
 
             {/* Request Selection Section */}
             <div className="bg-white dark:bg-gray-800 mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-                <div className="flex justify-between items-center mb-4">
-                    <h4 className="font-semibold text-gray-900 dark:text-gray-100">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+                    <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-base sm:text-lg">
                         Daftar Request untuk Sub-Bagian "{currentRequest.sub_section?.name}"
                     </h4>
                     {sameSubsectionRequests.length > 0 && (
@@ -241,13 +241,13 @@ const sameSubsectionRequests = useMemo(() => {
                                     const allRequestIds = sameSubsectionRequests.map(req => String(req.id));
                                     setSelectedBulkRequests(allRequestIds);
                                 }}
-                                className="px-3 py-1 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-900/60 text-blue-800 dark:text-blue-300 text-sm rounded-md transition-colors"
+                                className="px-2 sm:px-3 py-1 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-900/60 text-blue-800 dark:text-blue-300 text-xs sm:text-sm rounded-md transition-colors"
                             >
                                 Pilih Semua
                             </button>
                             <button
                                 onClick={() => setSelectedBulkRequests([])}
-                                className="px-3 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm rounded-md transition-colors"
+                                className="px-2 sm:px-3 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs sm:text-sm rounded-md transition-colors"
                             >
                                 Hapus Semua
                             </button>
@@ -268,7 +268,7 @@ const sameSubsectionRequests = useMemo(() => {
                             return (
                                 <div
                                     key={req.id}
-                                    className={`p-4 rounded-md mb-3 cursor-pointer transition-all ${
+                                    className={`p-3 sm:p-4 rounded-md mb-3 cursor-pointer transition-all ${
                                         isSelected
                                             ? 'bg-blue-100 dark:bg-blue-900/40 border-2 border-blue-300 dark:border-blue-600'
                                             : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
@@ -276,37 +276,37 @@ const sameSubsectionRequests = useMemo(() => {
                                     onClick={() => toggleBulkRequestSelection(req.id)}
                                 >
                                     <div className="flex justify-between items-start">
-                                        <div className="flex items-start space-x-3 flex-1">
+                                        <div className="flex items-start space-x-2 sm:space-x-3 flex-1">
                                             <input
                                                 type="checkbox"
                                                 checked={isSelected}
                                                 onChange={() => {}}
                                                 className="mt-1"
                                             />
-                                            <div className="flex-1">
-                                                <div className="flex items-center space-x-2 mb-2">
-                                                    <div className="font-medium text-gray-900 dark:text-gray-100">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2 mb-2">
+                                                    <div className="font-medium text-gray-900 dark:text-gray-100 text-sm sm:text-base">
                                                         {req.shift?.name || 'No Shift'} - {req.requested_amount} orang
                                                     </div>
                                                     {isCurrentRequest && (
-                                                        <span className="bg-yellow-100 dark:bg-yellow-800 px-2 py-1 rounded-full text-yellow-800 dark:text-yellow-200 text-xs">
+                                                        <span className="bg-yellow-100 dark:bg-yellow-800 px-2 py-1 rounded-full text-yellow-800 dark:text-yellow-200 text-xs whitespace-nowrap">
                                                             Request Saat Ini
                                                         </span>
                                                     )}
                                                     {req.status === 'fulfilled' && (
-                                                        <span className="bg-green-100 dark:bg-green-800 px-2 py-1 rounded-full text-green-800 dark:text-green-200 text-xs">
+                                                        <span className="bg-green-100 dark:bg-green-800 px-2 py-1 rounded-full text-green-800 dark:text-green-200 text-xs whitespace-nowrap">
                                                             Sudah Dipenuhi
                                                         </span>
                                                     )}
                                                 </div>
                                                 
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs sm:text-sm">
                                                     {/* Requirements */}
                                                     <div>
                                                         <div className="text-gray-600 dark:text-gray-400 mb-1">
                                                             <strong>Kebutuhan:</strong>
                                                         </div>
-                                                        <div className="flex flex-wrap gap-2">
+                                                        <div className="flex flex-wrap gap-1 sm:gap-2">
                                                             {maleCount > 0 && (
                                                                 <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 px-2 py-1 rounded text-xs">
                                                                     L: {maleCount}
@@ -337,7 +337,7 @@ const sameSubsectionRequests = useMemo(() => {
                                                                     }}
                                                                 ></div>
                                                             </div>
-                                                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                            <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
                                                                 {assignedCount}/{req.requested_amount}
                                                             </span>
                                                         </div>
@@ -349,12 +349,12 @@ const sameSubsectionRequests = useMemo(() => {
 
                                     {/* Employee Selection for Bulk Request */}
                                     {isSelected && (
-                                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
-                                            <div className="flex justify-between items-center mb-3">
+                                        <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-200 dark:border-gray-600">
+                                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 gap-2">
                                                 <h5 className="font-medium text-gray-700 dark:text-gray-300 text-sm">
                                                     Karyawan Terpilih:
                                                 </h5>
-                                                <span className={`text-xs px-2 py-1 rounded-full ${
+                                                <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${
                                                     assignedCount === req.requested_amount
                                                         ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
                                                         : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
@@ -385,7 +385,7 @@ const sameSubsectionRequests = useMemo(() => {
                                                     return (
                                                         <div
                                                             key={index}
-                                                            className={`p-3 rounded border ${
+                                                            className={`p-2 sm:p-3 rounded border ${
                                                                 employee
                                                                     ? 'border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
                                                                     : 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700'
@@ -395,7 +395,7 @@ const sameSubsectionRequests = useMemo(() => {
                                                                 <span className="text-gray-500 dark:text-gray-400 text-xs">
                                                                     #{index + 1}
                                                                     {lineAssignment && (
-                                                                        <span className="ml-1 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 px-1 rounded">
+                                                                        <span className="ml-1 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 px-1 rounded text-xs">
                                                                             Line {lineAssignment}
                                                                         </span>
                                                                     )}
@@ -413,10 +413,10 @@ const sameSubsectionRequests = useMemo(() => {
 
                                                             {employee ? (
                                                                 <div className="mb-2">
-                                                                    <div className="font-medium text-gray-900 dark:text-gray-100 text-sm">
+                                                                    <div className="font-medium text-gray-900 dark:text-gray-100 text-xs sm:text-sm truncate">
                                                                         {employee.name}
                                                                     </div>
-                                                                    <div className="text-gray-500 dark:text-gray-400 text-xs">
+                                                                    <div className="text-gray-500 dark:text-gray-400 text-xs truncate">
                                                                         {employee.type} - {employee.subSections?.[0]?.name || '-'}
                                                                     </div>
                                                                     <div className="text-gray-400 dark:text-gray-500 text-xs mt-1">
@@ -446,32 +446,32 @@ const sameSubsectionRequests = useMemo(() => {
                                             
                                             {/* Tampilkan summary line assignment untuk putway */}
                                             {isPutwayRequest(req) && assignedCount > 0 && (
-                                                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                                                <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-200 dark:border-gray-600">
                                                     <h6 className="font-medium text-gray-700 dark:text-gray-300 text-sm mb-2">
                                                         Preview Penugasan Line:
                                                     </h6>
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                                                        <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded">
-                                                            <div className="font-medium text-purple-700 dark:text-purple-300 mb-2">Line 1</div>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 text-xs">
+                                                        <div className="bg-purple-50 dark:bg-purple-900/20 p-2 sm:p-3 rounded">
+                                                            <div className="font-medium text-purple-700 dark:text-purple-300 mb-2 text-xs sm:text-sm">Line 1</div>
                                                             {assignedEmployees
                                                                 .filter((_, idx) => (idx % 2) === 0)
                                                                 .map((id, idx) => {
                                                                     const emp = getEmployeeDetails(id);
                                                                     return emp ? (
-                                                                        <div key={id} className="text-purple-600 dark:text-purple-400 py-1">
+                                                                        <div key={id} className="text-purple-600 dark:text-purple-400 py-1 text-xs truncate">
                                                                             {idx * 2 + 1}. {emp.name} ({emp.gender === 'female' ? 'P' : 'L'})
                                                                         </div>
                                                                     ) : null;
                                                                 })}
                                                         </div>
-                                                        <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded">
-                                                            <div className="font-medium text-purple-700 dark:text-purple-300 mb-2">Line 2</div>
+                                                        <div className="bg-purple-50 dark:bg-purple-900/20 p-2 sm:p-3 rounded">
+                                                            <div className="font-medium text-purple-700 dark:text-purple-300 mb-2 text-xs sm:text-sm">Line 2</div>
                                                             {assignedEmployees
                                                                 .filter((_, idx) => (idx % 2) === 1)
                                                                 .map((id, idx) => {
                                                                     const emp = getEmployeeDetails(id);
                                                                     return emp ? (
-                                                                        <div key={id} className="text-purple-600 dark:text-purple-400 py-1">
+                                                                        <div key={id} className="text-purple-600 dark:text-purple-400 py-1 text-xs truncate">
                                                                             {idx * 2 + 2}. {emp.name} ({emp.gender === 'female' ? 'P' : 'L'})
                                                                         </div>
                                                                     ) : null;
@@ -488,10 +488,10 @@ const sameSubsectionRequests = useMemo(() => {
                     ) : (
                         <div className="py-8 text-center">
                             <div className="text-gray-400 dark:text-gray-500 text-4xl mb-2">📋</div>
-                            <p className="text-gray-500 dark:text-gray-400">
+                            <p className="text-gray-500 dark:text-gray-400 text-sm sm:text-base">
                                 Tidak ada request untuk sub-bagian ini pada tanggal yang sama.
                             </p>
-                            <p className="text-gray-400 dark:text-gray-500 text-sm mt-1">
+                            <p className="text-gray-400 dark:text-gray-500 text-xs sm:text-sm mt-1">
                                 Semua request mungkin sudah terpenuhi atau tidak ada request lain dengan sub-bagian yang sama.
                             </p>
                         </div>
@@ -500,22 +500,22 @@ const sameSubsectionRequests = useMemo(() => {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex justify-between items-center">
-                <div className="text-gray-600 dark:text-gray-400 text-sm">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm">
                     {selectedBulkRequests.length} request terpilih dari {totalRequests} • 
                     {assignmentStats.totalAssigned} dari {assignmentStats.totalSelected} karyawan terisi
                 </div>
                 <button
                     onClick={() => handleBulkSubmit(strategy, visibility)}
                     disabled={processing || selectedBulkRequests.length === 0 || hasIncompleteAssignments}
-                    className={`px-6 py-3 rounded-lg font-semibold text-white transition-colors ${
+                    className={`px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold text-white transition-colors text-sm sm:text-base w-full sm:w-auto ${
                         processing || selectedBulkRequests.length === 0 || hasIncompleteAssignments
                             ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
                             : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700'
                     }`}
                 >
                     {processing ? (
-                        <span className="flex items-center">
+                        <span className="flex items-center justify-center sm:justify-start">
                             <svg className="mr-2 -ml-1 w-4 h-4 text-white animate-spin" fill="none" viewBox="0 0 24 24">
                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>

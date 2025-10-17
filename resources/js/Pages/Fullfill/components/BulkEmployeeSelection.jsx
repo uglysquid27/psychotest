@@ -1,4 +1,4 @@
-// resources/js/Components/BulkEmployeeSelector.jsx
+// BulkEmployeeSelection.jsx
 import React, { useState, useEffect } from "react";
 
 export default function BulkEmployeeSelector({
@@ -39,7 +39,7 @@ export default function BulkEmployeeSelector({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Cari karyawan..."
-          className="p-2 border rounded-md w-full"
+          className="p-2 border rounded-md w-full text-sm sm:text-base"
         />
       </div>
 
@@ -50,14 +50,14 @@ export default function BulkEmployeeSelector({
               key={emp.id}
               className="flex justify-between items-center hover:bg-gray-100 px-1 py-2"
             >
-              <div>
-                <div className="font-medium">{emp.name}</div>
-                <div className="text-gray-600 text-sm">NIK: {emp.nik}</div>
-                <div className="text-sm">Score: {emp.total_score?.toFixed(2)}</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-sm sm:text-base truncate">{emp.name}</div>
+                <div className="text-gray-600 text-xs sm:text-sm truncate">NIK: {emp.nik}</div>
+                <div className="text-xs sm:text-sm">Score: {emp.total_score?.toFixed(2)}</div>
               </div>
               <button
                 onClick={() => onAssign(emp, requestId)}
-                className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-md text-white"
+                className="bg-blue-600 hover:bg-blue-700 px-2 sm:px-3 py-1 rounded-md text-white text-xs sm:text-sm whitespace-nowrap ml-2"
               >
                 Assign
               </button>
@@ -65,7 +65,7 @@ export default function BulkEmployeeSelector({
           ))}
         </ul>
       ) : (
-        <p className="text-gray-500 text-sm">Tidak ada karyawan tersedia</p>
+        <p className="text-gray-500 text-xs sm:text-sm">Tidak ada karyawan tersedia</p>
       )}
     </div>
   );

@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+// EmployeeModal.jsx
+import { useState, useMemo, useEffect } from 'react';
 import IncompleteSelectionModal from './IncompleteSelectionModal';
 
 export default function EmployeeModal({
@@ -19,6 +20,21 @@ export default function EmployeeModal({
     const [showIncompleteModal, setShowIncompleteModal] = useState(false);
     const [failedImages, setFailedImages] = useState(new Set());
 
+    // Prevent background scroll when modal is open
+    useEffect(() => {
+        if (showModal) {
+            document.body.style.overflow = 'hidden';
+            document.documentElement.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'unset';
+            document.documentElement.style.overflow = 'unset';
+        }
+
+        return () => {
+            document.body.style.overflow = 'unset';
+            document.documentElement.style.overflow = 'unset';
+        };
+    }, [showModal]);
 
     const availableSubSections = useMemo(() => {
         const subSectionMap = new Map();
@@ -60,13 +76,6 @@ export default function EmployeeModal({
                 emp.subSections.some(ss => String(ss.id) === subSectionId)
             );
         }
-
-        // console.log('📊 Filtered employees:', {
-        //     searchTerm,
-        //     selectedSubSection,
-        //     totalCount: filtered.length,
-        //     employees: filtered.map(e => ({ id: e.id, name: e.name, status: e.status }))
-        // });
 
         return filtered;
     }, [allSortedEligibleEmployees, searchTerm, selectedSubSection]);
@@ -148,17 +157,7 @@ export default function EmployeeModal({
     };
 
     const toggleEmployeeSelection = (employeeId) => {
-        // console.log('🖱️ Employee clicked:', {
-        //     employeeId,
-        //     employeeIdString: String(employeeId),
-        //     multiSelectMode,
-        //     isBulkMode,
-        //     tempSelectedIds,
-        //     selectedIds
-        // });
-
         if (!multiSelectMode) {
-            // console.log('🚀 Calling selectNewEmployee with:', employeeId);
             selectNewEmployee(employeeId);
             return;
         }
@@ -169,21 +168,11 @@ export default function EmployeeModal({
             const isCurrentlySelected = prevStr.includes(employeeIdStr);
             const newEmployee = allSortedEligibleEmployees.find(e => String(e.id) === employeeIdStr);
 
-            // console.log('📝 Multi-select state update:', {
-            //     previousIds: prev,
-            //     employeeIdStr,
-            //     isCurrentlySelected,
-            //     newEmployee: newEmployee ? { id: newEmployee.id, name: newEmployee.name } : 'NOT FOUND',
-            //     allEmployees: allSortedEligibleEmployees.map(e => ({ id: e.id, name: e.name }))
-            // });
-
             if (isCurrentlySelected) {
                 const newIds = prev.filter(id => String(id) !== employeeIdStr);
-                // console.log('➖ Removing employee, new IDs:', newIds);
                 return newIds;
             } else {
                 if (prev.length >= request.requested_amount) {
-                    // console.log('❌ Maximum reached:', prev.length, '>=', request.requested_amount);
                     alert(`Maksimum ${request.requested_amount} karyawan dapat dipilih`);
                     return prev;
                 }
@@ -196,40 +185,23 @@ export default function EmployeeModal({
                 const maleCount = newSelectionWithEmployee.filter(e => e.gender === 'male').length;
                 const femaleCount = newSelectionWithEmployee.filter(e => e.gender === 'female').length;
 
-                // console.log('👥 Gender validation:', {
-                //     maleCount,
-                //     femaleCount,
-                //     requiredMale: request.male_count,
-                //     requiredFemale: request.female_count
-                // });
-
                 if (request.male_count > 0 && maleCount > request.male_count) {
-                    // console.log('❌ Male limit exceeded');
                     alert(`Maksimum ${request.male_count} karyawan laki-laki diperbolehkan`);
                     return prev;
                 }
 
                 if (request.female_count > 0 && femaleCount > request.female_count) {
-                    // console.log('❌ Female limit exceeded');
                     alert(`Maksimum ${request.female_count} karyawan perempuan diperbolehkan`);
                     return prev;
                 }
 
                 const newIds = [...prev, employeeId];
-                // console.log('➕ Adding employee, new IDs:', newIds);
                 return newIds;
             }
         });
     };
 
     const applyMultiSelection = () => {
-        // console.log('✅ Applying multi-selection:', {
-        //     tempSelectedIds,
-        //     tempSelectedIdsString: tempSelectedIds.map(id => String(id)),
-        //     requestId: request.id,
-        //     requestedAmount: request.requested_amount
-        // });
-
         const finalSelection = tempSelectedIds.map(id => {
             const idStr = String(id);
             return allSortedEligibleEmployees.find(e => String(e.id) === idStr);
@@ -246,30 +218,15 @@ export default function EmployeeModal({
         const meetsGenderRequirements = maleCount >= (request.male_count || 0) && femaleCount >= (request.female_count || 0);
         const meetsTotalRequirements = tempSelectedIds.length >= request.requested_amount;
 
-        // console.log('📋 Selection validation:', {
-        //     maleCount,
-        //     femaleCount,
-        //     missingMale,
-        //     missingFemale,
-        //     missingTotal,
-        //     hasGenderRequirements,
-        //     meetsGenderRequirements,
-        //     meetsTotalRequirements,
-        //     finalSelection: finalSelection.map(e => ({ id: e.id, name: e.name, gender: e.gender }))
-        // });
-
         if (meetsGenderRequirements && meetsTotalRequirements) {
-            // console.log('🎯 All requirements met, calling handleMultiSelect');
             handleMultiSelect(tempSelectedIds);
             setShowModal(false);
         } else {
-            // console.log('⚠️ Requirements not met, showing incomplete modal');
             setShowIncompleteModal(true);
         }
     };
 
     const cancelMultiSelection = () => {
-        // console.log('❌ Canceling multi-selection');
         setTempSelectedIds([]);
         setShowModal(false);
     };
@@ -278,12 +235,6 @@ export default function EmployeeModal({
         const availableIds = filteredEmployees
             .slice(0, request.requested_amount)
             .map(emp => String(emp.id));
-        
-        // console.log('🎯 Selecting top employees:', {
-        //     availableIds,
-        //     filteredEmployeesCount: filteredEmployees.length,
-        //     requestedAmount: request.requested_amount
-        // });
         
         setTempSelectedIds(availableIds);
     };
@@ -317,34 +268,12 @@ export default function EmployeeModal({
 
         const isFemale = emp.gender === 'female';
 
-        // console.log('👤 Employee card render:', {
-        //     empId,
-        //     name: emp.name,
-        //     isSelected,
-        //     isSelectedInMulti,
-        //     isSelectedInSingle,
-        //     isDisabled,
-        //     isAssigned,
-        //     isCurrentlyScheduled,
-        //     status: emp.status
-        // });
-
         return (
             <div
                 key={empId}
                 onClick={() => {
-                    // console.log('🎯 Employee card clicked:', {
-                    //     empId,
-                    //     name: emp.name,
-                    //     isDisabled,
-                    //     multiSelectMode,
-                    //     isBulkMode
-                    // });
-                    
                     if (!isDisabled) {
                         toggleEmployeeSelection(empId);
-                    } else {
-                        // console.log('🚫 Employee disabled, cannot select');
                     }
                 }}
                 className={`cursor-pointer text-left p-3 rounded-md border transition relative ${
@@ -367,12 +296,11 @@ export default function EmployeeModal({
                             type="checkbox"
                             checked={isSelectedInMulti}
                             onChange={() => {
-                                // console.log('✅ Checkbox clicked for:', emp.name);
                                 if (!isAssigned) {
                                     toggleEmployeeSelection(empId);
                                 }
                             }}
-                            className="w-5 h-5 text-green-600 bg-white border-gray-300 rounded focus:ring-green-500 focus:ring-2"
+                            className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 bg-white border-gray-300 rounded focus:ring-green-500 focus:ring-2"
                             disabled={isAssigned}
                         />
                     </div>
@@ -380,13 +308,15 @@ export default function EmployeeModal({
 
                 <div className="flex justify-between items-start">
                     <div className={`flex ${multiSelectMode ? 'pr-8' : ''}`}>
-                        <div>
-                            <strong className="text-gray-900 dark:text-gray-100">{emp.name}</strong>
+                        <div className="min-w-0 flex-1">
+                            <strong className="text-gray-900 dark:text-gray-100 text-sm sm:text-base block truncate">
+                                {emp.name}
+                            </strong>
                             <div className="mt-1 text-gray-500 dark:text-gray-400 text-xs">
-                                <p>NIK: {emp.nik}</p>
-                                <p>Tipe: {emp.type}</p>
-                                <p>Status: {emp.status === 'assigned' ? 'Assigned' : 'Available'}</p>
-                                <p>Sub: {displaySubSectionName}</p>
+                                <p className="truncate">NIK: {emp.nik}</p>
+                                <p className="truncate">Tipe: {emp.type}</p>
+                                <p className="truncate">Status: {emp.status === 'assigned' ? 'Assigned' : 'Available'}</p>
+                                <p className="truncate">Sub: {displaySubSectionName}</p>
                                 <p>Skor: {emp.total_score.toFixed(2)}</p>
                                 {emp.type === 'harian' && (
                                     <p>Bobot Kerja: {emp.working_day_weight}</p>
@@ -398,7 +328,7 @@ export default function EmployeeModal({
                         </div>
                     </div>
                     {!multiSelectMode && (
-                        <div className="flex flex-col items-end">
+                        <div className="flex flex-col items-end shrink-0 ml-2">
                             <span className={`text-xs px-1 rounded mb-1 ${
                                 isFemale
                                     ? 'bg-pink-100 dark:bg-pink-900/40 text-pink-800 dark:text-pink-300'
@@ -407,13 +337,13 @@ export default function EmployeeModal({
                                 {isFemale ? 'P' : 'L'}
                             </span>
                             {isCurrentlyScheduled && (
-                                <span className="text-xs px-1 rounded bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300">
-                                    Sudah dijadwalkan
+                                <span className="text-xs px-1 rounded bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 whitespace-nowrap">
+                                    Terjadwal
                                 </span>
                             )}
                             {isAssigned && !isCurrentlyScheduled && (
-                                <span className="text-xs px-1 rounded bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300">
-                                    Sudah ditugaskan
+                                <span className="text-xs px-1 rounded bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300 whitespace-nowrap">
+                                    Ditugaskan
                                 </span>
                             )}
                         </div>
@@ -426,258 +356,240 @@ export default function EmployeeModal({
     if (!showModal) return null;
 
     return (
-        <div
-            className="z-50 fixed inset-0 flex justify-center items-center bg-black bg-opacity-50 p-4"
-            onClick={() => {
-                // console.log('❌ Modal background clicked, closing modal');
-                setShowModal(false);
-            }}
-        >
-            <div
-                className="relative bg-white dark:bg-gray-800 shadow-xl rounded-lg w-full max-w-6xl max-h-[85vh] overflow-hidden"
-                onClick={(e) => {
-                    // console.log('🛑 Stopping modal content click propagation');
-                    e.stopPropagation();
-                }}
-            >
-                {/* Header with close button */}
-                <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center space-x-4">
-                        <h3 className="font-bold text-xl text-gray-900 dark:text-gray-100">
-                            {multiSelectMode ? 'Pilih Multiple Karyawan' : 'Pilih Karyawan Baru'}
-                            {isBulkMode && ' (Bulk Mode)'}
-                        </h3>
-                        {multiSelectMode && (
-                            <span className="px-3 py-1 text-sm bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 rounded-full">
-                                {tempSelectedIds.length} / {request.requested_amount} terpilih
-                            </span>
-                        )}
-                    </div>
-                    <button
-                        onClick={() => {
-                            // console.log('❌ Close button clicked');
-                            setShowModal(false);
-                        }}
-                        className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+        <>
+            {/* Main Modal */}
+            <div className="fixed inset-0 z-50 overflow-y-auto">
+                {/* Backdrop */}
+                <div 
+                    className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+                    onClick={() => setShowModal(false)}
+                />
+                
+                {/* Modal Content */}
+                <div className="flex min-h-full items-center justify-center p-2 sm:p-4">
+                    <div 
+                        className="relative bg-white dark:bg-gray-800 shadow-xl rounded-lg w-full max-w-6xl max-h-[90vh] overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
                     >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
-
-                {/* Multi-select mode toggle */}
-                <div className="p-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
+                        {/* Header with close button */}
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
+                            <div className="flex items-center space-x-2 sm:space-x-4 mb-2 sm:mb-0">
+                                <h3 className="font-bold text-gray-900 dark:text-gray-100 text-lg sm:text-xl">
+                                    {multiSelectMode ? 'Pilih Multiple Karyawan' : 'Pilih Karyawan Baru'}
+                                    {isBulkMode && ' (Bulk Mode)'}
+                                </h3>
+                                {multiSelectMode && (
+                                    <span className="px-2 sm:px-3 py-1 text-xs sm:text-sm bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 rounded-full whitespace-nowrap">
+                                        {tempSelectedIds.length} / {request.requested_amount} terpilih
+                                    </span>
+                                )}
+                            </div>
                             <button
-                                onClick={() => {
-                                    // console.log('🔄 Toggling multi-select mode from:', multiSelectMode, 'to:', !multiSelectMode);
-                                    toggleMultiSelectMode();
-                                }}
-                                className={`px-4 py-2 rounded-md font-medium transition-colors ${multiSelectMode
-                                    ? 'bg-green-600 hover:bg-green-700 text-white'
-                                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                                    }`}
+                                onClick={() => setShowModal(false)}
+                                className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 p-1"
                             >
-                                {multiSelectMode ? '📋 Mode Multi-Select' : '🔄 Mode Single Select'}
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
                             </button>
+                        </div>
 
-                            {multiSelectMode && (
-                                <div className="flex space-x-2">
+                        {/* Multi-select mode toggle */}
+                        <div className="p-3 sm:p-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                                    <button
+                                        onClick={toggleMultiSelectMode}
+                                        className={`px-3 sm:px-4 py-2 rounded-md font-medium transition-colors text-sm sm:text-base w-full sm:w-auto ${
+                                            multiSelectMode
+                                                ? 'bg-green-600 hover:bg-green-700 text-white'
+                                                : 'bg-blue-600 hover:bg-blue-700 text-white'
+                                        }`}
+                                    >
+                                        {multiSelectMode ? '📋 Mode Multi-Select' : '🔄 Mode Single Select'}
+                                    </button>
+
+                                    {multiSelectMode && (
+                                        <div className="flex flex-wrap gap-2">
+                                            <button
+                                                onClick={() => setTempSelectedIds([])}
+                                                className="px-2 sm:px-3 py-1 text-xs sm:text-sm bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-900/60 text-red-800 dark:text-red-300 rounded-md whitespace-nowrap"
+                                            >
+                                                🗑️ Clear All
+                                            </button>
+                                            <button
+                                                onClick={handleSelectTopEmployees}
+                                                className="px-2 sm:px-3 py-1 text-xs sm:text-sm bg-blue-100 dark:bg-blue-900/40 hover:bg-blue-200 dark:hover:bg-blue-900/60 text-blue-800 dark:text-blue-300 rounded-md whitespace-nowrap"
+                                            >
+                                                ✅ Select Top {Math.min(request.requested_amount, filteredEmployees.length)}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {multiSelectMode && (
+                                    <div className="flex space-x-2 w-full sm:w-auto">
+                                        <button
+                                            onClick={cancelMultiSelection}
+                                            className="px-3 sm:px-4 py-2 bg-gray-500 dark:bg-gray-600 hover:bg-gray-600 dark:hover:bg-gray-700 text-white rounded-md transition-colors text-sm sm:text-base flex-1 sm:flex-none"
+                                        >
+                                            ❌ Batal
+                                        </button>
+                                        <button
+                                            onClick={applyMultiSelection}
+                                            className="px-3 sm:px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors text-sm sm:text-base flex-1 sm:flex-none"
+                                        >
+                                            ✅ Terapkan
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Search and Filter Section */}
+                        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+                            <div className="flex flex-col lg:flex-row gap-3 sm:gap-4">
+                                {/* Search Input */}
+                                <div className="flex-1">
+                                    <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Cari berdasarkan Nama atau NIK
+                                    </label>
+                                    <input
+                                        type="text"
+                                        id="search"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        placeholder="Ketik nama atau NIK karyawan..."
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
+                                    />
+                                </div>
+
+                                {/* SubSection Filter */}
+                                <div className="lg:w-1/3">
+                                    <label htmlFor="subsection" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Filter berdasarkan Sub-Bagian
+                                    </label>
+                                    <select
+                                        id="subsection"
+                                        value={selectedSubSection}
+                                        onChange={(e) => setSelectedSubSection(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
+                                    >
+                                        <option value="all">Semua Sub-Bagian</option>
+                                        {availableSubSections.map(subSection => (
+                                            <option key={subSection.id} value={subSection.id}>
+                                                {subSection.section_name} - {subSection.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Clear Filters */}
+                                <div className="flex items-end">
                                     <button
                                         onClick={() => {
-                                            // console.log('🗑️ Clearing all selections');
-                                            setTempSelectedIds([]);
+                                            setSearchTerm('');
+                                            setSelectedSubSection('all');
                                         }}
-                                        className="px-3 py-1 text-sm bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-900/60 text-red-800 dark:text-red-300 rounded-md"
+                                        className="px-3 sm:px-4 py-2 bg-gray-500 dark:bg-gray-600 hover:bg-gray-600 dark:hover:bg-gray-700 text-white rounded-md transition-colors text-sm sm:text-base w-full lg:w-auto"
                                     >
-                                        🗑️ Clear All
+                                        Reset Filter
                                     </button>
-                                    <button
-                                        onClick={handleSelectTopEmployees}
-                                        className="px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900/40 hover:bg-blue-200 dark:hover:bg-blue-900/60 text-blue-800 dark:text-blue-300 rounded-md"
-                                    >
-                                        ✅ Select Top {Math.min(request.requested_amount, filteredEmployees.length)}
-                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Results Summary */}
+                            <div className="mt-3 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                                Menampilkan {filteredEmployees.length} dari {allSortedEligibleEmployees.length} karyawan
+                                {searchTerm && ` • Pencarian: "${searchTerm}"`}
+                                {selectedSubSection !== 'all' && ` • Filter: ${availableSubSections.find(s => s.id === selectedSubSection)?.section_name} - ${availableSubSections.find(s => s.id === selectedSubSection)?.name}`}
+                            </div>
+                        </div>
+
+                        {/* Employee List */}
+                        <div className="overflow-y-auto max-h-[40vh] sm:max-h-[50vh] p-4 sm:p-6">
+                            {/* Same Sub-Section Employees */}
+                            {sameSubSectionEmployees.length > 0 && (
+                                <div className="mb-6 sm:mb-8">
+                                    <h4 className="mb-3 sm:mb-4 font-semibold text-gray-700 dark:text-gray-300 text-base sm:text-lg flex items-center">
+                                        <span className="w-2 h-2 sm:w-3 sm:h-3 bg-green-500 rounded-full mr-2"></span>
+                                        Karyawan dari Sub-Bagian Sama ({request?.sub_section?.name || 'Unknown'}) - {sameSubSectionEmployees.length} orang
+                                    </h4>
+                                    <div className="gap-2 sm:gap-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                                        {sameSubSectionEmployees.map(renderEmployeeCard)}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Other Sub-Section Employees */}
+                            {otherSubSectionEmployees.length > 0 && (
+                                <div>
+                                    <h4 className="mb-3 sm:mb-4 font-semibold text-gray-700 dark:text-gray-300 text-base sm:text-lg flex items-center">
+                                        <span className="w-2 h-2 sm:w-3 sm:h-3 bg-blue-500 rounded-full mr-2"></span>
+                                        Karyawan dari Sub-Bagian Lain - {otherSubSectionEmployees.length} orang
+                                    </h4>
+                                    <div className="gap-2 sm:gap-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                                        {otherSubSectionEmployees.map(renderEmployeeCard)}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* No Results */}
+                            {filteredEmployees.length === 0 && (
+                                <div className="text-center py-8 sm:py-12">
+                                    <div className="text-gray-400 dark:text-gray-500 text-4xl sm:text-6xl mb-3 sm:mb-4">
+                                        🔍
+                                    </div>
+                                    <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                                        Tidak ada karyawan ditemukan
+                                    </h3>
+                                    <p className="text-gray-500 dark:text-gray-400 text-sm sm:text-base">
+                                        Coba ubah kata kunci pencarian atau filter yang digunakan
+                                    </p>
                                 </div>
                             )}
                         </div>
 
-                        {multiSelectMode && (
-                            <div className="flex space-x-2">
+                        {/* Footer */}
+                        {!multiSelectMode && (
+                            <div className="flex justify-end p-4 sm:p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
                                 <button
-                                    onClick={cancelMultiSelection}
-                                    className="px-4 py-2 bg-gray-500 dark:bg-gray-600 hover:bg-gray-600 dark:hover:bg-gray-700 text-white rounded-md transition-colors"
+                                    type="button"
+                                    onClick={() => setShowModal(false)}
+                                    className="bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-700 px-4 sm:px-6 py-2 rounded-lg text-gray-700 dark:text-gray-200 transition-colors text-sm sm:text-base"
                                 >
-                                    ❌ Batal
-                                </button>
-                                <button
-                                    onClick={applyMultiSelection}
-                                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors"
-                                >
-                                    ✅ Terapkan Pilihan
+                                    Tutup
                                 </button>
                             </div>
                         )}
                     </div>
                 </div>
-
-                {/* Search and Filter Section */}
-                <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-                    <div className="flex flex-col md:flex-row gap-4">
-                        {/* Search Input */}
-                        <div className="flex-1">
-                            <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Cari berdasarkan Nama atau NIK
-                            </label>
-                            <input
-                                type="text"
-                                id="search"
-                                value={searchTerm}
-                                onChange={(e) => {
-                                    // console.log('🔍 Search term changed:', e.target.value);
-                                    setSearchTerm(e.target.value);
-                                }}
-                                placeholder="Ketik nama atau NIK karyawan..."
-                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                        </div>
-
-                        {/* SubSection Filter */}
-                        <div className="md:w-1/3">
-                            <label htmlFor="subsection" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Filter berdasarkan Sub-Bagian
-                            </label>
-                            <select
-                                id="subsection"
-                                value={selectedSubSection}
-                                onChange={(e) => {
-                                    // console.log('🏷️ Sub-section filter changed:', e.target.value);
-                                    setSelectedSubSection(e.target.value);
-                                }}
-                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            >
-                                <option value="all">Semua Sub-Bagian</option>
-                                {availableSubSections.map(subSection => (
-                                    <option key={subSection.id} value={subSection.id}>
-                                        {subSection.section_name} - {subSection.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* Clear Filters */}
-                        <div className="flex items-end">
-                            <button
-                                onClick={() => {
-                                    // console.log('🔄 Resetting filters');
-                                    setSearchTerm('');
-                                    setSelectedSubSection('all');
-                                }}
-                                className="px-4 py-2 bg-gray-500 dark:bg-gray-600 hover:bg-gray-600 dark:hover:bg-gray-700 text-white rounded-md transition-colors"
-                            >
-                                Reset Filter
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Results Summary */}
-                    <div className="mt-3 text-sm text-gray-600 dark:text-gray-400">
-                        Menampilkan {filteredEmployees.length} dari {allSortedEligibleEmployees.length} karyawan
-                        {searchTerm && ` • Pencarian: "${searchTerm}"`}
-                        {selectedSubSection !== 'all' && ` • Filter: ${availableSubSections.find(s => s.id === selectedSubSection)?.section_name} - ${availableSubSections.find(s => s.id === selectedSubSection)?.name}`}
-                    </div>
-                </div>
-
-                {/* Employee List */}
-                <div className="overflow-y-auto max-h-[50vh] p-6">
-                    {/* Same Sub-Section Employees */}
-                    {sameSubSectionEmployees.length > 0 && (
-                        <div className="mb-8">
-                            <h4 className="mb-4 font-semibold text-lg text-gray-700 dark:text-gray-300 flex items-center">
-                                <span className="w-3 h-3 bg-green-500 rounded-full mr-2"></span>
-                                Karyawan dari Sub-Bagian Sama ({request?.sub_section?.name || 'Unknown'}) - {sameSubSectionEmployees.length} orang
-                            </h4>
-                            <div className="gap-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                                {sameSubSectionEmployees.map(renderEmployeeCard)}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Other Sub-Section Employees */}
-                    {otherSubSectionEmployees.length > 0 && (
-                        <div>
-                            <h4 className="mb-4 font-semibold text-lg text-gray-700 dark:text-gray-300 flex items-center">
-                                <span className="w-3 h-3 bg-blue-500 rounded-full mr-2"></span>
-                                Karyawan dari Sub-Bagian Lain - {otherSubSectionEmployees.length} orang
-                            </h4>
-                            <div className="gap-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                                {otherSubSectionEmployees.map(renderEmployeeCard)}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* No Results */}
-                    {filteredEmployees.length === 0 && (
-                        <div className="text-center py-12">
-                            <div className="text-gray-400 dark:text-gray-500 text-6xl mb-4">
-                                🔍
-                            </div>
-                            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-                                Tidak ada karyawan ditemukan
-                            </h3>
-                            <p className="text-gray-500 dark:text-gray-400">
-                                Coba ubah kata kunci pencarian atau filter yang digunakan
-                            </p>
-                        </div>
-                    )}
-                </div>
-
-                {/* Footer */}
-                {!multiSelectMode && (
-                    <div className="flex justify-end p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                // console.log('❌ Closing modal from footer');
-                                setShowModal(false);
-                            }}
-                            className="bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-700 px-6 py-2 rounded-lg text-gray-700 dark:text-gray-200 transition-colors"
-                        >
-                            Tutup
-                        </button>
-                    </div>
-                )}
-
-                {showIncompleteModal && (
-                    <IncompleteSelectionModal
-                        show={showIncompleteModal}
-                        onClose={() => {
-                            // console.log('❌ Incomplete modal closed');
-                            setShowIncompleteModal(false);
-                        }}
-                        onConfirm={() => {
-                            // console.log('✅ Incomplete modal confirmed');
-                            handleMultiSelect(tempSelectedIds);
-                            setShowIncompleteModal(false);
-                            setShowModal(false);
-                        }}
-                        request={request}
-                        selectedCount={tempSelectedIds.length}
-                        requiredMale={request.male_count || 0}
-                        requiredFemale={request.female_count || 0}
-                        currentMaleCount={tempSelectedIds.filter(id => {
-                            const emp = allSortedEligibleEmployees.find(e => String(e.id) === String(id));
-                            return emp?.gender === 'male';
-                        }).length}
-                        currentFemaleCount={tempSelectedIds.filter(id => {
-                            const emp = allSortedEligibleEmployees.find(e => String(e.id) === String(id));
-                            return emp?.gender === 'female';
-                        }).length}
-                    />
-                )}
             </div>
-        </div>
+
+            {/* Incomplete Selection Modal */}
+            {showIncompleteModal && (
+                <IncompleteSelectionModal
+                    show={showIncompleteModal}
+                    onClose={() => setShowIncompleteModal(false)}
+                    onConfirm={() => {
+                        handleMultiSelect(tempSelectedIds);
+                        setShowIncompleteModal(false);
+                        setShowModal(false);
+                    }}
+                    request={request}
+                    selectedCount={tempSelectedIds.length}
+                    requiredMale={request.male_count || 0}
+                    requiredFemale={request.female_count || 0}
+                    currentMaleCount={tempSelectedIds.filter(id => {
+                        const emp = allSortedEligibleEmployees.find(e => String(e.id) === String(id));
+                        return emp?.gender === 'male';
+                    }).length}
+                    currentFemaleCount={tempSelectedIds.filter(id => {
+                        const emp = allSortedEligibleEmployees.find(e => String(e.id) === String(id));
+                        return emp?.gender === 'female';
+                    }).length}
+                />
+            )}
+        </>
     );
 }
