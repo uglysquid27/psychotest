@@ -23,7 +23,7 @@ export default function Index({ sections: initialSections, auth }) {
   const [fulfillStrategy, setFulfillStrategy] = useState('optimal');
   const [processingRequests, setProcessingRequests] = useState([]);
   const [showBulkResultModal, setShowBulkResultModal] = useState(false);
-const [bulkResult, setBulkResult] = useState(null);
+  const [bulkResult, setBulkResult] = useState(null);
 
   const itemsPerPage = 10;
   const user = auth?.user || null;

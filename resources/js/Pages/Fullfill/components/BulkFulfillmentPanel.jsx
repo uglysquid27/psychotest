@@ -233,26 +233,6 @@ export default function BulkFulfillmentPanel({
                     <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-base sm:text-lg">
                         Daftar Request untuk Sub-Bagian "{currentRequest.sub_section?.name}"
                     </h4>
-                    {sameSubsectionRequests.length > 0 && (
-                        <div className="flex items-center space-x-2">
-                            <button
-                                onClick={() => {
-                                    // Select all requests
-                                    const allRequestIds = sameSubsectionRequests.map(req => String(req.id));
-                                    setSelectedBulkRequests(allRequestIds);
-                                }}
-                                className="px-2 sm:px-3 py-1 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-900/60 text-blue-800 dark:text-blue-300 text-xs sm:text-sm rounded-md transition-colors"
-                            >
-                                Pilih Semua
-                            </button>
-                            <button
-                                onClick={() => setSelectedBulkRequests([])}
-                                className="px-2 sm:px-3 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs sm:text-sm rounded-md transition-colors"
-                            >
-                                Hapus Semua
-                            </button>
-                        </div>
-                    )}
                 </div>
 
                 <div className="max-h-96 overflow-y-auto">
@@ -411,23 +391,26 @@ export default function BulkFulfillmentPanel({
                                                                 )}
                                                             </div>
 
-                                                            {employee ? (
-                                                                <div className="mb-2">
-                                                                    <div className="font-medium text-gray-900 dark:text-gray-100 text-xs sm:text-sm truncate">
-                                                                        {employee.name}
-                                                                    </div>
-                                                                    <div className="text-gray-500 dark:text-gray-400 text-xs truncate">
-                                                                        {employee.type} - {employee.subSections?.[0]?.name || '-'}
-                                                                    </div>
-                                                                    <div className="text-gray-400 dark:text-gray-500 text-xs mt-1">
-                                                                        Score: {employee.total_score?.toFixed(2)}
-                                                                    </div>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="text-gray-500 dark:text-gray-400 text-xs italic mb-2">
-                                                                    Belum dipilih
-                                                                </div>
-                                                            )}
+                                                        {employee ? (
+    <div className="mb-2">
+        <div className="font-medium text-gray-900 dark:text-gray-100 text-xs sm:text-sm truncate">
+            {employee.name}
+        </div>
+        <div className="text-gray-500 dark:text-gray-400 text-xs truncate">
+            {employee.type} - {employee.subSections?.[0]?.name || '-'}
+        </div>
+        {/* ADD ML SCORES */}
+        <div className="text-gray-400 dark:text-gray-500 text-xs mt-1 grid grid-cols-3 gap-1">
+            <div>Base: {(employee.total_score || 0).toFixed(2)}</div>
+            <div>ML: {(employee.ml_score || 0).toFixed(2)}</div>
+            <div>Final: {(employee.final_score || 0).toFixed(2)}</div>
+        </div>
+    </div>
+) : (
+    <div className="text-gray-500 dark:text-gray-400 text-xs italic mb-2">
+        Belum dipilih
+    </div>
+)}
 
                                                             <button
                                                                 type="button"
@@ -523,7 +506,7 @@ export default function BulkFulfillmentPanel({
                             Memproses...
                         </span>
                     ) : (
-                        `🚀 Penuhi ${selectedBulkRequests.length} Request`
+                        `Penuhi ${selectedBulkRequests.length} Request`
                     )}
                 </button>
             </div>

@@ -56,96 +56,92 @@ export default function Fulfill({
     }, [request]);
 
     const combinedEmployees = useMemo(() => { 
-        const availableEmployees = [
-            ...sameSubSectionEmployees,
-            ...otherSubSectionEmployees,
-        ].filter((emp) => { 
-            const empId = String(emp.id);
-            const currentScheduledIdsStr = currentScheduledIds.map((id) =>
-                String(id)
-            );
+    const availableEmployees = [
+        ...sameSubSectionEmployees,
+        ...otherSubSectionEmployees,
+    ].filter((emp) => { 
+        const empId = String(emp.id);
+        const currentScheduledIdsStr = currentScheduledIds.map((id) =>
+            String(id)
+        );
  
-            return (
-                currentScheduledIdsStr.includes(empId) ||
-                emp.status === "available"
-            );
-        });
+        return (
+            currentScheduledIdsStr.includes(empId) ||
+            emp.status === "available"
+        );
+    });
 
-        return availableEmployees.map((emp) => ({
-            ...emp,
-            subSections: emp.sub_sections_data || emp.sub_sections || [],
-            gender: normalizeGender(emp.gender),
-            originalGender: emp.gender,
-            isCurrentlyScheduled: currentScheduledIds
-                .map((id) => String(id))
-                .includes(String(emp.id)),
-        }));
-    }, [
-        sameSubSectionEmployees,
-        otherSubSectionEmployees,
-        currentScheduledIds,
-    ]);
+    return availableEmployees.map((emp) => ({
+        ...emp,
+        subSections: emp.sub_sections_data || emp.sub_sections || [],
+        gender: normalizeGender(emp.gender),
+        originalGender: emp.gender,
+        isCurrentlyScheduled: currentScheduledIds
+            .map((id) => String(id))
+            .includes(String(emp.id)),
+        // ADD ML SCORES
+        ml_score: emp.ml_score || 0,
+        final_score: emp.final_score || emp.total_score || 0,
+    }));
+}, [
+    sameSubSectionEmployees,
+    otherSubSectionEmployees,
+    currentScheduledIds,
+]);
 
-    const allSortedEligibleEmployees = useMemo(() => {
-        const sorted = [...combinedEmployees].sort((a, b) => {
-            if (a.isCurrentlyScheduled !== b.isCurrentlyScheduled) {
-                return a.isCurrentlyScheduled ? -1 : 1;
-            }
+ const allSortedEligibleEmployees = useMemo(() => {
+    const sorted = [...combinedEmployees].sort((a, b) => {
+        if (a.isCurrentlyScheduled !== b.isCurrentlyScheduled) {
+            return a.isCurrentlyScheduled ? -1 : 1;
+        }
  
-            const aIsSame = a.subSections.some(
-                (ss) => String(ss.id) === String(request.sub_section_id)
-            );
-            const bIsSame = b.subSections.some(
-                (ss) => String(ss.id) === String(request.sub_section_id)
-            );
+        const aIsSame = a.subSections.some(
+            (ss) => String(ss.id) === String(request.sub_section_id)
+        );
+        const bIsSame = b.subSections.some(
+            (ss) => String(ss.id) === String(request.sub_section_id)
+        );
 
-            if (aIsSame !== bIsSame) return aIsSame ? -1 : 1;
+        if (aIsSame !== bIsSame) return aIsSame ? -1 : 1;
 
-            const aTotalScore =
-                (a.workload_points || 0) +
-                (a.blind_test_points || 0) +
-                (a.average_rating || 0);
-            const bTotalScore =
-                (b.workload_points || 0) +
-                (b.blind_test_points || 0) +
-                (b.average_rating || 0);
+        // USE ML-ENHANCED FINAL SCORE INSTEAD OF TOTAL SCORE
+        if (a.final_score !== b.final_score) {
+            return b.final_score - a.final_score;
+        }
 
-            const aGenderMatch =
-                request.male_count > 0 && a.gender === "male"
-                    ? 0
-                    : request.female_count > 0 && a.gender === "female"
-                    ? 0
-                    : 1;
-            const bGenderMatch =
-                request.male_count > 0 && b.gender === "male"
-                    ? 0
-                    : request.female_count > 0 && b.gender === "female"
-                    ? 0
-                    : 1;
-            if (aGenderMatch !== bGenderMatch)
-                return aGenderMatch - bGenderMatch;
+        const aGenderMatch =
+            request.male_count > 0 && a.gender === "male"
+                ? 0
+                : request.female_count > 0 && a.gender === "female"
+                ? 0
+                : 1;
+        const bGenderMatch =
+            request.male_count > 0 && b.gender === "male"
+                ? 0
+                : request.female_count > 0 && b.gender === "female"
+                ? 0
+                : 1;
+        if (aGenderMatch !== bGenderMatch)
+            return aGenderMatch - bGenderMatch;
 
-            if (aTotalScore !== bTotalScore) {
-                return bTotalScore - aTotalScore;
-            }
+        // Keep existing type and weight sorting
+        if (a.type === "bulanan" && b.type === "harian") return -1;
+        if (a.type === "harian" && b.type === "bulanan") return 1;
 
-            if (a.type === "bulanan" && b.type === "harian") return -1;
-            if (a.type === "harian" && b.type === "bulanan") return 1;
+        if (a.type === "harian" && b.type === "harian") {
+            return b.working_day_weight - a.working_day_weight;
+        }
 
-            if (a.type === "harian" && b.type === "harian") {
-                return b.working_day_weight - a.working_day_weight;
-            }
+        return a.id - b.id;
+    });
 
-            return a.id - b.id;
-        });
-
-        return sorted;
-    }, [
-        combinedEmployees,
-        request.sub_section_id,
-        request.male_count,
-        request.female_count,
-    ]);
+    return sorted;
+}, [
+    combinedEmployees,
+    request.sub_section_id,
+    request.male_count,
+    request.female_count,
+]);
 
     const initialSelectedIds = useMemo(() => {
         const validCurrentIds = currentScheduledIds
@@ -1162,6 +1158,15 @@ export default function Fulfill({
                     <div className="flex justify-between items-center">
                         <h2 className="font-semibold text-gray-800 dark:text-gray-200 text-xl">
                             Penuhi Request Man Power
+                             {ml_status && (
+                        <span className={`ml-2 text-xs px-2 py-1 rounded-full ${
+                            ml_status === 'trained' 
+                                ? 'bg-green-100 text-green-800 dark:bg-green-800/30 dark:text-green-300'
+                                : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800/30 dark:text-yellow-300'
+                        }`}>
+                            ML: {ml_status === 'trained' ? `Trained (${ml_accuracy}%)` : 'Not Trained'}
+                        </span>
+                    )}
                         </h2>
                     </div>
                 }

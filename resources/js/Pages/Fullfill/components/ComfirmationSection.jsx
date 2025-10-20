@@ -33,9 +33,9 @@ export default function ConfirmationSection({ auth, processing, isBulkMode }) {
                         Memproses...
                     </span>
                 ) : isBulkMode ? (
-                    '🚀 Penuhi Semua Request Terpilih'
+                    'Penuhi Semua Request Terpilih'
                 ) : (
-                    '✅ Konfirmasi Pemenuhan Request'
+                    'Submit Penjadwalan'
                 )}
             </button>
         </div>

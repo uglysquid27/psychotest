@@ -1,4 +1,5 @@
 <?php
+// app/Http/Controllers/ManPowerRequestFulfillmentController.php
 
 namespace App\Http\Controllers;
 
@@ -8,6 +9,8 @@ use App\Models\Schedule;
 use App\Models\Workload;
 use App\Models\BlindTest;
 use App\Models\Rating;
+use App\Services\SimpleMLService;
+use App\Services\PHPMachineLearning;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Carbon\Carbon;
@@ -73,7 +76,7 @@ class ManPowerRequestFulfillmentController extends Controller
             ])
             ->with(['schedules.manPowerRequest.shift'])
             ->get()
-            ->map(function ($employee) {
+            ->map(function ($employee) use ($request) {
                 $totalWorkingHours = 0;
                 foreach ($employee->schedules as $schedule) {
                     if ($schedule->manPowerRequest && $schedule->manPowerRequest->shift) {
@@ -111,6 +114,12 @@ class ManPowerRequestFulfillmentController extends Controller
 
                 $totalScore = ($workloadPoints * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
 
+                // ADD ML SCORE CALCULATION
+                $mlScore = $this->calculateMLPriorityScore($employee, $request);
+                
+                // COMBINE WITH ML SCORE (70% ML + 30% existing logic)
+                $finalScore = ($mlScore * 0.7) + ($totalScore * 0.3);
+
                 // FIX: Properly include section data in subSectionsData
                 $subSectionsData = $employee->subSections->map(function ($subSection) {
                     return [
@@ -123,7 +132,6 @@ class ManPowerRequestFulfillmentController extends Controller
                         ] : null,
                     ];
                 })->toArray();
-
 
                 return [
                     'id' => $employee->id,
@@ -145,6 +153,8 @@ class ManPowerRequestFulfillmentController extends Controller
                     'blind_test_points' => $blindTestPoints,
                     'average_rating' => $averageRating,
                     'total_score' => $totalScore,
+                    'ml_score' => $mlScore, // NEW: ML priority score
+                    'final_score' => $finalScore, // NEW: Combined score
                 ];
             });
 
@@ -178,8 +188,9 @@ class ManPowerRequestFulfillmentController extends Controller
             return [$same, $other];
         };
 
+        // UPDATE: Sort by final_score (ML-enhanced) instead of total_score
         $sortEmployees = function ($employees) {
-            return $employees->sortByDesc('total_score')
+            return $employees->sortByDesc('final_score') // Use ML-enhanced score
                 ->sortByDesc(fn($employee) => $employee['type'] === 'bulanan' ? 1 : 0)
                 ->sortBy('working_day_weight')
                 ->values();
@@ -190,6 +201,16 @@ class ManPowerRequestFulfillmentController extends Controller
         $sortedSameSubSectionEmployees = $sortEmployees($sameSubSectionEligible);
         $sortedOtherSubSectionEmployees = $sortEmployees($otherSubSectionEligible);
 
+        // Get ML status for frontend
+        $mlService = app(SimpleMLService::class);
+        $mlStatus = $mlService->isModelTrained() ? 'trained' : 'not_trained';
+        $mlAccuracy = null;
+        
+        if ($mlService->isModelTrained()) {
+            $modelInfo = $mlService->getModelInfo();
+            $mlAccuracy = isset($modelInfo['accuracy']) ? round($modelInfo['accuracy'] * 100, 1) : null;
+        }
+
         // Debug logging to help identify issues
         Log::info('Fulfillment Request Details', [
             'request_id' => $request->id,
@@ -199,6 +220,8 @@ class ManPowerRequestFulfillmentController extends Controller
             'same_subsection_count' => $sameSubSectionEligible->count(),
             'other_subsection_count' => $otherSubSectionEligible->count(),
             'same_day_requests_count' => $sameDayRequests->count(),
+            'ml_status' => $mlStatus,
+            'ml_accuracy' => $mlAccuracy,
         ]);
 
         return Inertia::render('Fullfill/Fulfill', [
@@ -207,177 +230,545 @@ class ManPowerRequestFulfillmentController extends Controller
             'otherSubSectionEmployees' => $sortedOtherSubSectionEmployees,
             'currentScheduledIds' => $currentScheduledIds,
             'sameDayRequests' => $sameDayRequests, // Add same day requests to the response
+            'ml_status' => $mlStatus, // NEW
+            'ml_accuracy' => $mlAccuracy, // NEW
             'auth' => ['user' => auth()->user()]
         ]);
     }
 
-public function bulkStore(Request $request)
-{
-    $request->validate([
-        'request_ids'         => 'required|array',
-        'request_ids.*'       => 'exists:man_power_requests,id',
-        'employee_selections' => 'required|array',
-        'strategy'            => 'required|in:optimal,same_section,balanced',
-        'visibility'          => 'in:public,private',
-        'status'              => 'in:pending,accepted,rejected'
-    ]);
-
-    Log::info('=== BULK FULFILLMENT STARTED ===', [
-        'user_id'     => auth()->id(),
-        'user_name'   => auth()->user()->name,
-        'request_ids' => $request->request_ids,
-        'request_count' => count($request->request_ids),
-        'strategy'    => $request->strategy,
-        'visibility'  => $request->visibility,
-        'timestamp'   => now()->toDateTimeString(),
-        'raw_input'   => $request->all(),
-    ]);
-
-    DB::beginTransaction();
-    try {
-        $results          = [];
-        $successCount     = 0;
-        $failureCount     = 0;
-        $employeeSelections = $request->employee_selections;
-        $status           = $request->status ?? 'pending';
-
-        foreach ($request->request_ids as $id) {
-            Log::info('⚡ Processing request', ['request_id' => $id]);
-
-            $manpowerRequest = ManPowerRequest::with(['subSection', 'schedules'])->findOrFail($id);
-
-            // Skip if already fulfilled
-            if ($manpowerRequest->status === 'fulfilled') {
-                $results[$id] = 'already fulfilled';
-                $failureCount++;
-                Log::warning('REQUEST ALREADY FULFILLED - SKIPPING', ['request_id' => $id]);
-                continue;
+    /**
+     * Calculate ML priority score for an employee
+     */
+    private function calculateMLPriorityScore($employee, $manpowerRequest)
+    {
+        try {
+            $mlService = app(SimpleMLService::class);
+            
+            if (!$mlService->isModelTrained()) {
+                Log::warning('ML model not trained, using fallback score');
+                return 0.5; // Default score if model not trained
             }
 
-            // Get selected employee IDs for this request
-            $selectedEmployeeIds = $employeeSelections[$id] ?? [];
+            $features = [
+                'work_days_count' => $this->getWorkDaysCount($employee),
+                'rating_value' => $this->getAverageRating($employee),
+                'test_score' => $this->getTestScore($employee),
+                'gender' => $employee->gender === 'male' ? 1 : 0,
+                'employee_type' => $employee->type === 'bulanan' ? 1 : 0,
+                'same_subsection' => $this->isSameSubsection($employee, $manpowerRequest) ? 1 : 0,
+                'same_section' => $this->isSameSection($employee, $manpowerRequest) ? 1 : 0,
+                'current_workload' => $this->getCurrentWorkload($employee),
+            ];
 
-            // Validate employee selection count
-            if (count($selectedEmployeeIds) !== $manpowerRequest->requested_amount) {
-                $results[$id] = 'invalid employee selection count';
-                $failureCount++;
-                Log::error('INVALID EMPLOYEE SELECTION COUNT - SKIPPING', [
-                    'request_id' => $id,
-                    'selected'   => count($selectedEmployeeIds),
-                    'expected'   => $manpowerRequest->requested_amount
-                ]);
-                continue;
-            }
-
-            // Validate gender requirements
-            $maleCount   = 0;
-            $femaleCount = 0;
-
-            foreach ($selectedEmployeeIds as $employeeId) {
-                $employee = Employee::find($employeeId);
-                if (!$employee) {
-                    throw new \Exception("Employee {$employeeId} not found");
-                }
-
-                if ($employee->gender === 'male') {
-                    $maleCount++;
-                } elseif ($employee->gender === 'female') {
-                    $femaleCount++;
-                }
-            }
-
-            if ($manpowerRequest->male_count > 0 && $maleCount < $manpowerRequest->male_count) {
-                $results[$id] = 'insufficient male employees';
-                $failureCount++;
-                Log::error('INSUFFICIENT MALE EMPLOYEES - SKIPPING', [
-                    'request_id' => $id,
-                    'actual'     => $maleCount,
-                    'required'   => $manpowerRequest->male_count
-                ]);
-                continue;
-            }
-
-            if ($manpowerRequest->female_count > 0 && $femaleCount < $manpowerRequest->female_count) {
-                $results[$id] = 'insufficient female employees';
-                $failureCount++;
-                Log::error('INSUFFICIENT FEMALE EMPLOYEES - SKIPPING', [
-                    'request_id' => $id,
-                    'actual'     => $femaleCount,
-                    'required'   => $manpowerRequest->female_count
-                ]);
-                continue;
-            }
-
-            // Create schedules with line assignment for putway subsection
-            $createdSchedules = [];
-            foreach ($selectedEmployeeIds as $index => $employeeId) {
-                $data = [
-                    'employee_id'        => $employeeId,
-                    'sub_section_id'     => $manpowerRequest->sub_section_id,
-                    'man_power_request_id' => $manpowerRequest->id,
-                    'date'               => $manpowerRequest->date,
-                    'status'             => $status,
-                    'visibility'         => $request->visibility ?? 'private',
-                ];
-
-                // Add line for putway subsection - SAME LOGIC AS SINGLE MODE
-                if ($manpowerRequest->subSection && strtolower($manpowerRequest->subSection->name) === 'putway') {
-                    $data['line'] = strval((($index % 2) + 1)); // 1,2,1,2...
-                }
-
-                $schedule = Schedule::create($data);
-                $createdSchedules[] = $schedule->id;
-
-                Log::info('✅ Employee assigned', [
-                    'request_id'  => $id,
-                    'employee_id' => $employeeId,
-                    'schedule_id' => $schedule->id,
-                    'line'        => $data['line'] ?? 'N/A',
-                ]);
-            }
-
-            // Update request status
-            $manpowerRequest->update([
-                'status'       => 'fulfilled',
-                'fulfilled_by' => auth()->id()
+            Log::debug('ML Features for employee', [
+                'employee_id' => $employee->id,
+                'features' => $features
             ]);
 
-            $results[$id] = 'fulfilled - ' . count($selectedEmployeeIds) . ' employees assigned';
-            $successCount++;
+            $predictions = $mlService->predict([$features]);
+            $mlScore = $predictions[0] ?? 0.5;
+
+            Log::debug('ML Prediction result', [
+                'employee_id' => $employee->id,
+                'ml_score' => $mlScore
+            ]);
+
+            return $mlScore;
+
+        } catch (\Exception $e) {
+            Log::error("ML Score calculation failed for employee {$employee->id}: " . $e->getMessage());
+            return 0.5; // Fallback score
+        }
+    }
+
+    // Helper methods for ML feature calculation
+    private function getWorkDaysCount($employee)
+    {
+        $startDate = now()->subDays(30)->startOfDay();
+        return $employee->schedules()
+            ->where('date', '>=', $startDate)
+            ->count();
+    }
+
+    private function getAverageRating($employee)
+    {
+        $avgRating = $employee->ratings()->avg('rating');
+        return $avgRating ?? 3.0;
+    }
+
+    private function getTestScore($employee)
+    {
+        $latestTest = $employee->blindTests()->latest('test_date')->first();
+        return $latestTest && $latestTest->result === 'Pass' ? 1.0 : 0.0;
+    }
+
+    private function isSameSubsection($employee, $manpowerRequest)
+    {
+        return $employee->subSections->contains('id', $manpowerRequest->sub_section_id);
+    }
+
+    private function isSameSection($employee, $manpowerRequest)
+    {
+        $requestSectionId = $manpowerRequest->subSection->section_id ?? null;
+        if (!$requestSectionId) return false;
+        return $employee->subSections->contains('section_id', $requestSectionId);
+    }
+
+    private function getCurrentWorkload($employee)
+    {
+        $startDate = now()->subDays(7)->startOfDay();
+        $workHours = $employee->schedules()
+            ->where('date', '>=', $startDate)
+            ->with('manPowerRequest.shift')
+            ->get()
+            ->sum(function ($schedule) {
+                return $schedule->manPowerRequest->shift->hours ?? 0;
+            });
+        return min($workHours / 40, 1.0);
+    }
+
+    /**
+     * Enhanced auto-assign with ML integration
+     */
+    private function autoSelectEmployees(ManPowerRequest $manpowerRequest, string $strategy, array $excludeIds = [])
+    {
+        Log::debug('Starting autoSelectEmployees with ML', [
+            'request_id' => $manpowerRequest->id,
+            'strategy' => $strategy,
+            'exclude_ids_count' => count($excludeIds),
+            'required_male' => $manpowerRequest->male_count,
+            'required_female' => $manpowerRequest->female_count,
+            'total_required' => $manpowerRequest->requested_amount
+        ]);
+
+        // Ensure excludeIds is always an array
+        $excludeIds = $excludeIds ?? [];
+
+        // Get employees from same sub-section
+        $sameSubSectionEmployees = Employee::whereHas('subSections', function ($query) use ($manpowerRequest) {
+            $query->where('sub_section_id', $manpowerRequest->sub_section_id);
+        })->whereNotIn('id', $excludeIds)->get();
+
+        Log::debug('Same subsection employees', [
+            'request_id' => $manpowerRequest->id,
+            'same_subsection_count' => $sameSubSectionEmployees->count(),
+            'sub_section_id' => $manpowerRequest->sub_section_id
+        ]);
+
+        // Get employees from other sub-sections in the same section
+        $otherSubSectionEmployees = Employee::whereHas('subSections.section', function ($query) use ($manpowerRequest) {
+            $query->where('section_id', $manpowerRequest->subSection->section_id);
+        })->whereNotIn('id', $excludeIds)
+        ->whereDoesntHave('subSections', function ($query) use ($manpowerRequest) {
+            $query->where('sub_section_id', $manpowerRequest->sub_section_id);
+        })->get();
+
+        Log::debug('Other subsection employees', [
+            'request_id' => $manpowerRequest->id,
+            'other_subsection_count' => $otherSubSectionEmployees->count(),
+            'section_id' => $manpowerRequest->subSection->section_id ?? 'N/A'
+        ]);
+
+        // Combine and normalize employees WITH ML SCORES
+        $combinedEmployees = collect([
+            ...$sameSubSectionEmployees->map(function ($emp) use ($manpowerRequest) {
+                return $this->normalizeEmployeeWithML($emp, $manpowerRequest, true);
+            }),
+            ...$otherSubSectionEmployees->map(function ($emp) use ($manpowerRequest) {
+                return $this->normalizeEmployeeWithML($emp, $manpowerRequest, false);
+            })
+        ]);
+
+        Log::debug('Combined employees before sorting', [
+            'request_id' => $manpowerRequest->id,
+            'total_combined_count' => $combinedEmployees->count()
+        ]);
+
+        // Sort employees based on strategy (now using ML-enhanced scores)
+        $sortedEmployees = $this->sortEmployeesByStrategyWithML($combinedEmployees, $manpowerRequest, $strategy);
+
+        // Select employees based on requirements
+        $selected = $this->selectOptimalEmployees($sortedEmployees, $manpowerRequest);
+
+        Log::debug('Final employee selection', [
+            'request_id' => $manpowerRequest->id,
+            'final_selected_count' => $selected->count(),
+            'selected_genders' => $selected->groupBy('gender')->map->count(),
+            'used_ml_scores' => $selected->pluck('final_score')->toArray()
+        ]);
+
+        return $selected;
+    }
+
+    /**
+     * Normalize employee data with ML scores
+     */
+    private function normalizeEmployeeWithML($employee, $manpowerRequest, $isSameSubSection)
+    {
+        $gender = strtolower(trim($employee->gender ?? 'male'));
+        if (!in_array($gender, ['male', 'female'])) {
+            $gender = 'male';
         }
 
-        DB::commit();
+        // Calculate base scores
+        $workloadPoints = $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0;
+        $blindTestPoints = 0;
+        $latestTest = $employee->blindTests->sortByDesc('test_date')->first();
+        if ($latestTest && $latestTest->result === 'Pass') {
+            $blindTestPoints = 3;
+        }
+        $averageRating = $employee->ratings->avg('rating') ?? 0;
+        $baseScore = ($workloadPoints * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
 
-        Log::info('=== BULK FULFILLMENT COMPLETED ===', [
-            'total_requests' => count($request->request_ids),
-            'successful'     => $successCount,
-            'failed'         => $failureCount,
-            'success_rate'   => round(($successCount / count($request->request_ids)) * 100, 2) . '%',
-            'results'        => $results,
-            'timestamp'      => now()->toDateTimeString()
-        ]);
+        // Calculate ML score
+        $mlScore = $this->calculateMLPriorityScore($employee, $manpowerRequest);
+        
+        // Combine scores (70% ML + 30% base)
+        $finalScore = ($mlScore * 0.7) + ($baseScore * 0.3);
 
-        return redirect()->route('manpower-requests.index')->with([
-            'success' => 'Bulk fulfill completed: ' . $successCount . ' successful, ' . $failureCount . ' failed',
-            'bulk_results' => $results
-        ]);
-
-    } catch (\Exception $e) {
-        DB::rollBack();
-
-        Log::error('=== BULK FULFILLMENT FAILED ===', [
-            'error_message' => $e->getMessage(),
-            'error_trace'   => $e->getTraceAsString(),
-            'request_data'  => $request->except(['employee_selections']),
-            'timestamp'     => now()->toDateTimeString()
-        ]);
-
-        return redirect()->back()->withErrors([
-            'fulfillment_error' => 'Bulk fulfill failed: ' . $e->getMessage()
-        ]);
+        return (object) [
+            'id' => $employee->id,
+            'name' => $employee->name,
+            'gender' => $gender,
+            'type' => $employee->type,
+            'workload_points' => $workloadPoints,
+            'blind_test_points' => $blindTestPoints,
+            'average_rating' => $averageRating,
+            'working_day_weight' => $employee->working_day_weight ?? 0,
+            'base_score' => $baseScore,
+            'ml_score' => $mlScore,
+            'final_score' => $finalScore, // ML-enhanced score
+            'is_same_subsection' => $isSameSubSection,
+            'subSections' => $employee->subSections ?? collect()
+        ];
     }
-}
 
+    /**
+     * Sort employees with ML-enhanced strategy
+     */
+    private function sortEmployeesByStrategyWithML($employees, ManpowerRequest $request, string $strategy)
+    {
+        return $employees->sort(function ($a, $b) use ($request, $strategy) {
+            switch ($strategy) {
+                case 'same_section':
+                    // Prioritize same subsection first
+                    if ($a->is_same_subsection !== $b->is_same_subsection) {
+                        return $a->is_same_subsection ? -1 : 1;
+                    }
+                    break;
+                    
+                case 'balanced':
+                    // Balance workload distribution but consider ML scores
+                    if ($a->workload_points !== $b->workload_points) {
+                        return $a->workload_points - $b->workload_points; // Lower workload first
+                    }
+                    break;
+                    
+                case 'optimal':
+                default:
+                    // Use ML-enhanced final score first
+                    if ($a->final_score !== $b->final_score) {
+                        return $b->final_score - $a->final_score; // Higher ML score first
+                    }
+                    break;
+            }
+
+            // Secondary sort: gender matching
+            $aGenderMatch = $this->getGenderMatchScore($a, $request);
+            $bGenderMatch = $this->getGenderMatchScore($b, $request);
+            if ($aGenderMatch !== $bGenderMatch) {
+                return $aGenderMatch - $bGenderMatch;
+            }
+
+            // Tertiary sort: employee type preference (bulanan first)
+            if ($a->type === 'bulanan' && $b->type === 'harian') return -1;
+            if ($a->type === 'harian' && $b->type === 'bulanan') return 1;
+
+            // Final sort: working day weight for harian employees
+            if ($a->type === 'harian' && $b->type === 'harian') {
+                return $b->working_day_weight - $a->working_day_weight;
+            }
+
+            return $a->id - $b->id;
+        });
+    }
+
+    /**
+     * Get gender matching score (lower is better)
+     */
+    private function getGenderMatchScore($employee, ManpowerRequest $request)
+    {
+        $maleNeeded = $request->male_count > 0;
+        $femaleNeeded = $request->female_count > 0;
+        
+        if ($maleNeeded && $employee->gender === 'male') return 0;
+        if ($femaleNeeded && $employee->gender === 'female') return 0;
+        
+        return 1; // No match
+    }
+
+    /**
+     * Select optimal employees based on request requirements
+     */
+    private function selectOptimalEmployees($sortedEmployees, ManpowerRequest $request)
+    {
+        $selected = collect();
+        $requiredMale = $request->male_count ?? 0;
+        $requiredFemale = $request->female_count ?? 0;
+        $totalRequired = $request->requested_amount;
+
+        // First, select required gender counts
+        if ($requiredMale > 0) {
+            $males = $sortedEmployees->filter(fn($emp) => $emp->gender === 'male')
+                ->take($requiredMale);
+            $selected = $selected->merge($males);
+        }
+
+        if ($requiredFemale > 0) {
+            $females = $sortedEmployees->filter(fn($emp) => $emp->gender === 'female')
+                ->take($requiredFemale);
+            $selected = $selected->merge($females);
+        }
+
+        // Fill remaining slots with any available employees
+        $remaining = $totalRequired - $selected->count();
+        if ($remaining > 0) {
+            $alreadySelectedIds = $selected->pluck('id')->toArray();
+            $additionalEmployees = $sortedEmployees
+                ->filter(fn($emp) => !in_array($emp->id, $alreadySelectedIds))
+                ->take($remaining);
+            
+            $selected = $selected->merge($additionalEmployees);
+        }
+
+        return $selected->take($totalRequired);
+    }
+
+    /**
+     * Validate if selected employees meet gender requirements
+     */
+    private function validateGenderRequirements(ManpowerRequest $request, $employees)
+    {
+        $maleCount = $employees->filter(fn($emp) => $emp->gender === 'male')->count();
+        $femaleCount = $employees->filter(fn($emp) => $emp->gender === 'female')->count();
+        
+        $requiredMale = $request->male_count ?? 0;
+        $requiredFemale = $request->female_count ?? 0;
+
+        if ($requiredMale > 0 && $maleCount < $requiredMale) {
+            return [
+                'valid' => false,
+                'message' => "Required {$requiredMale} male employees, but only {$maleCount} available"
+            ];
+        }
+
+        if ($requiredFemale > 0 && $femaleCount < $requiredFemale) {
+            return [
+                'valid' => false,
+                'message' => "Required {$requiredFemale} female employees, but only {$femaleCount} available"
+            ];
+        }
+
+        return ['valid' => true];
+    }
+
+    /**
+     * Log ML assignment performance
+     */
+    private function logMLAssignment($manpowerRequest, $selectedEmployees, $allEligibleEmployees)
+    {
+        $mlService = app(SimpleMLService::class);
+        
+        if ($mlService->isModelTrained()) {
+            $topCandidates = $allEligibleEmployees
+                ->sortByDesc('final_score')
+                ->take(10)
+                ->map(fn($e) => [
+                    'id' => $e->id, 
+                    'name' => $e->name,
+                    'ml_score' => round($e->ml_score, 3),
+                    'final_score' => round($e->final_score, 3),
+                    'selected' => in_array($e->id, $selectedEmployees->pluck('id')->toArray())
+                ]);
+
+            Log::info('ML-Assigned Employees', [
+                'request_id' => $manpowerRequest->id,
+                'selected_count' => count($selectedEmployees),
+                'top_candidates' => $topCandidates,
+                'ml_model_used' => get_class($mlService)
+            ]);
+        }
+    }
+
+    // ... KEEP ALL YOUR EXISTING METHODS BELOW (bulkStore, bulkFulfill, etc.)
+    // They will automatically benefit from the ML integration through the autoSelectEmployees method
+
+    public function bulkStore(Request $request)
+    {
+        $request->validate([
+            'request_ids'         => 'required|array',
+            'request_ids.*'       => 'exists:man_power_requests,id',
+            'employee_selections' => 'required|array',
+            'strategy'            => 'required|in:optimal,same_section,balanced',
+            'visibility'          => 'in:public,private',
+            'status'              => 'in:pending,accepted,rejected'
+        ]);
+
+        Log::info('=== BULK FULFILLMENT STARTED ===', [
+            'user_id'     => auth()->id(),
+            'user_name'   => auth()->user()->name,
+            'request_ids' => $request->request_ids,
+            'request_count' => count($request->request_ids),
+            'strategy'    => $request->strategy,
+            'visibility'  => $request->visibility,
+            'timestamp'   => now()->toDateTimeString(),
+            'raw_input'   => $request->all(),
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $results          = [];
+            $successCount     = 0;
+            $failureCount     = 0;
+            $employeeSelections = $request->employee_selections;
+            $status           = $request->status ?? 'pending';
+
+            foreach ($request->request_ids as $id) {
+                Log::info('⚡ Processing request', ['request_id' => $id]);
+
+                $manpowerRequest = ManPowerRequest::with(['subSection', 'schedules'])->findOrFail($id);
+
+                // Skip if already fulfilled
+                if ($manpowerRequest->status === 'fulfilled') {
+                    $results[$id] = 'already fulfilled';
+                    $failureCount++;
+                    Log::warning('REQUEST ALREADY FULFILLED - SKIPPING', ['request_id' => $id]);
+                    continue;
+                }
+
+                // Get selected employee IDs for this request
+                $selectedEmployeeIds = $employeeSelections[$id] ?? [];
+
+                // Validate employee selection count
+                if (count($selectedEmployeeIds) !== $manpowerRequest->requested_amount) {
+                    $results[$id] = 'invalid employee selection count';
+                    $failureCount++;
+                    Log::error('INVALID EMPLOYEE SELECTION COUNT - SKIPPING', [
+                        'request_id' => $id,
+                        'selected'   => count($selectedEmployeeIds),
+                        'expected'   => $manpowerRequest->requested_amount
+                    ]);
+                    continue;
+                }
+
+                // Validate gender requirements
+                $maleCount   = 0;
+                $femaleCount = 0;
+
+                foreach ($selectedEmployeeIds as $employeeId) {
+                    $employee = Employee::find($employeeId);
+                    if (!$employee) {
+                        throw new \Exception("Employee {$employeeId} not found");
+                    }
+
+                    if ($employee->gender === 'male') {
+                        $maleCount++;
+                    } elseif ($employee->gender === 'female') {
+                        $femaleCount++;
+                    }
+                }
+
+                if ($manpowerRequest->male_count > 0 && $maleCount < $manpowerRequest->male_count) {
+                    $results[$id] = 'insufficient male employees';
+                    $failureCount++;
+                    Log::error('INSUFFICIENT MALE EMPLOYEES - SKIPPING', [
+                        'request_id' => $id,
+                        'actual'     => $maleCount,
+                        'required'   => $manpowerRequest->male_count
+                    ]);
+                    continue;
+                }
+
+                if ($manpowerRequest->female_count > 0 && $femaleCount < $manpowerRequest->female_count) {
+                    $results[$id] = 'insufficient female employees';
+                    $failureCount++;
+                    Log::error('INSUFFICIENT FEMALE EMPLOYEES - SKIPPING', [
+                        'request_id' => $id,
+                        'actual'     => $femaleCount,
+                        'required'   => $manpowerRequest->female_count
+                    ]);
+                    continue;
+                }
+
+                // Create schedules with line assignment for putway subsection
+                $createdSchedules = [];
+                foreach ($selectedEmployeeIds as $index => $employeeId) {
+                    $data = [
+                        'employee_id'        => $employeeId,
+                        'sub_section_id'     => $manpowerRequest->sub_section_id,
+                        'man_power_request_id' => $manpowerRequest->id,
+                        'date'               => $manpowerRequest->date,
+                        'status'             => $status,
+                        'visibility'         => $request->visibility ?? 'private',
+                    ];
+
+                    // Add line for putway subsection - SAME LOGIC AS SINGLE MODE
+                    if ($manpowerRequest->subSection && strtolower($manpowerRequest->subSection->name) === 'putway') {
+                        $data['line'] = strval((($index % 2) + 1)); // 1,2,1,2...
+                    }
+
+                    $schedule = Schedule::create($data);
+                    $createdSchedules[] = $schedule->id;
+
+                    Log::info('✅ Employee assigned', [
+                        'request_id'  => $id,
+                        'employee_id' => $employeeId,
+                        'schedule_id' => $schedule->id,
+                        'line'        => $data['line'] ?? 'N/A',
+                    ]);
+                }
+
+                // Update request status
+                $manpowerRequest->update([
+                    'status'       => 'fulfilled',
+                    'fulfilled_by' => auth()->id()
+                ]);
+
+                $results[$id] = 'fulfilled - ' . count($selectedEmployeeIds) . ' employees assigned';
+                $successCount++;
+            }
+
+            DB::commit();
+
+            Log::info('=== BULK FULFILLMENT COMPLETED ===', [
+                'total_requests' => count($request->request_ids),
+                'successful'     => $successCount,
+                'failed'         => $failureCount,
+                'success_rate'   => round(($successCount / count($request->request_ids)) * 100, 2) . '%',
+                'results'        => $results,
+                'timestamp'      => now()->toDateTimeString()
+            ]);
+
+            return redirect()->route('manpower-requests.index')->with([
+                'success' => 'Bulk fulfill completed: ' . $successCount . ' successful, ' . $failureCount . ' failed',
+                'bulk_results' => $results
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            Log::error('=== BULK FULFILLMENT FAILED ===', [
+                'error_message' => $e->getMessage(),
+                'error_trace'   => $e->getTraceAsString(),
+                'request_data'  => $request->except(['employee_selections']),
+                'timestamp'     => now()->toDateTimeString()
+            ]);
+
+            return redirect()->back()->withErrors([
+                'fulfillment_error' => 'Bulk fulfill failed: ' . $e->getMessage()
+            ]);
+        }
+    }
 
 public function bulkFulfill(Request $request)
 {
