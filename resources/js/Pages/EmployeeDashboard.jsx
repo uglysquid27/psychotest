@@ -13,111 +13,6 @@ dayjs.extend(isToday);
 dayjs.extend(isTomorrow);
 dayjs.extend(isYesterday);
 
-// Famday Popup Component
-const FamdayPopup = ({ employeeNik, onClose }) => {
-  const [famdayData, setFamdayData] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchFamdayData = async () => {
-      try {
-        const response = await fetch(route('employee.famday.data'));
-        const data = await response.json();
-        setFamdayData(data);
-      } catch (error) {
-        console.error('Failed to fetch Famday data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchFamdayData();
-  }, [employeeNik]);
-
-  if (loading) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md mx-auto shadow-xl">
-          <div className="flex justify-center items-center py-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!famdayData || !famdayData.username) {
-    return null; // Don't show popup if no Famday account
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md mx-auto shadow-xl relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-
-        <div className="text-center mb-4">
-          <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-            Otsuka Family Day 2025
-          </h3>
-          
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Informasi akun Famday Anda
-          </p>
-        </div>
-         <div className="w-full overflow-hidden rounded-2xl shadow-md">
-            <img
-              src="/images/famday-banner.jpeg" // simpan file banner ke public/storage atau public/images
-              alt="Family Day 2025"
-              className="w-full object-cover"
-            />
-          </div>
-
-        <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 mb-4">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">NIK:</span>
-            <span className="text-sm text-gray-900 dark:text-white">{famdayData.nik}</span>
-          </div>
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Nama:</span>
-            <span className="text-sm text-gray-900 dark:text-white">{famdayData.employee_name}</span>
-          </div>
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Username:</span>
-            <span className="text-sm font-mono text-gray-900 dark:text-white">{famdayData.username}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Password:</span>
-            <span className="text-sm font-mono text-gray-900 dark:text-white">{famdayData.password}</span>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-3">
-          <a
-            href="https://sembuhtb.aio.co.id:8443/Famday_Chatbot/#/Login?redirectTo=ListChat"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bg-indigo-600 hover:bg-indigo-700 text-white text-center py-2 px-4 rounded-lg font-medium transition-colors"
-          >
-            Buka Famday Chat
-          </a>
-          <button
-            onClick={onClose}
-            className="border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 py-2 px-4 rounded-lg font-medium transition-colors hover:bg-gray-50 dark:hover:bg-gray-700"
-          >
-            Tutup
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 export default function EmployeeDashboard() {
     const { auth, mySchedules, incompleteProfile } = usePage().props;
@@ -138,8 +33,8 @@ export default function EmployeeDashboard() {
     const [itemsPerPage] = useState(10);
 
     // Famday Popup state
-    const [showFamdayPopup, setShowFamdayPopup] = useState(false);
-     const [hasFamdayAccount, setHasFamdayAccount] = useState(false);
+    // const [showFamdayPopup, setShowFamdayPopup] = useState(false);
+    //  const [hasFamdayAccount, setHasFamdayAccount] = useState(false);
 
     // Date filter state - 1 week range ending with tomorrow's date
     const [dateRange, setDateRange] = useState({
@@ -166,26 +61,6 @@ export default function EmployeeDashboard() {
         setCurrentPage(1);
     }, [dateRange]);
 
-    // Check if should show Famday popup on component mount
-    useEffect(() => {
-        const checkFamdayAccount = async () => {
-            try {
-                const response = await fetch(route('employee.famday.check'));
-                const data = await response.json();
-                if (data.hasAccount) {
-                     setHasFamdayAccount(true);
-                    setShowFamdayPopup(true);
-                }
-            } catch (error) {
-                console.error('Failed to check Famday account:', error);
-            }
-        };
-
-        // Only check if employee has completed profile
-        if (!incompleteProfile) {
-            checkFamdayAccount();
-        }
-    }, [incompleteProfile]);
 
     const openRejectModal = (scheduleId, mode = 'reject') => {
         setCurrentScheduleId(scheduleId);
@@ -348,7 +223,7 @@ export default function EmployeeDashboard() {
                         </p>
                         
                         {/* Famday Event Button */}
-                        <div className="mt-4">
+                        {/* <div className="mt-4">
  {hasFamdayAccount && (
                             <div className="mt-4">
                                 <button
@@ -359,7 +234,7 @@ export default function EmployeeDashboard() {
                                 </button>
                             </div>
                         )}
-</div>
+</div> */}
                     </div>
 
                     {/* Jika belum isi data diri */}
@@ -720,12 +595,12 @@ export default function EmployeeDashboard() {
             </div>
 
             {/* Famday Popup */}
-            {hasFamdayAccount && showFamdayPopup && (
+            {/* {hasFamdayAccount && showFamdayPopup && (
                 <FamdayPopup 
                     employeeNik={employeeNik} 
                     onClose={() => setShowFamdayPopup(false)} 
                 />
-            )}
+            )} */}
         </AuthenticatedLayout>
     );
 }
