@@ -86,24 +86,24 @@ class ManPowerRequestFulfillmentController extends Controller
 
                 $weeklyScheduleCount = $employee->schedules_count;
 
-                $rating = match ($weeklyScheduleCount) {
-                    5 => 5,
-                    4 => 4,
-                    3 => 3,
-                    2 => 2,
-                    1 => 1,
-                    default => 0,
-                };
+                // $rating = match ($weeklyScheduleCount) {
+                //     5 => 5,
+                //     4 => 4,
+                //     3 => 3,
+                //     2 => 2,
+                //     1 => 1,
+                //     default => 0,
+                // };
 
-                $workingDayWeight = match ($rating) {
-                    5 => 15,
-                    4 => 45,
-                    3 => 75,
-                    2 => 105,
-                    1 => 135,
-                    0 => 165,
-                    default => 0,
-                };
+                // $workingDayWeight = match ($rating) {
+                //     5 => 15,
+                //     4 => 45,
+                //     3 => 75,
+                //     2 => 105,
+                //     1 => 135,
+                //     0 => 165,
+                //     default => 0,
+                // };
 
                 $workloadPoints = $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0;
 
@@ -116,7 +116,7 @@ class ManPowerRequestFulfillmentController extends Controller
 
                 // ADD ML SCORE CALCULATION
                 $mlScore = $this->calculateMLPriorityScore($employee, $request);
-                
+
                 // COMBINE WITH ML SCORE (70% ML + 30% existing logic)
                 $finalScore = ($mlScore * 0.7) + ($totalScore * 0.3);
 
@@ -145,8 +145,8 @@ class ManPowerRequestFulfillmentController extends Controller
                     'created_at' => $employee->created_at,
                     'updated_at' => $employee->updated_at,
                     'schedules_count' => $employee->schedules_count,
-                    'calculated_rating' => $rating,
-                    'working_day_weight' => $workingDayWeight,
+                    // 'calculated_rating' => $rating,
+                    // 'working_day_weight' => $workingDayWeight,
                     'total_assigned_hours' => $totalWorkingHours,
                     'sub_sections_data' => $subSectionsData,
                     'workload_points' => $workloadPoints,
@@ -205,7 +205,7 @@ class ManPowerRequestFulfillmentController extends Controller
         $mlService = app(SimpleMLService::class);
         $mlStatus = $mlService->isModelTrained() ? 'trained' : 'not_trained';
         $mlAccuracy = null;
-        
+
         if ($mlService->isModelTrained()) {
             $modelInfo = $mlService->getModelInfo();
             $mlAccuracy = isset($modelInfo['accuracy']) ? round($modelInfo['accuracy'] * 100, 1) : null;
@@ -243,7 +243,7 @@ class ManPowerRequestFulfillmentController extends Controller
     {
         try {
             $mlService = app(SimpleMLService::class);
-            
+
             if (!$mlService->isModelTrained()) {
                 Log::warning('ML model not trained, using fallback score');
                 return 0.5; // Default score if model not trained
@@ -310,7 +310,8 @@ class ManPowerRequestFulfillmentController extends Controller
     private function isSameSection($employee, $manpowerRequest)
     {
         $requestSectionId = $manpowerRequest->subSection->section_id ?? null;
-        if (!$requestSectionId) return false;
+        if (!$requestSectionId)
+            return false;
         return $employee->subSections->contains('section_id', $requestSectionId);
     }
 
@@ -359,9 +360,9 @@ class ManPowerRequestFulfillmentController extends Controller
         $otherSubSectionEmployees = Employee::whereHas('subSections.section', function ($query) use ($manpowerRequest) {
             $query->where('section_id', $manpowerRequest->subSection->section_id);
         })->whereNotIn('id', $excludeIds)
-        ->whereDoesntHave('subSections', function ($query) use ($manpowerRequest) {
-            $query->where('sub_section_id', $manpowerRequest->sub_section_id);
-        })->get();
+            ->whereDoesntHave('subSections', function ($query) use ($manpowerRequest) {
+                $query->where('sub_section_id', $manpowerRequest->sub_section_id);
+            })->get();
 
         Log::debug('Other subsection employees', [
             'request_id' => $manpowerRequest->id,
@@ -422,7 +423,7 @@ class ManPowerRequestFulfillmentController extends Controller
 
         // Calculate ML score
         $mlScore = $this->calculateMLPriorityScore($employee, $manpowerRequest);
-        
+
         // Combine scores (70% ML + 30% base)
         $finalScore = ($mlScore * 0.7) + ($baseScore * 0.3);
 
@@ -434,7 +435,7 @@ class ManPowerRequestFulfillmentController extends Controller
             'workload_points' => $workloadPoints,
             'blind_test_points' => $blindTestPoints,
             'average_rating' => $averageRating,
-            'working_day_weight' => $employee->working_day_weight ?? 0,
+            // 'working_day_weight' => $employee->working_day_weight ?? 0,
             'base_score' => $baseScore,
             'ml_score' => $mlScore,
             'final_score' => $finalScore, // ML-enhanced score
@@ -446,52 +447,49 @@ class ManPowerRequestFulfillmentController extends Controller
     /**
      * Sort employees with ML-enhanced strategy
      */
-    private function sortEmployeesByStrategyWithML($employees, ManpowerRequest $request, string $strategy)
-    {
-        return $employees->sort(function ($a, $b) use ($request, $strategy) {
-            switch ($strategy) {
-                case 'same_section':
-                    // Prioritize same subsection first
-                    if ($a->is_same_subsection !== $b->is_same_subsection) {
-                        return $a->is_same_subsection ? -1 : 1;
-                    }
-                    break;
-                    
-                case 'balanced':
-                    // Balance workload distribution but consider ML scores
-                    if ($a->workload_points !== $b->workload_points) {
-                        return $a->workload_points - $b->workload_points; // Lower workload first
-                    }
-                    break;
-                    
-                case 'optimal':
-                default:
-                    // Use ML-enhanced final score first
-                    if ($a->final_score !== $b->final_score) {
-                        return $b->final_score - $a->final_score; // Higher ML score first
-                    }
-                    break;
-            }
+   private function sortEmployeesByStrategyWithML($employees, ManpowerRequest $request, string $strategy)
+{
+    return $employees->sort(function ($a, $b) use ($request, $strategy) {
+        switch ($strategy) {
+            case 'same_section':
+                // Prioritize same subsection first
+                if ($a->is_same_subsection !== $b->is_same_subsection) {
+                    return $a->is_same_subsection ? -1 : 1;
+                }
+                break;
+                
+            case 'balanced':
+                // Balance workload distribution but consider ML scores
+                if ($a->workload_penalty !== $b->workload_penalty) {
+                    return $b->workload_penalty - $a->workload_penalty; // Higher penalty = lower priority
+                }
+                break;
+                
+            case 'optimal':
+            default:
+                // Use ML-enhanced final score first
+                if ($a->final_score !== $b->final_score) {
+                    return $b->final_score - $a->final_score; // Higher ML score first
+                }
+                break;
+        }
 
-            // Secondary sort: gender matching
-            $aGenderMatch = $this->getGenderMatchScore($a, $request);
-            $bGenderMatch = $this->getGenderMatchScore($b, $request);
-            if ($aGenderMatch !== $bGenderMatch) {
-                return $aGenderMatch - $bGenderMatch;
-            }
+        // Secondary sort: gender matching
+        $aGenderMatch = $this->getGenderMatchScore($a, $request);
+        $bGenderMatch = $this->getGenderMatchScore($b, $request);
+        if ($aGenderMatch !== $bGenderMatch) {
+            return $aGenderMatch - $bGenderMatch;
+        }
 
-            // Tertiary sort: employee type preference (bulanan first)
-            if ($a->type === 'bulanan' && $b->type === 'harian') return -1;
-            if ($a->type === 'harian' && $b->type === 'bulanan') return 1;
+        // Tertiary sort: employee type preference (bulanan first)
+        if ($a->type === 'bulanan' && $b->type === 'harian') return -1;
+        if ($a->type === 'harian' && $b->type === 'bulanan') return 1;
 
-            // Final sort: working day weight for harian employees
-            if ($a->type === 'harian' && $b->type === 'harian') {
-                return $b->working_day_weight - $a->working_day_weight;
-            }
-
-            return $a->id - $b->id;
-        });
-    }
+        // REMOVED: working_day_weight sorting for harian employees
+        
+        return $a->id - $b->id;
+    });
+}
 
     /**
      * Get gender matching score (lower is better)
@@ -500,10 +498,12 @@ class ManPowerRequestFulfillmentController extends Controller
     {
         $maleNeeded = $request->male_count > 0;
         $femaleNeeded = $request->female_count > 0;
-        
-        if ($maleNeeded && $employee->gender === 'male') return 0;
-        if ($femaleNeeded && $employee->gender === 'female') return 0;
-        
+
+        if ($maleNeeded && $employee->gender === 'male')
+            return 0;
+        if ($femaleNeeded && $employee->gender === 'female')
+            return 0;
+
         return 1; // No match
     }
 
@@ -537,7 +537,7 @@ class ManPowerRequestFulfillmentController extends Controller
             $additionalEmployees = $sortedEmployees
                 ->filter(fn($emp) => !in_array($emp->id, $alreadySelectedIds))
                 ->take($remaining);
-            
+
             $selected = $selected->merge($additionalEmployees);
         }
 
@@ -551,7 +551,7 @@ class ManPowerRequestFulfillmentController extends Controller
     {
         $maleCount = $employees->filter(fn($emp) => $emp->gender === 'male')->count();
         $femaleCount = $employees->filter(fn($emp) => $emp->gender === 'female')->count();
-        
+
         $requiredMale = $request->male_count ?? 0;
         $requiredFemale = $request->female_count ?? 0;
 
@@ -578,13 +578,13 @@ class ManPowerRequestFulfillmentController extends Controller
     private function logMLAssignment($manpowerRequest, $selectedEmployees, $allEligibleEmployees)
     {
         $mlService = app(SimpleMLService::class);
-        
+
         if ($mlService->isModelTrained()) {
             $topCandidates = $allEligibleEmployees
                 ->sortByDesc('final_score')
                 ->take(10)
                 ->map(fn($e) => [
-                    'id' => $e->id, 
+                    'id' => $e->id,
                     'name' => $e->name,
                     'ml_score' => round($e->ml_score, 3),
                     'final_score' => round($e->final_score, 3),
@@ -606,32 +606,32 @@ class ManPowerRequestFulfillmentController extends Controller
     public function bulkStore(Request $request)
     {
         $request->validate([
-            'request_ids'         => 'required|array',
-            'request_ids.*'       => 'exists:man_power_requests,id',
+            'request_ids' => 'required|array',
+            'request_ids.*' => 'exists:man_power_requests,id',
             'employee_selections' => 'required|array',
-            'strategy'            => 'required|in:optimal,same_section,balanced',
-            'visibility'          => 'in:public,private',
-            'status'              => 'in:pending,accepted,rejected'
+            'strategy' => 'required|in:optimal,same_section,balanced',
+            'visibility' => 'in:public,private',
+            'status' => 'in:pending,accepted,rejected'
         ]);
 
         Log::info('=== BULK FULFILLMENT STARTED ===', [
-            'user_id'     => auth()->id(),
-            'user_name'   => auth()->user()->name,
+            'user_id' => auth()->id(),
+            'user_name' => auth()->user()->name,
             'request_ids' => $request->request_ids,
             'request_count' => count($request->request_ids),
-            'strategy'    => $request->strategy,
-            'visibility'  => $request->visibility,
-            'timestamp'   => now()->toDateTimeString(),
-            'raw_input'   => $request->all(),
+            'strategy' => $request->strategy,
+            'visibility' => $request->visibility,
+            'timestamp' => now()->toDateTimeString(),
+            'raw_input' => $request->all(),
         ]);
 
         DB::beginTransaction();
         try {
-            $results          = [];
-            $successCount     = 0;
-            $failureCount     = 0;
+            $results = [];
+            $successCount = 0;
+            $failureCount = 0;
             $employeeSelections = $request->employee_selections;
-            $status           = $request->status ?? 'pending';
+            $status = $request->status ?? 'pending';
 
             foreach ($request->request_ids as $id) {
                 Log::info('⚡ Processing request', ['request_id' => $id]);
@@ -655,14 +655,14 @@ class ManPowerRequestFulfillmentController extends Controller
                     $failureCount++;
                     Log::error('INVALID EMPLOYEE SELECTION COUNT - SKIPPING', [
                         'request_id' => $id,
-                        'selected'   => count($selectedEmployeeIds),
-                        'expected'   => $manpowerRequest->requested_amount
+                        'selected' => count($selectedEmployeeIds),
+                        'expected' => $manpowerRequest->requested_amount
                     ]);
                     continue;
                 }
 
                 // Validate gender requirements
-                $maleCount   = 0;
+                $maleCount = 0;
                 $femaleCount = 0;
 
                 foreach ($selectedEmployeeIds as $employeeId) {
@@ -683,8 +683,8 @@ class ManPowerRequestFulfillmentController extends Controller
                     $failureCount++;
                     Log::error('INSUFFICIENT MALE EMPLOYEES - SKIPPING', [
                         'request_id' => $id,
-                        'actual'     => $maleCount,
-                        'required'   => $manpowerRequest->male_count
+                        'actual' => $maleCount,
+                        'required' => $manpowerRequest->male_count
                     ]);
                     continue;
                 }
@@ -694,8 +694,8 @@ class ManPowerRequestFulfillmentController extends Controller
                     $failureCount++;
                     Log::error('INSUFFICIENT FEMALE EMPLOYEES - SKIPPING', [
                         'request_id' => $id,
-                        'actual'     => $femaleCount,
-                        'required'   => $manpowerRequest->female_count
+                        'actual' => $femaleCount,
+                        'required' => $manpowerRequest->female_count
                     ]);
                     continue;
                 }
@@ -704,12 +704,12 @@ class ManPowerRequestFulfillmentController extends Controller
                 $createdSchedules = [];
                 foreach ($selectedEmployeeIds as $index => $employeeId) {
                     $data = [
-                        'employee_id'        => $employeeId,
-                        'sub_section_id'     => $manpowerRequest->sub_section_id,
+                        'employee_id' => $employeeId,
+                        'sub_section_id' => $manpowerRequest->sub_section_id,
                         'man_power_request_id' => $manpowerRequest->id,
-                        'date'               => $manpowerRequest->date,
-                        'status'             => $status,
-                        'visibility'         => $request->visibility ?? 'private',
+                        'date' => $manpowerRequest->date,
+                        'status' => $status,
+                        'visibility' => $request->visibility ?? 'private',
                     ];
 
                     // Add line for putway subsection - SAME LOGIC AS SINGLE MODE
@@ -721,16 +721,16 @@ class ManPowerRequestFulfillmentController extends Controller
                     $createdSchedules[] = $schedule->id;
 
                     Log::info('✅ Employee assigned', [
-                        'request_id'  => $id,
+                        'request_id' => $id,
                         'employee_id' => $employeeId,
                         'schedule_id' => $schedule->id,
-                        'line'        => $data['line'] ?? 'N/A',
+                        'line' => $data['line'] ?? 'N/A',
                     ]);
                 }
 
                 // Update request status
                 $manpowerRequest->update([
-                    'status'       => 'fulfilled',
+                    'status' => 'fulfilled',
                     'fulfilled_by' => auth()->id()
                 ]);
 
@@ -742,11 +742,11 @@ class ManPowerRequestFulfillmentController extends Controller
 
             Log::info('=== BULK FULFILLMENT COMPLETED ===', [
                 'total_requests' => count($request->request_ids),
-                'successful'     => $successCount,
-                'failed'         => $failureCount,
-                'success_rate'   => round(($successCount / count($request->request_ids)) * 100, 2) . '%',
-                'results'        => $results,
-                'timestamp'      => now()->toDateTimeString()
+                'successful' => $successCount,
+                'failed' => $failureCount,
+                'success_rate' => round(($successCount / count($request->request_ids)) * 100, 2) . '%',
+                'results' => $results,
+                'timestamp' => now()->toDateTimeString()
             ]);
 
             return redirect()->route('manpower-requests.index')->with([
@@ -759,9 +759,9 @@ class ManPowerRequestFulfillmentController extends Controller
 
             Log::error('=== BULK FULFILLMENT FAILED ===', [
                 'error_message' => $e->getMessage(),
-                'error_trace'   => $e->getTraceAsString(),
-                'request_data'  => $request->except(['employee_selections']),
-                'timestamp'     => now()->toDateTimeString()
+                'error_trace' => $e->getTraceAsString(),
+                'request_data' => $request->except(['employee_selections']),
+                'timestamp' => now()->toDateTimeString()
             ]);
 
             return redirect()->back()->withErrors([
@@ -770,75 +770,75 @@ class ManPowerRequestFulfillmentController extends Controller
         }
     }
 
-public function bulkFulfill(Request $request)
-{
-    $request->validate([
-        'request_ids'           => 'required|array',
-        'request_ids.*'         => 'exists:man_power_requests,id',
-        'employee_selections'   => 'required|array',
-        'strategy'              => 'required|in:optimal,same_section,balanced',
-        'visibility'            => 'required|in:private,public',
-    ]);
-
-    try {
-        DB::beginTransaction();
-
-        $requestIds         = $request->request_ids;
-        $employeeSelections = $request->employee_selections;
-
-        \Log::info('🚀 BulkFulfill triggered', [
-            'request_ids'         => $requestIds,
-            'employee_selections' => $employeeSelections,
+    public function bulkFulfill(Request $request)
+    {
+        $request->validate([
+            'request_ids' => 'required|array',
+            'request_ids.*' => 'exists:man_power_requests,id',
+            'employee_selections' => 'required|array',
+            'strategy' => 'required|in:optimal,same_section,balanced',
+            'visibility' => 'required|in:private,public',
         ]);
 
-        foreach ($requestIds as $reqId) {
-            $manpowerRequest = ManPowerRequest::findOrFail($reqId);
+        try {
+            DB::beginTransaction();
 
-            $employeeIds = $employeeSelections[$reqId] ?? [];
+            $requestIds = $request->request_ids;
+            $employeeSelections = $request->employee_selections;
 
-            \Log::info('⚡ Processing bulk fulfill', [
-                'request_id'   => $reqId,
-                'employee_ids' => $employeeIds,
+            \Log::info('🚀 BulkFulfill triggered', [
+                'request_ids' => $requestIds,
+                'employee_selections' => $employeeSelections,
             ]);
 
-            // hapus schedule lama (kalau overwrite)
-            $manpowerRequest->schedules()->delete();
+            foreach ($requestIds as $reqId) {
+                $manpowerRequest = ManPowerRequest::findOrFail($reqId);
 
-            foreach ($employeeIds as $empId) {
-                $manpowerRequest->schedules()->create([
-                    'employee_id' => $empId,
-                    'status'      => $request->status ?? 'pending',
-                    'visibility'  => $request->visibility,
+                $employeeIds = $employeeSelections[$reqId] ?? [];
+
+                \Log::info('⚡ Processing bulk fulfill', [
+                    'request_id' => $reqId,
+                    'employee_ids' => $employeeIds,
                 ]);
 
-                \Log::info('✅ Employee assigned', [
-                    'request_id'  => $reqId,
-                    'employee_id' => $empId,
+                // hapus schedule lama (kalau overwrite)
+                $manpowerRequest->schedules()->delete();
+
+                foreach ($employeeIds as $empId) {
+                    $manpowerRequest->schedules()->create([
+                        'employee_id' => $empId,
+                        'status' => $request->status ?? 'pending',
+                        'visibility' => $request->visibility,
+                    ]);
+
+                    \Log::info('✅ Employee assigned', [
+                        'request_id' => $reqId,
+                        'employee_id' => $empId,
+                    ]);
+                }
+
+                $manpowerRequest->update([
+                    'status' => 'fulfilled',
+                    'fulfilled_by' => $request->user()->id,
                 ]);
             }
 
-            $manpowerRequest->update([
-                'status'       => 'fulfilled',
-                'fulfilled_by' => $request->user()->id,
+            DB::commit();
+
+            \Log::info('🎉 BulkFulfill finished successfully');
+
+            return back()->with('success', 'Bulk fulfillment berhasil diproses.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('❌ BulkFulfill error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return back()->withErrors([
+                'fulfillment_error' => 'Terjadi kesalahan saat memproses bulk fulfillment: ' . $e->getMessage(),
             ]);
         }
-
-        DB::commit();
-
-        \Log::info('🎉 BulkFulfill finished successfully');
-
-        return back()->with('success', 'Bulk fulfillment berhasil diproses.');
-    } catch (\Exception $e) {
-        DB::rollBack();
-        \Log::error('❌ BulkFulfill error: ' . $e->getMessage(), [
-            'trace' => $e->getTraceAsString(),
-        ]);
-
-        return back()->withErrors([
-            'fulfillment_error' => 'Terjadi kesalahan saat memproses bulk fulfillment: ' . $e->getMessage(),
-        ]);
     }
-}
 
 
     private function sortEmployeesForBulk($employees, $requests, $strategy)
@@ -962,13 +962,18 @@ public function bulkFulfill(Request $request)
                         default => 0,
                     };
 
-                    $workloadPoints = $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0;
-                    $blindTestResult = $employee->blindTests->sortByDesc('test_date')->first()->result ?? 'Fail';
-                    $blindTestPoints = $blindTestResult === 'Pass' ? 3 : 0;
-                    $averageRating = $employee->ratings->avg('rating') ?? 0;
-
-                    $totalScore = ($workloadPoints * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
-
+                    // $workloadPoints = $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0;
+                    // $blindTestResult = $employee->blindTests->sortByDesc('test_date')->first()->result ?? 'Fail';
+                    // $blindTestPoints = $blindTestResult === 'Pass' ? 3 : 0;
+                    // $averageRating = $employee->ratings->avg('rating') ?? 0;
+    
+                    // $totalScore = ($workloadPoints * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
+    
+                    // Use weeklyScheduleCount for workload penalty
+                    $baseScore = $this->calculateBaseScore($employee, $weeklyScheduleCount);
+                    // For bulk preview, you might want to use final score or keep base score
+                    $totalScore = $baseScore; // Or use final score if you want ML here too
+    
                     $subSectionsData = $employee->subSections->map(function ($subSection) {
                         return [
                             'id' => $subSection->id,
@@ -1166,13 +1171,17 @@ public function bulkFulfill(Request $request)
                     default => 0,
                 };
 
-                $workloadPoints = $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0;
-                $blindTestResult = $employee->blindTests->sortByDesc('test_date')->first()->result ?? 'Fail';
-                $blindTestPoints = $blindTestResult === 'Pass' ? 3 : 0;
-                $averageRating = $employee->ratings->avg('rating') ?? 0;
-
-                $totalScore = ($workloadPoints * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
-
+                // $workloadPoints = $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0;
+                // $blindTestResult = $employee->blindTests->sortByDesc('test_date')->first()->result ?? 'Fail';
+                // $blindTestPoints = $blindTestResult === 'Pass' ? 3 : 0;
+                // $averageRating = $employee->ratings->avg('rating') ?? 0;
+    
+                // $totalScore = ($workloadPoints * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
+                // For auto-assign, use the ML-enhanced final score
+                $baseScore = $this->calculateBaseScore($employee, $weeklyScheduleCount);
+                $mlScore = $this->calculateMLPriorityScore($employee, $request);
+                $totalScore = ($mlScore * 0.7) + ($baseScore * 0.3); // Final ML-enhanced score
+    
                 // Get proper subsection data with section information
                 $subSectionsData = $employee->subSections->map(function ($subSection) {
                     return [
@@ -1514,14 +1523,18 @@ public function bulkFulfill(Request $request)
                     default => 0,
                 };
 
-                $workloadPoints = $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0;
-
-                $blindTestResult = $employee->blindTests->sortByDesc('test_date')->first()->result ?? 'Fail';
-                $blindTestPoints = $blindTestResult === 'Pass' ? 3 : 0;
-
-                $averageRating = $employee->ratings->avg('rating') ?? 0;
-
-                $totalScore = ($workloadPoints * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
+                // $workloadPoints = $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0;
+    
+                // $blindTestResult = $employee->blindTests->sortByDesc('test_date')->first()->result ?? 'Fail';
+                // $blindTestPoints = $blindTestResult === 'Pass' ? 3 : 0;
+    
+                // $averageRating = $employee->ratings->avg('rating') ?? 0;
+    
+                // $totalScore = ($workloadPoints * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
+    
+                $baseScore = $this->calculateBaseScore($employee, $weeklyScheduleCount);
+                $mlScore = $this->calculateMLPriorityScore($employee, $request);
+                $totalScore = ($mlScore * 0.7) + ($baseScore * 0.3);
 
                 $subSectionsData = $employee->subSections->map(function ($subSection) {
                     return [
@@ -1552,9 +1565,10 @@ public function bulkFulfill(Request $request)
                     'working_day_weight' => $workingDayWeight,
                     'total_assigned_hours' => $totalWorkingHours,
                     'sub_sections_data' => $subSectionsData,
-                    'workload_points' => $workloadPoints,
-                    'blind_test_points' => $blindTestPoints,
-                    'average_rating' => $averageRating,
+                    // 'workload_points' => $workloadPoints,
+                    // 'blind_test_points' => $blindTestPoints,
+                    // 'average_rating' => $averageRating,
+                    'ml_score' => $mlScore, // Where applicable
                     'total_score' => $totalScore,
                 ];
             });
@@ -1734,6 +1748,45 @@ public function bulkFulfill(Request $request)
         return redirect()
             ->route('manpower-requests.index')
             ->with('success', 'Revisi permintaan berhasil disimpan');
+    }
+
+    /**
+     * Calculate base score with proper workload penalty based on recent schedules
+     */
+    private function calculateBaseScore($employee, $weeklyScheduleCount)
+    {
+        // Calculate workload penalty based on recent schedules (last 7 days)
+        $workloadPenalty = $this->calculateWorkloadPenalty($weeklyScheduleCount);
+
+        $blindTestResult = $employee->blindTests->sortByDesc('test_date')->first()->result ?? 'Fail';
+        $blindTestPoints = $blindTestResult === 'Pass' ? 3 : 0;
+
+        $averageRating = $employee->ratings->avg('rating') ?? 0;
+
+        // Base score: Higher workload = lower priority
+        $baseScore = ($workloadPenalty * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
+
+        return $baseScore;
+    }
+
+    /**
+     * Calculate workload penalty based on weekly schedule count
+     * More schedules = higher penalty = lower priority
+     */
+    private function calculateWorkloadPenalty($weeklyScheduleCount)
+    {
+        // Inverse relationship: more schedules = lower score (penalty)
+        // Scale: 0 schedules = 100, 5+ schedules = 0
+        $penalty = match ($weeklyScheduleCount) {
+            0 => 100,
+            1 => 80,
+            2 => 60,
+            3 => 40,
+            4 => 20,
+            default => 0, // 5 or more schedules
+        };
+
+        return $penalty;
     }
 
 

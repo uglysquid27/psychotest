@@ -1,4 +1,4 @@
-// EmployeeModal.jsx
+// EmployeeModal.jsx - Updated to show ML scores
 import { useState, useMemo, useEffect } from 'react';
 import IncompleteSelectionModal from './IncompleteSelectionModal';
 
@@ -317,13 +317,35 @@ export default function EmployeeModal({
                                 <p className="truncate">Tipe: {emp.type}</p>
                                 <p className="truncate">Status: {emp.status === 'assigned' ? 'Assigned' : 'Available'}</p>
                                 <p className="truncate">Sub: {displaySubSectionName}</p>
-                                <p>Skor: {emp.total_score.toFixed(2)}</p>
-                                {emp.type === 'harian' && (
-                                    <p>Bobot Kerja: {emp.working_day_weight}</p>
-                                )}
-                                <p>Beban Kerja: {emp.workload_points}</p>
-                                <p>Test Buta: {emp.blind_test_points}</p>
-                                <p>Rating: {emp.average_rating.toFixed(1)}</p>
+                                
+                                {/* ML Scores Section */}
+                                <div className="mt-2 grid grid-cols-3 gap-1 text-xs border-t pt-1 border-gray-200 dark:border-gray-600">
+                                    <div>
+                                        <span className="font-medium">Base:</span>
+                                        <br />
+                                        {emp.total_score?.toFixed(2) || '0.00'}
+                                    </div>
+                                    <div>
+                                        <span className="font-medium">ML:</span>
+                                        <br />
+                                        {emp.ml_score?.toFixed(2) || '0.00'}
+                                    </div>
+                                    <div>
+                                        <span className="font-medium text-green-600 dark:text-green-400">Final:</span>
+                                        <br />
+                                        {emp.final_score?.toFixed(2) || '0.00'}
+                                    </div>
+                                </div>
+                                
+                                {/* Additional Info */}
+                                <div className="mt-1 grid grid-cols-2 gap-1 text-xs">
+                                    <p>Workload: {emp.workload_points}</p>
+                                    <p>Blind Test: {emp.blind_test_points}</p>
+                                    <p>Rating: {emp.average_rating?.toFixed(1) || '0.0'}</p>
+                                    {/* {emp.type === 'harian' && (
+                                        <p>Bobot: {emp.working_day_weight}</p>
+                                    )} */}
+                                </div>
                             </div>
                         </div>
                     </div>

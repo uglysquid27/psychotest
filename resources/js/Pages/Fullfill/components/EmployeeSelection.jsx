@@ -1,3 +1,4 @@
+// EmployeeSelection.jsx - Updated to show ML scores
 export default function EmployeeSelection({
     request,
     selectedIds,
@@ -21,17 +22,6 @@ export default function EmployeeSelection({
                 <h3 className="font-bold text-gray-900 dark:text-gray-100 text-lg">
                     Karyawan Terpilih ({selectedIds.length}/{request.requested_amount})
                 </h3>
-                {/* <button
-                    type="button"
-                    onClick={toggleMultiSelectMode}
-                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-                        multiSelectMode
-                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                            : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200'
-                    }`}
-                >
-                    {multiSelectMode ? '✖️ Tutup Multi Select' : '🔍 Mode Multi Select'}
-                </button> */}
             </div>
 
             {/* Warning for assigned employees */}
@@ -96,6 +86,26 @@ export default function EmployeeSelection({
                                             Sub: {employee.subSections.map(ss => ss.name).join(', ')}
                                         </div>
                                     )}
+                                    
+                                    {/* ML Scores Section */}
+                                    <div className="mt-2 grid grid-cols-3 gap-1 text-xs border-t pt-1 border-gray-200 dark:border-gray-600">
+                                        <div>
+                                            <span className="font-medium">Base:</span>
+                                            <br />
+                                            {employee.total_score?.toFixed(2) || '0.00'}
+                                        </div>
+                                        <div>
+                                            <span className="font-medium">ML:</span>
+                                            <br />
+                                            {employee.ml_score?.toFixed(2) || '0.00'}
+                                        </div>
+                                        <div>
+                                            <span className="font-medium text-green-600 dark:text-green-400">Final:</span>
+                                            <br />
+                                            {employee.final_score?.toFixed(2) || '0.00'}
+                                        </div>
+                                    </div>
+                                    
                                     {employee.isCurrentlyScheduled && (
                                         <div className="mt-1 text-green-600 dark:text-green-400 text-xs">
                                             ✓ Sudah dijadwalkan
