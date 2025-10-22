@@ -32,12 +32,13 @@ class ScheduleController extends Controller
         $sectionId = $request->input('section');
         $subSectionId = $request->input('sub_section');
 
-        if ($startDate && $endDate) {
-            $query->whereBetween('date', [
-                Carbon::parse($startDate)->startOfDay(),
-                Carbon::parse($endDate)->endOfDay()
-            ]);
-        }
+        // In ScheduleController.php - update the index method date filtering
+if ($startDate && $endDate) {
+    $query->whereBetween('date', [
+        Carbon::parse($startDate)->startOfDay(),
+        Carbon::parse($endDate)->endOfDay()
+    ]);
+}
 
         if ($sectionId) {
             $query->whereHas('manPowerRequest.subSection', function ($q) use ($sectionId) {
