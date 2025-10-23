@@ -12,14 +12,14 @@ import EmployeeModal from "./components/EmployeeModal";
 import BulkFulfillmentPanel from "./components/BulkFulfillmentPanel";
 
 export default function Fulfill({
-    request,  
+    request,
     sameSubSectionEmployees,
     otherSubSectionEmployees,
     currentScheduledIds = [],
     sameDayRequests = [],
     message,
     auth,
-}) { 
+}) {
     const isPutwaySubsection = useMemo(() => {
         return (
             request?.sub_section?.name?.toLowerCase() === "putway" ||
@@ -39,11 +39,11 @@ export default function Fulfill({
     };
 
     const canReviseFulfilledRequest = useMemo(() => {
-        if (request.status === "fulfilled") { 
+        if (request.status === "fulfilled") {
             const hasPendingSchedules = request.schedules?.some(
                 (schedule) => schedule.status === "pending"
             );
- 
+
             const hasRejectedEmployees = request.schedules?.some(
                 (schedule) =>
                     schedule.employee?.status === "rejected" ||
@@ -55,93 +55,93 @@ export default function Fulfill({
         return false;
     }, [request]);
 
-    const combinedEmployees = useMemo(() => { 
-    const availableEmployees = [
-        ...sameSubSectionEmployees,
-        ...otherSubSectionEmployees,
-    ].filter((emp) => { 
-        const empId = String(emp.id);
-        const currentScheduledIdsStr = currentScheduledIds.map((id) =>
-            String(id)
-        );
- 
-        return (
-            currentScheduledIdsStr.includes(empId) ||
-            emp.status === "available"
-        );
-    });
+    const combinedEmployees = useMemo(() => {
+        const availableEmployees = [
+            ...sameSubSectionEmployees,
+            ...otherSubSectionEmployees,
+        ].filter((emp) => {
+            const empId = String(emp.id);
+            const currentScheduledIdsStr = currentScheduledIds.map((id) =>
+                String(id)
+            );
 
-    return availableEmployees.map((emp) => ({
-        ...emp,
-        subSections: emp.sub_sections_data || emp.sub_sections || [],
-        gender: normalizeGender(emp.gender),
-        originalGender: emp.gender,
-        isCurrentlyScheduled: currentScheduledIds
-            .map((id) => String(id))
-            .includes(String(emp.id)),
-        // ADD ML SCORES
-        ml_score: emp.ml_score || 0,
-        final_score: emp.final_score || emp.total_score || 0,
-    }));
-}, [
-    sameSubSectionEmployees,
-    otherSubSectionEmployees,
-    currentScheduledIds,
-]);
+            return (
+                currentScheduledIdsStr.includes(empId) ||
+                emp.status === "available"
+            );
+        });
 
- const allSortedEligibleEmployees = useMemo(() => {
-    const sorted = [...combinedEmployees].sort((a, b) => {
-        if (a.isCurrentlyScheduled !== b.isCurrentlyScheduled) {
-            return a.isCurrentlyScheduled ? -1 : 1;
-        }
- 
-        const aIsSame = a.subSections.some(
-            (ss) => String(ss.id) === String(request.sub_section_id)
-        );
-        const bIsSame = b.subSections.some(
-            (ss) => String(ss.id) === String(request.sub_section_id)
-        );
+        return availableEmployees.map((emp) => ({
+            ...emp,
+            subSections: emp.sub_sections_data || emp.sub_sections || [],
+            gender: normalizeGender(emp.gender),
+            originalGender: emp.gender,
+            isCurrentlyScheduled: currentScheduledIds
+                .map((id) => String(id))
+                .includes(String(emp.id)),
+            // ADD ML SCORES
+            ml_score: emp.ml_score || 0,
+            final_score: emp.final_score || emp.total_score || 0,
+        }));
+    }, [
+        sameSubSectionEmployees,
+        otherSubSectionEmployees,
+        currentScheduledIds,
+    ]);
 
-        if (aIsSame !== bIsSame) return aIsSame ? -1 : 1;
+    const allSortedEligibleEmployees = useMemo(() => {
+        const sorted = [...combinedEmployees].sort((a, b) => {
+            if (a.isCurrentlyScheduled !== b.isCurrentlyScheduled) {
+                return a.isCurrentlyScheduled ? -1 : 1;
+            }
 
-        // USE ML-ENHANCED FINAL SCORE INSTEAD OF TOTAL SCORE
-        if (a.final_score !== b.final_score) {
-            return b.final_score - a.final_score;
-        }
+            const aIsSame = a.subSections.some(
+                (ss) => String(ss.id) === String(request.sub_section_id)
+            );
+            const bIsSame = b.subSections.some(
+                (ss) => String(ss.id) === String(request.sub_section_id)
+            );
 
-        const aGenderMatch =
-            request.male_count > 0 && a.gender === "male"
-                ? 0
-                : request.female_count > 0 && a.gender === "female"
-                ? 0
-                : 1;
-        const bGenderMatch =
-            request.male_count > 0 && b.gender === "male"
-                ? 0
-                : request.female_count > 0 && b.gender === "female"
-                ? 0
-                : 1;
-        if (aGenderMatch !== bGenderMatch)
-            return aGenderMatch - bGenderMatch;
+            if (aIsSame !== bIsSame) return aIsSame ? -1 : 1;
 
-        // Keep existing type and weight sorting
-        if (a.type === "bulanan" && b.type === "harian") return -1;
-        if (a.type === "harian" && b.type === "bulanan") return 1;
+            // USE ML-ENHANCED FINAL SCORE INSTEAD OF TOTAL SCORE
+            if (a.final_score !== b.final_score) {
+                return b.final_score - a.final_score;
+            }
 
-        if (a.type === "harian" && b.type === "harian") {
-            return b.working_day_weight - a.working_day_weight;
-        }
+            const aGenderMatch =
+                request.male_count > 0 && a.gender === "male"
+                    ? 0
+                    : request.female_count > 0 && a.gender === "female"
+                    ? 0
+                    : 1;
+            const bGenderMatch =
+                request.male_count > 0 && b.gender === "male"
+                    ? 0
+                    : request.female_count > 0 && b.gender === "female"
+                    ? 0
+                    : 1;
+            if (aGenderMatch !== bGenderMatch)
+                return aGenderMatch - bGenderMatch;
 
-        return a.id - b.id;
-    });
+            // Keep existing type and weight sorting
+            if (a.type === "bulanan" && b.type === "harian") return -1;
+            if (a.type === "harian" && b.type === "bulanan") return 1;
 
-    return sorted;
-}, [
-    combinedEmployees,
-    request.sub_section_id,
-    request.male_count,
-    request.female_count,
-]);
+            if (a.type === "harian" && b.type === "harian") {
+                return b.working_day_weight - a.working_day_weight;
+            }
+
+            return a.id - b.id;
+        });
+
+        return sorted;
+    }, [
+        combinedEmployees,
+        request.sub_section_id,
+        request.male_count,
+        request.female_count,
+    ]);
 
     const initialSelectedIds = useMemo(() => {
         const validCurrentIds = currentScheduledIds
@@ -154,7 +154,7 @@ export default function Fulfill({
             if (validCurrentIds.length < request.requested_amount) {
                 const remainingCount =
                     request.requested_amount - validCurrentIds.length;
- 
+
                 const remainingSameSubSection = allSortedEligibleEmployees
                     .filter(
                         (e) =>
@@ -171,7 +171,7 @@ export default function Fulfill({
                 if (remainingSameSubSection.length >= remainingCount) {
                     return [...validCurrentIds, ...remainingSameSubSection];
                 }
- 
+
                 const remainingOtherSubSection = allSortedEligibleEmployees
                     .filter(
                         (e) =>
@@ -193,11 +193,11 @@ export default function Fulfill({
             }
             return validCurrentIds.slice(0, request.requested_amount);
         }
- 
+
         const requiredMale = request.male_count || 0;
         const requiredFemale = request.female_count || 0;
         const totalRequired = requiredMale + requiredFemale;
- 
+
         const sameSubMales = allSortedEligibleEmployees.filter(
             (e) =>
                 e.gender === "male" &&
@@ -213,7 +213,7 @@ export default function Fulfill({
                     (ss) => String(ss.id) === String(request.sub_section_id)
                 )
         );
- 
+
         const otherSubMales = allSortedEligibleEmployees.filter(
             (e) =>
                 e.gender === "male" &&
@@ -231,14 +231,14 @@ export default function Fulfill({
         );
 
         const selected = [];
- 
+
         selected.push(
             ...sameSubMales.slice(0, requiredMale).map((e) => String(e.id))
         );
         selected.push(
             ...sameSubFemales.slice(0, requiredFemale).map((e) => String(e.id))
         );
- 
+
         const currentMaleCount = selected.filter((id) => {
             const emp = allSortedEligibleEmployees.find(
                 (e) => String(e.id) === id
@@ -266,7 +266,7 @@ export default function Fulfill({
                 ...otherSubFemales.slice(0, needed).map((e) => String(e.id))
             );
         }
- 
+
         if (selected.length < request.requested_amount) {
             const remainingSameSub = allSortedEligibleEmployees
                 .filter(
@@ -326,6 +326,7 @@ export default function Fulfill({
     const [selectedBulkRequests, setSelectedBulkRequests] = useState([]);
     const [bulkSelectedEmployees, setBulkSelectedEmployees] = useState({});
     const [activeBulkRequest, setActiveBulkRequest] = useState(null);
+    const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
 
     useEffect(() => {
         const allValidRequestIds = new Set();
@@ -418,7 +419,7 @@ export default function Fulfill({
         request.male_count,
         request.female_count,
     ]);
- 
+
     const lineAssignments = useMemo(() => {
         if (!isPutwaySubsection) return {};
 
@@ -438,7 +439,7 @@ export default function Fulfill({
                 (req) => String(req.id) === requestId
             );
             if (!request) return;
- 
+
             const isPutway =
                 request?.sub_section?.name?.toLowerCase() === "putway" ||
                 request?.subSection?.name?.toLowerCase() === "putway";
@@ -473,7 +474,7 @@ export default function Fulfill({
         (requestId, index, newEmployeeId) => {
             setBulkSelectedEmployees((prev) => {
                 const currentEmployees = prev[requestId] || [];
- 
+
                 if (
                     newEmployeeId !== currentEmployees[index] &&
                     currentEmployees.includes(newEmployeeId)
@@ -526,14 +527,14 @@ export default function Fulfill({
                 );
                 return;
             }
- 
+
             setData({
                 employee_ids: selectedIds,
                 fulfilled_by: auth.user.id,
                 is_revision: request.status === "fulfilled",
                 visibility: data.visibility,
             });
- 
+
             post(route("manpower-requests.fulfill.store", request.id), {
                 onSuccess: () => router.visit(route("manpower-requests.index")),
                 onError: (errors) => {
@@ -571,7 +572,7 @@ export default function Fulfill({
             let availableEmployees = allSortedEligibleEmployees.filter(
                 (emp) =>
                     !usedEmployeeIds.has(String(emp.id)) &&
-                    emp.status === "available" 
+                    emp.status === "available"
             );
 
             if (strategy === "same_section") {
@@ -613,14 +614,14 @@ export default function Fulfill({
                     (emp) =>
                         emp.gender === "male" &&
                         !usedEmployeeIds.has(String(emp.id)) &&
-                        emp.status === "available" 
+                        emp.status === "available"
                 );
 
                 const femaleCandidates = availableEmployees.filter(
                     (emp) =>
                         emp.gender === "female" &&
                         !usedEmployeeIds.has(String(emp.id)) &&
-                        emp.status === "available" 
+                        emp.status === "available"
                 );
 
                 const selectedForRequest = [];
@@ -1056,7 +1057,7 @@ export default function Fulfill({
             let usedEmployeeIds = new Set();
 
             if (request.status !== "fulfilled") {
-                initialSelections[String(request.id)] = [...selectedIds]; 
+                initialSelections[String(request.id)] = [...selectedIds];
                 selectedIds.forEach((id) => usedEmployeeIds.add(id));
             }
 
@@ -1158,15 +1159,20 @@ export default function Fulfill({
                     <div className="flex justify-between items-center">
                         <h2 className="font-semibold text-gray-800 dark:text-gray-200 text-xl">
                             Penuhi Request Man Power
-                             {ml_status && (
-                        <span className={`ml-2 text-xs px-2 py-1 rounded-full ${
-                            ml_status === 'trained' 
-                                ? 'bg-green-100 text-green-800 dark:bg-green-800/30 dark:text-green-300'
-                                : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800/30 dark:text-yellow-300'
-                        }`}>
-                            ML: {ml_status === 'trained' ? `Trained (${ml_accuracy}%)` : 'Not Trained'}
-                        </span>
-                    )}
+                            {ml_status && (
+                                <span
+                                    className={`ml-2 text-xs px-2 py-1 rounded-full ${
+                                        ml_status === "trained"
+                                            ? "bg-green-100 text-green-800 dark:bg-green-800/30 dark:text-green-300"
+                                            : "bg-yellow-100 text-yellow-800 dark:bg-yellow-800/30 dark:text-yellow-300"
+                                    }`}
+                                >
+                                    ML:{" "}
+                                    {ml_status === "trained"
+                                        ? `Trained (${ml_accuracy}%)`
+                                        : "Not Trained"}
+                                </span>
+                            )}
                         </h2>
                     </div>
                 }
@@ -1245,7 +1251,7 @@ export default function Fulfill({
                 {bulkMode && (
                     <BulkFulfillmentPanel
                         sameDayRequests={sameDayRequests}
-                        currentRequest={request} 
+                        currentRequest={request}
                         selectedBulkRequests={selectedBulkRequests}
                         toggleBulkRequestSelection={toggleBulkRequestSelection}
                         handleBulkSubmit={handleBulkSubmit}
@@ -1428,6 +1434,7 @@ export default function Fulfill({
                     multiSelectMode={multiSelectMode}
                     toggleMultiSelectMode={toggleMultiSelectMode}
                     isBulkMode={!!activeBulkRequest}
+                    isLoading={isLoadingEmployees} // Now this is defined
                 />
             </div>
         </AuthenticatedLayout>

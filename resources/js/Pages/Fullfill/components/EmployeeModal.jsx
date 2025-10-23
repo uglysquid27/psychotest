@@ -1,5 +1,6 @@
-// EmployeeModal.jsx - Updated to show ML scores
+// EmployeeModal.jsx - Updated to show ML scores with loading states
 import { useState, useMemo, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import IncompleteSelectionModal from './IncompleteSelectionModal';
 
 export default function EmployeeModal({
@@ -12,7 +13,8 @@ export default function EmployeeModal({
     handleMultiSelect,
     multiSelectMode,
     toggleMultiSelectMode,
-    isBulkMode = false
+    isBulkMode = false,
+    isLoading = false // New prop for loading state
 }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedSubSection, setSelectedSubSection] = useState('all');
@@ -239,6 +241,46 @@ export default function EmployeeModal({
         setTempSelectedIds(availableIds);
     };
 
+    // Loading skeleton for employee cards
+    const EmployeeCardSkeleton = () => (
+        <motion.div
+            initial={{ opacity: 0.6 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.8, repeat: Infinity, repeatType: "reverse" }}
+            className="cursor-pointer text-left p-3 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800"
+        >
+            <div className="flex justify-between items-start">
+                <div className="flex flex-1">
+                    <div className="min-w-0 flex-1">
+                        <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded mb-2 w-3/4"></div>
+                        <div className="mt-2 space-y-1">
+                            <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-1/2"></div>
+                            <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-2/3"></div>
+                            <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-1/3"></div>
+                        </div>
+                        
+                        {/* ML Scores Section Skeleton */}
+                        <div className="mt-3 grid grid-cols-3 gap-1 text-xs border-t pt-2 border-gray-200 dark:border-gray-600">
+                            {[...Array(3)].map((_, i) => (
+                                <div key={i}>
+                                    <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded mb-1 w-2/3"></div>
+                                    <div className="h-3 bg-gray-300 dark:bg-gray-600 rounded w-full"></div>
+                                </div>
+                            ))}
+                        </div>
+                        
+                        {/* Additional Info Skeleton */}
+                        <div className="mt-2 grid grid-cols-2 gap-1 text-xs">
+                            {[...Array(4)].map((_, i) => (
+                                <div key={i} className="h-3 bg-gray-300 dark:bg-gray-600 rounded"></div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </motion.div>
+    );
+
     const renderEmployeeCard = (emp) => {
         const empId = String(emp.id);
         const selectedIdsStr = selectedIds.map(id => String(id));
@@ -269,8 +311,12 @@ export default function EmployeeModal({
         const isFemale = emp.gender === 'female';
 
         return (
-            <div
+            <motion.div
                 key={empId}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
                 onClick={() => {
                     if (!isDisabled) {
                         toggleEmployeeSelection(empId);
@@ -371,7 +417,7 @@ export default function EmployeeModal({
                         </div>
                     )}
                 </div>
-            </div>
+            </motion.div>
         );
     };
 
@@ -380,213 +426,299 @@ export default function EmployeeModal({
     return (
         <>
             {/* Main Modal */}
-            <div className="fixed inset-0 z-50 overflow-y-auto">
-                {/* Backdrop */}
-                <div 
-                    className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
-                    onClick={() => setShowModal(false)}
-                />
-                
-                {/* Modal Content */}
-                <div className="flex min-h-full items-center justify-center p-2 sm:p-4">
-                    <div 
-                        className="relative bg-white dark:bg-gray-800 shadow-xl rounded-lg w-full max-w-6xl max-h-[90vh] overflow-hidden"
-                        onClick={(e) => e.stopPropagation()}
+            <AnimatePresence>
+                {showModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 overflow-y-auto"
                     >
-                        {/* Header with close button */}
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
-                            <div className="flex items-center space-x-2 sm:space-x-4 mb-2 sm:mb-0">
-                                <h3 className="font-bold text-gray-900 dark:text-gray-100 text-lg sm:text-xl">
-                                    {multiSelectMode ? 'Pilih Multiple Karyawan' : 'Pilih Karyawan Baru'}
-                                    {isBulkMode && ' (Bulk Mode)'}
-                                </h3>
-                                {multiSelectMode && (
-                                    <span className="px-2 sm:px-3 py-1 text-xs sm:text-sm bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 rounded-full whitespace-nowrap">
-                                        {tempSelectedIds.length} / {request.requested_amount} terpilih
-                                    </span>
-                                )}
-                            </div>
-                            <button
-                                onClick={() => setShowModal(false)}
-                                className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 p-1"
+                        {/* Backdrop */}
+                        <motion.div 
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
+                            onClick={() => setShowModal(false)}
+                        />
+                        
+                        {/* Modal Content */}
+                        <div className="flex min-h-full items-center justify-center p-2 sm:p-4">
+                            <motion.div 
+                                initial={{ opacity: 0, scale: 0.95 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                transition={{ duration: 0.2 }}
+                                className="relative bg-white dark:bg-gray-800 shadow-xl rounded-lg w-full max-w-6xl max-h-[90vh] overflow-hidden"
+                                onClick={(e) => e.stopPropagation()}
                             >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-
-                        {/* Multi-select mode toggle */}
-                        <div className="p-3 sm:p-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                                <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                                {/* Header with close button */}
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
+                                    <div className="flex items-center space-x-2 sm:space-x-4 mb-2 sm:mb-0">
+                                        <h3 className="font-bold text-gray-900 dark:text-gray-100 text-lg sm:text-xl">
+                                            {multiSelectMode ? 'Pilih Multiple Karyawan' : 'Pilih Karyawan Baru'}
+                                            {isBulkMode && ' (Bulk Mode)'}
+                                        </h3>
+                                        {multiSelectMode && (
+                                            <span className="px-2 sm:px-3 py-1 text-xs sm:text-sm bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 rounded-full whitespace-nowrap">
+                                                {tempSelectedIds.length} / {request.requested_amount} terpilih
+                                            </span>
+                                        )}
+                                    </div>
                                     <button
-                                        onClick={toggleMultiSelectMode}
-                                        className={`px-3 sm:px-4 py-2 rounded-md font-medium transition-colors text-sm sm:text-base w-full sm:w-auto ${
-                                            multiSelectMode
-                                                ? 'bg-green-600 hover:bg-green-700 text-white'
-                                                : 'bg-blue-600 hover:bg-blue-700 text-white'
-                                        }`}
+                                        onClick={() => setShowModal(false)}
+                                        className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 p-1"
                                     >
-                                        {multiSelectMode ? '📋 Mode Multi-Select' : '🔄 Mode Single Select'}
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
                                     </button>
+                                </div>
 
-                                    {multiSelectMode && (
-                                        <div className="flex flex-wrap gap-2">
+                                {/* Loading Overlay */}
+                                {isLoading && (
+                                    <motion.div
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        className="absolute inset-0 bg-white dark:bg-gray-800 bg-opacity-80 dark:bg-opacity-80 z-10 flex items-center justify-center"
+                                    >
+                                        <div className="text-center">
+                                            <motion.div
+                                                animate={{ rotate: 360 }}
+                                                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                                                className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full mx-auto mb-4"
+                                            />
+                                            <p className="text-gray-600 dark:text-gray-300 font-medium">
+                                                Memuat data karyawan...
+                                            </p>
+                                        </div>
+                                    </motion.div>
+                                )}
+
+                                {/* Multi-select mode toggle */}
+                                <div className="p-3 sm:p-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
                                             <button
-                                                onClick={() => setTempSelectedIds([])}
-                                                className="px-2 sm:px-3 py-1 text-xs sm:text-sm bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-900/60 text-red-800 dark:text-red-300 rounded-md whitespace-nowrap"
+                                                onClick={toggleMultiSelectMode}
+                                                disabled={isLoading}
+                                                className={`px-3 sm:px-4 py-2 rounded-md font-medium transition-colors text-sm sm:text-base w-full sm:w-auto ${
+                                                    multiSelectMode
+                                                        ? 'bg-green-600 hover:bg-green-700 text-white'
+                                                        : 'bg-blue-600 hover:bg-blue-700 text-white'
+                                                } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                                             >
-                                                🗑️ Clear All
+                                                {multiSelectMode ? '📋 Mode Multi-Select' : '🔄 Mode Single Select'}
                                             </button>
-                                            <button
-                                                onClick={handleSelectTopEmployees}
-                                                className="px-2 sm:px-3 py-1 text-xs sm:text-sm bg-blue-100 dark:bg-blue-900/40 hover:bg-blue-200 dark:hover:bg-blue-900/60 text-blue-800 dark:text-blue-300 rounded-md whitespace-nowrap"
+
+                                            {multiSelectMode && (
+                                                <div className="flex flex-wrap gap-2">
+                                                    <button
+                                                        onClick={() => setTempSelectedIds([])}
+                                                        disabled={isLoading}
+                                                        className="px-2 sm:px-3 py-1 text-xs sm:text-sm bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-900/60 text-red-800 dark:text-red-300 rounded-md whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        🗑️ Clear All
+                                                    </button>
+                                                    <button
+                                                        onClick={handleSelectTopEmployees}
+                                                        disabled={isLoading}
+                                                        className="px-2 sm:px-3 py-1 text-xs sm:text-sm bg-blue-100 dark:bg-blue-900/40 hover:bg-blue-200 dark:hover:bg-blue-900/60 text-blue-800 dark:text-blue-300 rounded-md whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        ✅ Select Top {Math.min(request.requested_amount, filteredEmployees.length)}
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {multiSelectMode && (
+                                            <div className="flex space-x-2 w-full sm:w-auto">
+                                                <button
+                                                    onClick={cancelMultiSelection}
+                                                    disabled={isLoading}
+                                                    className="px-3 sm:px-4 py-2 bg-gray-500 dark:bg-gray-600 hover:bg-gray-600 dark:hover:bg-gray-700 text-white rounded-md transition-colors text-sm sm:text-base flex-1 sm:flex-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    ❌ Batal
+                                                </button>
+                                                <button
+                                                    onClick={applyMultiSelection}
+                                                    disabled={isLoading}
+                                                    className="px-3 sm:px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors text-sm sm:text-base flex-1 sm:flex-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    ✅ Terapkan
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Search and Filter Section */}
+                                <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+                                    <div className="flex flex-col lg:flex-row gap-3 sm:gap-4">
+                                        {/* Search Input */}
+                                        <div className="flex-1">
+                                            <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                Cari berdasarkan Nama atau NIK
+                                            </label>
+                                            <input
+                                                type="text"
+                                                id="search"
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                placeholder="Ketik nama atau NIK karyawan..."
+                                                disabled={isLoading}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                                            />
+                                        </div>
+
+                                        {/* SubSection Filter */}
+                                        <div className="lg:w-1/3">
+                                            <label htmlFor="subsection" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                                Filter berdasarkan Sub-Bagian
+                                            </label>
+                                            <select
+                                                id="subsection"
+                                                value={selectedSubSection}
+                                                onChange={(e) => setSelectedSubSection(e.target.value)}
+                                                disabled={isLoading}
+                                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
-                                                ✅ Select Top {Math.min(request.requested_amount, filteredEmployees.length)}
+                                                <option value="all">Semua Sub-Bagian</option>
+                                                {availableSubSections.map(subSection => (
+                                                    <option key={subSection.id} value={subSection.id}>
+                                                        {subSection.section_name} - {subSection.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {/* Clear Filters */}
+                                        <div className="flex items-end">
+                                            <button
+                                                onClick={() => {
+                                                    setSearchTerm('');
+                                                    setSelectedSubSection('all');
+                                                }}
+                                                disabled={isLoading}
+                                                className="px-3 sm:px-4 py-2 bg-gray-500 dark:bg-gray-600 hover:bg-gray-600 dark:hover:bg-gray-700 text-white rounded-md transition-colors text-sm sm:text-base w-full lg:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                Reset Filter
                                             </button>
                                         </div>
+                                    </div>
+
+                                    {/* Results Summary */}
+                                    <div className="mt-3 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                                        {isLoading ? (
+                                            <div className="flex items-center space-x-2">
+                                                <motion.div
+                                                    animate={{ opacity: [0.5, 1, 0.5] }}
+                                                    transition={{ duration: 1.5, repeat: Infinity }}
+                                                    className="w-2 h-2 bg-gray-400 rounded-full"
+                                                />
+                                                <span>Memuat data karyawan...</span>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                Menampilkan {filteredEmployees.length} dari {allSortedEligibleEmployees.length} karyawan
+                                                {searchTerm && ` • Pencarian: "${searchTerm}"`}
+                                                {selectedSubSection !== 'all' && ` • Filter: ${availableSubSections.find(s => s.id === selectedSubSection)?.section_name} - ${availableSubSections.find(s => s.id === selectedSubSection)?.name}`}
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Employee List */}
+                                <div className="overflow-y-auto max-h-[40vh] sm:max-h-[50vh] p-4 sm:p-6">
+                                    {isLoading ? (
+                                        // Loading Skeletons
+                                        <div className="space-y-6">
+                                            {/* Same Sub-Section Skeleton */}
+                                            <div className="mb-6 sm:mb-8">
+                                                <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-64 mb-4"></div>
+                                                <div className="gap-2 sm:gap-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                                                    {[...Array(3)].map((_, i) => (
+                                                        <EmployeeCardSkeleton key={i} />
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            
+                                            {/* Other Sub-Section Skeleton */}
+                                            <div>
+                                                <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-48 mb-4"></div>
+                                                <div className="gap-2 sm:gap-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                                                    {[...Array(6)].map((_, i) => (
+                                                        <EmployeeCardSkeleton key={i} />
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        // Actual Employee Data
+                                        <>
+                                            {/* Same Sub-Section Employees */}
+                                            {sameSubSectionEmployees.length > 0 && (
+                                                <div className="mb-6 sm:mb-8">
+                                                    <h4 className="mb-3 sm:mb-4 font-semibold text-gray-700 dark:text-gray-300 text-base sm:text-lg flex items-center">
+                                                        <span className="w-2 h-2 sm:w-3 sm:h-3 bg-green-500 rounded-full mr-2"></span>
+                                                        Karyawan dari Sub-Bagian Sama ({request?.sub_section?.name || 'Unknown'}) - {sameSubSectionEmployees.length} orang
+                                                    </h4>
+                                                    <div className="gap-2 sm:gap-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                                                        {sameSubSectionEmployees.map(renderEmployeeCard)}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Other Sub-Section Employees */}
+                                            {otherSubSectionEmployees.length > 0 && (
+                                                <div>
+                                                    <h4 className="mb-3 sm:mb-4 font-semibold text-gray-700 dark:text-gray-300 text-base sm:text-lg flex items-center">
+                                                        <span className="w-2 h-2 sm:w-3 sm:h-3 bg-blue-500 rounded-full mr-2"></span>
+                                                        Karyawan dari Sub-Bagian Lain - {otherSubSectionEmployees.length} orang
+                                                    </h4>
+                                                    <div className="gap-2 sm:gap-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                                                        {otherSubSectionEmployees.map(renderEmployeeCard)}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* No Results */}
+                                            {filteredEmployees.length === 0 && (
+                                                <div className="text-center py-8 sm:py-12">
+                                                    <div className="text-gray-400 dark:text-gray-500 text-4xl sm:text-6xl mb-3 sm:mb-4">
+                                                        🔍
+                                                    </div>
+                                                    <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                                                        Tidak ada karyawan ditemukan
+                                                    </h3>
+                                                    <p className="text-gray-500 dark:text-gray-400 text-sm sm:text-base">
+                                                        Coba ubah kata kunci pencarian atau filter yang digunakan
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </>
                                     )}
                                 </div>
 
-                                {multiSelectMode && (
-                                    <div className="flex space-x-2 w-full sm:w-auto">
+                                {/* Footer */}
+                                {!multiSelectMode && (
+                                    <div className="flex justify-end p-4 sm:p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
                                         <button
-                                            onClick={cancelMultiSelection}
-                                            className="px-3 sm:px-4 py-2 bg-gray-500 dark:bg-gray-600 hover:bg-gray-600 dark:hover:bg-gray-700 text-white rounded-md transition-colors text-sm sm:text-base flex-1 sm:flex-none"
+                                            type="button"
+                                            onClick={() => setShowModal(false)}
+                                            disabled={isLoading}
+                                            className="bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-700 px-4 sm:px-6 py-2 rounded-lg text-gray-700 dark:text-gray-200 transition-colors text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
-                                            ❌ Batal
-                                        </button>
-                                        <button
-                                            onClick={applyMultiSelection}
-                                            className="px-3 sm:px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors text-sm sm:text-base flex-1 sm:flex-none"
-                                        >
-                                            ✅ Terapkan
+                                            Tutup
                                         </button>
                                     </div>
                                 )}
-                            </div>
+                            </motion.div>
                         </div>
-
-                        {/* Search and Filter Section */}
-                        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-                            <div className="flex flex-col lg:flex-row gap-3 sm:gap-4">
-                                {/* Search Input */}
-                                <div className="flex-1">
-                                    <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Cari berdasarkan Nama atau NIK
-                                    </label>
-                                    <input
-                                        type="text"
-                                        id="search"
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        placeholder="Ketik nama atau NIK karyawan..."
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
-                                    />
-                                </div>
-
-                                {/* SubSection Filter */}
-                                <div className="lg:w-1/3">
-                                    <label htmlFor="subsection" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Filter berdasarkan Sub-Bagian
-                                    </label>
-                                    <select
-                                        id="subsection"
-                                        value={selectedSubSection}
-                                        onChange={(e) => setSelectedSubSection(e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
-                                    >
-                                        <option value="all">Semua Sub-Bagian</option>
-                                        {availableSubSections.map(subSection => (
-                                            <option key={subSection.id} value={subSection.id}>
-                                                {subSection.section_name} - {subSection.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                {/* Clear Filters */}
-                                <div className="flex items-end">
-                                    <button
-                                        onClick={() => {
-                                            setSearchTerm('');
-                                            setSelectedSubSection('all');
-                                        }}
-                                        className="px-3 sm:px-4 py-2 bg-gray-500 dark:bg-gray-600 hover:bg-gray-600 dark:hover:bg-gray-700 text-white rounded-md transition-colors text-sm sm:text-base w-full lg:w-auto"
-                                    >
-                                        Reset Filter
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Results Summary */}
-                            <div className="mt-3 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
-                                Menampilkan {filteredEmployees.length} dari {allSortedEligibleEmployees.length} karyawan
-                                {searchTerm && ` • Pencarian: "${searchTerm}"`}
-                                {selectedSubSection !== 'all' && ` • Filter: ${availableSubSections.find(s => s.id === selectedSubSection)?.section_name} - ${availableSubSections.find(s => s.id === selectedSubSection)?.name}`}
-                            </div>
-                        </div>
-
-                        {/* Employee List */}
-                        <div className="overflow-y-auto max-h-[40vh] sm:max-h-[50vh] p-4 sm:p-6">
-                            {/* Same Sub-Section Employees */}
-                            {sameSubSectionEmployees.length > 0 && (
-                                <div className="mb-6 sm:mb-8">
-                                    <h4 className="mb-3 sm:mb-4 font-semibold text-gray-700 dark:text-gray-300 text-base sm:text-lg flex items-center">
-                                        <span className="w-2 h-2 sm:w-3 sm:h-3 bg-green-500 rounded-full mr-2"></span>
-                                        Karyawan dari Sub-Bagian Sama ({request?.sub_section?.name || 'Unknown'}) - {sameSubSectionEmployees.length} orang
-                                    </h4>
-                                    <div className="gap-2 sm:gap-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                                        {sameSubSectionEmployees.map(renderEmployeeCard)}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Other Sub-Section Employees */}
-                            {otherSubSectionEmployees.length > 0 && (
-                                <div>
-                                    <h4 className="mb-3 sm:mb-4 font-semibold text-gray-700 dark:text-gray-300 text-base sm:text-lg flex items-center">
-                                        <span className="w-2 h-2 sm:w-3 sm:h-3 bg-blue-500 rounded-full mr-2"></span>
-                                        Karyawan dari Sub-Bagian Lain - {otherSubSectionEmployees.length} orang
-                                    </h4>
-                                    <div className="gap-2 sm:gap-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                                        {otherSubSectionEmployees.map(renderEmployeeCard)}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* No Results */}
-                            {filteredEmployees.length === 0 && (
-                                <div className="text-center py-8 sm:py-12">
-                                    <div className="text-gray-400 dark:text-gray-500 text-4xl sm:text-6xl mb-3 sm:mb-4">
-                                        🔍
-                                    </div>
-                                    <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-                                        Tidak ada karyawan ditemukan
-                                    </h3>
-                                    <p className="text-gray-500 dark:text-gray-400 text-sm sm:text-base">
-                                        Coba ubah kata kunci pencarian atau filter yang digunakan
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Footer */}
-                        {!multiSelectMode && (
-                            <div className="flex justify-end p-4 sm:p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowModal(false)}
-                                    className="bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-700 px-4 sm:px-6 py-2 rounded-lg text-gray-700 dark:text-gray-200 transition-colors text-sm sm:text-base"
-                                >
-                                    Tutup
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Incomplete Selection Modal */}
             {showIncompleteModal && (

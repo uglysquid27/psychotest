@@ -363,7 +363,7 @@ export default function AuthenticatedLayout({ header, children, hideSidebar = fa
                                         >
                                             <span className="block">Lunch Coupons</span>
                                         </NavLink>
-                                        <div>
+                                        {/* <div>
                                             {isAdmin && (
                                                 <button
                                                     onClick={togglePsikotes}
@@ -449,7 +449,7 @@ export default function AuthenticatedLayout({ header, children, hideSidebar = fa
 
                                                 </div>
                                             )}
-                                        </div>
+                                        </div> */}
                                     </>
                                 )}
                             </>
