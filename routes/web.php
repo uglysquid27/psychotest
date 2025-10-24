@@ -285,6 +285,7 @@ Route::get('/manpower-requests/{requestId}/bulk-available-employees', [ManPowerR
         ->name('manpower-requests.check-duplicates');
     Route::get('/manpower-requests/{id}/can-revise', [ManPowerRequestController::class, 'canRevise'])
         ->name('manpower-requests.can-revise');
+    Route::post('/manpower-requests/bulk-delete', [ManPowerRequestController::class, 'bulkDelete'])->name('manpower-requests.bulk-delete');
     // Revision routes for fulfilled requests
     Route::get('/manpower-requests/{id}/revise', [ManPowerRequestFulfillmentController::class, 'revise'])
         ->name('manpower-requests.revise');

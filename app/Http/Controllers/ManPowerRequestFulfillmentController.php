@@ -86,24 +86,12 @@ class ManPowerRequestFulfillmentController extends Controller
 
                 $weeklyScheduleCount = $employee->schedules_count;
 
-                // $rating = match ($weeklyScheduleCount) {
-                //     5 => 5,
-                //     4 => 4,
-                //     3 => 3,
-                //     2 => 2,
-                //     1 => 1,
-                //     default => 0,
-                // };
-
-                // $workingDayWeight = match ($rating) {
-                //     5 => 15,
-                //     4 => 45,
-                //     3 => 75,
-                //     2 => 105,
-                //     1 => 135,
-                //     0 => 165,
-                //     default => 0,
-                // };
+                // Calculate work days for 14 days and 30 days
+                $workDays14Days = $this->getWorkDaysCount($employee, 14);
+                $workDays30Days = $this->getWorkDaysCount($employee, 30);
+                
+                // Get last 5 shifts
+                $last5Shifts = $this->getLastShifts($employee, 5);
 
                 $workloadPoints = $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0;
 
@@ -145,8 +133,6 @@ class ManPowerRequestFulfillmentController extends Controller
                     'created_at' => $employee->created_at,
                     'updated_at' => $employee->updated_at,
                     'schedules_count' => $employee->schedules_count,
-                    // 'calculated_rating' => $rating,
-                    // 'working_day_weight' => $workingDayWeight,
                     'total_assigned_hours' => $totalWorkingHours,
                     'sub_sections_data' => $subSectionsData,
                     'workload_points' => $workloadPoints,
@@ -155,6 +141,10 @@ class ManPowerRequestFulfillmentController extends Controller
                     'total_score' => $totalScore,
                     'ml_score' => $mlScore, // NEW: ML priority score
                     'final_score' => $finalScore, // NEW: Combined score
+                    // NEW: Work days and shift history
+                    'work_days_14_days' => $workDays14Days,
+                    'work_days_30_days' => $workDays30Days,
+                    'last_5_shifts' => $last5Shifts,
                 ];
             });
 
@@ -237,6 +227,48 @@ class ManPowerRequestFulfillmentController extends Controller
     }
 
     /**
+     * Calculate work days count for an employee within a given period
+     */
+    private function getWorkDaysCount($employee, $days = 30)
+    {
+        $startDate = now()->subDays($days)->startOfDay();
+        $endDate = now()->endOfDay();
+        
+        return $employee->schedules()
+            ->whereBetween('date', [$startDate, $endDate])
+            ->whereHas('manPowerRequest', function ($query) {
+                $query->where('status', 'fulfilled');
+            })
+            ->distinct('date')
+            ->count('date');
+    }
+
+    /**
+     * Get last N shifts for an employee
+     */
+    private function getLastShifts($employee, $limit = 5)
+    {
+        return $employee->schedules()
+            ->with(['manPowerRequest.shift'])
+            ->whereHas('manPowerRequest', function ($query) {
+                $query->where('status', 'fulfilled');
+            })
+            ->where('date', '<=', now()->toDateString())
+            ->orderBy('date', 'desc')
+            ->limit($limit)
+            ->get()
+            ->map(function ($schedule) {
+                return [
+                    'date' => $schedule->date->format('Y-m-d'),
+                    'shift_name' => $schedule->manPowerRequest->shift->name ?? 'N/A',
+                    'start_time' => $schedule->manPowerRequest->shift->start_time ?? null,
+                    'end_time' => $schedule->manPowerRequest->shift->end_time ?? null,
+                ];
+            })
+            ->toArray();
+    }
+
+    /**
      * Calculate ML priority score for an employee
      */
     private function calculateMLPriorityScore($employee, $manpowerRequest)
@@ -281,15 +313,7 @@ class ManPowerRequestFulfillmentController extends Controller
         }
     }
 
-    // Helper methods for ML feature calculation
-    private function getWorkDaysCount($employee)
-    {
-        $startDate = now()->subDays(30)->startOfDay();
-        return $employee->schedules()
-            ->where('date', '>=', $startDate)
-            ->count();
-    }
-
+    // Helper methods for ML feature calculation (keep existing ones)
     private function getAverageRating($employee)
     {
         $avgRating = $employee->ratings()->avg('rating');
@@ -327,6 +351,9 @@ class ManPowerRequestFulfillmentController extends Controller
             });
         return min($workHours / 40, 1.0);
     }
+
+    // ... KEEP ALL YOUR EXISTING METHODS BELOW (they will automatically use the new data)
+    // The autoSelectEmployees, bulkStore, bulkFulfill, etc. methods remain the same
 
     /**
      * Enhanced auto-assign with ML integration
@@ -411,6 +438,13 @@ class ManPowerRequestFulfillmentController extends Controller
             $gender = 'male';
         }
 
+        // Calculate work days for 14 days and 30 days
+        $workDays14Days = $this->getWorkDaysCount($employee, 14);
+        $workDays30Days = $this->getWorkDaysCount($employee, 30);
+        
+        // Get last 5 shifts
+        $last5Shifts = $this->getLastShifts($employee, 5);
+
         // Calculate base scores
         $workloadPoints = $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0;
         $blindTestPoints = 0;
@@ -435,12 +469,15 @@ class ManPowerRequestFulfillmentController extends Controller
             'workload_points' => $workloadPoints,
             'blind_test_points' => $blindTestPoints,
             'average_rating' => $averageRating,
-            // 'working_day_weight' => $employee->working_day_weight ?? 0,
             'base_score' => $baseScore,
             'ml_score' => $mlScore,
             'final_score' => $finalScore, // ML-enhanced score
             'is_same_subsection' => $isSameSubSection,
-            'subSections' => $employee->subSections ?? collect()
+            'subSections' => $employee->subSections ?? collect(),
+            // NEW: Work days and shift history
+            'work_days_14_days' => $workDays14Days,
+            'work_days_30_days' => $workDays30Days,
+            'last_5_shifts' => $last5Shifts,
         ];
     }
 
@@ -543,65 +580,6 @@ class ManPowerRequestFulfillmentController extends Controller
 
         return $selected->take($totalRequired);
     }
-
-    /**
-     * Validate if selected employees meet gender requirements
-     */
-    private function validateGenderRequirements(ManpowerRequest $request, $employees)
-    {
-        $maleCount = $employees->filter(fn($emp) => $emp->gender === 'male')->count();
-        $femaleCount = $employees->filter(fn($emp) => $emp->gender === 'female')->count();
-
-        $requiredMale = $request->male_count ?? 0;
-        $requiredFemale = $request->female_count ?? 0;
-
-        if ($requiredMale > 0 && $maleCount < $requiredMale) {
-            return [
-                'valid' => false,
-                'message' => "Required {$requiredMale} male employees, but only {$maleCount} available"
-            ];
-        }
-
-        if ($requiredFemale > 0 && $femaleCount < $requiredFemale) {
-            return [
-                'valid' => false,
-                'message' => "Required {$requiredFemale} female employees, but only {$femaleCount} available"
-            ];
-        }
-
-        return ['valid' => true];
-    }
-
-    /**
-     * Log ML assignment performance
-     */
-    private function logMLAssignment($manpowerRequest, $selectedEmployees, $allEligibleEmployees)
-    {
-        $mlService = app(SimpleMLService::class);
-
-        if ($mlService->isModelTrained()) {
-            $topCandidates = $allEligibleEmployees
-                ->sortByDesc('final_score')
-                ->take(10)
-                ->map(fn($e) => [
-                    'id' => $e->id,
-                    'name' => $e->name,
-                    'ml_score' => round($e->ml_score, 3),
-                    'final_score' => round($e->final_score, 3),
-                    'selected' => in_array($e->id, $selectedEmployees->pluck('id')->toArray())
-                ]);
-
-            Log::info('ML-Assigned Employees', [
-                'request_id' => $manpowerRequest->id,
-                'selected_count' => count($selectedEmployees),
-                'top_candidates' => $topCandidates,
-                'ml_model_used' => get_class($mlService)
-            ]);
-        }
-    }
-
-    // ... KEEP ALL YOUR EXISTING METHODS BELOW (bulkStore, bulkFulfill, etc.)
-    // They will automatically benefit from the ML integration through the autoSelectEmployees method
 
     public function bulkStore(Request $request)
     {

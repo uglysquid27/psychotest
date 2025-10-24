@@ -1,4 +1,4 @@
-// EmployeeModal.jsx - Updated to show ML scores with loading states
+// EmployeeModal.jsx - Updated with red indicator for harian employees reaching 21 days
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import IncompleteSelectionModal from './IncompleteSelectionModal';
@@ -14,7 +14,7 @@ export default function EmployeeModal({
     multiSelectMode,
     toggleMultiSelectMode,
     isBulkMode = false,
-    isLoading = false // New prop for loading state
+    isLoading = false
 }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedSubSection, setSelectedSubSection] = useState('all');
@@ -113,6 +113,11 @@ export default function EmployeeModal({
             });
         });
     }, [filteredEmployees, request?.sub_section_id]);
+
+    // Check if harian employee has reached 21 days
+    const isHarianReachingLimit = (emp) => {
+        return emp.type === 'harian' && emp.work_days_30_days >= 21;
+    };
 
     const handleImageError = (employeeId, e) => {
         if (!failedImages.has(employeeId)) {
@@ -309,6 +314,7 @@ export default function EmployeeModal({
         }
 
         const isFemale = emp.gender === 'female';
+        const isHarianLimit = isHarianReachingLimit(emp);
 
         return (
             <motion.div
@@ -334,8 +340,19 @@ export default function EmployeeModal({
                                 : isFemale
                                     ? 'hover:bg-pink-50 dark:hover:bg-pink-900/20 border-pink-200 dark:border-pink-700'
                                     : 'hover:bg-blue-50 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-700'
-                } ${isDisabled ? 'cursor-not-allowed opacity-60' : ''}`}
+                } ${isDisabled ? 'cursor-not-allowed opacity-60' : ''} ${
+                    isHarianLimit ? 'ring-2 ring-red-500 dark:ring-red-400' : ''
+                }`}
             >
+                {/* Harian Limit Warning Badge */}
+                {isHarianLimit && (
+                     <div className="absolute top-2 right-10 z-10">
+                    <span className="text-xs px-2 py-1 rounded bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300 whitespace-nowrap flex items-center border border-red-300 dark:border-red-700">
+                        ⚠️ Limit 21 Hari
+                    </span>
+                </div>
+                )}
+
                 {multiSelectMode && (
                     <div className="absolute top-2 right-2">
                         <input
@@ -364,6 +381,23 @@ export default function EmployeeModal({
                                 <p className="truncate">Status: {emp.status === 'assigned' ? 'Assigned' : 'Available'}</p>
                                 <p className="truncate">Sub: {displaySubSectionName}</p>
                                 
+                                {/* Work Days Information */}
+                                <div className="mt-2 grid grid-cols-2 gap-1 text-xs border-t pt-1 border-gray-200 dark:border-gray-600">
+                                    <div className={isHarianLimit ? 'text-red-600 dark:text-red-400 font-semibold' : ''}>
+                                        <span className="font-medium">Hari Kerja (2M):</span>
+                                        <br />
+                                        {emp.work_days_14_days || 0} hari
+                                    </div>
+                                    <div className={isHarianLimit ? 'text-red-600 dark:text-red-400 font-semibold' : ''}>
+                                        <span className="font-medium">Periode (1B):</span>
+                                        <br />
+                                        {emp.work_days_30_days || 0} hari
+                                        {isHarianLimit && (
+                                            <span className="ml-1 text-red-500">⚠️</span>
+                                        )}
+                                    </div>
+                                </div>
+                                
                                 {/* ML Scores Section */}
                                 <div className="mt-2 grid grid-cols-3 gap-1 text-xs border-t pt-1 border-gray-200 dark:border-gray-600">
                                     <div>
@@ -385,12 +419,26 @@ export default function EmployeeModal({
                                 
                                 {/* Additional Info */}
                                 <div className="mt-1 grid grid-cols-2 gap-1 text-xs">
-                                    <p>Workload: {emp.workload_points}</p>
+                                    {/* <p>Workload: {emp.workload_points}</p> */}
                                     <p>Blind Test: {emp.blind_test_points}</p>
                                     <p>Rating: {emp.average_rating?.toFixed(1) || '0.0'}</p>
-                                    {/* {emp.type === 'harian' && (
-                                        <p>Bobot: {emp.working_day_weight}</p>
-                                    )} */}
+                                </div>
+
+                                {/* Last 5 Shifts */}
+                                <div className="mt-2 text-xs border-t pt-1 border-gray-200 dark:border-gray-600">
+                                    <span className="font-medium">Shift Terakhir (5 hari):</span>
+                                    <div className="mt-1 max-h-16 overflow-y-auto">
+                                        {emp.last_5_shifts && emp.last_5_shifts.length > 0 ? (
+                                            emp.last_5_shifts.map((shift, index) => (
+                                                <div key={index} className="flex justify-between">
+                                                    <span className="truncate flex-1">{shift.date}:</span>
+                                                    <span className="font-medium ml-1">{shift.shift_name || 'N/A'}</span>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <span className="text-gray-400">Tidak ada data</span>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>

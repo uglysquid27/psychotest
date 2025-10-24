@@ -1,979 +1,1465 @@
-import { Link, useForm, usePage } from '@inertiajs/react';
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import { useState, useMemo, useEffect } from 'react';
-import SectionGroup from './Components/ManpowerRequests/SectionGroup';
-import axios from 'axios';
-import BulkFulfillPreviewModal from './BulkFulfillReviewModal';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Link, useForm, usePage } from "@inertiajs/react";
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import { useState, useMemo, useEffect } from "react";
+import SectionGroup from "./Components/ManpowerRequests/SectionGroup";
+import axios from "axios";
+import BulkFulfillPreviewModal from "./BulkFulfillReviewModal";
+import { motion, AnimatePresence } from "framer-motion";
 
 // Add loading animation components
 const LoadingOverlay = () => {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-90 dark:bg-gray-900 dark:bg-opacity-90">
-      <div className="text-center">
-        <motion.div
-          className="mx-auto mb-4 h-12 w-12 rounded-full border-4 border-indigo-200 border-t-indigo-600 dark:border-indigo-800 dark:border-t-indigo-400"
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-        />
-        <motion.p
-          className="text-lg font-medium text-gray-700 dark:text-gray-300"
-          initial={{ opacity: 0.5 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.6, repeat: Infinity, repeatType: "reverse" }}
-        >
-          Memuat Data...
-        </motion.p>
-      </div>
-    </div>
-  );
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white bg-opacity-90 dark:bg-gray-900 dark:bg-opacity-90">
+            <div className="text-center">
+                <motion.div
+                    className="mx-auto mb-4 h-12 w-12 rounded-full border-4 border-indigo-200 border-t-indigo-600 dark:border-indigo-800 dark:border-t-indigo-400"
+                    animate={{ rotate: 360 }}
+                    transition={{
+                        duration: 1,
+                        repeat: Infinity,
+                        ease: "linear",
+                    }}
+                />
+                <motion.p
+                    className="text-lg font-medium text-gray-700 dark:text-gray-300"
+                    initial={{ opacity: 0.5 }}
+                    animate={{ opacity: 1 }}
+                    transition={{
+                        duration: 0.6,
+                        repeat: Infinity,
+                        repeatType: "reverse",
+                    }}
+                >
+                    Memuat Data...
+                </motion.p>
+            </div>
+        </div>
+    );
 };
 
 const TableRowSkeleton = () => {
-  return (
-    <tr className="animate-pulse">
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="h-4 w-4 bg-gray-300 dark:bg-gray-600 rounded"></div>
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="h-4 w-32 bg-gray-300 dark:bg-gray-600 rounded"></div>
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="h-4 w-24 bg-gray-300 dark:bg-gray-600 rounded"></div>
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="flex space-x-1">
-          <div className="h-6 w-16 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
-          <div className="h-6 w-20 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
-        </div>
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="h-4 w-8 bg-gray-300 dark:bg-gray-600 rounded"></div>
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="h-4 w-8 bg-gray-300 dark:bg-gray-600 rounded"></div>
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="h-4 w-20 bg-gray-300 dark:bg-gray-600 rounded"></div>
-      </td>
-    </tr>
-  );
-};
-
-const BulkModeSkeleton = () => {
-  return (
-    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4 animate-pulse">
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-        <div className="flex items-center space-x-4">
-          <div className="h-5 w-5 bg-blue-200 dark:bg-blue-700 rounded"></div>
-          <div className="h-4 w-40 bg-blue-200 dark:bg-blue-700 rounded"></div>
-        </div>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
-          <div className="h-8 w-32 bg-blue-200 dark:bg-blue-700 rounded"></div>
-          <div className="h-8 w-20 bg-blue-200 dark:bg-blue-700 rounded"></div>
-        </div>
-      </div>
-      <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-700">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} className="text-center">
-              <div className="h-6 w-12 bg-blue-200 dark:bg-blue-700 rounded mx-auto mb-1"></div>
-              <div className="h-4 w-16 bg-blue-200 dark:bg-blue-700 rounded mx-auto"></div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+    return (
+        <tr className="animate-pulse">
+            <td className="px-6 py-4 whitespace-nowrap">
+                <div className="h-4 w-4 bg-gray-300 dark:bg-gray-600 rounded"></div>
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap">
+                <div className="h-4 w-32 bg-gray-300 dark:bg-gray-600 rounded"></div>
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap">
+                <div className="h-4 w-24 bg-gray-300 dark:bg-gray-600 rounded"></div>
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap">
+                <div className="flex space-x-1">
+                    <div className="h-6 w-16 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
+                    <div className="h-6 w-20 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
+                </div>
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap">
+                <div className="h-4 w-8 bg-gray-300 dark:bg-gray-600 rounded"></div>
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap">
+                <div className="h-4 w-8 bg-gray-300 dark:bg-gray-600 rounded"></div>
+            </td>
+            <td className="px-6 py-4 whitespace-nowrap">
+                <div className="h-4 w-20 bg-gray-300 dark:bg-gray-600 rounded"></div>
+            </td>
+        </tr>
+    );
 };
 
 export default function Index({ sections: initialSections, auth }) {
-  const { delete: destroy } = useForm({});
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [requestToDelete, setRequestToDelete] = useState(null);
-  const [selectedGroup, setSelectedGroup] = useState(null);
-  const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
-  const [currentPage, setCurrentPage] = useState(1);
-  const [showBulkPreviewModal, setShowBulkPreviewModal] = useState(false);
-  const [dateFilter, setDateFilter] = useState('current');
-  const [localSections, setLocalSections] = useState(initialSections);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [selectedRequests, setSelectedRequests] = useState([]);
-  const [fulfillStrategy, setFulfillStrategy] = useState('optimal');
-  const [processingRequests, setProcessingRequests] = useState([]);
-  const [showBulkResultModal, setShowBulkResultModal] = useState(false);
-  const [bulkResult, setBulkResult] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isInitialLoading, setIsInitialLoading] = useState(false);
-
-  const itemsPerPage = 10;
-  const user = auth?.user || null;
-
-  // Handle initial page load
-  useEffect(() => {
-    setIsInitialLoading(true);
-    const timer = setTimeout(() => {
-      setIsInitialLoading(false);
-    }, 800);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  const statusClasses = {
-    pending: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300',
-    approved: 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300',
-    rejected: 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-300',
-    fulfilled: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300',
-    revision_requested: 'bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300',
-    fulfilling: 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300',
-  };
-
-  const getStatusClasses = (status) =>
-    statusClasses[status?.toLowerCase()] || 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300';
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    try {
-      return new Date(dateString).toLocaleDateString('id-ID', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
-    } catch {
-      return String(dateString);
-    }
-  };
-
-  const getDateRange = () => {
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    return {
-      yesterday: yesterday.toISOString().slice(0, 10),
-      today: today.toISOString().slice(0, 10),
-      tomorrow: tomorrow.toISOString().slice(0, 10)
-    };
-  };
-
-  const dateRange = getDateRange();
-
-  // Get all requests for bulk operations
-  const allRequests = useMemo(() => {
-    if (!localSections?.data) return [];
-    const requests = [];
-    localSections.data.forEach((section) => {
-      (section.sub_sections || []).forEach((sub) => {
-        (sub.man_power_requests || []).forEach((req) => {
-          requests.push({
-            ...req,
-            sub_section: { id: sub.id, name: sub.name },
-            section: { id: section.id, name: section.name }
-          });
-        });
-      });
+    const { delete: destroy } = useForm({});
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [showDetailsModal, setShowDetailsModal] = useState(false);
+    const [requestToDelete, setRequestToDelete] = useState(null);
+    const [selectedGroup, setSelectedGroup] = useState(null);
+    const [sortConfig, setSortConfig] = useState({
+        key: "name",
+        direction: "asc",
     });
-    return requests;
-  }, [localSections, refreshTrigger]);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [showBulkPreviewModal, setShowBulkPreviewModal] = useState(false);
+    const [dateFilter, setDateFilter] = useState("current");
+    const [localSections, setLocalSections] = useState(initialSections);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [selectedRequests, setSelectedRequests] = useState([]);
+    const [fulfillStrategy, setFulfillStrategy] = useState("optimal");
+    const [processingRequests, setProcessingRequests] = useState([]);
+    const [showBulkResultModal, setShowBulkResultModal] = useState(false);
+    const [bulkResult, setBulkResult] = useState(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isInitialLoading, setIsInitialLoading] = useState(false);
+    const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+    const [deleteProcessing, setDeleteProcessing] = useState(false);
 
-  const unfulfilledRequests = useMemo(() => {
-    return allRequests.filter(req => req.status !== 'fulfilled' && req.status !== 'fulfilling');
-  }, [allRequests]);
+    const itemsPerPage = 10;
+    const user = auth?.user || null;
 
-  // Group requests by section and date
-  const sectionDateGroups = useMemo(() => {
-    if (!localSections?.data) return [];
-    const groups = [];
+    // Handle initial page load
+    useEffect(() => {
+        setIsInitialLoading(true);
+        const timer = setTimeout(() => {
+            setIsInitialLoading(false);
+        }, 800);
 
-    localSections.data.forEach((section) => {
-      const dateMap = {};
-      (section.sub_sections || []).forEach((sub) => {
-        (sub.man_power_requests || []).forEach((req) => {
-          const dateKey = new Date(req.date).toISOString().slice(0, 10);
-          
-          // Apply date filter
-          if (dateFilter === 'current') {
-            if (dateKey !== dateRange.yesterday && 
-                dateKey !== dateRange.today && 
-                dateKey !== dateRange.tomorrow) {
-              return; // Skip dates outside the 3-day range
+        return () => clearTimeout(timer);
+    }, []);
+
+    const statusClasses = {
+        pending:
+            "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300",
+        approved:
+            "bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300",
+        rejected:
+            "bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-300",
+        fulfilled:
+            "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-300",
+        revision_requested:
+            "bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300",
+        fulfilling:
+            "bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300",
+    };
+
+    const getStatusClasses = (status) =>
+        statusClasses[status?.toLowerCase()] ||
+        "bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300";
+
+    const formatDate = (dateString) => {
+        if (!dateString) return "N/A";
+        try {
+            return new Date(dateString).toLocaleDateString("id-ID", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+            });
+        } catch {
+            return String(dateString);
+        }
+    };
+
+    const getDateRange = () => {
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        return {
+            yesterday: yesterday.toISOString().slice(0, 10),
+            today: today.toISOString().slice(0, 10),
+            tomorrow: tomorrow.toISOString().slice(0, 10),
+        };
+    };
+
+    const dateRange = getDateRange();
+
+    // Get all requests for bulk operations
+    const allRequests = useMemo(() => {
+        if (!localSections?.data) return [];
+        const requests = [];
+        localSections.data.forEach((section) => {
+            (section.sub_sections || []).forEach((sub) => {
+                (sub.man_power_requests || []).forEach((req) => {
+                    requests.push({
+                        ...req,
+                        sub_section: { id: sub.id, name: sub.name },
+                        section: { id: section.id, name: section.name },
+                    });
+                });
+            });
+        });
+        return requests;
+    }, [localSections, refreshTrigger]);
+
+    // Group requests by section and date
+    const sectionDateGroups = useMemo(() => {
+        if (!localSections?.data) return [];
+        const groups = [];
+
+        localSections.data.forEach((section) => {
+            const dateMap = {};
+            (section.sub_sections || []).forEach((sub) => {
+                (sub.man_power_requests || []).forEach((req) => {
+                    const dateKey = new Date(req.date)
+                        .toISOString()
+                        .slice(0, 10);
+
+                    // Apply date filter
+                    if (dateFilter === "current") {
+                        if (
+                            dateKey !== dateRange.yesterday &&
+                            dateKey !== dateRange.today &&
+                            dateKey !== dateRange.tomorrow
+                        ) {
+                            return; // Skip dates outside the 3-day range
+                        }
+                    }
+
+                    if (!dateMap[dateKey]) {
+                        dateMap[dateKey] = [];
+                    }
+                    dateMap[dateKey].push({
+                        ...req,
+                        sub_section: { id: sub.id, name: sub.name },
+                    });
+                });
+            });
+
+            Object.keys(dateMap).forEach((dateKey) => {
+                const reqs = dateMap[dateKey];
+                groups.push({
+                    sectionId: section.id,
+                    sectionName: section.name,
+                    date: dateKey,
+                    requests: reqs,
+                    totalRequests: reqs.length,
+                    totalWorkers: reqs.reduce(
+                        (sum, r) => sum + (r.requested_amount || 0),
+                        0
+                    ),
+                    statuses: [...new Set(reqs.map((r) => r.status))],
+                });
+            });
+        });
+
+        return groups;
+    }, [localSections, refreshTrigger, dateFilter]);
+
+    // Sorting
+    const sortedGroups = useMemo(() => {
+        const items = [...sectionDateGroups];
+        if (sortConfig.key === "name") {
+            items.sort((a, b) =>
+                sortConfig.direction === "asc"
+                    ? a.sectionName.localeCompare(b.sectionName)
+                    : b.sectionName.localeCompare(a.sectionName)
+            );
+        } else if (sortConfig.key === "date") {
+            items.sort((a, b) => {
+                const ad = new Date(a.date).getTime();
+                const bd = new Date(b.date).getTime();
+                return sortConfig.direction === "asc" ? ad - bd : bd - ad;
+            });
+        } else if (sortConfig.key === "total") {
+            items.sort((a, b) =>
+                sortConfig.direction === "asc"
+                    ? a.totalRequests - b.totalRequests
+                    : b.totalRequests - a.totalRequests
+            );
+        }
+        return items;
+    }, [sectionDateGroups, sortConfig]);
+
+    // Pagination
+    const totalPages = Math.ceil(sortedGroups.length / itemsPerPage);
+    const paginatedGroups = sortedGroups.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
+    // Quick fulfill single request
+    const quickFulfill = async (requestId) => {
+        try {
+            setProcessingRequests((prev) => [...prev, requestId]);
+            await axios.post(
+                route("manpower-requests.quick-fulfill", {
+                    manpower_request: requestId,
+                }),
+                { strategy: fulfillStrategy }
+            );
+            toast.success("Request fulfilled successfully");
+            setRefreshTrigger((prev) => prev + 1);
+        } catch (error) {
+            console.error("Quick fulfill error:", error);
+            toast.error(
+                error.response?.data?.message || "Failed to fulfill request"
+            );
+        } finally {
+            setProcessingRequests((prev) =>
+                prev.filter((id) => id !== requestId)
+            );
+        }
+    };
+
+    const handleBulkDelete = async () => {
+    if (selectedRequests.length === 0) return;
+
+    try {
+        setDeleteProcessing(true);
+
+        await axios.post(route("manpower-requests.bulk-delete"), {
+            request_ids: selectedRequests,
+        });
+
+        toast.success(
+            `${selectedRequests.length} requests deleted successfully`
+        );
+
+        // Clear selection and close modal
+        setSelectedRequests([]);
+        setShowBulkDeleteModal(false);
+        
+        // Reload the page after successful delete to ensure fresh data
+        window.location.reload();
+        
+    } catch (error) {
+        console.error("Bulk delete error:", error);
+        toast.error(
+            error.response?.data?.message || "Failed to delete requests"
+        );
+        setDeleteProcessing(false);
+    }
+};
+
+    const handleBulkResultClose = () => {
+        setShowBulkResultModal(false);
+        setBulkResult(null);
+        setSelectedRequests([]);
+
+        // Refresh the page data
+        setRefreshTrigger((prev) => prev + 1);
+    };
+
+    const handleBulkFulfillConfirm = async (result) => {
+        try {
+            if (result.success) {
+                // Success case
+                setBulkResult({
+                    type: "success",
+                    title: "Bulk Fulfillment Successful",
+                    message: result.message,
+                    data: result.data,
+                });
+            } else if (result.isWarning) {
+                // Warning case (partial success)
+                setBulkResult({
+                    type: "warning",
+                    title: "Bulk Fulfillment Completed",
+                    message: result.message,
+                    data: result.data,
+                });
+            } else {
+                // Error case
+                setBulkResult({
+                    type: "error",
+                    title: "Bulk Fulfillment Failed",
+                    message: result.message,
+                    error: result.error,
+                });
             }
-          }
-          
-          if (!dateMap[dateKey]) {
-            dateMap[dateKey] = [];
-          }
-          dateMap[dateKey].push({ ...req, sub_section: { id: sub.id, name: sub.name } });
-        });
-      });
 
-      Object.keys(dateMap).forEach((dateKey) => {
-        const reqs = dateMap[dateKey];
-        groups.push({
-          sectionId: section.id,
-          sectionName: section.name,
-          date: dateKey,
-          requests: reqs,
-          totalRequests: reqs.length,
-          totalWorkers: reqs.reduce((sum, r) => sum + (r.requested_amount || 0), 0),
-          statuses: [...new Set(reqs.map((r) => r.status))],
-        });
-      });
-    });
-
-    return groups;
-  }, [localSections, refreshTrigger, dateFilter]);
-
-  // Sorting
-  const sortedGroups = useMemo(() => {
-    const items = [...sectionDateGroups];
-    if (sortConfig.key === 'name') {
-      items.sort((a, b) =>
-        sortConfig.direction === 'asc'
-          ? a.sectionName.localeCompare(b.sectionName)
-          : b.sectionName.localeCompare(a.sectionName)
-      );
-    } else if (sortConfig.key === 'date') {
-      items.sort((a, b) => {
-        const ad = new Date(a.date).getTime();
-        const bd = new Date(b.date).getTime();
-        return sortConfig.direction === 'asc' ? ad - bd : bd - ad;
-      });
-    } else if (sortConfig.key === 'total') {
-      items.sort((a, b) =>
-        sortConfig.direction === 'asc'
-          ? a.totalRequests - b.totalRequests
-          : b.totalRequests - a.totalRequests
-      );
-    }
-    return items;
-  }, [sectionDateGroups, sortConfig]);
-
-  // Pagination
-  const totalPages = Math.ceil(sortedGroups.length / itemsPerPage);
-  const paginatedGroups = sortedGroups.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
-
-  // Quick fulfill single request
-  const quickFulfill = async (requestId) => {
-    try {
-      setProcessingRequests(prev => [...prev, requestId]);
-      await axios.post(
-        route('manpower-requests.quick-fulfill', { manpower_request: requestId }),
-        { strategy: fulfillStrategy }
-      );
-      toast.success('Request fulfilled successfully');
-      setRefreshTrigger(prev => prev + 1);
-    } catch (error) {
-      console.error('Quick fulfill error:', error);
-      toast.error(error.response?.data?.message || 'Failed to fulfill request');
-    } finally {
-      setProcessingRequests(prev => prev.filter(id => id !== requestId));
-    }
-  };
-
-  const handleBulkResultClose = () => {
-    setShowBulkResultModal(false);
-    setBulkResult(null);
-    setSelectedRequests([]);
-    
-    // Refresh the page data
-    setRefreshTrigger(prev => prev + 1);
-  };
-
-  const handleBulkFulfillConfirm = async (result) => {
-    try {
-      if (result.success) {
-        // Success case
-        setBulkResult({
-          type: 'success',
-          title: 'Bulk Fulfillment Successful',
-          message: result.message,
-          data: result.data
-        });
-      } else if (result.isWarning) {
-        // Warning case (partial success)
-        setBulkResult({
-          type: 'warning',
-          title: 'Bulk Fulfillment Completed',
-          message: result.message,
-          data: result.data
-        });
-      } else {
-        // Error case
-        setBulkResult({
-          type: 'error',
-          title: 'Bulk Fulfillment Failed',
-          message: result.message,
-          error: result.error
-        });
-      }
-      
-      setShowBulkResultModal(true);
-      setShowBulkPreviewModal(false);
-      
-    } catch (error) {
-      console.error('Error handling bulk fulfill result:', error);
-      setBulkResult({
-        type: 'error',
-        title: 'Unexpected Error',
-        message: 'An unexpected error occurred while processing the fulfillment.'
-      });
-      setShowBulkResultModal(true);
-      setShowBulkPreviewModal(false);
-    }
-  };
-
-  // Handle request selection for bulk operations
-  const handleRequestSelect = (requestId, checked) => {
-    if (checked) {
-      setSelectedRequests(prev => [...prev, requestId]);
-    } else {
-      setSelectedRequests(prev => prev.filter(id => id !== requestId));
-    }
-  };
-
-  // Select all requests for a date
-  const handleSelectAllForDate = (requests, checked) => {
-    const requestIds = requests.map(req => req.id);
-    if (checked) {
-      setSelectedRequests(prev => [...new Set([...prev, ...requestIds])]);
-    } else {
-      setSelectedRequests(prev => prev.filter(id => !requestIds.includes(id)));
-    }
-  };
-
-  const selectedRequirements = useMemo(() => {
-    const selected = allRequests.filter(req => selectedRequests.includes(req.id));
-    return {
-      totalRequests: selected.length,
-      totalWorkers: selected.reduce((sum, req) => sum + (req.requested_amount || 0), 0),
-      totalMale: selected.reduce((sum, req) => sum + (req.male_count || 0), 0),
-      totalFemale: selected.reduce((sum, req) => sum + (req.female_count || 0), 0)
-    };
-  }, [selectedRequests, allRequests]);
-
-  const requestDelete = (id) => {
-    setRequestToDelete(id);
-  };
-
-  const confirmDelete = () => {
-    if (!requestToDelete) return;
-    destroy(route('manpower-requests.destroy', requestToDelete), {
-      preserveScroll: true,
-      onSuccess: () => {
-        setLocalSections(prev => {
-          const updated = { ...prev };
-          updated.data = updated.data.map(section => ({
-            ...section,
-            sub_sections: section.sub_sections.map(sub => ({
-              ...sub,
-              man_power_requests: sub.man_power_requests.filter(req => req.id !== requestToDelete)
-            }))
-          }));
-          return updated;
-        });
-
-        setRefreshTrigger(prev => prev + 1);
-        toast.success('Request deleted');
-        setShowDeleteModal(false);
-        setRequestToDelete(null);
-      },
-      onError: () => {
-        toast.error('Failed to delete');
-        setShowDeleteModal(false);
-        setRequestToDelete(null);
-      },
-    });
-  };
-
-  const openDetails = (group) => {
-    setSelectedGroup(group);
-    setShowDetailsModal(true);
-  };
-
-  const toggleSort = (key) => {
-    setSortConfig((prev) =>
-      prev.key === key
-        ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
-        : { key, direction: 'asc' }
-    );
-  };
-
-  useEffect(() => {
-    if (showDetailsModal) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'auto';
-    }
-    return () => {
-      document.body.style.overflow = 'auto';
-    };
-  }, [showDetailsModal]);
-
-  // Show loading overlay during initial load
-  if (isInitialLoading) {
-    return (
-      <AuthenticatedLayout
-        user={auth.user}
-        header={<h2 className="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">Manpower Requests</h2>}
-      >
-        <LoadingOverlay />
-      </AuthenticatedLayout>
-    );
-  }
-
-  return (
-    <AuthenticatedLayout
-      user={auth.user}
-      header={<h2 className="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">Manpower Requests</h2>}
-    >
-      <ToastContainer
-        position="top-right"
-        autoClose={5000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-      />
-
-      <div className="py-4 sm:py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Loading Overlay */}
-          <AnimatePresence>
-            {isLoading && <LoadingOverlay />}
-          </AnimatePresence>
-
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="bg-white dark:bg-gray-800 overflow-hidden shadow-lg sm:rounded-lg"
-          >
-            {/* Header with bulk mode controls */}
-            <div className="p-4 sm:p-6 md:p-8 text-gray-900 dark:text-gray-100">
-              <div className="flex flex-col space-y-4 mb-6">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
-                  <motion.h1 
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.5, delay: 0.1 }}
-                    className="text-xl sm:text-2xl font-bold text-gray-700 dark:text-gray-300 mb-4 sm:mb-0"
-                  >
-                    Manpower Requests
-                  </motion.h1>
-                  <div className="flex items-center space-x-3 mb-4 sm:mb-0">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Show:</span>
-                    <div className="flex bg-gray-200 dark:bg-gray-700 rounded-md p-1">
-                      <button
-                        onClick={() => setDateFilter('current')}
-                        className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                          dateFilter === 'current'
-                            ? 'bg-indigo-600 text-white'
-                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                        }`}
-                      >
-                        3 Days
-                      </button>
-                      <button
-                        onClick={() => setDateFilter('all')}
-                        className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                          dateFilter === 'all'
-                            ? 'bg-indigo-600 text-white'
-                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                        }`}
-                      >
-                        All Dates
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
-                    {/* Show bulk fulfill button when requests are selected */}
-                    {selectedRequests.length > 0 && (
-                      <motion.button
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        onClick={() => setShowBulkPreviewModal(true)}
-                        className="px-4 py-2 bg-green-600 dark:bg-green-500 text-white rounded-md hover:bg-green-700 dark:hover:bg-green-600"
-                      >
-                        Bulk Fulfill ({selectedRequests.length})
-                      </motion.button>
-                    )}
-
-                    <motion.div
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.5, delay: 0.2 }}
-                    >
-                      <Link
-                        href={route('manpower-requests.create')}
-                        className="inline-flex items-center bg-indigo-600 dark:bg-indigo-500 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-md shadow-sm hover:bg-indigo-700 dark:hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 text-sm sm:text-base"
-                      >
-                        <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2 -ml-1" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-                        </svg>
-                        New Request
-                      </Link>
-                    </motion.div>
-                  </div>
-                </div>
-
-                {/* Bulk mode controls - Always show when requests are selected */}
-                <AnimatePresence>
-                  {selectedRequests.length > 0 ? (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.3 }}
-                      className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4"
-                    >
-                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-                        <div className="flex items-center space-x-4">
-                          <div className="flex items-center space-x-2">
-                            <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                            <span className="font-medium text-blue-800 dark:text-blue-300">Bulk Fulfillment</span>
-                          </div>
-                          <span className="text-sm text-blue-700 dark:text-blue-400">
-                            {selectedRequests.length} of {unfulfilledRequests.length} requests selected
-                          </span>
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
-                          <div className="flex items-center space-x-2">
-                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Strategy:</label>
-                            <select
-                              value={fulfillStrategy}
-                              onChange={(e) => setFulfillStrategy(e.target.value)}
-                              className="text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                            >
-                              <option value="optimal">Optimal Match</option>
-                              <option value="same_section">Same Section First</option>
-                              <option value="balanced">Balanced Distribution</option>
-                            </select>
-                          </div>
-
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => setSelectedRequests([])}
-                              className="px-3 py-1 text-sm bg-gray-500 dark:bg-gray-600 text-white rounded-md hover:bg-gray-600 dark:hover:bg-gray-700"
-                            >
-                              Clear
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Selected requirements summary */}
-                      <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-700">
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                          <div>
-                            <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{selectedRequirements.totalRequests}</div>
-                            <div className="text-xs text-blue-700 dark:text-blue-400">Requests</div>
-                          </div>
-                          <div>
-                            <div className="text-lg font-bold text-green-600 dark:text-green-400">{selectedRequirements.totalWorkers}</div>
-                            <div className="text-xs text-green-700 dark:text-green-400">Workers</div>
-                          </div>
-                          <div>
-                            <div className="text-lg font-bold text-blue-500">{selectedRequirements.totalMale}</div>
-                            <div className="text-xs text-blue-700 dark:text-blue-400">Male</div>
-                          </div>
-                          <div>
-                            <div className="text-lg font-bold text-pink-500">{selectedRequirements.totalFemale}</div>
-                            <div className="text-xs text-pink-700 dark:text-pink-400">Female</div>
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ) : null}
-                </AnimatePresence>
-              </div>
-
-              <AnimatePresence mode="wait">
-                {isLoading ? (
-                  <motion.div
-                    key="loading"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    {/* Loading skeleton for table */}
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead className="bg-gray-50 dark:bg-gray-700">
-                          <tr>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                              Select
-                            </th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                              Section
-                            </th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                              Date
-                            </th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                              Statuses
-                            </th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                              Total Requests
-                            </th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                              Total Workers
-                            </th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                              Actions
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                          {Array.from({ length: 5 }).map((_, index) => (
-                            <TableRowSkeleton key={index} />
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </motion.div>
-                ) : paginatedGroups.length === 0 ? (
-                  <motion.div
-                    key="empty"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.5 }}
-                    className="text-center py-8"
-                  >
-                    <div className="flex flex-col items-center">
-                      <svg className="w-12 h-12 text-gray-400 dark:text-gray-500 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                      </svg>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-                        No manpower requests found.
-                      </p>
-                      <Link
-                        href={route('manpower-requests.create')}
-                        className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium"
-                      >
-                        Create your first request
-                      </Link>
-                    </div>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="content"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.5 }}
-                  >
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead className="bg-gray-50 dark:bg-gray-700">
-                          <tr>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                              Select
-                            </th>
-                            <th
-                              scope="col"
-                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                              onClick={() => toggleSort('name')}
-                            >
-                              <div className="flex items-center">
-                                Section
-                                {sortConfig.key === 'name' && (
-                                  <span className="ml-1">
-                                    {sortConfig.direction === 'asc' ? '↑' : '↓'}
-                                  </span>
-                                )}
-                              </div>
-                            </th>
-                            <th
-                              scope="col"
-                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                              onClick={() => toggleSort('date')}
-                            >
-                              <div className="flex items-center">
-                                Date
-                                {sortConfig.key === 'date' && (
-                                  <span className="ml-1">
-                                    {sortConfig.direction === 'asc' ? '↑' : '↓'}
-                                  </span>
-                                )}
-                              </div>
-                            </th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                              Statuses
-                            </th>
-                            <th
-                              scope="col"
-                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
-                              onClick={() => toggleSort('total')}
-                            >
-                              <div className="flex items-center">
-                                Total Requests
-                                {sortConfig.key === 'total' && (
-                                  <span className="ml-1">
-                                    {sortConfig.direction === 'asc' ? '↑' : '↓'}
-                                  </span>
-                                )}
-                              </div>
-                            </th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                              Total Workers
-                            </th>
-                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                              Actions
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                          {paginatedGroups.map((group, idx) => (
-                            <motion.tr
-                              key={`${group.sectionId}-${group.date}-${idx}`}
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ duration: 0.3, delay: idx * 0.05 }}
-                              className="hover:bg-gray-50 dark:hover:bg-gray-700"
-                            >
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <input
-                                  type="checkbox"
-                                  checked={group.requests.every(req => selectedRequests.includes(req.id)) && group.requests.some(req => req.status !== 'fulfilled')}
-                                  onChange={(e) => handleSelectAllForDate(group.requests.filter(req => req.status !== 'fulfilled'), e.target.checked)}
-                                  className="rounded text-blue-600 dark:text-blue-500 focus:ring-blue-500 dark:focus:ring-blue-400"
-                                />
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                                {group.sectionName}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                {formatDate(group.date)}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="flex flex-wrap gap-1">
-                                  {group.statuses.map(status => (
-                                    <span
-                                      key={status}
-                                      className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusClasses(status)}`}
-                                    >
-                                      {status.replace('_', ' ')}
-                                    </span>
-                                  ))}
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                {group.totalRequests}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                {group.totalWorkers}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                <div className="flex space-x-2">
-                                  <button
-                                    onClick={() => openDetails(group)}
-                                    className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
-                                  >
-                                    View Details
-                                  </button>
-                                </div>
-                              </td>
-                            </motion.tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <motion.div 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.5, delay: 0.4 }}
-                  className="mt-6 flex justify-end flex-wrap gap-2"
-                >
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                    <button
-                      key={page}
-                      onClick={() => setCurrentPage(page)}
-                      className={`px-3 py-1 rounded-md text-sm transition-all ${page === currentPage
-                        ? 'bg-indigo-600 dark:bg-indigo-700 text-white'
-                        : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-                        }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </div>
-          </motion.div>
-        </div>
-      </div>
-
-      {/* Rest of the modals remain the same */}
-      {/* Details Modal */}
-      {showDetailsModal && selectedGroup && (
-        <div className="fixed inset-0 z-40 overflow-y-auto">
-          <div
-            className="fixed inset-0 bg-gray-500 dark:bg-gray-900 opacity-75"
-            onClick={() => setShowDetailsModal(false)}
-          ></div>
-          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-6xl sm:w-full sm:p-6 relative z-50"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-gray-100">
-                      {selectedGroup.sectionName} Requests - {formatDate(selectedGroup.date)}
-                    </h3>
-                  </div>
-                  <button
-                    type="button"
-                    className="bg-white dark:bg-gray-700 rounded-md text-gray-400 dark:text-gray-300 hover:text-gray-500 dark:hover:text-gray-200 focus:outline-none"
-                    onClick={() => {
-                      setShowDetailsModal(false);
-                      setTimeout(() => {
-                        window.location.reload();
-                      }, 100);
-                    }}
-                  >
-                    <span className="sr-only">Close</span>
-                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-                <div className="mt-4">
-                  <SectionGroup
-                    section={{ name: selectedGroup.sectionName }}
-                    requests={selectedGroup.requests}
-                    formatDate={formatDate}
-                    getStatusClasses={getStatusClasses}
-                    onDelete={requestDelete}
-                    onRevision={() => { }}
-                    isUser={!!user}
-                    initialOpen
-                    quickFulfill={quickFulfill}
-                    processingRequests={processingRequests}
-                    bulkMode={true}
-                    selectedRequests={selectedRequests}
-                    handleRequestSelect={handleRequestSelect}
-                    canRevise={true}
-                  />
-                </div>
-              </div>
-              <div className="mt-5 sm:mt-6">
-                <button
-                  type="button"
-                  className="inline-flex justify-center w-full rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:text-sm"
-                  onClick={() => {
-                    setShowDetailsModal(false);
-                    setTimeout(() => {
-                      window.location.reload();
-                    }, 100);
-                  }}
-                >
-                  Close
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        </div>
-      )}
-
-      {/* Bulk Fulfill Modal */}
-      {showBulkPreviewModal && (
-        <BulkFulfillPreviewModal
-          open={showBulkPreviewModal}
-          onClose={() => {
+            setShowBulkResultModal(true);
             setShowBulkPreviewModal(false);
-            setSelectedRequests([]);
-          }}
-          strategy={fulfillStrategy}
-          selectedRequests={selectedRequests}
-          onConfirm={handleBulkFulfillConfirm}
-          loading={processingRequests.length > 0}
-          allRequests={allRequests}
-        />
-      )}
+        } catch (error) {
+            console.error("Error handling bulk fulfill result:", error);
+            setBulkResult({
+                type: "error",
+                title: "Unexpected Error",
+                message:
+                    "An unexpected error occurred while processing the fulfillment.",
+            });
+            setShowBulkResultModal(true);
+            setShowBulkPreviewModal(false);
+        }
+    };
 
-      {showBulkResultModal && bulkResult && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md"
-          >
-            <div className="flex items-center p-6">
-              <div className={`flex-shrink-0 w-12 h-12 flex items-center justify-center rounded-full ${
-                bulkResult.type === 'success' 
-                  ? 'bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400' 
-                  : bulkResult.type === 'warning'
-                  ? 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400'
-                  : 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400'
-              }`}>
-                {bulkResult.type === 'success' ? (
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : bulkResult.type === 'warning' ? (
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                  </svg>
-                ) : (
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                )}
-              </div>
-              <div className="ml-4">
-                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                  {bulkResult.title}
-                </h3>
-                <div className="mt-2">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {bulkResult.message}
-                  </p>
+    // Handle request selection for bulk operations
+    const handleRequestSelect = (requestId, checked) => {
+        if (checked) {
+            setSelectedRequests((prev) => [...prev, requestId]);
+        } else {
+            setSelectedRequests((prev) =>
+                prev.filter((id) => id !== requestId)
+            );
+        }
+    };
+
+    const handleSelectAllForDate = (requests, checked) => {
+        if (!requests || !Array.isArray(requests)) return;
+        
+        const requestIds = requests.map(req => req.id);
+        
+        if (checked) {
+            setSelectedRequests(prev => [...new Set([...prev, ...requestIds])]);
+        } else {
+            setSelectedRequests(prev => prev.filter(id => !requestIds.includes(id)));
+        }
+    };
+
+    const isGroupFullySelected = (group) => {
+        if (!group || !group.requests || !Array.isArray(group.requests) || group.requests.length === 0) {
+            return false;
+        }
+        
+        return group.requests.every((req) => selectedRequests.includes(req.id));
+    };
+
+    const selectedRequirements = useMemo(() => {
+        const selected = allRequests.filter((req) =>
+            selectedRequests.includes(req.id)
+        );
+        return {
+            totalRequests: selected.length,
+            totalWorkers: selected.reduce(
+                (sum, req) => sum + (req.requested_amount || 0),
+                0
+            ),
+            totalMale: selected.reduce(
+                (sum, req) => sum + (req.male_count || 0),
+                0
+            ),
+            totalFemale: selected.reduce(
+                (sum, req) => sum + (req.female_count || 0),
+                0
+            ),
+        };
+    }, [selectedRequests, allRequests]);
+
+    const requestDelete = (id) => {
+        setRequestToDelete(id);
+    };
+
+    const confirmDelete = () => {
+    if (!requestToDelete) return;
+    destroy(route("manpower-requests.destroy", requestToDelete), {
+        preserveScroll: true,
+        onSuccess: () => {
+            setLocalSections((prev) => {
+                const updated = { ...prev };
+                updated.data = updated.data.map((section) => ({
+                    ...section,
+                    sub_sections: section.sub_sections.map((sub) => ({
+                        ...sub,
+                        man_power_requests: sub.man_power_requests.filter(
+                            (req) => req.id !== requestToDelete
+                        ),
+                    })),
+                }));
+                return updated;
+            });
+
+            setRefreshTrigger((prev) => prev + 1);
+            toast.success("Request deleted");
+            setShowDeleteModal(false);
+            setRequestToDelete(null);
+            
+            // Reload the page after successful delete
+            window.location.reload();
+        },
+        onError: () => {
+            toast.error("Failed to delete");
+            setShowDeleteModal(false);
+            setRequestToDelete(null);
+        },
+    });
+};
+
+    const openDetails = (group) => {
+        setSelectedGroup(group);
+        setShowDetailsModal(true);
+    };
+
+    const toggleSort = (key) => {
+        setSortConfig((prev) =>
+            prev.key === key
+                ? { key, direction: prev.direction === "asc" ? "desc" : "asc" }
+                : { key, direction: "asc" }
+        );
+    };
+
+    useEffect(() => {
+        if (showDetailsModal) {
+            document.body.style.overflow = "hidden";
+        } else {
+            document.body.style.overflow = "auto";
+        }
+        return () => {
+            document.body.style.overflow = "auto";
+        };
+    }, [showDetailsModal]);
+
+    // Show loading overlay during initial load
+    if (isInitialLoading) {
+        return (
+            <AuthenticatedLayout
+                user={auth.user}
+                header={
+                    <h2 className="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
+                        Manpower Requests
+                    </h2>
+                }
+            >
+                <LoadingOverlay />
+            </AuthenticatedLayout>
+        );
+    }
+
+    return (
+        <AuthenticatedLayout
+            user={auth.user}
+            header={
+                <h2 className="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
+                    Manpower Requests
+                </h2>
+            }
+        >
+            <ToastContainer
+                position="top-right"
+                autoClose={5000}
+                hideProgressBar={false}
+                newestOnTop={false}
+                closeOnClick
+                rtl={false}
+                pauseOnFocusLoss
+                draggable
+                pauseOnHover
+            />
+
+            <div className="py-4 sm:py-8">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    {/* Loading Overlay */}
+                    <AnimatePresence>
+                        {isLoading && <LoadingOverlay />}
+                    </AnimatePresence>
+
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5 }}
+                        className="bg-white dark:bg-gray-800 overflow-hidden shadow-lg sm:rounded-lg"
+                    >
+                        {/* Header with bulk mode controls */}
+                        <div className="p-4 sm:p-6 md:p-8 text-gray-900 dark:text-gray-100">
+                            <div className="flex flex-col space-y-4 mb-6">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                                    <motion.h1
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{
+                                            duration: 0.5,
+                                            delay: 0.1,
+                                        }}
+                                        className="text-xl sm:text-2xl font-bold text-gray-700 dark:text-gray-300 mb-4 sm:mb-0"
+                                    >
+                                        Manpower Requests
+                                    </motion.h1>
+                                    <div className="flex items-center space-x-3 mb-4 sm:mb-0">
+                                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                                            Show:
+                                        </span>
+                                        <div className="flex bg-gray-200 dark:bg-gray-700 rounded-md p-1">
+                                            <button
+                                                onClick={() =>
+                                                    setDateFilter("current")
+                                                }
+                                                className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                                                    dateFilter === "current"
+                                                        ? "bg-indigo-600 text-white"
+                                                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
+                                                }`}
+                                            >
+                                                3 Days
+                                            </button>
+                                            <button
+                                                onClick={() =>
+                                                    setDateFilter("all")
+                                                }
+                                                className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                                                    dateFilter === "all"
+                                                        ? "bg-indigo-600 text-white"
+                                                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
+                                                }`}
+                                            >
+                                                All Dates
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
+                                        {/* {selectedRequests.length > 0 && (
+                                            <motion.button
+                                                initial={{
+                                                    opacity: 0,
+                                                    scale: 0.8,
+                                                }}
+                                                animate={{
+                                                    opacity: 1,
+                                                    scale: 1,
+                                                }}
+                                                onClick={() =>
+                                                    setShowBulkPreviewModal(
+                                                        true
+                                                    )
+                                                }
+                                                className="px-4 py-2 bg-green-600 dark:bg-green-500 text-white rounded-md hover:bg-green-700 dark:hover:bg-green-600"
+                                            >
+                                                Bulk Fulfill (
+                                                {selectedRequests.length})
+                                            </motion.button>
+                                        )} */}
+
+                                        <motion.div
+                                            initial={{ opacity: 0, x: 20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            transition={{
+                                                duration: 0.5,
+                                                delay: 0.2,
+                                            }}
+                                        >
+                                            <Link
+                                                href={route(
+                                                    "manpower-requests.create"
+                                                )}
+                                                className="inline-flex items-center bg-indigo-600 dark:bg-indigo-500 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-md shadow-sm hover:bg-indigo-700 dark:hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 transition ease-in-out duration-150 text-sm sm:text-base"
+                                            >
+                                                <svg
+                                                    className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2 -ml-1"
+                                                    fill="currentColor"
+                                                    viewBox="0 0 20 20"
+                                                >
+                                                    <path
+                                                        fillRule="evenodd"
+                                                        d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
+                                                        clipRule="evenodd"
+                                                    />
+                                                </svg>
+                                                New Request
+                                            </Link>
+                                        </motion.div>
+                                    </div>
+                                </div>
+
+                                {/* Bulk mode controls */}
+                                <AnimatePresence>
+                                    {selectedRequests.length > 0 ? (
+                                        <motion.div
+                                            initial={{ opacity: 0, height: 0 }}
+                                            animate={{
+                                                opacity: 1,
+                                                height: "auto",
+                                            }}
+                                            exit={{ opacity: 0, height: 0 }}
+                                            transition={{ duration: 0.3 }}
+                                            className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4"
+                                        >
+                                            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+                                                <div className="flex items-center space-x-4">
+                                                    <div className="flex items-center space-x-2">
+                                                        <svg
+                                                            className="w-5 h-5 text-blue-600 dark:text-blue-400"
+                                                            fill="none"
+                                                            viewBox="0 0 24 24"
+                                                            stroke="currentColor"
+                                                        >
+                                                            <path
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                                strokeWidth={2}
+                                                                d="M13 10V3L4 14h7v7l9-11h-7z"
+                                                            />
+                                                        </svg>
+                                                        <span className="font-medium text-blue-800 dark:text-blue-300">
+                                                            Bulk Operations
+                                                        </span>
+                                                    </div>
+                                                    <span className="text-sm text-blue-700 dark:text-blue-400">
+                                                        {
+                                                            selectedRequests.length
+                                                        }{" "}
+                                                        requests selected
+                                                    </span>
+                                                </div>
+
+                                                <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                                                    {selectedRequests.some(
+                                                        (id) => {
+                                                            const request =
+                                                                allRequests.find(
+                                                                    (req) =>
+                                                                        req.id ===
+                                                                        id
+                                                                );
+                                                            return (
+                                                                request &&
+                                                                request.status !==
+                                                                    "fulfilled" &&
+                                                                request.status !==
+                                                                    "fulfilling"
+                                                            );
+                                                        }
+                                                    ) && (
+                                                        <div className="flex items-center space-x-2">
+                                                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                                Strategy:
+                                                            </label>
+                                                            <select
+                                                                value={
+                                                                    fulfillStrategy
+                                                                }
+                                                                onChange={(e) =>
+                                                                    setFulfillStrategy(
+                                                                        e.target
+                                                                            .value
+                                                                    )
+                                                                }
+                                                                className="text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                                                            >
+                                                                <option value="optimal">
+                                                                    Optimal
+                                                                    Match
+                                                                </option>
+                                                                <option value="same_section">
+                                                                    Same Section
+                                                                    First
+                                                                </option>
+                                                                <option value="balanced">
+                                                                    Balanced
+                                                                    Distribution
+                                                                </option>
+                                                            </select>
+                                                        </div>
+                                                    )}
+
+                                                    <button
+                                                        onClick={() =>
+                                                            setShowBulkDeleteModal(
+                                                                true
+                                                            )
+                                                        }
+                                                        className="px-4 py-2 bg-red-600 dark:bg-red-500 text-white rounded-md hover:bg-red-700 dark:hover:bg-red-600 disabled:opacity-50"
+                                                        disabled={
+                                                            deleteProcessing
+                                                        }
+                                                    >
+                                                        {deleteProcessing
+                                                            ? "Deleting..."
+                                                            : `Delete (${selectedRequests.length})`}
+                                                    </button>
+
+                                                    {selectedRequests.some(
+                                                        (id) => {
+                                                            const request =
+                                                                allRequests.find(
+                                                                    (req) =>
+                                                                        req.id ===
+                                                                        id
+                                                                );
+                                                            return (
+                                                                request &&
+                                                                request.status !==
+                                                                    "fulfilled" &&
+                                                                request.status !==
+                                                                    "fulfilling"
+                                                            );
+                                                        }
+                                                    ) && (
+                                                        <button
+                                                            onClick={() =>
+                                                                setShowBulkPreviewModal(
+                                                                    true
+                                                                )
+                                                            }
+                                                            className="px-4 py-2 bg-green-600 dark:bg-green-500 text-white rounded-md hover:bg-green-700 dark:hover:bg-green-600"
+                                                        >
+                                                            Bulk Fulfill (
+                                                            {
+                                                                selectedRequests.filter(
+                                                                    (id) => {
+                                                                        const request =
+                                                                            allRequests.find(
+                                                                                (
+                                                                                    req
+                                                                                ) =>
+                                                                                    req.id ===
+                                                                                    id
+                                                                            );
+                                                                        return (
+                                                                            request &&
+                                                                            request.status !==
+                                                                                "fulfilled" &&
+                                                                            request.status !==
+                                                                                "fulfilling"
+                                                                        );
+                                                                    }
+                                                                ).length
+                                                            }
+                                                            )
+                                                        </button>
+                                                    )}
+
+                                                    <button
+                                                        onClick={() =>
+                                                            setSelectedRequests(
+                                                                []
+                                                            )
+                                                        }
+                                                        className="px-3 py-2 text-sm bg-gray-500 dark:bg-gray-600 text-white rounded-md hover:bg-gray-600 dark:hover:bg-gray-700"
+                                                    >
+                                                        Clear
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div className="mt-4 pt-4 border-t border-blue-200 dark:border-blue-700">
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                                                    <div>
+                                                        <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                                                            {
+                                                                selectedRequests.length
+                                                            }
+                                                        </div>
+                                                        <div className="text-xs text-blue-700 dark:text-blue-400">
+                                                            Total Selected
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-lg font-bold text-green-600 dark:text-green-400">
+                                                            {
+                                                                selectedRequests.filter(
+                                                                    (id) => {
+                                                                        const request =
+                                                                            allRequests.find(
+                                                                                (
+                                                                                    req
+                                                                                ) =>
+                                                                                    req.id ===
+                                                                                    id
+                                                                            );
+                                                                        return (
+                                                                            request &&
+                                                                            request.status !==
+                                                                                "fulfilled" &&
+                                                                            request.status !==
+                                                                                "fulfilling"
+                                                                        );
+                                                                    }
+                                                                ).length
+                                                            }
+                                                        </div>
+                                                        <div className="text-xs text-green-700 dark:text-green-400">
+                                                            Pending Fulfillment
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-lg font-bold text-indigo-500 dark:text-indigo-400">
+                                                            {
+                                                                selectedRequests.filter(
+                                                                    (id) => {
+                                                                        const request =
+                                                                            allRequests.find(
+                                                                                (
+                                                                                    req
+                                                                                ) =>
+                                                                                    req.id ===
+                                                                                    id
+                                                                            );
+                                                                        return (
+                                                                            request &&
+                                                                            (request.status ===
+                                                                                "fulfilled" ||
+                                                                                request.status ===
+                                                                                    "fulfilling")
+                                                                        );
+                                                                    }
+                                                                ).length
+                                                            }
+                                                        </div>
+                                                        <div className="text-xs text-indigo-700 dark:text-indigo-400">
+                                                            Already Fulfilled
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-lg font-bold text-purple-500 dark:text-purple-400">
+                                                            {
+                                                                selectedRequirements.totalWorkers
+                                                            }
+                                                        </div>
+                                                        <div className="text-xs text-purple-700 dark:text-purple-400">
+                                                            Total Workers
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    ) : null}
+                                </AnimatePresence>
+                            </div>
+
+                            <AnimatePresence mode="wait">
+                                {isLoading ? (
+                                    <motion.div
+                                        key="loading"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        transition={{ duration: 0.3 }}
+                                    >
+                                        <div className="overflow-x-auto">
+                                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                                <thead className="bg-gray-50 dark:bg-gray-700">
+                                                    <tr>
+                                                        <th
+                                                            scope="col"
+                                                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                                                        >
+                                                            Select
+                                                        </th>
+                                                        <th
+                                                            scope="col"
+                                                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                                                        >
+                                                            Section
+                                                        </th>
+                                                        <th
+                                                            scope="col"
+                                                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                                                        >
+                                                            Date
+                                                        </th>
+                                                        <th
+                                                            scope="col"
+                                                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                                                        >
+                                                            Statuses
+                                                        </th>
+                                                        <th
+                                                            scope="col"
+                                                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                                                        >
+                                                            Total Requests
+                                                        </th>
+                                                        <th
+                                                            scope="col"
+                                                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                                                        >
+                                                            Total Workers
+                                                        </th>
+                                                        <th
+                                                            scope="col"
+                                                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                                                        >
+                                                            Actions
+                                                        </th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                    {Array.from({
+                                                        length: 5,
+                                                    }).map((_, index) => (
+                                                        <TableRowSkeleton
+                                                            key={index}
+                                                        />
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </motion.div>
+                                ) : paginatedGroups.length === 0 ? (
+                                    <motion.div
+                                        key="empty"
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0 }}
+                                        transition={{ duration: 0.5 }}
+                                        className="text-center py-8"
+                                    >
+                                        <div className="flex flex-col items-center">
+                                            <svg
+                                                className="w-12 h-12 text-gray-400 dark:text-gray-500 mb-3"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                stroke="currentColor"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
+                                                />
+                                            </svg>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                                                No manpower requests found.
+                                            </p>
+                                            <Link
+                                                href={route(
+                                                    "manpower-requests.create"
+                                                )}
+                                                className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium"
+                                            >
+                                                Create your first request
+                                            </Link>
+                                        </div>
+                                    </motion.div>
+                                ) : (
+                                    <motion.div
+                                        key="content"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        transition={{ duration: 0.5 }}
+                                    >
+                                        <div className="overflow-x-auto">
+                                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                                <thead className="bg-gray-50 dark:bg-gray-700">
+                                                    <tr>
+                                                        <th
+                                                            scope="col"
+                                                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                                                        >
+                                                            Select
+                                                        </th>
+                                                        <th
+                                                            scope="col"
+                                                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                                            onClick={() =>
+                                                                toggleSort(
+                                                                    "name"
+                                                                )
+                                                            }
+                                                        >
+                                                            <div className="flex items-center">
+                                                                Section
+                                                                {sortConfig.key ===
+                                                                    "name" && (
+                                                                    <span className="ml-1">
+                                                                        {sortConfig.direction ===
+                                                                        "asc"
+                                                                            ? "↑"
+                                                                            : "↓"}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </th>
+                                                        <th
+                                                            scope="col"
+                                                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                                            onClick={() =>
+                                                                toggleSort(
+                                                                    "date"
+                                                                )
+                                                            }
+                                                        >
+                                                            <div className="flex items-center">
+                                                                Date
+                                                                {sortConfig.key ===
+                                                                    "date" && (
+                                                                    <span className="ml-1">
+                                                                        {sortConfig.direction ===
+                                                                        "asc"
+                                                                            ? "↑"
+                                                                            : "↓"}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </th>
+                                                        <th
+                                                            scope="col"
+                                                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                                                        >
+                                                            Statuses
+                                                        </th>
+                                                        <th
+                                                            scope="col"
+                                                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
+                                                            onClick={() =>
+                                                                toggleSort(
+                                                                    "total"
+                                                                )
+                                                            }
+                                                        >
+                                                            <div className="flex items-center">
+                                                                Total Requests
+                                                                {sortConfig.key ===
+                                                                    "total" && (
+                                                                    <span className="ml-1">
+                                                                        {sortConfig.direction ===
+                                                                        "asc"
+                                                                            ? "↑"
+                                                                            : "↓"}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </th>
+                                                        <th
+                                                            scope="col"
+                                                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                                                        >
+                                                            Total Workers
+                                                        </th>
+                                                        <th
+                                                            scope="col"
+                                                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                                                        >
+                                                            Actions
+                                                        </th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                    {paginatedGroups.map((group, idx) => {
+                                                        if (!group) return null;
+                                                        
+                                                        return (
+                                                            <motion.tr
+                                                                key={`${group.sectionId}-${group.date}-${idx}`}
+                                                                initial={{ opacity: 0, y: 10 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                transition={{ duration: 0.3, delay: idx * 0.05 }}
+                                                                className="hover:bg-gray-50 dark:hover:bg-gray-700"
+                                                            >
+                                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={isGroupFullySelected(group)}
+                                                                        onChange={(e) =>
+                                                                            handleSelectAllForDate(group.requests, e.target.checked)
+                                                                        }
+                                                                        className="rounded text-blue-600 dark:text-blue-500 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                                                    />
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                                                                    {group.sectionName}
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                    {formatDate(group.date)}
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                                    <div className="flex flex-wrap gap-1">
+                                                                        {group.statuses && group.statuses.map(status => (
+                                                                            <span
+                                                                                key={status}
+                                                                                className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusClasses(status)}`}
+                                                                            >
+                                                                                {status.replace('_', ' ')}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                    {group.totalRequests}
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                    {group.totalWorkers}
+                                                                </td>
+                                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                                    <div className="flex space-x-2">
+                                                                        <button
+                                                                            onClick={() => openDetails(group)}
+                                                                            className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
+                                                                        >
+                                                                            View Details
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </motion.tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+
+                            {/* Pagination */}
+                            {totalPages > 1 && (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    transition={{ duration: 0.5, delay: 0.4 }}
+                                    className="mt-6 flex justify-end flex-wrap gap-2"
+                                >
+                                    {Array.from(
+                                        { length: totalPages },
+                                        (_, i) => i + 1
+                                    ).map((page) => (
+                                        <button
+                                            key={page}
+                                            onClick={() => setCurrentPage(page)}
+                                            className={`px-3 py-1 rounded-md text-sm transition-all ${
+                                                page === currentPage
+                                                    ? "bg-indigo-600 dark:bg-indigo-700 text-white"
+                                                    : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
+                                            }`}
+                                        >
+                                            {page}
+                                        </button>
+                                    ))}
+                                </motion.div>
+                            )}
+                        </div>
+                    </motion.div>
                 </div>
-              </div>
             </div>
-            <div className="bg-gray-50 dark:bg-gray-700 px-6 py-3 rounded-b-lg">
-              <div className="flex justify-end">
-                <button
-                  onClick={handleBulkResultClose}
-                  className="px-4 py-2 bg-indigo-600 dark:bg-indigo-500 text-white rounded-md hover:bg-indigo-700 dark:hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  OK
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </AuthenticatedLayout>
-  );
+
+            {/* Details Modal */}
+            {showDetailsModal && selectedGroup && (
+                <div className="fixed inset-0 z-40 overflow-y-auto">
+                    <div
+                        className="fixed inset-0 bg-gray-500 dark:bg-gray-900 opacity-75"
+                        onClick={() => setShowDetailsModal(false)}
+                    ></div>
+                    <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                        <span
+                            className="hidden sm:inline-block sm:align-middle sm:h-screen"
+                            aria-hidden="true"
+                        >
+                            &#8203;
+                        </span>
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-6xl sm:w-full sm:p-6 relative z-50"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div>
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-gray-100">
+                                            {selectedGroup.sectionName} Requests
+                                            - {formatDate(selectedGroup.date)}
+                                        </h3>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="bg-white dark:bg-gray-700 rounded-md text-gray-400 dark:text-gray-300 hover:text-gray-500 dark:hover:text-gray-200 focus:outline-none"
+                                        onClick={() => {
+                                            setShowDetailsModal(false);
+                                            setTimeout(() => {
+                                                window.location.reload();
+                                            }, 100);
+                                        }}
+                                    >
+                                        <span className="sr-only">Close</span>
+                                        <svg
+                                            className="h-6 w-6"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                        >
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth="2"
+                                                d="M6 18L18 6M6 6l12 12"
+                                            />
+                                        </svg>
+                                    </button>
+                                </div>
+                                <div className="mt-4">
+                                    <SectionGroup
+                                        section={{
+                                            name: selectedGroup.sectionName,
+                                        }}
+                                        requests={selectedGroup.requests}
+                                        formatDate={formatDate}
+                                        getStatusClasses={getStatusClasses}
+                                        onDelete={requestDelete}
+                                        onRevision={() => {}}
+                                        isUser={!!user}
+                                        initialOpen
+                                        quickFulfill={quickFulfill}
+                                        processingRequests={processingRequests}
+                                        bulkMode={true}
+                                        selectedRequests={selectedRequests}
+                                        handleRequestSelect={
+                                            handleRequestSelect
+                                        }
+                                        canRevise={true}
+                                    />
+                                </div>
+                            </div>
+                            <div className="mt-5 sm:mt-6">
+                                <button
+                                    type="button"
+                                    className="inline-flex justify-center w-full rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:text-sm"
+                                    onClick={() => {
+                                        setShowDetailsModal(false);
+                                         window.location.reload();
+                                    }}
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                </div>
+            )}
+
+            {/* Bulk Delete Confirmation Modal */}
+            {showBulkDeleteModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md"
+                    >
+                        <div className="flex items-center p-6">
+                            <div className="flex-shrink-0 w-12 h-12 flex items-center justify-center rounded-full bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400">
+                                <svg
+                                    className="w-6 h-6"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+                                    />
+                                </svg>
+                            </div>
+                            <div className="ml-4">
+                                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                                    Confirm Bulk Delete
+                                </h3>
+                                <div className="mt-2">
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                                        Are you sure you want to delete{" "}
+                                        {selectedRequests.length} selected
+                                        requests? This action cannot be undone.
+                                    </p>
+                                    <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-md">
+                                        <p className="text-xs text-red-700 dark:text-red-400">
+                                            <strong>Warning:</strong> This will
+                                            permanently delete all selected
+                                            manpower requests.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-700 px-6 py-3 rounded-b-lg">
+                            <div className="flex justify-end space-x-3">
+                                <button
+                                    onClick={() =>
+                                        setShowBulkDeleteModal(false)
+                                    }
+                                    className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-400 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                                    disabled={deleteProcessing}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleBulkDelete}
+                                    className="px-4 py-2 bg-red-600 dark:bg-red-500 text-white rounded-md hover:bg-red-700 dark:hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
+                                    disabled={deleteProcessing}
+                                >
+                                    {deleteProcessing
+                                        ? "Deleting..."
+                                        : "Delete Requests"}
+                                </button>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
+            {/* Bulk Fulfill Modal */}
+            {showBulkPreviewModal && (
+                <BulkFulfillPreviewModal
+                    open={showBulkPreviewModal}
+                    onClose={() => {
+                        setShowBulkPreviewModal(false);
+                        setSelectedRequests([]);
+                    }}
+                    strategy={fulfillStrategy}
+                    selectedRequests={selectedRequests}
+                    onConfirm={handleBulkFulfillConfirm}
+                    loading={processingRequests.length > 0}
+                    allRequests={allRequests}
+                />
+            )}
+
+            {showBulkResultModal && bulkResult && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md"
+                    >
+                        <div className="flex items-center p-6">
+                            <div
+                                className={`flex-shrink-0 w-12 h-12 flex items-center justify-center rounded-full ${
+                                    bulkResult.type === "success"
+                                        ? "bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400"
+                                        : bulkResult.type === "warning"
+                                        ? "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400"
+                                        : "bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400"
+                                }`}
+                            >
+                                {bulkResult.type === "success" ? (
+                                    <svg
+                                        className="w-6 h-6"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M5 13l4 4L19 7"
+                                        />
+                                    </svg>
+                                ) : bulkResult.type === "warning" ? (
+                                    <svg
+                                        className="w-6 h-6"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+                                        />
+                                    </svg>
+                                ) : (
+                                    <svg
+                                        className="w-6 h-6"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                        stroke="currentColor"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M6 18L18 6M6 6l12 12"
+                                        />
+                                    </svg>
+                                )}
+                            </div>
+                            <div className="ml-4">
+                                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                                    {bulkResult.title}
+                                </h3>
+                                <div className="mt-2">
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                                        {bulkResult.message}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-700 px-6 py-3 rounded-b-lg">
+                            <div className="flex justify-end">
+                                <button
+                                    onClick={handleBulkResultClose}
+                                    className="px-4 py-2 bg-indigo-600 dark:bg-indigo-500 text-white rounded-md hover:bg-indigo-700 dark:hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                >
+                                    OK
+                                </button>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+        </AuthenticatedLayout>
+    );
 }
