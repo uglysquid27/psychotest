@@ -42,7 +42,8 @@ class MachineLearning
                     floatval($item['employee_type'] ?? 0),
                     floatval($item['same_subsection'] ?? 0),
                     floatval($item['same_section'] ?? 0),
-                    floatval($item['current_workload'] ?? 0)
+                    floatval($item['current_workload'] ?? 0),
+                    floatval($item['shift_priority'] ?? 0.5)
                 ];
                 $labels[] = intval($item['was_assigned'] ?? 0);
                 $targets[] = floatval($item['was_assigned'] ?? 0);
@@ -98,14 +99,15 @@ class MachineLearning
             $samples = [];
             foreach ($features as $featureSet) {
                 $samples[] = [
-                    floatval($featureSet['work_days_count'] ?? 0),
-                    floatval($featureSet['rating_value'] ?? 3.0),
-                    floatval($featureSet['test_score'] ?? 0.0),
-                    floatval($featureSet['gender'] ?? 0),
-                    floatval($featureSet['employee_type'] ?? 0),
-                    floatval($featureSet['same_subsection'] ?? 0),
-                    floatval($featureSet['same_section'] ?? 0),
-                    floatval($featureSet['current_workload'] ?? 0)
+                     floatval($featureSet['work_days_count'] ?? 0),
+                floatval($featureSet['rating_value'] ?? 3.0),
+                floatval($featureSet['test_score'] ?? 0.0),
+                floatval($featureSet['gender'] ?? 0),
+                floatval($featureSet['employee_type'] ?? 0),
+                floatval($featureSet['same_subsection'] ?? 0),
+                floatval($featureSet['same_section'] ?? 0),
+                floatval($featureSet['current_workload'] ?? 0),
+                floatval($featureSet['shift_priority'] ?? 0.5)
                 ];
             }
 

@@ -215,15 +215,21 @@ class ManPowerRequestFulfillmentController extends Controller
         ]);
 
         return Inertia::render('Fullfill/Fulfill', [
-            'request' => $request,
-            'sameSubSectionEmployees' => $sortedSameSubSectionEmployees,
-            'otherSubSectionEmployees' => $sortedOtherSubSectionEmployees,
-            'currentScheduledIds' => $currentScheduledIds,
-            'sameDayRequests' => $sameDayRequests, // Add same day requests to the response
-            'ml_status' => $mlStatus, // NEW
-            'ml_accuracy' => $mlAccuracy, // NEW
-            'auth' => ['user' => auth()->user()]
-        ]);
+    'request' => $request,
+    'sameSubSectionEmployees' => $sortedSameSubSectionEmployees,
+    'otherSubSectionEmployees' => $sortedOtherSubSectionEmployees,
+    'currentScheduledIds' => $currentScheduledIds,
+    'sameDayRequests' => $sameDayRequests,
+    'ml_status' => $mlStatus,
+    'ml_accuracy' => $mlAccuracy,
+    'ml_features' => [ // NEW: Show what features are being used
+        'work_days_14_days' => 'Work Days (14 days)',
+        'work_days_30_days' => 'Work Days (30 days)', 
+        'shift_priority' => 'Shift Rotation Priority',
+        'current_workload_14_days' => 'Workload (14 days)'
+    ],
+    'auth' => ['user' => auth()->user()]
+]);
     }
 
     /**
@@ -269,49 +275,176 @@ class ManPowerRequestFulfillmentController extends Controller
     }
 
     /**
-     * Calculate ML priority score for an employee
-     */
-    private function calculateMLPriorityScore($employee, $manpowerRequest)
-    {
-        try {
-            $mlService = app(SimpleMLService::class);
+ * Calculate current workload for 14 days (updated from 7 days)
+ */
+private function getCurrentWorkload14Days($employee)
+{
+    $startDate = now()->subDays(14)->startOfDay();
+    $workHours = $employee->schedules()
+        ->where('date', '>=', $startDate)
+        ->with('manPowerRequest.shift')
+        ->get()
+        ->sum(function ($schedule) {
+            return $schedule->manPowerRequest->shift->hours ?? 0;
+        });
+    
+    // Normalize to 0-1 (80 hours max for 2 weeks)
+    return min($workHours / 80, 1.0);
+}
 
-            if (!$mlService->isModelTrained()) {
-                Log::warning('ML model not trained, using fallback score');
-                return 0.5; // Default score if model not trained
-            }
+/**
+ * Calculate shift priority based on last assigned shift
+ */
+private function calculateShiftPriority($employee, $manpowerRequest)
+{
+    try {
+        // Get the last assigned shift for this employee
+        $lastSchedule = $employee->schedules()
+            ->where('date', '<', now()->toDateString())
+            ->with('manPowerRequest.shift')
+            ->orderBy('date', 'desc')
+            ->first();
 
-            $features = [
-                'work_days_count' => $this->getWorkDaysCount($employee),
-                'rating_value' => $this->getAverageRating($employee),
-                'test_score' => $this->getTestScore($employee),
-                'gender' => $employee->gender === 'male' ? 1 : 0,
-                'employee_type' => $employee->type === 'bulanan' ? 1 : 0,
-                'same_subsection' => $this->isSameSubsection($employee, $manpowerRequest) ? 1 : 0,
-                'same_section' => $this->isSameSection($employee, $manpowerRequest) ? 1 : 0,
-                'current_workload' => $this->getCurrentWorkload($employee),
-            ];
-
-            Log::debug('ML Features for employee', [
-                'employee_id' => $employee->id,
-                'features' => $features
-            ]);
-
-            $predictions = $mlService->predict([$features]);
-            $mlScore = $predictions[0] ?? 0.5;
-
-            Log::debug('ML Prediction result', [
-                'employee_id' => $employee->id,
-                'ml_score' => $mlScore
-            ]);
-
-            return $mlScore;
-
-        } catch (\Exception $e) {
-            Log::error("ML Score calculation failed for employee {$employee->id}: " . $e->getMessage());
-            return 0.5; // Fallback score
+        if (!$lastSchedule || !$lastSchedule->manPowerRequest->shift) {
+            return 1.0; // No previous shift, neutral priority
         }
+
+        $lastShiftOrder = $this->getShiftOrder($lastSchedule->manPowerRequest->shift);
+        $currentShiftOrder = $this->getShiftOrder($manpowerRequest->shift);
+
+        if ($lastShiftOrder === null || $currentShiftOrder === null) {
+            return 1.0; // Unknown shift, neutral priority
+        }
+
+        // Calculate shift priority based on sequential ordering
+        // Shift 1 (pagi) -> lower priority for next Shift 1, higher for Shift 2, highest for Shift 3
+        $shiftDifference = $currentShiftOrder - $lastShiftOrder;
+        
+        if ($shiftDifference === 0) {
+            // Same shift as last time - lower priority
+            return 0.3;
+        } elseif ($shiftDifference === 1) {
+            // Next sequential shift - medium priority
+            return 0.7;
+        } elseif ($shiftDifference === 2) {
+            // Two shifts ahead - highest priority
+            return 1.0;
+        } elseif ($shiftDifference === -1) {
+            // Previous shift - low priority
+            return 0.4;
+        } else {
+            // Other cases - neutral
+            return 0.5;
+        }
+    } catch (\Exception $e) {
+        Log::warning("Error calculating shift priority: " . $e->getMessage());
+        return 0.5;
     }
+}
+
+/**
+ * Map shift names to sequential order
+ */
+private function getShiftOrder($shift)
+{
+    try {
+        // Map shift names to sequential order
+        $shiftOrder = [
+            'pagi' => 1,
+            'siang' => 2,
+            'malam' => 3,
+            '1' => 1,
+            '2' => 2,
+            '3' => 3
+        ];
+
+        $shiftName = strtolower($shift->name ?? '');
+        return $shiftOrder[$shiftName] ?? null;
+    } catch (\Exception $e) {
+        Log::warning("Error getting shift order: " . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * Fallback ML score calculation when model is not trained
+ */
+private function calculateFallbackMLScore($employee, $manpowerRequest)
+{
+    $score = 0.0;
+    
+    // Work days count (fewer days = higher priority)
+    $workDays = $this->getWorkDaysCount($employee, 30);
+    $score += max(0, 1 - ($workDays / 22)) * 0.25;
+    
+    // Rating value
+    $rating = $this->getAverageRating($employee);
+    $score += ($rating / 5) * 0.2;
+    
+    // Test score
+    $testScore = $this->getTestScore($employee);
+    $score += $testScore * 0.15;
+    
+    // Section match
+    $sameSubsection = $this->isSameSubsection($employee, $manpowerRequest) ? 1 : 0;
+    $sameSection = $this->isSameSection($employee, $manpowerRequest) ? 1 : 0;
+    $sectionScore = 0.0;
+    if ($sameSubsection > 0) $sectionScore = 0.15;
+    elseif ($sameSection > 0) $sectionScore = 0.1;
+    $score += $sectionScore;
+    
+    // Shift priority (fallback)
+    $shiftPriority = $this->calculateShiftPriority($employee, $manpowerRequest);
+    $score += $shiftPriority * 0.25;
+    
+    return min(1.0, max(0.0, $score));
+}
+
+    /**
+ * Calculate ML priority score for an employee with updated features
+ */
+private function calculateMLPriorityScore($employee, $manpowerRequest)
+{
+    try {
+        $mlService = app(SimpleMLService::class);
+
+        if (!$mlService->isModelTrained()) {
+            Log::warning('ML model not trained, using fallback score');
+            return $this->calculateFallbackMLScore($employee, $manpowerRequest);
+        }
+
+        $features = [
+            'work_days_count' => $this->getWorkDaysCount($employee, 30), // 30-day work days
+            'rating_value' => $this->getAverageRating($employee),
+            'test_score' => $this->getTestScore($employee),
+            'gender' => $employee->gender === 'male' ? 1 : 0,
+            'employee_type' => $employee->type === 'bulanan' ? 1 : 0,
+            'same_subsection' => $this->isSameSubsection($employee, $manpowerRequest) ? 1 : 0,
+            'same_section' => $this->isSameSection($employee, $manpowerRequest) ? 1 : 0,
+            'current_workload' => $this->getCurrentWorkload14Days($employee), // UPDATED: 14-day workload
+            'shift_priority' => $this->calculateShiftPriority($employee, $manpowerRequest), // NEW: Shift priority
+        ];
+
+        Log::debug('ML Features for employee', [
+            'employee_id' => $employee->id,
+            'features' => $features
+        ]);
+
+        $predictions = $mlService->predict([$features]);
+        $mlScore = $predictions[0] ?? 0.5;
+
+        Log::debug('ML Prediction result', [
+            'employee_id' => $employee->id,
+            'ml_score' => $mlScore
+        ]);
+
+        return $mlScore;
+
+    } catch (\Exception $e) {
+        Log::error("ML Score calculation failed for employee {$employee->id}: " . $e->getMessage());
+        return $this->calculateFallbackMLScore($employee, $manpowerRequest);
+    }
+}
 
     // Helper methods for ML feature calculation (keep existing ones)
     private function getAverageRating($employee)
@@ -428,58 +561,56 @@ class ManPowerRequestFulfillmentController extends Controller
         return $selected;
     }
 
-    /**
-     * Normalize employee data with ML scores
-     */
     private function normalizeEmployeeWithML($employee, $manpowerRequest, $isSameSubSection)
-    {
-        $gender = strtolower(trim($employee->gender ?? 'male'));
-        if (!in_array($gender, ['male', 'female'])) {
-            $gender = 'male';
-        }
-
-        // Calculate work days for 14 days and 30 days
-        $workDays14Days = $this->getWorkDaysCount($employee, 14);
-        $workDays30Days = $this->getWorkDaysCount($employee, 30);
-        
-        // Get last 5 shifts
-        $last5Shifts = $this->getLastShifts($employee, 5);
-
-        // Calculate base scores
-        $workloadPoints = $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0;
-        $blindTestPoints = 0;
-        $latestTest = $employee->blindTests->sortByDesc('test_date')->first();
-        if ($latestTest && $latestTest->result === 'Pass') {
-            $blindTestPoints = 3;
-        }
-        $averageRating = $employee->ratings->avg('rating') ?? 0;
-        $baseScore = ($workloadPoints * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
-
-        // Calculate ML score
-        $mlScore = $this->calculateMLPriorityScore($employee, $manpowerRequest);
-
-        // Combine scores (70% ML + 30% base)
-        $finalScore = ($mlScore * 0.7) + ($baseScore * 0.3);
-
-        return (object) [
-            'id' => $employee->id,
-            'name' => $employee->name,
-            'gender' => $gender,
-            'type' => $employee->type,
-            'workload_points' => $workloadPoints,
-            'blind_test_points' => $blindTestPoints,
-            'average_rating' => $averageRating,
-            'base_score' => $baseScore,
-            'ml_score' => $mlScore,
-            'final_score' => $finalScore, // ML-enhanced score
-            'is_same_subsection' => $isSameSubSection,
-            'subSections' => $employee->subSections ?? collect(),
-            // NEW: Work days and shift history
-            'work_days_14_days' => $workDays14Days,
-            'work_days_30_days' => $workDays30Days,
-            'last_5_shifts' => $last5Shifts,
-        ];
+{
+    $gender = strtolower(trim($employee->gender ?? 'male'));
+    if (!in_array($gender, ['male', 'female'])) {
+        $gender = 'male';
     }
+
+    // Calculate work days for 14 days and 30 days
+    $workDays14Days = $this->getWorkDaysCount($employee, 14);
+    $workDays30Days = $this->getWorkDaysCount($employee, 30);
+    
+    // Get last 5 shifts
+    $last5Shifts = $this->getLastShifts($employee, 5);
+
+    // Calculate base scores
+    $workloadPoints = $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0;
+    $blindTestPoints = 0;
+    $latestTest = $employee->blindTests->sortByDesc('test_date')->first();
+    if ($latestTest && $latestTest->result === 'Pass') {
+        $blindTestPoints = 3;
+    }
+    $averageRating = $employee->ratings->avg('rating') ?? 0;
+    $baseScore = ($workloadPoints * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
+
+    // Calculate ML score with updated features
+    $mlScore = $this->calculateMLPriorityScore($employee, $manpowerRequest);
+
+    // Combine scores (70% ML + 30% base)
+    $finalScore = ($mlScore * 0.7) + ($baseScore * 0.3);
+
+    return (object) [
+        'id' => $employee->id,
+        'name' => $employee->name,
+        'gender' => $gender,
+        'type' => $employee->type,
+        'workload_points' => $workloadPoints,
+        'blind_test_points' => $blindTestPoints,
+        'average_rating' => $averageRating,
+        'base_score' => $baseScore,
+        'ml_score' => $mlScore,
+        'final_score' => $finalScore,
+        'is_same_subsection' => $isSameSubSection,
+        'subSections' => $employee->subSections ?? collect(),
+        // Enhanced work days and shift history
+        'work_days_14_days' => $workDays14Days,
+        'work_days_30_days' => $workDays30Days,
+        'last_5_shifts' => $last5Shifts,
+        'shift_priority' => $this->calculateShiftPriority($employee, $manpowerRequest), // NEW
+    ];
+}
 
     /**
      * Sort employees with ML-enhanced strategy

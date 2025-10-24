@@ -8,6 +8,7 @@ use Phpml\Regression\LeastSquares;
 use Phpml\Dataset\ArrayDataset;
 use Phpml\Metric\Accuracy;
 use Phpml\ModelManager;
+use Phpml\Preprocessing\Normalizer;
 use Illuminate\Support\Facades\Log;
 
 class PHPMachineLearning
@@ -16,16 +17,23 @@ class PHPMachineLearning
     private $regressor;
     private $isTrained = false;
     private $modelPath;
+    private $normalizer;
 
     public function __construct()
     {
         $this->modelPath = storage_path('app/ml_models/');
         $this->ensureDirectoryExists();
+        $this->normalizer = new Normalizer();
     }
 
     public function train(array $trainingData)
     {
         try {
+            // Validate and prepare data
+            if (count($trainingData) < 10) {
+                throw new \Exception("Insufficient training data. Need at least 10 records.");
+            }
+
             $samples = [];
             $labels = [];
             $targets = [];
@@ -39,25 +47,35 @@ class PHPMachineLearning
 
             $this->info("Training with " . count($samples) . " samples");
 
-            // Train Decision Tree Classifier with regularization
+            // Normalize samples to prevent singular matrix
+            $this->normalizer->fit($samples);
+            $normalizedSamples = $this->normalizer->transform($samples);
+
+            // Remove any potential NaN or infinite values
+            $cleanedSamples = $this->cleanSamples($normalizedSamples);
+
+            // Train Decision Tree Classifier
             $this->classifier = new DecisionTree(
-                10,      // max depth
-                5,       // min samples split
-                0.0001   // min impurity decrease (regularization)
+                8,       // Reduced max depth
+                3,       // Reduced min samples split
+                0.001    // Increased min impurity decrease
             );
 
-            $this->classifier->train($samples, $labels);
+            $this->classifier->train($cleanedSamples, $labels);
 
-            // Train Linear Regression with regularization
-            // Use only non-collinear features for regression
+            // For regression, use only non-collinear features
             $regressionSamples = $this->prepareRegressionFeatures($trainingData);
+            $this->normalizer->fit($regressionSamples);
+            $normalizedRegSamples = $this->normalizer->transform($regressionSamples);
+            $cleanedRegSamples = $this->cleanSamples($normalizedRegSamples);
+
             $this->regressor = new LeastSquares();
-            $this->regressor->train($regressionSamples, $targets);
+            $this->regressor->train($cleanedRegSamples, $targets);
 
             $this->isTrained = true;
 
-            // Test accuracy
-            $predictions = $this->classifier->predict($samples);
+            // Calculate accuracy
+            $predictions = $this->classifier->predict($cleanedSamples);
             $accuracy = Accuracy::score($labels, $predictions);
 
             $this->saveModels();
@@ -80,19 +98,24 @@ class PHPMachineLearning
 
     private function prepareFeatures(array $item)
     {
-        // Remove collinear features and add some noise to prevent singularity
+        // Use carefully selected non-collinear features
         return [
-            floatval($item['work_days_count'] ?? 0) + $this->addSmallNoise(),
+            // Core performance features
+            floatval($item['work_days_count'] ?? 0),
             floatval($item['rating_value'] ?? 3.0),
             floatval($item['test_score'] ?? 0.0),
-            // Remove one of the collinear features (gender/employee_type)
-            floatval($item['employee_type'] ?? 0),
-            // Combine subsection and section into one feature to avoid collinearity
+            
+            // Single section feature (combined to avoid collinearity)
             $this->combineSectionFeatures(
                 floatval($item['same_subsection'] ?? 0),
                 floatval($item['same_section'] ?? 0)
             ),
-            floatval($item['current_workload'] ?? 0) + $this->addSmallNoise(),
+            
+            // Workload and shift features
+            floatval($item['current_workload'] ?? 0),
+            floatval($item['shift_priority'] ?? 0.5)
+            
+            // Removed: gender, employee_type (potentially collinear or low importance)
         ];
     }
 
@@ -100,12 +123,13 @@ class PHPMachineLearning
     {
         $samples = [];
         foreach ($trainingData as $item) {
-            // Use only non-collinear features for regression
+            // Use only clearly independent features for regression
             $samples[] = [
-                floatval($item['work_days_count'] ?? 0) + $this->addSmallNoise(),
+                floatval($item['work_days_count'] ?? 0),
                 floatval($item['rating_value'] ?? 3.0),
                 floatval($item['test_score'] ?? 0.0),
-                floatval($item['current_workload'] ?? 0) + $this->addSmallNoise(),
+                floatval($item['current_workload'] ?? 0),
+                floatval($item['shift_priority'] ?? 0.5)
             ];
         }
         return $samples;
@@ -113,16 +137,28 @@ class PHPMachineLearning
 
     private function combineSectionFeatures($sameSubsection, $sameSection)
     {
-        // Combine into single feature: 2=same subsection, 1=same section, 0=neither
-        if ($sameSubsection > 0) return 2.0;
-        if ($sameSection > 0) return 1.0;
-        return 0.0;
+        // Combine into single feature with clear hierarchy
+        if ($sameSubsection > 0) return 2.0;  // Highest priority
+        if ($sameSection > 0) return 1.0;     // Medium priority
+        return 0.0;                           // Lowest priority
     }
 
-    private function addSmallNoise()
+    private function cleanSamples($samples)
     {
-        // Add tiny random noise to prevent perfect collinearity
-        return (mt_rand(0, 1000) / 1000000); // 0.000001 to 0.001
+        $cleaned = [];
+        foreach ($samples as $sample) {
+            $cleanSample = [];
+            foreach ($sample as $value) {
+                // Replace NaN and infinite values with 0
+                if (is_nan($value) || is_infinite($value)) {
+                    $cleanSample[] = 0.0;
+                } else {
+                    $cleanSample[] = $value;
+                }
+            }
+            $cleaned[] = $cleanSample;
+        }
+        return $cleaned;
     }
 
     public function predict(array $features)
@@ -142,20 +178,18 @@ class PHPMachineLearning
                 $samples[] = $this->prepareFeatures($featureSet);
             }
 
+            // Normalize samples for prediction
+            $normalizedSamples = $this->normalizer->transform($samples);
+            $cleanedSamples = $this->cleanSamples($normalizedSamples);
+
             // Get classifier predictions
-            $rfPredictions = $this->classifier->predict($samples);
+            $rfPredictions = $this->classifier->predict($cleanedSamples);
             
-            // Get regression scores (using reduced feature set)
-            $regressionSamples = [];
-            foreach ($features as $featureSet) {
-                $regressionSamples[] = [
-                    floatval($featureSet['work_days_count'] ?? 0),
-                    floatval($featureSet['rating_value'] ?? 3.0),
-                    floatval($featureSet['test_score'] ?? 0.0),
-                    floatval($featureSet['current_workload'] ?? 0),
-                ];
-            }
-            $regScores = $this->regressor->predict($regressionSamples);
+            // Get regression scores
+            $regressionSamples = $this->prepareRegressionFeatures([$features[0]]);
+            $normalizedRegSamples = $this->normalizer->transform($regressionSamples);
+            $cleanedRegSamples = $this->cleanSamples($normalizedRegSamples);
+            $regScores = $this->regressor->predict($cleanedRegSamples);
 
             // Normalize regression scores to 0-1
             $minReg = min($regScores);
@@ -171,11 +205,10 @@ class PHPMachineLearning
                 }
             }
 
-            // Hybrid scoring with better probability estimation
+            // Hybrid scoring
             $predictions = [];
             for ($i = 0; $i < count($rfPredictions); $i++) {
-                // Use confidence from decision tree depth or other heuristics
-                $rfScore = $this->estimateTreeConfidence($rfPredictions[$i], $samples[$i]);
+                $rfScore = $rfPredictions[$i] == 1 ? 0.7 : 0.3;
                 $predictions[] = 0.6 * $rfScore + 0.4 * $normalizedRegScores[$i];
             }
 
@@ -187,49 +220,35 @@ class PHPMachineLearning
         }
     }
 
-    private function estimateTreeConfidence($prediction, $features)
-    {
-        // Simple confidence estimation based on feature values
-        // You can enhance this based on your domain knowledge
-        $baseConfidence = $prediction == 1 ? 0.7 : 0.3;
-        
-        // Adjust confidence based on strong indicators
-        if ($features[2] > 0.8) { // test_score
-            $baseConfidence += 0.1;
-        }
-        if ($features[4] == 2.0) { // same subsection
-            $baseConfidence += 0.15;
-        }
-        
-        return min(0.95, max(0.05, $baseConfidence));
-    }
-
     private function fallbackPrediction($features)
     {
-        // Simple rule-based fallback
         $predictions = [];
         foreach ($features as $featureSet) {
             $score = 0.0;
             
             // Work days count (fewer days = higher priority)
             $workDays = $featureSet['work_days_count'] ?? 0;
-            $score += max(0, 1 - ($workDays / 22)) * 0.3;
+            $score += max(0, 1 - ($workDays / 22)) * 0.25;
             
             // Rating value
             $rating = $featureSet['rating_value'] ?? 3.0;
-            $score += ($rating / 5) * 0.25;
+            $score += ($rating / 5) * 0.2;
             
             // Test score
             $testScore = $featureSet['test_score'] ?? 0.0;
-            $score += $testScore * 0.2;
+            $score += $testScore * 0.15;
             
             // Section match (combined)
             $sameSubsection = $featureSet['same_subsection'] ?? 0;
             $sameSection = $featureSet['same_section'] ?? 0;
             $sectionScore = 0.0;
-            if ($sameSubsection > 0) $sectionScore = 0.2;
+            if ($sameSubsection > 0) $sectionScore = 0.15;
             elseif ($sameSection > 0) $sectionScore = 0.1;
             $score += $sectionScore;
+            
+            // Shift priority
+            $shiftPriority = $featureSet['shift_priority'] ?? 0.5;
+            $score += $shiftPriority * 0.25;
             
             $predictions[] = min(1.0, max(0.0, $score));
         }
@@ -248,13 +267,16 @@ class PHPMachineLearning
             // Save regressor
             $modelManager->saveToFile($this->regressor, $this->modelPath . 'regressor.phpml');
             
+            // Save normalizer
+            $modelManager->saveToFile($this->normalizer, $this->modelPath . 'normalizer.phpml');
+            
             // Save training status
             file_put_contents(
                 $this->modelPath . 'training_status.json',
                 json_encode([
                     'is_trained' => true, 
                     'updated_at' => now()->toISOString(),
-                    'feature_count' => 6 // Updated feature count
+                    'feature_count' => 6
                 ])
             );
 
@@ -272,10 +294,12 @@ class PHPMachineLearning
             $modelManager = new ModelManager();
             
             if (file_exists($this->modelPath . 'classifier.phpml') &&
-                file_exists($this->modelPath . 'regressor.phpml')) {
+                file_exists($this->modelPath . 'regressor.phpml') &&
+                file_exists($this->modelPath . 'normalizer.phpml')) {
                 
                 $this->classifier = $modelManager->restoreFromFile($this->modelPath . 'classifier.phpml');
                 $this->regressor = $modelManager->restoreFromFile($this->modelPath . 'regressor.phpml');
+                $this->normalizer = $modelManager->restoreFromFile($this->modelPath . 'normalizer.phpml');
                 $this->isTrained = true;
                 
                 return true;
@@ -317,6 +341,7 @@ class PHPMachineLearning
             $files = [
                 $this->modelPath . 'classifier.phpml',
                 $this->modelPath . 'regressor.phpml',
+                $this->modelPath . 'normalizer.phpml',
                 $this->modelPath . 'training_status.json'
             ];
 

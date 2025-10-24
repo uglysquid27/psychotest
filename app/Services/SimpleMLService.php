@@ -23,21 +23,22 @@ class SimpleMLService
         $this->loadModel();
     }
 
-    private function initializeWeights()
-    {
-        // Initialize with reasonable weights based on domain knowledge
-        $this->weights = [
-            'work_days_count' => -0.3,  // Negative: fewer days = better
-            'rating_value' => 0.25,     // Positive: higher rating = better
-            'test_score' => 0.2,        // Positive: passed test = better
-            'gender' => 0.0,            // Neutral by default
-            'employee_type' => 0.1,     // Slight preference for bulanan
-            'same_subsection' => 0.15,  // Positive: same subsection = better
-            'same_section' => 0.1,      // Positive: same section = better
-            'current_workload' => -0.2  // Negative: lower workload = better
-        ];
-        $this->bias = 0.5;
-    }
+   private function initializeWeights()
+{
+    // Initialize with reasonable weights based on domain knowledge
+    $this->weights = [
+        'work_days_count' => -0.3,  // Negative: fewer days = better
+        'rating_value' => 0.25,     // Positive: higher rating = better
+        'test_score' => 0.2,        // Positive: passed test = better
+        'gender' => 0.0,            // Neutral by default
+        'employee_type' => 0.1,     // Slight preference for bulanan
+        'same_subsection' => 0.15,  // Positive: same subsection = better
+        'same_section' => 0.1,      // Positive: same section = better
+        'current_workload' => -0.2, // Negative: lower workload = better
+        'shift_priority' => 0.25    // NEW: Positive: higher shift priority = better
+    ];
+    $this->bias = 0.5;
+}
 
     public function train(array $trainingData)
     {
@@ -176,19 +177,21 @@ class SimpleMLService
         }
     }
 
-    private function extractFeatures($item)
-    {
-        return [
-            'work_days_count' => floatval($item['work_days_count'] ?? 0),
-            'rating_value' => floatval($item['rating_value'] ?? 3.0) / 5.0, // Normalize to 0-1
-            'test_score' => floatval($item['test_score'] ?? 0.0),
-            'gender' => floatval($item['gender'] ?? 0),
-            'employee_type' => floatval($item['employee_type'] ?? 0),
-            'same_subsection' => floatval($item['same_subsection'] ?? 0),
-            'same_section' => floatval($item['same_section'] ?? 0),
-            'current_workload' => min(1.0, floatval($item['current_workload'] ?? 0) / 100.0) // Normalize and cap at 1.0
-        ];
-    }
+    
+private function extractFeatures($item)
+{
+    return [
+        'work_days_count' => floatval($item['work_days_count'] ?? 0),
+        'rating_value' => floatval($item['rating_value'] ?? 3.0) / 5.0, // Normalize to 0-1
+        'test_score' => floatval($item['test_score'] ?? 0.0),
+        'gender' => floatval($item['gender'] ?? 0),
+        'employee_type' => floatval($item['employee_type'] ?? 0),
+        'same_subsection' => floatval($item['same_subsection'] ?? 0),
+        'same_section' => floatval($item['same_section'] ?? 0),
+        'current_workload' => min(1.0, floatval($item['current_workload'] ?? 0)),
+        'shift_priority' => floatval($item['shift_priority'] ?? 0.5) // NEW: Add shift priority
+    ];
+}
 
     private function calculateAccuracy($trainingData)
     {
