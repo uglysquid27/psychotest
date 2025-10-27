@@ -328,6 +328,14 @@ export default function Fulfill({
     const [activeBulkRequest, setActiveBulkRequest] = useState(null);
     const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
 
+    // Check if there are any currently scheduled employees
+    const hasScheduledEmployees = useMemo(() => {
+        return selectedIds.some(id => {
+            const emp = allSortedEligibleEmployees.find(e => String(e.id) === id);
+            return emp?.isCurrentlyScheduled;
+        });
+    }, [selectedIds, allSortedEligibleEmployees]);
+
     useEffect(() => {
         const allValidRequestIds = new Set();
 
@@ -1159,20 +1167,6 @@ export default function Fulfill({
                     <div className="flex justify-between items-center">
                         <h2 className="font-semibold text-gray-800 dark:text-gray-200 text-xl">
                             Penuhi Request Man Power
-                            {ml_status && (
-                                <span
-                                    className={`ml-2 text-xs px-2 py-1 rounded-full ${
-                                        ml_status === "trained"
-                                            ? "bg-green-100 text-green-800 dark:bg-green-800/30 dark:text-green-300"
-                                            : "bg-yellow-100 text-yellow-800 dark:bg-yellow-800/30 dark:text-yellow-300"
-                                    }`}
-                                >
-                                    ML:{" "}
-                                    {ml_status === "trained"
-                                        ? `Trained (${ml_accuracy}%)`
-                                        : "Not Trained"}
-                                </span>
-                            )}
                         </h2>
                     </div>
                 }
@@ -1210,20 +1204,23 @@ export default function Fulfill({
                     <h2 className="font-semibold text-gray-800 dark:text-gray-200 text-xl">
                         Penuhi Request Man Power
                     </h2>
-                    <div className="flex items-center space-x-4">
-                        <button
-                            onClick={toggleBulkMode}
-                            className={`px-4 py-2 rounded-md font-medium transition-colors ${
-                                bulkMode
-                                    ? "bg-purple-600 hover:bg-purple-700 text-white"
-                                    : "bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
-                            }`}
-                        >
-                            {bulkMode
-                                ? "Keluar Mode Bulk"
-                                : "Mode Bulk Fulfill"}
-                        </button>
-                    </div>
+                    {/* Only show bulk mode button if there are no scheduled employees */}
+                    {!hasScheduledEmployees && (
+                        <div className="flex items-center space-x-4">
+                            <button
+                                onClick={toggleBulkMode}
+                                className={`px-4 py-2 rounded-md font-medium transition-colors ${
+                                    bulkMode
+                                        ? "bg-purple-600 hover:bg-purple-700 text-white"
+                                        : "bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
+                                }`}
+                            >
+                                {bulkMode
+                                    ? "Keluar Mode Bulk"
+                                    : "Mode Bulk Fulfill"}
+                            </button>
+                        </div>
+                    )}
                 </div>
             }
             user={auth.user}
@@ -1434,7 +1431,7 @@ export default function Fulfill({
                     multiSelectMode={multiSelectMode}
                     toggleMultiSelectMode={toggleMultiSelectMode}
                     isBulkMode={!!activeBulkRequest}
-                    isLoading={isLoadingEmployees} // Now this is defined
+                    isLoading={isLoadingEmployees}
                 />
             </div>
         </AuthenticatedLayout>
