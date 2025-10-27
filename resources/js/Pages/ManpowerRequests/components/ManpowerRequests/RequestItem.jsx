@@ -7,9 +7,9 @@ export default function RequestItem({
     getStatusClasses,
     onDelete,
     onRevision,
+    isAdmin,
 }) {
     const { auth } = usePage().props;
-    const isUser = auth.user.role === "user";
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const { delete: destroy, processing } = useForm();
 
@@ -29,17 +29,11 @@ export default function RequestItem({
                 // Call the parent's onDelete to update local state
                 if (onDelete) {
                     onDelete(request.id);
-                    console.log("ok");
                 }
-
-                // Show success message
-                // toast.success('Request deleted'); // You'll need to implement toast
                 setShowDeleteModal(false);
             },
             onError: () => {
-                // toast.error('Failed to delete'); // You'll need to implement toast
                 setShowDeleteModal(false);
-                console.log("lah");
             },
         });
     };
@@ -92,7 +86,7 @@ export default function RequestItem({
                         </Link>
 
                         {/* Fulfill Button - Only show for pending requests and admin users */}
-                        {request.status === "pending" && !isUser && (
+                        {request.status === "pending" && isAdmin && (
                             <Link
                                 href={route(
                                     "manpower-requests.fulfill",
@@ -118,8 +112,8 @@ export default function RequestItem({
                             </Link>
                         )}
 
-                        {/* Revise Button - Only show for fulfilled requests */}
-                        {request.status === "fulfilled" && (
+                        {/* Revise Button - Only show for fulfilled requests and admin users */}
+                        {request.status === "fulfilled" && isAdmin && (
                             <Link
                                 href={route(
                                     "manpower-requests.revise",
@@ -145,28 +139,30 @@ export default function RequestItem({
                             </Link>
                         )}
 
-                        {/* Delete Button - Always show */}
-                        <button
-                            onClick={() => setShowDeleteModal(true)}
-                            className="p-1.5 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                            title="Delete"
-                            disabled={processing}
-                        >
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="h-5 w-5"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
+                        {/* Delete Button - Only show for admin users */}
+                        
+                            <button
+                                onClick={() => setShowDeleteModal(true)}
+                                className="p-1.5 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                title="Delete"
+                                disabled={processing}
                             >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                />
-                            </svg>
-                        </button>
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    className="h-5 w-5"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                    />
+                                </svg>
+                            </button>
+                        
                     </div>
                 </div>
 
@@ -196,7 +192,7 @@ export default function RequestItem({
                 </div>
             </div>
 
-            {/* Delete Confirmation Modal */}
+            {/* Delete Confirmation Modal - Only show for admin */}
             {showDeleteModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
                     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-80 p-5">

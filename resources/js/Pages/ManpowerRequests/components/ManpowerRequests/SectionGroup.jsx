@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import DateGroup from './DateGroup';
 
-export default function SectionGroup({ section, requests, formatDate, getStatusClasses, onDelete, onRevision, isUser, initialOpen = false }) {
+export default function SectionGroup({ section, requests, formatDate, getStatusClasses, onDelete, onRevision, isUser, initialOpen = false, isAdmin }) {
   const [isOpen, setIsOpen] = useState(!!initialOpen);
   const [localRequests, setLocalRequests] = useState(requests); // state lokal
 
@@ -56,9 +56,10 @@ export default function SectionGroup({ section, requests, formatDate, getStatusC
               requests={requestsByDate[dateKey]}
               formatDate={formatDate}
               getStatusClasses={getStatusClasses}
-              onDelete={handleLocalDelete} // gunakan handler lokal
-              onRevision={onRevision}
+              onDelete={isAdmin ? handleLocalDelete : null}
+              onRevision={isAdmin ? onRevision : null}
               isUser={isUser}
+              isAdmin={isAdmin}
             />
           ))}
         </div>

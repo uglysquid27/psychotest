@@ -173,7 +173,13 @@ export default function AuthenticatedLayout({ header, children, hideSidebar = fa
 
     const isAdmin = user && user.role === 'admin';
     const isUser = user && user.role === 'user';
+    const isLogistic = user && user.role === 'logistic';
+    const isRmPm = user && user.role === 'rm/pm';
+    const isFsb = user && user.role === 'fsb';
     const isEmployee = user && typeof user.nik === 'string' && user.nik.trim() !== '';
+
+    // Combined check for user-level access (user, logistic, rm/pm, fsb)
+    const hasUserLevelAccess = isUser || isLogistic || isRmPm || isFsb;
 
     return (
         <div className="flex flex-col md:flex-row min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 dark:from-gray-900 dark:to-gray-800 font-sans antialiased transition-all duration-300">
@@ -231,7 +237,7 @@ export default function AuthenticatedLayout({ header, children, hideSidebar = fa
                     {/* Main Navigation */}
                     <nav className="flex flex-col flex-grow p-3 space-y-2 overflow-y-auto custom-scrollbar">
                         {/* Admin/User Links - Shown at the top */}
-                        {(isAdmin || isUser) && (
+                        {(isAdmin || hasUserLevelAccess) && (
                             <>
                                 <NavLink
                                     href={route('dashboard')}
@@ -243,10 +249,10 @@ export default function AuthenticatedLayout({ header, children, hideSidebar = fa
                                             : 'text-gray-700 dark:text-gray-200'
                                         }`}
                                 >
-                                    <span className="block">{isAdmin ? 'Admin Dashboard' : 'User Dashboard'}</span>
+                                    <span className="block">{isAdmin ? 'Admin Dashboard' : `${user?.role?.toUpperCase() || 'User'} Dashboard`}</span>
                                 </NavLink>
 
-                                {(isAdmin || isUser) && (
+                                {(isAdmin || hasUserLevelAccess) && (
                                     <>
                                         <NavLink
                                             href={route('manpower-requests.index')}
@@ -456,7 +462,7 @@ export default function AuthenticatedLayout({ header, children, hideSidebar = fa
                         )}
 
                         {/* Employee Links - Shown at the bottom */}
-                        {!isAdmin && !isUser && (
+                        {!isAdmin && !hasUserLevelAccess && (
                             <>
                                 <NavLink
                                     href={route('employee.dashboard')}
@@ -577,49 +583,63 @@ ${route().current('employee.license')
                 </aside>
             )}
 
-            {/* Overlay for mobile menu */}
-            {!hideSidebar && isMobileMenuOpen && (
+            {/* Main Content */}
+            <main className={`flex-1 transition-all duration-300 ${hideSidebar ? 'w-full' : ''}`}>
+                {/* Desktop Header */}
+                <header className="hidden md:flex items-center justify-between p-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm shadow-lg transition-colors duration-300">
+                    <div className="flex items-center space-x-4">
+                        {!hideSidebar && (
+                            <button
+                                onClick={toggleMobileMenu}
+                                className="text-gray-600 dark:text-gray-300 focus:outline-none transition-transform hover:scale-110"
+                                aria-label="Toggle menu"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                                </svg>
+                            </button>
+                        )}
+                        {header && (
+                            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 transition-colors duration-200">
+                                {header}
+                            </h2>
+                        )}
+                    </div>
+
+                    <div className="flex items-center space-x-4">
+                        <label htmlFor="theme-toggle-checkbox" className="flex items-center cursor-pointer transition-transform hover:scale-110" title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}>
+                            <div className="relative">
+                                <input
+                                    type="checkbox"
+                                    id="theme-toggle-checkbox"
+                                    className="sr-only"
+                                    checked={isDark}
+                                    onChange={toggleDarkMode}
+                                />
+                                <div className="block bg-gray-300 dark:bg-gray-700 w-12 h-7 rounded-full transition-colors duration-300 ease-in-out"></div>
+                                <div className={`dot absolute left-1 top-1 bg-white dark:bg-gray-300 w-5 h-5 rounded-full transition-all duration-300 ease-in-out transform ${isDark ? 'translate-x-full' : ''} flex items-center justify-center shadow-md`}>
+                                    {isDark ? <MoonIcon /> : <SunIcon />}
+                                </div>
+                            </div>
+                        </label>
+
+                        <ProfileDropdown user={user} isEmployee={isEmployee} />
+                    </div>
+                </header>
+
+                {/* Page Content */}
+                <div className="p-4 md:p-6 transition-all duration-300">
+                    {children}
+                </div>
+            </main>
+
+            {/* Overlay for mobile sidebar */}
+            {isMobileMenuOpen && (
                 <div
-                    className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 md:hidden transition-opacity duration-300 ease-in-out opacity-100"
+                    className="fixed inset-0 bg-black/50 z-30 md:hidden transition-opacity duration-300"
                     onClick={toggleMobileMenu}
                 ></div>
             )}
-
-            <div className="flex-1 flex flex-col">
-                {header && (
-                    <header className="hidden md:block bg-transparent px-4 sm:px-6 lg:px-8 pt-4 sticky top-0 z-50">
-                        <div className="p-4 shadow-xl rounded-2xl bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm flex justify-between items-center transition-colors duration-200 border border-white/50 dark:border-gray-700/50">
-                            <div className="flex-grow text-gray-800 dark:text-gray-200">
-                                {header}
-                            </div>
-
-                            <div className="flex items-center space-x-4">
-                                <label htmlFor="theme-toggle-checkbox-desktop" className="flex items-center cursor-pointer ml-4 transition-transform hover:scale-110" title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}>
-                                    <div className="relative">
-                                        <input
-                                            type="checkbox"
-                                            id="theme-toggle-checkbox-desktop"
-                                            className="sr-only"
-                                            checked={isDark}
-                                            onChange={toggleDarkMode}
-                                        />
-                                        <div className="block bg-gray-300 dark:bg-gray-700 w-12 h-7 sm:w-14 sm:h-8 rounded-full transition-colors duration-300 ease-in-out"></div>
-                                        <div className={`dot absolute left-1 top-1 bg-white dark:bg-gray-300 w-5 h-5 sm:w-6 sm:h-6 rounded-full transition-all duration-300 ease-in-out transform ${isDark ? 'translate-x-full sm:translate-x-6' : ''} flex items-center justify-center shadow-md`}>
-                                            {isDark ? <MoonIcon /> : <SunIcon />}
-                                        </div>
-                                    </div>
-                                </label>
-
-                                {/* Profile Dropdown for Desktop */}
-                                <ProfileDropdown user={user} isEmployee={isEmployee} />
-                            </div>
-                        </div>
-                    </header>
-                )}
-                <main className="">
-                    {children}
-                </main>
-            </div>
         </div>
     );
 }

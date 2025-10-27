@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import RequestItem from './RequestItem';
 
-export default function DateGroup({ date, requests, formatDate, getStatusClasses, onDelete, onRevision, isUser }) {
+export default function DateGroup({ date, requests, formatDate, getStatusClasses, onDelete, onRevision, isUser, isAdmin }) {
   const [isOpen, setIsOpen] = useState(false);
 
   const [localRequests, setLocalRequests] = useState(requests); // state lokal
@@ -60,8 +60,9 @@ export default function DateGroup({ date, requests, formatDate, getStatusClasses
                     request={request}
                     formatDate={formatDate}
                     getStatusClasses={getStatusClasses}
-                    onDelete={() => handleDelete(request.id)}
-                    onRevision={() => onRevision?.(request.id)}
+                    onDelete={isAdmin ? () => handleDelete(request.id) : null}
+                    onRevision={isAdmin ? () => onRevision?.(request.id) : null}
+                    isAdmin={isAdmin}
                   />
                 ))}
               </div>

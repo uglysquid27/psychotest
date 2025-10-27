@@ -1603,7 +1603,7 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
             ])
             ->with(['schedules.manPowerRequest.shift'])
             ->get()
-            ->map(function ($employee) {
+            ->map(function ($employee) use ($request) {
                 $totalWorkingHours = 0;
                 foreach ($employee->schedules as $schedule) {
                     if ($schedule->manPowerRequest && $schedule->manPowerRequest->shift) {
@@ -1641,9 +1641,9 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
     
                 // $totalScore = ($workloadPoints * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
     
-                $baseScore = $this->calculateBaseScore($employee, $weeklyScheduleCount);
-                $mlScore = $this->calculateMLPriorityScore($employee, $request);
-                $totalScore = ($mlScore * 0.7) + ($baseScore * 0.3);
+               $baseScore = $this->calculateBaseScore($employee, $weeklyScheduleCount);
+$mlScore = $this->calculateMLPriorityScore($employee, $request);
+$totalScore = ($mlScore * 0.7) + ($baseScore * 0.3);
 
                 $subSectionsData = $employee->subSections->map(function ($subSection) {
                     return [

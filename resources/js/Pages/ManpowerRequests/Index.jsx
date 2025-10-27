@@ -39,12 +39,14 @@ const LoadingOverlay = () => {
     );
 };
 
-const TableRowSkeleton = () => {
+const TableRowSkeleton = ({ isAdmin = true }) => {
     return (
         <tr className="animate-pulse">
-            <td className="px-6 py-4 whitespace-nowrap">
-                <div className="h-4 w-4 bg-gray-300 dark:bg-gray-600 rounded"></div>
-            </td>
+            {isAdmin && (
+                <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="h-4 w-4 bg-gray-300 dark:bg-gray-600 rounded"></div>
+                </td>
+            )}
             <td className="px-6 py-4 whitespace-nowrap">
                 <div className="h-4 w-32 bg-gray-300 dark:bg-gray-600 rounded"></div>
             </td>
@@ -72,6 +74,9 @@ const TableRowSkeleton = () => {
 
 export default function Index({ sections: initialSections, auth }) {
     const { delete: destroy } = useForm({});
+    const { auth: pageAuth } = usePage().props;
+    const user = pageAuth?.user || auth?.user || null;
+    
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [showDetailsModal, setShowDetailsModal] = useState(false);
     const [requestToDelete, setRequestToDelete] = useState(null);
@@ -96,7 +101,22 @@ export default function Index({ sections: initialSections, auth }) {
     const [deleteProcessing, setDeleteProcessing] = useState(false);
 
     const itemsPerPage = 10;
-    const user = auth?.user || null;
+
+    // Define user access levels
+    const isAdmin = user && user.role === 'admin';
+    const isUser = user && user.role === 'user';
+    const isLogistic = user && user.role === 'logistic';
+    const isRmPm = user && user.role === 'rm/pm';
+    const isFsb = user && user.role === 'fsb';
+    const isEmployee = user && typeof user.nik === 'string' && user.nik.trim() !== '';
+
+    // Role access mapping
+    const roleAccess = {
+        'logistic': ['Finished goods', 'Delivery', 'Loader', 'Operator Forklift', 'Inspeksi', 'Produksi'],
+        'rm/pm': ['RM/PM'],
+        'fsb': ['Food & Snackbar'],
+        'user': initialSections?.data ? initialSections.data.map(section => section.name) : []
+    };
 
     // Handle initial page load
     useEffect(() => {
@@ -156,11 +176,32 @@ export default function Index({ sections: initialSections, auth }) {
 
     const dateRange = getDateRange();
 
+    // Filter sections based on user role
+    const getFilteredSections = () => {
+        if (!localSections?.data) return [];
+        
+        if (isAdmin) {
+            // Admin can see all sections
+            return localSections.data;
+        }
+
+        // Get allowed sections for current user role
+        const userRole = user?.role;
+        const allowedSections = roleAccess[userRole] || [];
+
+        // Filter sections based on allowed section names
+        return localSections.data.filter(section => {
+            return allowedSections.includes(section.name);
+        });
+    };
+
     // Get all requests for bulk operations
     const allRequests = useMemo(() => {
-        if (!localSections?.data) return [];
+        const filteredSections = getFilteredSections();
+        if (!filteredSections || filteredSections.length === 0) return [];
+        
         const requests = [];
-        localSections.data.forEach((section) => {
+        filteredSections.forEach((section) => {
             (section.sub_sections || []).forEach((sub) => {
                 (sub.man_power_requests || []).forEach((req) => {
                     requests.push({
@@ -176,10 +217,12 @@ export default function Index({ sections: initialSections, auth }) {
 
     // Group requests by section and date
     const sectionDateGroups = useMemo(() => {
-        if (!localSections?.data) return [];
+        const filteredSections = getFilteredSections();
+        if (!filteredSections || filteredSections.length === 0) return [];
+        
         const groups = [];
 
-        localSections.data.forEach((section) => {
+        filteredSections.forEach((section) => {
             const dateMap = {};
             (section.sub_sections || []).forEach((sub) => {
                 (sub.man_power_requests || []).forEach((req) => {
@@ -285,34 +328,34 @@ export default function Index({ sections: initialSections, auth }) {
     };
 
     const handleBulkDelete = async () => {
-    if (selectedRequests.length === 0) return;
+        if (selectedRequests.length === 0) return;
 
-    try {
-        setDeleteProcessing(true);
+        try {
+            setDeleteProcessing(true);
 
-        await axios.post(route("manpower-requests.bulk-delete"), {
-            request_ids: selectedRequests,
-        });
+            await axios.post(route("manpower-requests.bulk-delete"), {
+                request_ids: selectedRequests,
+            });
 
-        toast.success(
-            `${selectedRequests.length} requests deleted successfully`
-        );
+            toast.success(
+                `${selectedRequests.length} requests deleted successfully`
+            );
 
-        // Clear selection and close modal
-        setSelectedRequests([]);
-        setShowBulkDeleteModal(false);
-        
-        // Reload the page after successful delete to ensure fresh data
-        window.location.reload();
-        
-    } catch (error) {
-        console.error("Bulk delete error:", error);
-        toast.error(
-            error.response?.data?.message || "Failed to delete requests"
-        );
-        setDeleteProcessing(false);
-    }
-};
+            // Clear selection and close modal
+            setSelectedRequests([]);
+            setShowBulkDeleteModal(false);
+            
+            // Reload the page after successful delete to ensure fresh data
+            window.location.reload();
+            
+        } catch (error) {
+            console.error("Bulk delete error:", error);
+            toast.error(
+                error.response?.data?.message || "Failed to delete requests"
+            );
+            setDeleteProcessing(false);
+        }
+    };
 
     const handleBulkResultClose = () => {
         setShowBulkResultModal(false);
@@ -423,39 +466,39 @@ export default function Index({ sections: initialSections, auth }) {
     };
 
     const confirmDelete = () => {
-    if (!requestToDelete) return;
-    destroy(route("manpower-requests.destroy", requestToDelete), {
-        preserveScroll: true,
-        onSuccess: () => {
-            setLocalSections((prev) => {
-                const updated = { ...prev };
-                updated.data = updated.data.map((section) => ({
-                    ...section,
-                    sub_sections: section.sub_sections.map((sub) => ({
-                        ...sub,
-                        man_power_requests: sub.man_power_requests.filter(
-                            (req) => req.id !== requestToDelete
-                        ),
-                    })),
-                }));
-                return updated;
-            });
+        if (!requestToDelete) return;
+        destroy(route("manpower-requests.destroy", requestToDelete), {
+            preserveScroll: true,
+            onSuccess: () => {
+                setLocalSections((prev) => {
+                    const updated = { ...prev };
+                    updated.data = updated.data.map((section) => ({
+                        ...section,
+                        sub_sections: section.sub_sections.map((sub) => ({
+                            ...sub,
+                            man_power_requests: sub.man_power_requests.filter(
+                                (req) => req.id !== requestToDelete
+                            ),
+                        })),
+                    }));
+                    return updated;
+                });
 
-            setRefreshTrigger((prev) => prev + 1);
-            toast.success("Request deleted");
-            setShowDeleteModal(false);
-            setRequestToDelete(null);
-            
-            // Reload the page after successful delete
-            window.location.reload();
-        },
-        onError: () => {
-            toast.error("Failed to delete");
-            setShowDeleteModal(false);
-            setRequestToDelete(null);
-        },
-    });
-};
+                setRefreshTrigger((prev) => prev + 1);
+                toast.success("Request deleted");
+                setShowDeleteModal(false);
+                setRequestToDelete(null);
+                
+                // Reload the page after successful delete
+                window.location.reload();
+            },
+            onError: () => {
+                toast.error("Failed to delete");
+                setShowDeleteModal(false);
+                setRequestToDelete(null);
+            },
+        });
+    };
 
     const openDetails = (group) => {
         setSelectedGroup(group);
@@ -485,7 +528,7 @@ export default function Index({ sections: initialSections, auth }) {
     if (isInitialLoading) {
         return (
             <AuthenticatedLayout
-                user={auth.user}
+                user={user}
                 header={
                     <h2 className="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
                         Manpower Requests
@@ -499,7 +542,7 @@ export default function Index({ sections: initialSections, auth }) {
 
     return (
         <AuthenticatedLayout
-            user={auth.user}
+            user={user}
             header={
                 <h2 className="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
                     Manpower Requests
@@ -545,6 +588,11 @@ export default function Index({ sections: initialSections, auth }) {
                                         className="text-xl sm:text-2xl font-bold text-gray-700 dark:text-gray-300 mb-4 sm:mb-0"
                                     >
                                         Manpower Requests
+                                        {!isAdmin && (
+                                            <span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2">
+                                                ({user?.role?.toUpperCase() || 'User'} View)
+                                            </span>
+                                        )}
                                     </motion.h1>
                                     <div className="flex items-center space-x-3 mb-4 sm:mb-0">
                                         <span className="text-sm text-gray-600 dark:text-gray-400">
@@ -578,28 +626,6 @@ export default function Index({ sections: initialSections, auth }) {
                                         </div>
                                     </div>
                                     <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
-                                        {/* {selectedRequests.length > 0 && (
-                                            <motion.button
-                                                initial={{
-                                                    opacity: 0,
-                                                    scale: 0.8,
-                                                }}
-                                                animate={{
-                                                    opacity: 1,
-                                                    scale: 1,
-                                                }}
-                                                onClick={() =>
-                                                    setShowBulkPreviewModal(
-                                                        true
-                                                    )
-                                                }
-                                                className="px-4 py-2 bg-green-600 dark:bg-green-500 text-white rounded-md hover:bg-green-700 dark:hover:bg-green-600"
-                                            >
-                                                Bulk Fulfill (
-                                                {selectedRequests.length})
-                                            </motion.button>
-                                        )} */}
-
                                         <motion.div
                                             initial={{ opacity: 0, x: 20 }}
                                             animate={{ opacity: 1, x: 0 }}
@@ -631,9 +657,9 @@ export default function Index({ sections: initialSections, auth }) {
                                     </div>
                                 </div>
 
-                                {/* Bulk mode controls */}
+                                {/* Bulk mode controls - Only for admin */}
                                 <AnimatePresence>
-                                    {selectedRequests.length > 0 ? (
+                                    {isAdmin && selectedRequests.length > 0 ? (
                                         <motion.div
                                             initial={{ opacity: 0, height: 0 }}
                                             animate={{
@@ -900,12 +926,14 @@ export default function Index({ sections: initialSections, auth }) {
                                             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                                 <thead className="bg-gray-50 dark:bg-gray-700">
                                                     <tr>
-                                                        <th
-                                                            scope="col"
-                                                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
-                                                        >
-                                                            Select
-                                                        </th>
+                                                        {isAdmin && (
+                                                            <th
+                                                                scope="col"
+                                                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                                                            >
+                                                                Select
+                                                            </th>
+                                                        )}
                                                         <th
                                                             scope="col"
                                                             className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
@@ -950,6 +978,7 @@ export default function Index({ sections: initialSections, auth }) {
                                                     }).map((_, index) => (
                                                         <TableRowSkeleton
                                                             key={index}
+                                                            isAdmin={isAdmin}
                                                         />
                                                     ))}
                                                 </tbody>
@@ -979,7 +1008,7 @@ export default function Index({ sections: initialSections, auth }) {
                                                 />
                                             </svg>
                                             <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-                                                No manpower requests found.
+                                                No manpower requests found for your access level.
                                             </p>
                                             <Link
                                                 href={route(
@@ -1003,12 +1032,14 @@ export default function Index({ sections: initialSections, auth }) {
                                             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                                 <thead className="bg-gray-50 dark:bg-gray-700">
                                                     <tr>
-                                                        <th
-                                                            scope="col"
-                                                            className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
-                                                        >
-                                                            Select
-                                                        </th>
+                                                        {isAdmin && (
+                                                            <th
+                                                                scope="col"
+                                                                className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider"
+                                                            >
+                                                                Select
+                                                            </th>
+                                                        )}
                                                         <th
                                                             scope="col"
                                                             className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer"
@@ -1107,16 +1138,19 @@ export default function Index({ sections: initialSections, auth }) {
                                                                 transition={{ duration: 0.3, delay: idx * 0.05 }}
                                                                 className="hover:bg-gray-50 dark:hover:bg-gray-700"
                                                             >
-                                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={isGroupFullySelected(group)}
-                                                                        onChange={(e) =>
-                                                                            handleSelectAllForDate(group.requests, e.target.checked)
-                                                                        }
-                                                                        className="rounded text-blue-600 dark:text-blue-500 focus:ring-blue-500 dark:focus:ring-blue-400"
-                                                                    />
-                                                                </td>
+                                                                {/* Select checkbox - Only for admin */}
+                                                                {isAdmin && (
+                                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={isGroupFullySelected(group)}
+                                                                            onChange={(e) =>
+                                                                                handleSelectAllForDate(group.requests, e.target.checked)
+                                                                            }
+                                                                            className="rounded text-blue-600 dark:text-blue-500 focus:ring-blue-500 dark:focus:ring-blue-400"
+                                                                        />
+                                                                    </td>
+                                                                )}
                                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                                                                     {group.sectionName}
                                                                 </td>
@@ -1255,18 +1289,11 @@ export default function Index({ sections: initialSections, auth }) {
                                         requests={selectedGroup.requests}
                                         formatDate={formatDate}
                                         getStatusClasses={getStatusClasses}
-                                        onDelete={requestDelete}
-                                        onRevision={() => {}}
-                                        isUser={!!user}
+                                        onDelete={isAdmin ? requestDelete : null}
+                                        onRevision={isAdmin ? () => {} : null}
+                                        isUser={!isAdmin}
                                         initialOpen
-                                        quickFulfill={quickFulfill}
-                                        processingRequests={processingRequests}
-                                        bulkMode={true}
-                                        selectedRequests={selectedRequests}
-                                        handleRequestSelect={
-                                            handleRequestSelect
-                                        }
-                                        canRevise={true}
+                                        isAdmin={isAdmin}
                                     />
                                 </div>
                             </div>
@@ -1287,8 +1314,8 @@ export default function Index({ sections: initialSections, auth }) {
                 </div>
             )}
 
-            {/* Bulk Delete Confirmation Modal */}
-            {showBulkDeleteModal && (
+            {/* Bulk Delete Confirmation Modal - Only for admin */}
+            {isAdmin && showBulkDeleteModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
                     <motion.div
                         initial={{ opacity: 0, scale: 0.9 }}
@@ -1358,8 +1385,8 @@ export default function Index({ sections: initialSections, auth }) {
                 </div>
             )}
 
-            {/* Bulk Fulfill Modal */}
-            {showBulkPreviewModal && (
+            {/* Bulk Fulfill Modal - Only for admin */}
+            {isAdmin && showBulkPreviewModal && (
                 <BulkFulfillPreviewModal
                     open={showBulkPreviewModal}
                     onClose={() => {

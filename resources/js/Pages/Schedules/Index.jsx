@@ -143,7 +143,7 @@ const ManPowerRequestDetailModal = ({ request, assignedEmployees, onClose }) => 
     );
 };
 
-const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility }) => {
+const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility, user }) => {
     const [isToggling, setIsToggling] = useState(false);
     const [shiftPages, setShiftPages] = useState({});
     const itemsPerPage = 5;
@@ -209,7 +209,6 @@ const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility }) 
         }
     };
 
-
     const changeShiftPage = (shiftName, page) => {
         setShiftPages(prev => ({
             ...prev,
@@ -229,6 +228,9 @@ const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility }) 
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3l18 18M9.88 9.88A3 3 0 0012 15a3 3 0 002.12-5.12M6.1 6.1A9.956 9.956 0 002 12c1.274 4.057 5.064 7 10 7 1.42 0 2.77-.296 3.96-.83M17.9 17.9A9.956 9.956 0 0022 12a9.956 9.956 0 00-4.1-5.9" />
         </svg>
     );
+
+    // Check if user is admin
+    const isAdmin = user?.role === 'admin';
 
     return (
         <div className="rounded-lg bg-white p-4 shadow-md dark:bg-gray-800 dark:shadow-lg border border-gray-200 dark:border-gray-700">
@@ -312,7 +314,8 @@ const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility }) 
                 })
             )}
 
-            {Object.keys(shifts).length > 0 && (
+            {/* Only show visibility controls for admin users */}
+            {isAdmin && Object.keys(shifts).length > 0 && (
                 <div className="mt-4 flex justify-between items-center">
                     <span className="text-sm text-gray-700 dark:text-gray-300">
                         Visibility: <strong className="text-gray-900 dark:text-white">{currentVisibility}</strong>
@@ -342,6 +345,9 @@ const ScheduleSection = ({ title, shifts, date, sectionId, currentVisibility }) 
 
 const Index = () => {
     const { schedules, filters, sections, subSections } = usePage().props;
+    const { auth } = usePage().props;
+    const user = auth?.user;
+    
     const [startDate, setStartDate] = useState(filters.start_date || '');
     const [endDate, setEndDate] = useState(filters.end_date || '');
     const [selectedSection, setSelectedSection] = useState(filters.section || '');
@@ -351,6 +357,41 @@ const Index = () => {
     const [isInitialLoading, setIsInitialLoading] = useState(false);
 
     const itemsPerPage = 3;
+
+    // Define role-based section access
+    const getAccessibleSections = () => {
+        if (!user) return [];
+
+        const userRole = user.role;
+        
+        // Admin can access all sections
+        if (userRole === 'admin') {
+            return sections;
+        }
+
+        // Define role-based section access
+        const roleAccess = {
+            'logistic': ['Finished goods', 'Delivery', 'Loader', 'Operator Forklift', 'Inspeksi', 'Produksi'],
+            'rm/pm': ['RM/PM'],
+            'fsb': ['Food & Snackbar'],
+            'user': sections.map(section => section.name) // Regular users can access all sections
+        };
+
+        // If role has specific access defined, filter sections
+        if (roleAccess[userRole]) {
+            return sections.filter(section => 
+                roleAccess[userRole].includes(section.name)
+            );
+        }
+
+        // Default: no access if role not defined
+        return [];
+    };
+
+    const accessibleSections = getAccessibleSections();
+
+    // Check if user is admin for filter controls
+    const isAdmin = user?.role === 'admin';
 
     // Handle initial page load
     useEffect(() => {
@@ -383,6 +424,10 @@ const Index = () => {
             const shiftName = schedule.man_power_request.shift.name;
             const visibility = schedule.visibility;
 
+            // Filter schedules based on accessible sections
+            const isSectionAccessible = accessibleSections.some(section => section.name === sectionName);
+            if (!isSectionAccessible) return acc;
+
             if (!acc[dateKey]) {
                 acc[dateKey] = { displayDate, sections: {} };
             }
@@ -402,7 +447,7 @@ const Index = () => {
 
             return acc;
         }, {});
-    }, [schedules]);
+    }, [schedules, accessibleSections]);
 
     const sortedDates = useMemo(() =>
         Object.keys(groupedSchedulesByDateSectionShift).sort((a, b) =>
@@ -478,96 +523,99 @@ const Index = () => {
                     Agenda Penjadwalan
                 </motion.h1>
 
-                <motion.div 
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.1 }}
-                    className="mb-6 rounded-lg bg-white p-4 shadow-md dark:bg-gray-800 dark:shadow-lg border border-gray-200 dark:border-gray-700"
-                >
-                    {/* Filter section remains the same */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                        <div>
-                            <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Dari Tanggal:</label>
-                            <input
-                                type="date"
-                                id="startDate"
-                                value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
-                                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
-                            />
-                        </div>
+                {/* Only show filter section for admin users */}
+                {isAdmin && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 0.1 }}
+                        className="mb-6 rounded-lg bg-white p-4 shadow-md dark:bg-gray-800 dark:shadow-lg border border-gray-200 dark:border-gray-700"
+                    >
+                        {/* Filter section */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                            <div>
+                                <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Dari Tanggal:</label>
+                                <input
+                                    type="date"
+                                    id="startDate"
+                                    value={startDate}
+                                    onChange={(e) => setStartDate(e.target.value)}
+                                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
+                                />
+                            </div>
 
-                        <div>
-                            <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sampai Tanggal:</label>
-                            <input
-                                type="date"
-                                id="endDate"
-                                value={endDate}
-                                onChange={(e) => setEndDate(e.target.value)}
-                                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
-                            />
-                        </div>
+                            <div>
+                                <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sampai Tanggal:</label>
+                                <input
+                                    type="date"
+                                    id="endDate"
+                                    value={endDate}
+                                    onChange={(e) => setEndDate(e.target.value)}
+                                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
+                                />
+                            </div>
 
-                        <div>
-                            <label htmlFor="section" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Section:</label>
-                            <select
-                                id="section"
-                                value={selectedSection}
-                                onChange={(e) => {
-                                    setSelectedSection(e.target.value);
-                                    setSelectedSubSection('');
-                                }}
-                                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
-                            >
-                                <option value="">Semua Section</option>
-                                {sections.map(section => (
-                                    <option key={section.id} value={section.id}>{section.name}</option>
-                                ))}
-                            </select>
-                        </div>
+                            <div>
+                                <label htmlFor="section" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Section:</label>
+                                <select
+                                    id="section"
+                                    value={selectedSection}
+                                    onChange={(e) => {
+                                        setSelectedSection(e.target.value);
+                                        setSelectedSubSection('');
+                                    }}
+                                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
+                                >
+                                    <option value="">Semua Section</option>
+                                    {accessibleSections.map(section => (
+                                        <option key={section.id} value={section.id}>{section.name}</option>
+                                    ))}
+                                </select>
+                            </div>
 
-                        <div>
-                            <label htmlFor="subSection" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sub Section:</label>
-                            <select
-                                id="subSection"
-                                value={selectedSubSection}
-                                onChange={(e) => setSelectedSubSection(e.target.value)}
-                                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
-                            >
-                                <option value="">Semua Sub Section</option>
-                                {filteredSubSections.map(subSection => (
-                                    <option key={subSection.id} value={subSection.id}>{subSection.name}</option>
-                                ))}
-                            </select>
-                        </div>
+                            <div>
+                                <label htmlFor="subSection" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sub Section:</label>
+                                <select
+                                    id="subSection"
+                                    value={selectedSubSection}
+                                    onChange={(e) => setSelectedSubSection(e.target.value)}
+                                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
+                                >
+                                    <option value="">Semua Sub Section</option>
+                                    {filteredSubSections.map(subSection => (
+                                        <option key={subSection.id} value={subSection.id}>{subSection.name}</option>
+                                    ))}
+                                </select>
+                            </div>
 
-                        <div className="flex items-end gap-2">
-                            <button
-                                onClick={applyFilters}
-                                disabled={isLoading}
-                                className="flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 disabled:opacity-50 dark:bg-indigo-700 dark:hover:bg-indigo-600 w-full justify-center transition-colors"
-                            >
-                                {isLoading ? (
-                                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                                ) : (
+                            <div className="flex items-end gap-2">
+                                <button
+                                    onClick={applyFilters}
+                                    disabled={isLoading}
+                                    className="flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 disabled:opacity-50 dark:bg-indigo-700 dark:hover:bg-indigo-600 w-full justify-center transition-colors"
+                                >
+                                    {isLoading ? (
+                                        <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                                    ) : (
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707v5.172l-4 2V13.828a1 1 0 00-.293-.707L3.293 6.707A1 1 0 013 6V4z" />
+                                        </svg>
+                                    )}
+                                </button>
+
+                                <button
+                                    onClick={clearFilters}
+                                    disabled={isLoading}
+                                    className="flex items-center gap-2 rounded-md bg-gray-500 px-4 py-2 text-white hover:bg-gray-600 disabled:opacity-50 dark:bg-gray-600 dark:hover:bg-gray-500 w-full justify-center transition-colors"
+                                >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707v5.172l-4 2V13.828a1 1 0 00-.293-.707L3.293 6.707A1 1 0 013 6V4z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582M20 20v-5h-.581M5.418 9A7.978 7.978 0 014 12c0 4.418 3.582 8 8 8a7.978 7.978 0 015.418-2M18.582 15A7.978 7.978 0 0020 12c0-4.418-3.582-8-8-8a7.978 7.978 0 00-5.418 2" />
                                     </svg>
-                                )}
-                            </button>
-
-                            <button
-                                onClick={clearFilters}
-                                disabled={isLoading}
-                                className="flex items-center gap-2 rounded-md bg-gray-500 px-4 py-2 text-white hover:bg-gray-600 disabled:opacity-50 dark:bg-gray-600 dark:hover:bg-gray-500 w-full justify-center transition-colors"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582M20 20v-5h-.581M5.418 9A7.978 7.978 0 014 12c0 4.418 3.582 8 8 8a7.978 7.978 0 015.418-2M18.582 15A7.978 7.978 0 0020 12c0-4.418-3.582-8-8-8a7.978 7.978 0 00-5.418 2" />
-                                </svg>
-                            </button>
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                </motion.div>
+                    </motion.div>
+                )}
 
                 {/* Content with loading states */}
                 <AnimatePresence mode="wait">
@@ -644,6 +692,7 @@ const Index = () => {
                                                         date={dateKey}
                                                         sectionId={sectionData.sectionId}
                                                         currentVisibility={sectionData.visibility}
+                                                        user={user}
                                                     />
                                                 ))}
                                             </div>
@@ -652,7 +701,7 @@ const Index = () => {
                                 })
                             )}
 
-                            {/* Pagination remains the same */}
+                            {/* Pagination */}
                             {totalPages > 1 && (
                                 <div className="mt-6 flex justify-center">
                                     <nav className="flex items-center space-x-2">
