@@ -47,7 +47,7 @@ const UserIcon = () => (
 );
 
 // Profile dropdown component
-const ProfileDropdown = ({ user, isEmployee }) => {
+const ProfileDropdown = ({ user, isEmployee, isAdmin }) => {
     const [isOpen, setIsOpen] = useState(false);
 
     useEffect(() => {
@@ -130,7 +130,7 @@ const ProfileDropdown = ({ user, isEmployee }) => {
                         Edit Profile
                     </Link>
 
-                    {!isEmployee && (
+                    {!isEmployee && isAdmin && (
                         <Link
                             href={route("cronjob-settings.index")}
                             className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-indigo-50 dark:hover:bg-gray-700"
@@ -534,9 +534,8 @@ export default function AuthenticatedLayout({
                                                 >
                                                     <span className="block">Resigns</span>
                                                 </NavLink> */}
-                                            </>
-                                        )}
-                                        <NavLink
+                                           
+                                            <NavLink
                                             href={route("lunch-coupons.index")}
                                             active={route().current(
                                                 "lunch-coupons.index"
@@ -553,6 +552,9 @@ export default function AuthenticatedLayout({
                                                 Lunch Coupons
                                             </span>
                                         </NavLink>
+                                         </>
+                                        )}
+                                        
                                         {/* <div>
                                             {isAdmin && (
                                                 <button
@@ -782,7 +784,7 @@ ${
                                 </Link>
                             </div>
 
-                            {!isEmployee && (
+                            {!isEmployee && isAdmin && (
                                 <Link
                                     href={route("cronjob-settings.index")}
                                     className="w-full text-center py-2 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100/50 dark:hover:bg-indigo-900/50 rounded-lg transition-all duration-200 ease-in-out flex items-center justify-center"
