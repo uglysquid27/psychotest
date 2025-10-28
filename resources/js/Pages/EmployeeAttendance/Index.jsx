@@ -13,7 +13,41 @@ export default function Index() {
   const { employees: paginationData, filters, uniqueStatuses, uniqueSections, uniqueSubSections, auth } = usePage().props;
   const employees = paginationData.data.filter(employee => employee.status.toLowerCase() !== 'deactivated');
   const paginationLinks = paginationData.links;
-  const isUser = auth.user?.role === 'user';
+  const user = auth?.user;
+  
+  // Define role-based section access
+  const getAccessibleSections = () => {
+    if (!user) return [];
+
+    const userRole = user.role;
+    
+    // Admin can access all sections
+    if (userRole === 'admin') {
+      return uniqueSections;
+    }
+
+    // Define role-based section access
+    const roleAccess = {
+      'logistic': ['Finished goods', 'Delivery', 'Loader', 'Operator Forklift', 'Inspeksi', 'Produksi'],
+      'rm/pm': ['RM/PM'],
+      'fsb': ['Food & Snackbar'],
+      'user': uniqueSections // Regular users can access all sections
+    };
+
+    // If role has specific access defined, filter sections
+    if (roleAccess[userRole]) {
+      return uniqueSections.filter(section => 
+        roleAccess[userRole].includes(section)
+      );
+    }
+
+    // Default: no access if role not defined
+    return [];
+  };
+
+  const accessibleSections = getAccessibleSections();
+  const isAdmin = user?.role === 'admin';
+  const isUser = user?.role === 'user';
 
   // State for filters
   const [filterStatus, setFilterStatus] = useState(filters.status || 'All');
@@ -187,11 +221,11 @@ export default function Index() {
       {/* Add Bulk Deactivate Modal */}
       <Modal show={showBulkDeactivateModal} onClose={() => setShowBulkDeactivateModal(false)}>
         <BulkDeactivateModal
-    show={showBulkDeactivateModal}
-    onClose={() => setShowBulkDeactivateModal(false)}
-    employeeIds={selectedEmployees}
-    employeeCount={selectedEmployees.length}
-  />
+          show={showBulkDeactivateModal}
+          onClose={() => setShowBulkDeactivateModal(false)}
+          employeeIds={selectedEmployees}
+          employeeCount={selectedEmployees.length}
+        />
       </Modal>
 
       <div className="py-4 sm:py-8">
@@ -204,7 +238,7 @@ export default function Index() {
                     Ringkasan Penugasan Pegawai
                   </h1>
 
-                  {!isUser && (
+                  {isAdmin && (
                     <div className="flex flex-wrap gap-1.5 sm:gap-2">
                       {/* Add Employee */}
                       <Link
@@ -322,26 +356,13 @@ export default function Index() {
                 filterSubSection={filterSubSection}
                 searchTerm={searchTerm}
                 uniqueStatuses={uniqueStatuses}
-                uniqueSections={uniqueSections}
+                uniqueSections={accessibleSections}
                 uniqueSubSections={uniqueSubSections}
                 handleStatusChange={handleStatusChange}
                 handleSectionChange={handleSectionChange}
                 handleSubSectionChange={handleSubSectionChange}
                 handleSearchChange={handleSearchChange}
               />
-
-              {/* <div className="mb-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
-                    <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300">Total Work Count</h3>
-                    <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{totalWorkCount}</p>
-                  </div>
-                  <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-700">
-                    <h3 className="text-sm font-medium text-green-800 dark:text-green-300">Weekly Work Count</h3>
-                    <p className="text-2xl font-bold text-green-900 dark:text-green-100">{totalWeeklyWorkCount}</p>
-                  </div>
-                </div>
-              </div> */}
 
               <div className="flex flex-col gap-6">
                 <div className="hidden md:block">
@@ -350,6 +371,7 @@ export default function Index() {
                     selectedEmployees={selectedEmployees}
                     toggleEmployeeSelection={toggleEmployeeSelection}
                     selectAllEmployees={selectAllEmployees}
+                    isAdmin={isAdmin}
                     isUser={isUser}
                   />
                 </div>
@@ -358,6 +380,7 @@ export default function Index() {
                     employees={employees}
                     selectedEmployees={selectedEmployees}
                     toggleEmployeeSelection={toggleEmployeeSelection}
+                    isAdmin={isAdmin}
                     isUser={isUser}
                   />
                 </div>
