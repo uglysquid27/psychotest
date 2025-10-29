@@ -319,6 +319,8 @@ Route::get('/manpower-requests/{requestId}/bulk-available-employees', [ManPowerR
         ->name('schedules.toggle-visibility');
     Route::post('/schedules/toggle-visibility-group', [ScheduleController::class, 'toggleVisibilityGroup'])
         ->name('schedules.toggle-visibility-group');
+    Route::get('/schedules/updates', [ScheduleController::class, 'getUpdatedSchedules'])
+        ->name('schedules.updates');
     Route::post('/whatsapp/send', [WhatsAppNotificationController::class, 'sendScheduleNotification'])->name('whatsapp.send');
     Route::get('/wa/test', [WhatsAppNotificationController::class, 'testSend']);
 

@@ -444,4 +444,73 @@ if ($startDate && $endDate) {
         }
     }
 
+        public function getUpdatedSchedules(Request $request)
+    {
+        $query = Schedule::with([
+            'employee',
+            'subSection.section',
+            'manPowerRequest.shift',
+            'manPowerRequest.subSection.section'
+        ]);
+
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+        $sectionId = $request->input('section');
+        $subSectionId = $request->input('sub_section');
+        $lastUpdate = $request->input('last_update');
+
+        // Apply date filters
+        if ($startDate && $endDate) {
+            $query->whereBetween('date', [
+                Carbon::parse($startDate)->startOfDay(),
+                Carbon::parse($endDate)->endOfDay()
+            ]);
+        }
+
+        // Apply section filter
+        if ($sectionId) {
+            $query->whereHas('manPowerRequest.subSection', function ($q) use ($sectionId) {
+                $q->where('section_id', $sectionId);
+            });
+        }
+
+        // Apply sub-section filter
+        if ($subSectionId) {
+            $query->whereHas('manPowerRequest', function ($q) use ($subSectionId) {
+                $q->where('sub_section_id', $subSectionId);
+            });
+        }
+
+        // Only get updates since last check
+        if ($lastUpdate) {
+            $query->where(function ($q) use ($lastUpdate) {
+                $q->where('schedules.updated_at', '>', Carbon::parse($lastUpdate))
+                  ->orWhereHas('manPowerRequest', function ($q) use ($lastUpdate) {
+                      $q->where('man_power_requests.updated_at', '>', Carbon::parse($lastUpdate));
+                  })
+                  ->orWhereHas('employee', function ($q) use ($lastUpdate) {
+                      $q->where('employees.updated_at', '>', Carbon::parse($lastUpdate));
+                  });
+            });
+        }
+
+        $schedules = $query->orderBy('date')->get();
+
+        // If no changes detected and we have lastUpdate, return unchanged
+        if ($schedules->isEmpty() && $lastUpdate) {
+            return response()->json([
+                'schedules' => [],
+                'last_updated' => $lastUpdate,
+                'unchanged' => true
+            ]);
+        }
+
+        return response()->json([
+            'schedules' => $schedules,
+            'last_updated' => now()->toISOString(),
+            'unchanged' => false
+        ]);
+    }
+
+
 }

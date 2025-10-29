@@ -37,7 +37,16 @@ const LoadingOverlay = () => {
   );
 };
 
-const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibility, user, onToggleVisibility }) => {
+const ScheduleTableSection = ({ 
+  title, 
+  shifts, 
+  date, 
+  sectionId, 
+  currentVisibility, 
+  user, 
+  onToggleVisibility,
+  lastUpdate 
+}) => {
     const [expandedShift, setExpandedShift] = useState(null);
     const [coworkersData, setCoworkersData] = useState(null);
     const [loadingCoworkers, setLoadingCoworkers] = useState(false);
@@ -78,15 +87,12 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
     };
 
     const fetchSameDayEmployees = async (shiftName, shiftData) => {
-        // Close previously opened shift
         if (expandedShift && expandedShift !== shiftName) {
             setExpandedShift(null);
             setCoworkersData(null);
-            // Wait a bit before opening new one for smooth transition
             await new Promise(resolve => setTimeout(resolve, 100));
         }
 
-        // Toggle current shift
         if (expandedShift === shiftName) {
             setExpandedShift(null);
             setCoworkersData(null);
@@ -97,7 +103,6 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
         setExpandedShift(shiftName);
         
         try {
-            // Group schedules by time within the shift
             const timeGroups = {};
             
             shiftData.schedules.forEach(schedule => {
@@ -123,7 +128,6 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
                 });
             });
 
-            // Sort time groups by start time
             const sortedTimeGroups = Object.entries(timeGroups)
                 .sort(([,a], [,b]) => {
                     if (a.start_time === 'N/A') return 1;
@@ -137,7 +141,8 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
 
             const mockCoworkersData = {
                 shift_name: shiftName,
-                timeGroups: sortedTimeGroups
+                timeGroups: sortedTimeGroups,
+                last_updated: Date.now() // Track when this data was fetched
             };
             
             setCoworkersData(mockCoworkersData);
@@ -148,14 +153,63 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
         }
     };
 
-    // Calculate summary for the entire shift
+    // Auto-update coworkers data when main data updates and detail is open
+    useEffect(() => {
+        if (expandedShift && coworkersData) {
+            // Find the current shift data from props
+            const currentShiftData = shifts[expandedShift];
+            if (currentShiftData) {
+                const timeGroups = {};
+                
+                currentShiftData.schedules.forEach(schedule => {
+                    const startTime = schedule.man_power_request?.start_time || 'N/A';
+                    const endTime = schedule.man_power_request?.end_time || 'N/A';
+                    const timeKey = `${startTime}-${endTime}`;
+                    
+                    if (!timeGroups[timeKey]) {
+                        timeGroups[timeKey] = {
+                            start_time: startTime,
+                            end_time: endTime,
+                            employees: []
+                        };
+                    }
+                    
+                    timeGroups[timeKey].employees.push({
+                        id: schedule.id,
+                        employee: schedule.employee,
+                        sub_section: schedule.sub_section?.name || 'N/A',
+                        line: schedule.line,
+                        status: schedule.status,
+                        rejection_reason: schedule.rejection_reason
+                    });
+                });
+
+                const sortedTimeGroups = Object.entries(timeGroups)
+                    .sort(([,a], [,b]) => {
+                        if (a.start_time === 'N/A') return 1;
+                        if (b.start_time === 'N/A') return -1;
+                        return a.start_time.localeCompare(b.start_time);
+                    })
+                    .reduce((acc, [key, value]) => {
+                        acc[key] = value;
+                        return acc;
+                    }, {});
+
+                setCoworkersData({
+                    shift_name: expandedShift,
+                    timeGroups: sortedTimeGroups,
+                    last_updated: Date.now()
+                });
+            }
+        }
+    }, [shifts, lastUpdate]); // Re-run when shifts data or lastUpdate changes
+
     const getShiftSummary = (shiftData) => {
         const totalEmployees = shiftData.schedules.length;
         const acceptedCount = shiftData.schedules.filter(s => s.status === 'accepted').length;
         const rejectedCount = shiftData.schedules.filter(s => s.status === 'rejected').length;
         const pendingCount = shiftData.schedules.filter(s => s.status === 'pending').length;
 
-        // Group by sub-section for the summary table
         const subSectionGroups = shiftData.schedules.reduce((acc, schedule) => {
             const subSection = schedule.sub_section?.name || 'N/A';
             if (!acc[subSection]) {
@@ -186,7 +240,6 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
             <div className="flex justify-between items-start mb-6">
                 <h2 className="text-xl font-bold text-gray-800 dark:text-white">{title}</h2>
                 
-                {/* Visibility Toggle - Admin Only */}
                 {user?.role === 'admin' && (
                     <div className="flex items-center gap-4">
                         <span className="text-sm text-gray-600 dark:text-gray-400">
@@ -212,7 +265,6 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
 
                     return (
                         <div key={shiftName} className="mb-8 last:mb-0">
-                            {/* Shift Header */}
                             <div className="flex justify-between items-center mb-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-xl">
                                 <div>
                                     <h3 className="text-lg font-semibold text-blue-700 dark:text-blue-400">
@@ -244,7 +296,6 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
                                 </button>
                             </div>
 
-                            {/* Main Summary Table */}
                             <div className="overflow-x-auto custom-scrollbar rounded-2xl border border-gray-200 dark:border-gray-700 shadow-inner bg-gray-50 dark:bg-gray-900">
                                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-gray-800 dark:text-white">
                                     <thead className="bg-gray-100 dark:bg-gray-700">
@@ -296,30 +347,17 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
                                 </table>
                             </div>
 
-                            {/* Expanded Coworkers View - Divided by Hours */}
                             {expandedShift === shiftName && coworkersData && (
                                 <div className="mt-4 rounded-xl border border-blue-200 dark:border-blue-700 overflow-hidden">
-                                    {/* Sticky Header */}
-                                    {/* <div className="sticky top-0 bg-blue-600 dark:bg-blue-700 p-4 z-10 shadow-md">
-                                        <div className="flex justify-between items-center">
-                                            <h4 className="text-lg font-semibold text-white">
-                                                Rekan Kerja - {shiftName}
-                                            </h4>
-                                            <button
-                                                onClick={() => {
-                                                    setExpandedShift(null);
-                                                    setCoworkersData(null);
-                                                }}
-                                                className="bg-white hover:bg-gray-100 text-blue-600 px-4 py-2 rounded-lg text-sm font-medium shadow-md transition-colors"
-                                            >
-                                                Tutup
-                                            </button>
-                                        </div>
-                                    </div> */}
-                                    
-                                    {/* Content with padding */}
                                     <div className="bg-blue-50 dark:bg-blue-900/20 p-4 max-h-96 overflow-y-auto">
-                                        {/* Time Groups */}
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h4 className="text-lg font-semibold text-blue-700 dark:text-blue-300">
+                                                Detail Karyawan - {shiftName}
+                                            </h4>
+                                            <span className="text-xs text-blue-600 dark:text-blue-400">
+                                                Terakhir update: {dayjs(coworkersData.last_updated).format('HH:mm:ss')}
+                                            </span>
+                                        </div>
                                         {Object.entries(coworkersData.timeGroups).map(([timeKey, timeData]) => (
                                             <div key={timeKey} className="mb-6 last:mb-0">
                                                 <h5 className="font-semibold text-blue-700 dark:text-blue-300 mb-3 text-sm border-b border-blue-200 dark:border-blue-700 pb-2">
@@ -329,7 +367,6 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
                                                     </span>
                                                 </h5>
                                                 
-                                                {/* Group by Sub Section within this time group */}
                                                 {(() => {
                                                     const groupedBySubSection = timeData.employees.reduce((acc, emp) => {
                                                         const subSection = emp.sub_section;
@@ -392,9 +429,10 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
 };
 
 const Index = () => {
-    const { schedules, filters, sections, subSections, auth } = usePage().props;
+    const { schedules: initialSchedules, filters, sections, subSections, auth } = usePage().props;
     const user = auth?.user;
     
+    const [lastUpdate, setLastUpdate] = useState(null);
     const [startDate, setStartDate] = useState(filters.start_date || '');
     const [endDate, setEndDate] = useState(filters.end_date || '');
     const [selectedSection, setSelectedSection] = useState(filters.section || '');
@@ -411,12 +449,10 @@ const Index = () => {
 
         const userRole = user.role;
         
-        // Admin can access all sections
         if (userRole === 'admin') {
             return sections;
         }
 
-        // Define role-based section access
         const roleAccess = {
             'logistic': ['Finished goods', 'Delivery', 'Loader', 'Operator Forklift', 'Inspeksi', 'Produksi'],
             'rm/pm': ['RM/PM'],
@@ -443,8 +479,9 @@ const Index = () => {
         }, 500);
 
         return () => clearTimeout(timer);
-    }, [schedules]);
+    }, []);
 
+    // Update state when props change (from manual filtering)
     useEffect(() => {
         setStartDate(filters.start_date || '');
         setEndDate(filters.end_date || '');
@@ -453,13 +490,64 @@ const Index = () => {
         setCurrentPage(1);
     }, [filters]);
 
+    // POLLING IMPLEMENTATION - Auto updates every 15 seconds
+    useEffect(() => {
+        if (isLoading) return; // Don't poll during manual filtering
+        
+        const pollInterval = 15000; // 15 seconds
+        
+        const fetchUpdates = async () => {
+            try {
+                const params = new URLSearchParams({
+                    start_date: startDate || '',
+                    end_date: endDate || '',
+                    section: selectedSection || '',
+                    sub_section: selectedSubSection || '',
+                    last_update: lastUpdate || ''
+                });
+                
+                const response = await fetch(`/schedules/updates?${params}`, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Only update if data actually changed
+                    if (!data.unchanged && data.last_updated !== lastUpdate) {
+                        // Use Inertia's router to update the page data
+                        router.reload({ 
+                            only: ['schedules'],
+                            preserveState: true,
+                            preserveScroll: true,
+                            onSuccess: () => {
+                                setLastUpdate(data.last_updated);
+                            }
+                        });
+                    }
+                }
+            } catch (error) {
+                console.log('Background update failed:', error);
+                // Fail silently - don't show errors to users for background updates
+            }
+        };
+
+        // Start polling
+        const intervalId = setInterval(fetchUpdates, pollInterval);
+        
+        // Cleanup on unmount
+        return () => clearInterval(intervalId);
+    }, [isLoading, startDate, endDate, selectedSection, selectedSubSection, lastUpdate]);
+
     const filteredSubSections = useMemo(() => {
         if (!selectedSection) return subSections;
         return subSections.filter(sub => sub.section_id == selectedSection);
     }, [selectedSection, subSections]);
 
     const groupedSchedulesByDateSectionShift = useMemo(() => {
-        return schedules.reduce((acc, schedule) => {
+        return initialSchedules.reduce((acc, schedule) => {
             const dateKey = dayjs(schedule.date).format('YYYY-MM-DD');
             const displayDate = dayjs(schedule.date).format('dddd, DD MMMM YYYY');
             const sectionName = schedule.man_power_request.sub_section.section.name;
@@ -490,7 +578,7 @@ const Index = () => {
 
             return acc;
         }, {});
-    }, [schedules, accessibleSections]);
+    }, [initialSchedules, accessibleSections]);
 
     const sortedDates = useMemo(() =>
         Object.keys(groupedSchedulesByDateSectionShift).sort((a, b) =>
@@ -581,7 +669,7 @@ const Index = () => {
                             Agenda Penjadwalan
                         </h3>
                         <p className="text-base sm:text-lg md:text-xl font-light opacity-90 text-gray-600 dark:text-gray-300">
-                            Tampilan tabel seluruh jadwal karyawan
+                            Tampilan tabel seluruh jadwal karyawan • Auto-update setiap 15 detik
                         </p>
                     </div>
 
@@ -729,6 +817,7 @@ const Index = () => {
                                                         onToggleVisibility={() => 
                                                             handleToggleVisibility(dateKey, sectionData.sectionId, sectionData.visibility)
                                                         }
+                                                        lastUpdate={lastUpdate}
                                                     />
                                                 ))}
                                             </motion.div>
