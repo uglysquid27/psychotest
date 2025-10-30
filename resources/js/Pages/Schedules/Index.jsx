@@ -93,121 +93,141 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
         setExpandedSection(true);
         
         try {
-            // Combine all shifts data for this section
-            const allTimeGroups = {};
-            
-            Object.values(shifts).forEach(shiftData => {
-                shiftData.schedules.forEach(schedule => {
-                    const startTime = schedule.man_power_request?.start_time || 'N/A';
-                    const endTime = schedule.man_power_request?.end_time || 'N/A';
-                    const shiftName = schedule.man_power_request?.shift?.name || 'N/A';
-                    const timeKey = `${shiftName}-${startTime}-${endTime}`;
-                    
-                    if (!allTimeGroups[timeKey]) {
-                        allTimeGroups[timeKey] = {
-                            shift_name: shiftName,
-                            start_time: startTime,
-                            end_time: endTime,
-                            employees: []
-                        };
-                    }
-                    
-                    allTimeGroups[timeKey].employees.push({
-                        id: schedule.id,
-                        employee: schedule.employee,
-                        sub_section: schedule.sub_section?.name || 'N/A',
-                        line: schedule.line,
-                        status: schedule.status,
-                        rejection_reason: schedule.rejection_reason
-                    });
+        // Combine all shifts data for this section
+        const allTimeGroups = {};
+        
+        Object.values(shifts).forEach(shiftData => {
+            shiftData.schedules.forEach(schedule => {
+                const startTime = schedule.man_power_request?.start_time || 'N/A';
+                const endTime = schedule.man_power_request?.end_time || 'N/A';
+                const shiftName = schedule.man_power_request?.shift?.name || 'N/A';
+                const timeKey = `${shiftName}-${startTime}-${endTime}`;
+                
+                if (!allTimeGroups[timeKey]) {
+                    allTimeGroups[timeKey] = {
+                        shift_name: shiftName,
+                        start_time: startTime,
+                        end_time: endTime,
+                        employees: [],
+                        shift_order: getShiftOrder(shiftName) // Add order for sorting
+                    };
+                }
+                
+                allTimeGroups[timeKey].employees.push({
+                    id: schedule.id,
+                    employee: schedule.employee,
+                    sub_section: schedule.sub_section?.name || 'N/A',
+                    line: schedule.line,
+                    status: schedule.status,
+                    rejection_reason: schedule.rejection_reason
                 });
             });
+        });
 
-            // Sort time groups by shift name and start time
-            const sortedTimeGroups = Object.entries(allTimeGroups)
-                .sort(([,a], [,b]) => {
-                    // First sort by shift name
-                    const shiftCompare = a.shift_name.localeCompare(b.shift_name);
-                    if (shiftCompare !== 0) return shiftCompare;
-                    
-                    // Then by start time
-                    if (a.start_time === 'N/A') return 1;
-                    if (b.start_time === 'N/A') return -1;
-                    return a.start_time.localeCompare(b.start_time);
-                })
-                .reduce((acc, [key, value]) => {
-                    acc[key] = value;
-                    return acc;
-                }, {});
+        // Sort time groups by shift order (pagi -> siang -> malam)
+        const sortedTimeGroups = Object.entries(allTimeGroups)
+            .sort(([,a], [,b]) => {
+                // First sort by shift order
+                if (a.shift_order !== b.shift_order) {
+                    return a.shift_order - b.shift_order;
+                }
+                
+                // Then by shift name
+                const shiftCompare = a.shift_name.localeCompare(b.shift_name);
+                if (shiftCompare !== 0) return shiftCompare;
+                
+                // Then by start time
+                if (a.start_time === 'N/A') return 1;
+                if (b.start_time === 'N/A') return -1;
+                return a.start_time.localeCompare(b.start_time);
+            })
+            .reduce((acc, [key, value]) => {
+                acc[key] = value;
+                return acc;
+            }, {});
 
-            const mockCoworkersData = {
-                section_name: title,
-                timeGroups: sortedTimeGroups,
-                last_updated: Date.now()
-            };
-            
-            setCoworkersData(mockCoworkersData);
-        } catch (error) {
-            console.error('Failed to fetch coworkers:', error);
-        } finally {
-            setLoadingCoworkers(false);
-        }
+        const mockCoworkersData = {
+            section_name: title,
+            timeGroups: sortedTimeGroups,
+            last_updated: Date.now()
+        };
+        
+        setCoworkersData(mockCoworkersData);
+    } catch (error) {
+        console.error('Failed to fetch coworkers:', error);
+    } finally {
+        setLoadingCoworkers(false);
+    }
     };
 
-    // Auto-update coworkers data when main data updates and detail is open
-    useEffect(() => {
-        if (expandedSection && coworkersData) {
-            // Re-fetch the same day employees with updated data
-            const allTimeGroups = {};
-            
-            Object.values(shifts).forEach(shiftData => {
-                shiftData.schedules.forEach(schedule => {
-                    const startTime = schedule.man_power_request?.start_time || 'N/A';
-                    const endTime = schedule.man_power_request?.end_time || 'N/A';
-                    const shiftName = schedule.man_power_request?.shift?.name || 'N/A';
-                    const timeKey = `${shiftName}-${startTime}-${endTime}`;
-                    
-                    if (!allTimeGroups[timeKey]) {
-                        allTimeGroups[timeKey] = {
-                            shift_name: shiftName,
-                            start_time: startTime,
-                            end_time: endTime,
-                            employees: []
-                        };
-                    }
-                    
-                    allTimeGroups[timeKey].employees.push({
-                        id: schedule.id,
-                        employee: schedule.employee,
-                        sub_section: schedule.sub_section?.name || 'N/A',
-                        line: schedule.line,
-                        status: schedule.status,
-                        rejection_reason: schedule.rejection_reason
-                    });
+    // Helper to get shift order
+    const getShiftOrder = (shiftName) => {
+    const lowerShiftName = shiftName.toLowerCase();
+    if (lowerShiftName.includes('pagi')) return 1;
+    if (lowerShiftName.includes('siang')) return 2;
+    if (lowerShiftName.includes('malam')) return 3;
+    return 4; 
+};
+
+   useEffect(() => {
+    if (expandedSection && coworkersData) {
+        // Re-fetch the same day employees with updated data
+        const allTimeGroups = {};
+        
+        Object.values(shifts).forEach(shiftData => {
+            shiftData.schedules.forEach(schedule => {
+                const startTime = schedule.man_power_request?.start_time || 'N/A';
+                const endTime = schedule.man_power_request?.end_time || 'N/A';
+                const shiftName = schedule.man_power_request?.shift?.name || 'N/A';
+                const timeKey = `${shiftName}-${startTime}-${endTime}`;
+                
+                if (!allTimeGroups[timeKey]) {
+                    allTimeGroups[timeKey] = {
+                        shift_name: shiftName,
+                        start_time: startTime,
+                        end_time: endTime,
+                        employees: [],
+                        shift_order: getShiftOrder(shiftName)
+                    };
+                }
+                
+                allTimeGroups[timeKey].employees.push({
+                    id: schedule.id,
+                    employee: schedule.employee,
+                    sub_section: schedule.sub_section?.name || 'N/A',
+                    line: schedule.line,
+                    status: schedule.status,
+                    rejection_reason: schedule.rejection_reason
                 });
             });
+        });
 
-            const sortedTimeGroups = Object.entries(allTimeGroups)
-                .sort(([,a], [,b]) => {
-                    const shiftCompare = a.shift_name.localeCompare(b.shift_name);
-                    if (shiftCompare !== 0) return shiftCompare;
-                    
-                    if (a.start_time === 'N/A') return 1;
-                    if (b.start_time === 'N/A') return -1;
-                    return a.start_time.localeCompare(b.start_time);
-                })
-                .reduce((acc, [key, value]) => {
-                    acc[key] = value;
-                    return acc;
-                }, {});
+        // Sort by shift order (pagi -> siang -> malam)
+        const sortedTimeGroups = Object.entries(allTimeGroups)
+            .sort(([,a], [,b]) => {
+                if (a.shift_order !== b.shift_order) {
+                    return a.shift_order - b.shift_order;
+                }
+                
+                const shiftCompare = a.shift_name.localeCompare(b.shift_name);
+                if (shiftCompare !== 0) return shiftCompare;
+                
+                if (a.start_time === 'N/A') return 1;
+                if (b.start_time === 'N/A') return -1;
+                return a.start_time.localeCompare(b.start_time);
+            })
+            .reduce((acc, [key, value]) => {
+                acc[key] = value;
+                return acc;
+            }, {});
 
-            setCoworkersData({
-                section_name: title,
-                timeGroups: sortedTimeGroups,
-                last_updated: Date.now()
-            });
-        }
-    }, [shifts, lastUpdate, expandedSection]); // Re-run when shifts data or lastUpdate changes
+        setCoworkersData({
+            section_name: title,
+            timeGroups: sortedTimeGroups,
+            last_updated: Date.now()
+        });
+    }
+}, [shifts, lastUpdate, expandedSection]);
 
     // Calculate summary for each shift
     const getShiftSummary = (shiftData) => {

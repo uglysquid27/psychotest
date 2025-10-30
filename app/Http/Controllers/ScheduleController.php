@@ -19,56 +19,70 @@ use Illuminate\Support\Facades\Http;
 class ScheduleController extends Controller
 {
     public function index(Request $request): Response
-    {
-        $query = Schedule::with([
-            'employee',
-            'subSection.section',
-            'manPowerRequest.shift',
-            'manPowerRequest.subSection.section'
-        ]);
-
-        $startDate = $request->input('start_date');
-        $endDate = $request->input('end_date');
-        $sectionId = $request->input('section');
-        $subSectionId = $request->input('sub_section');
-
-        // In ScheduleController.php - update the index method date filtering
-if ($startDate && $endDate) {
-    $query->whereBetween('date', [
-        Carbon::parse($startDate)->startOfDay(),
-        Carbon::parse($endDate)->endOfDay()
+{
+    $query = Schedule::with([
+        'employee',
+        'subSection.section',
+        'manPowerRequest.shift',
+        'manPowerRequest.subSection.section'
     ]);
-}
 
-        if ($sectionId) {
-            $query->whereHas('manPowerRequest.subSection', function ($q) use ($sectionId) {
-                $q->where('section_id', $sectionId);
-            });
-        }
+    $startDate = $request->input('start_date');
+    $endDate = $request->input('end_date');
+    $sectionId = $request->input('section');
+    $subSectionId = $request->input('sub_section');
 
-        if ($subSectionId) {
-            $query->whereHas('manPowerRequest', function ($q) use ($subSectionId) {
-                $q->where('sub_section_id', $subSectionId);
-            });
-        }
-
-        $schedules = $query->orderBy('date')->get();
-
-        $sections = Section::all();
-        $subSections = SubSection::with('section')->get();
-
-        return Inertia::render('Schedules/Index', [
-            'schedules' => $schedules,
-            'sections' => $sections,
-            'subSections' => $subSections,
-            'filters' => [
-                'start_date' => $startDate,
-                'end_date' => $endDate,
-                'section' => $sectionId,
-                'sub_section' => $subSectionId,
-            ]
+    if ($startDate && $endDate) {
+        $query->whereBetween('date', [
+            Carbon::parse($startDate)->startOfDay(),
+            Carbon::parse($endDate)->endOfDay()
         ]);
     }
+
+    if ($sectionId) {
+        $query->whereHas('manPowerRequest.subSection', function ($q) use ($sectionId) {
+            $q->where('section_id', $sectionId);
+        });
+    }
+
+    if ($subSectionId) {
+        $query->whereHas('manPowerRequest', function ($q) use ($subSectionId) {
+            $q->where('sub_section_id', $subSectionId);
+        });
+    }
+
+    // ORDER BY shift: pagi -> siang -> malam
+    $query->leftJoin('man_power_requests', 'schedules.man_power_request_id', '=', 'man_power_requests.id')
+          ->leftJoin('shifts', 'man_power_requests.shift_id', '=', 'shifts.id')
+          ->orderByRaw("
+              CASE 
+                  WHEN shifts.name LIKE '%pagi%' THEN 1
+                  WHEN shifts.name LIKE '%siang%' THEN 2
+                  WHEN shifts.name LIKE '%malam%' THEN 3
+                  ELSE 4
+              END
+          ")
+          ->orderBy('shifts.name')
+          ->orderBy('date')
+          ->select('schedules.*');
+
+    $schedules = $query->get();
+
+    $sections = Section::all();
+    $subSections = SubSection::with('section')->get();
+
+    return Inertia::render('Schedules/Index', [
+        'schedules' => $schedules,
+        'sections' => $sections,
+        'subSections' => $subSections,
+        'filters' => [
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'section' => $sectionId,
+            'sub_section' => $subSectionId,
+        ]
+    ]);
+}
 
     public function edit($id): Response
     {
@@ -444,7 +458,7 @@ if ($startDate && $endDate) {
         }
     }
 
-     public function getUpdatedSchedules(Request $request)
+  public function getUpdatedSchedules(Request $request)
 {
     $query = Schedule::with([
         'employee',
@@ -459,7 +473,7 @@ if ($startDate && $endDate) {
     $subSectionId = $request->input('sub_section');
     $lastUpdate = $request->input('last_update');
 
-    // Apply date filters - IMPORTANT: Always apply the same filters as main index
+    // Apply date filters
     if ($startDate && $endDate) {
         $query->whereBetween('date', [
             Carbon::parse($startDate)->startOfDay(),
@@ -481,8 +495,23 @@ if ($startDate && $endDate) {
         });
     }
 
+    // ORDER BY shift: pagi -> siang -> malam
+    $query->leftJoin('man_power_requests', 'schedules.man_power_request_id', '=', 'man_power_requests.id')
+          ->leftJoin('shifts', 'man_power_requests.shift_id', '=', 'shifts.id')
+          ->orderByRaw("
+              CASE 
+                  WHEN shifts.name LIKE '%pagi%' THEN 1
+                  WHEN shifts.name LIKE '%siang%' THEN 2
+                  WHEN shifts.name LIKE '%malam%' THEN 3
+                  ELSE 4
+              END
+          ")
+          ->orderBy('shifts.name')
+          ->orderBy('date')
+          ->select('schedules.*'); // Important: select schedules columns only
+
     // Get ALL schedules with current filters
-    $schedules = $query->orderBy('date')->get();
+    $schedules = $query->get();
 
     // Check if data has changed since last update
     $latestUpdate = $schedules->max('updated_at') ?? now();
