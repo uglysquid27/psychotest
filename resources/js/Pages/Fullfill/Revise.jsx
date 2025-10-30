@@ -138,7 +138,7 @@ export default function Revise({
     const { data, setData, put, processing, errors } = useForm({
         employee_ids: initialSelectedIds,
         fulfilled_by: safeAuth?.user?.id || '',
-        visibility: 'private'
+        visibility: 'public'
     });
 
     const [selectedIds, setSelectedIds] = useState(initialSelectedIds);

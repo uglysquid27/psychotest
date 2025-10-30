@@ -295,7 +295,7 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
                                 Loading...
                             </span>
                         ) : (
-                            expandedSection ? 'Tutup' : 'Same Day'
+                            expandedSection ? 'Tutup' : 'List Karyawan'
                         )}
                     </button>
 
@@ -402,7 +402,7 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
                         <div className="flex justify-between items-center">
                             <div>
                                 <h4 className="text-lg font-semibold text-white">
-                                    Rekan Kerja - {title} - Total: {sectionSummary.totalEmployees} orang
+                                    Karyawan - {title} - Total: {sectionSummary.totalEmployees} orang
                                 </h4>
                                 <p className="text-blue-200 text-sm mt-1">
                                     Auto-update terakhir: {dayjs(coworkersData.last_updated).format('HH:mm:ss')}
