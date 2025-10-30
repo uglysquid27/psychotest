@@ -543,49 +543,63 @@ const Index = () => {
         setCurrentPage(1);
     }, [initialSchedules, filters]);
 
-    // POLLING IMPLEMENTATION - Auto updates every 15 seconds
     useEffect(() => {
-        if (isLoading) return; // Don't poll during manual filtering
-        
-        const pollInterval = 15000; // 15 seconds
-        
-        const fetchUpdates = async () => {
-            try {
-                // Always fetch ALL data without filters for polling
-                const params = new URLSearchParams({
-                    last_update: lastUpdate || ''
-                });
-                
-                const response = await fetch(`/schedules/updates?${params}`, {
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                    }
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    
-                    // Only update if data actually changed
-                    if (!data.unchanged && data.last_updated !== lastUpdate) {
-                        // Update schedules state with ALL new data
-                        setSchedules(data.schedules);
-                        setLastUpdate(data.last_updated);
-                        
-                        console.log('Schedule data updated automatically - showing ALL data');
-                    }
+    if (isLoading) return; // Don't poll during manual filtering
+    
+    const pollInterval = 15000; // 15 seconds
+    
+    const fetchUpdates = async () => {
+        try {
+            // Use the same filters as current display
+            const params = new URLSearchParams({
+                last_update: lastUpdate || '',
+                start_date: startDate || '',
+                end_date: endDate || '',
+                section: selectedSection || '',
+                sub_section: selectedSubSection || ''
+            });
+            
+            const response = await fetch(`/schedules/updates?${params}`, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
                 }
-            } catch (error) {
-                console.log('Background update failed:', error);
-                // Fail silently - don't show errors to users for background updates
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                // Only update if data actually changed
+                if (!data.unchanged && data.last_updated !== lastUpdate) {
+                    // Replace ALL schedules with the complete updated dataset
+                    setSchedules(data.schedules);
+                    setLastUpdate(data.last_updated);
+                    
+                    console.log('Schedule data updated automatically - complete dataset refreshed');
+                }
             }
-        };
+        } catch (error) {
+            console.log('Background update failed:', error);
+            // Fail silently - don't show errors to users for background updates
+        }
+    };
 
-        // Start polling
-        const intervalId = setInterval(fetchUpdates, pollInterval);
-        
-        // Cleanup on unmount
-        return () => clearInterval(intervalId);
-    }, [isLoading, lastUpdate]); // Removed filter dependencies - always fetch ALL data
+    // Start polling
+    const intervalId = setInterval(fetchUpdates, pollInterval);
+    
+    // Cleanup on unmount
+    return () => clearInterval(intervalId);
+}, [isLoading, lastUpdate, startDate, endDate, selectedSection, selectedSubSection]);
+
+useEffect(() => {
+    setSchedules(initialSchedules);
+    // Set lastUpdate berdasarkan updated_at terbaru dari initial data
+    if (initialSchedules.length > 0) {
+        const latestUpdate = Math.max(...initialSchedules.map(s => 
+            new Date(s.updated_at || s.created_at).getTime()
+        ));
+        setLastUpdate(new Date(latestUpdate).toISOString());
+    }
+}, [initialSchedules]);
 
     const filteredSubSections = useMemo(() => {
         if (!selectedSection) return subSections;
