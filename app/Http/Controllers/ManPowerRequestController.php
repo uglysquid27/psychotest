@@ -538,6 +538,9 @@ class ManPowerRequestController extends Controller
     /**
  * Bulk delete manpower requests
  */
+/**
+ * Bulk delete manpower requests
+ */
 public function bulkDelete(Request $request)
 {
     try {
@@ -570,11 +573,29 @@ public function bulkDelete(Request $request)
                 }
 
                 // Handle employee status updates for fulfilled requests
-                if ($manPowerRequest->status === 'fulfilled' && $manPowerRequest->schedules->isNotEmpty()) {
+                if ($manPowerRequest->schedules->isNotEmpty()) {
+                    Log::info('Updating employee statuses for schedules related to deleted request', [
+                        'request_id' => $manPowerRequest->id,
+                        'schedule_count' => $manPowerRequest->schedules->count()
+                    ]);
+                    
                     foreach ($manPowerRequest->schedules as $schedule) {
-                        if ($schedule->employee && $schedule->employee->status === 'assigned') {
-                            $schedule->employee->status = 'available';
-                            $schedule->employee->save();
+                        if ($schedule->employee) {
+                            $employee = $schedule->employee;
+                            
+                            // Reset status to 'available' if currently 'assigned'
+                            if ($employee->status === 'assigned') {
+                                $employee->status = 'available';
+                                $employee->save();
+                                Log::debug("Employee ID {$employee->id} status changed to 'available'.");
+                            }
+                            
+                            // Reset cuti status to 'no' if needed
+                            if ($employee->cuti === 'yes') {
+                                $employee->cuti = 'no';
+                                $employee->save();
+                                Log::debug("Employee ID {$employee->id} cuti status reset to 'no'.");
+                            }
                         }
                     }
                 }
