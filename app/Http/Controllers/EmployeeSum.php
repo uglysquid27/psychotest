@@ -203,21 +203,22 @@ class EmployeeSum extends Controller
         };
     }
 
-    public function resetAllStatuses(Request $request)
-    {
-        try {
-            DB::transaction(function () {
-                Employee::query()->update([
-                    'status' => 'available',
-                ]);
-            });
+  public function resetAllStatuses(Request $request)
+{
+    try {
+        DB::transaction(function () {
+            Employee::where('status', '!=', 'deactivated')
+                   ->update([
+                       'status' => 'available',
+                   ]);
+        });
 
-            return redirect()->back()->with('success', 'All employee statuses reset successfully.');
-        } catch (\Exception $e) {
-            Log::error('Error resetting employee statuses: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Terjadi kesalahan saat mereset status karyawan. Silakan coba lagi.');
-        }
+        return redirect()->back()->with('success', 'All employee statuses reset successfully.');
+    } catch (\Exception $e) {
+        Log::error('Error resetting employee statuses: ' . $e->getMessage());
+        return redirect()->back()->with('error', 'Terjadi kesalahan saat mereset status karyawan. Silakan coba lagi.');
     }
+}
 
     public function create(): Response
     {
