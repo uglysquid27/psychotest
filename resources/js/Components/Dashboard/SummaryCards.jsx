@@ -88,71 +88,55 @@ const SummaryCards = ({ summary, setModalState, formatDate }) => {
                     { header: 'Shift', field: 'shift', render: (item) => item.man_power_request?.shift?.name || 'N/A' }
                 ]
             )
-        },
-        {
-            title: "Today's Lunch Coupons",
-            value: summary.todayLunchCoupons || 0,
-            color: 'purple',
-            onClick: () => router.visit(route('lunch-coupons.index'))
-        },
-        {
-            title: "This Week's Lunch Coupons",
-            value: summary.thisWeekLunchCoupons || 0,
-            color: 'pink',
-            onClick: () => router.visit(route('lunch-coupons.index'))
         }
     ];
 
     return (
-        <motion.div className="grid grid-cols-2 gap-4 mb-8 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6">
-    {cardData.map((card, index) => (
-        <motion.div
-            key={index}
-            variants={cardVariants}
-            onClick={card.onClick}
-            whileHover={{ y: -5, boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}
-            whileTap={{ scale: 0.98 }}
-            className={`
-                bg-white/90 dark:bg-gray-800/90 
-                backdrop-blur-md 
-                rounded-2xl 
-                shadow-lg 
-                border border-white/30 dark:border-gray-600/30 
-                p-6 
-                cursor-pointer 
-                transition-all 
-                duration-300 
-                ${card.color === 'indigo' ? 'border-t-indigo-500 border-t-4' :
-                  card.color === 'yellow' ? 'border-t-yellow-500 border-t-4' :
-                  card.color === 'green' ? 'border-t-green-500 border-t-4' :
-                  card.color === 'blue' ? 'border-t-blue-500 border-t-4' :
-                  card.color === 'purple' ? 'border-t-purple-500 border-t-4' :
-                  card.color === 'pink' ? 'border-t-pink-500 border-t-4' : ''}
-            `}
-        >
-            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">{card.title}</h3>
-            <div className="mt-2 flex items-baseline">
-                <div className="w-20 sm:w-24">
-                    <span className={`text-2xl sm:text-3xl font-bold ${
-                        card.color === 'indigo' ? 'text-indigo-600 dark:text-indigo-400' :
-                        card.color === 'yellow' ? 'text-yellow-600 dark:text-yellow-400' :
-                        card.color === 'green' ? 'text-green-600 dark:text-green-400' :
-                        card.color === 'blue' ? 'text-blue-600 dark:text-blue-400' :
-                        card.color === 'purple' ? 'text-purple-600 dark:text-purple-400' :
-                        card.color === 'pink' ? 'text-pink-600 dark:text-pink-400' : ''
-                    }`}>
-                        {typeof card.value === 'number' ? card.value.toLocaleString() : 'N/A'}
-                    </span>
-                </div>
-                {card.hasOwnProperty('total') && (
-                    <span className="ml-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                        / {typeof card.total === 'number' ? card.total.toLocaleString() : 'N/A'}
-                    </span>
-                )}
-            </div>
+        <motion.div className="grid grid-cols-2 gap-4 mb-8 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4">
+            {cardData.map((card, index) => (
+                <motion.div
+                    key={index}
+                    variants={cardVariants}
+                    onClick={card.onClick}
+                    whileHover={{ y: -5, boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}
+                    whileTap={{ scale: 0.98 }}
+                    className={`
+                        bg-white/90 dark:bg-gray-800/90 
+                        backdrop-blur-md 
+                        rounded-2xl 
+                        shadow-lg 
+                        border border-white/30 dark:border-gray-600/30 
+                        p-6 
+                        cursor-pointer 
+                        transition-all 
+                        duration-300 
+                        ${card.color === 'indigo' ? 'border-t-indigo-500 border-t-4' :
+                          card.color === 'yellow' ? 'border-t-yellow-500 border-t-4' :
+                          card.color === 'green' ? 'border-t-green-500 border-t-4' :
+                          card.color === 'blue' ? 'border-t-blue-500 border-t-4' : ''}
+                    `}
+                >
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">{card.title}</h3>
+                    <div className="mt-2 flex items-baseline">
+                        <div className="w-20 sm:w-24">
+                            <span className={`text-2xl sm:text-3xl font-bold ${
+                                card.color === 'indigo' ? 'text-indigo-600 dark:text-indigo-400' :
+                                card.color === 'yellow' ? 'text-yellow-600 dark:text-yellow-400' :
+                                card.color === 'green' ? 'text-green-600 dark:text-green-400' :
+                                card.color === 'blue' ? 'text-blue-600 dark:text-blue-400' : ''
+                            }`}>
+                                {typeof card.value === 'number' ? card.value.toLocaleString() : 'N/A'}
+                            </span>
+                        </div>
+                        {card.hasOwnProperty('total') && (
+                            <span className="ml-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                                / {typeof card.total === 'number' ? card.total.toLocaleString() : 'N/A'}
+                            </span>
+                        )}
+                    </div>
+                </motion.div>
+            ))}
         </motion.div>
-    ))}
-</motion.div>
     );
 };
 
