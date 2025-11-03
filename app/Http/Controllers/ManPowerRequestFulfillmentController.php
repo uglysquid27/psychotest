@@ -201,19 +201,6 @@ class ManPowerRequestFulfillmentController extends Controller
             $mlAccuracy = isset($modelInfo['accuracy']) ? round($modelInfo['accuracy'] * 100, 1) : null;
         }
 
-        // Debug logging to help identify issues
-        Log::info('Fulfillment Request Details', [
-            'request_id' => $request->id,
-            'request_sub_section_id' => $request->sub_section_id,
-            'request_section_id' => $request->subSection->section_id ?? null,
-            'total_employees' => $eligibleEmployees->count(),
-            'same_subsection_count' => $sameSubSectionEligible->count(),
-            'other_subsection_count' => $otherSubSectionEligible->count(),
-            'same_day_requests_count' => $sameDayRequests->count(),
-            'ml_status' => $mlStatus,
-            'ml_accuracy' => $mlAccuracy,
-        ]);
-
         return Inertia::render('Fullfill/Fulfill', [
     'request' => $request,
     'sameSubSectionEmployees' => $sortedSameSubSectionEmployees,
@@ -723,17 +710,6 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
             'status' => 'in:pending,accepted,rejected'
         ]);
 
-        Log::info('=== BULK FULFILLMENT STARTED ===', [
-            'user_id' => auth()->id(),
-            'user_name' => auth()->user()->name,
-            'request_ids' => $request->request_ids,
-            'request_count' => count($request->request_ids),
-            'strategy' => $request->strategy,
-            'visibility' => $request->visibility,
-            'timestamp' => now()->toDateTimeString(),
-            'raw_input' => $request->all(),
-        ]);
-
         DB::beginTransaction();
         try {
             $results = [];
@@ -743,7 +719,6 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
             $status = $request->status ?? 'pending';
 
             foreach ($request->request_ids as $id) {
-                Log::info('⚡ Processing request', ['request_id' => $id]);
 
                 $manpowerRequest = ManPowerRequest::with(['subSection', 'schedules'])->findOrFail($id);
 
@@ -829,12 +804,6 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
                     $schedule = Schedule::create($data);
                     $createdSchedules[] = $schedule->id;
 
-                    Log::info('✅ Employee assigned', [
-                        'request_id' => $id,
-                        'employee_id' => $employeeId,
-                        'schedule_id' => $schedule->id,
-                        'line' => $data['line'] ?? 'N/A',
-                    ]);
                 }
 
                 // Update request status
@@ -848,15 +817,6 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
             }
 
             DB::commit();
-
-            Log::info('=== BULK FULFILLMENT COMPLETED ===', [
-                'total_requests' => count($request->request_ids),
-                'successful' => $successCount,
-                'failed' => $failureCount,
-                'success_rate' => round(($successCount / count($request->request_ids)) * 100, 2) . '%',
-                'results' => $results,
-                'timestamp' => now()->toDateTimeString()
-            ]);
 
             return redirect()->route('manpower-requests.index')->with([
                 'success' => 'Bulk fulfill completed: ' . $successCount . ' successful, ' . $failureCount . ' failed',
@@ -895,20 +855,13 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
             $requestIds = $request->request_ids;
             $employeeSelections = $request->employee_selections;
 
-            \Log::info('🚀 BulkFulfill triggered', [
-                'request_ids' => $requestIds,
-                'employee_selections' => $employeeSelections,
-            ]);
+            
 
             foreach ($requestIds as $reqId) {
                 $manpowerRequest = ManPowerRequest::findOrFail($reqId);
 
                 $employeeIds = $employeeSelections[$reqId] ?? [];
 
-                \Log::info('⚡ Processing bulk fulfill', [
-                    'request_id' => $reqId,
-                    'employee_ids' => $employeeIds,
-                ]);
 
                 // hapus schedule lama (kalau overwrite)
                 $manpowerRequest->schedules()->delete();
@@ -920,10 +873,6 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
                         'visibility' => $request->visibility,
                     ]);
 
-                    \Log::info('✅ Employee assigned', [
-                        'request_id' => $reqId,
-                        'employee_id' => $empId,
-                    ]);
                 }
 
                 $manpowerRequest->update([
@@ -934,7 +883,6 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
 
             DB::commit();
 
-            \Log::info('🎉 BulkFulfill finished successfully');
 
             return back()->with('success', 'Bulk fulfillment berhasil diproses.');
         } catch (\Exception $e) {
@@ -1476,7 +1424,6 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
                         $scheduleId = $schedule->id;
                         $schedule->delete();
 
-                        Log::info("Employee {$employeeId} removed from schedule {$scheduleId}");
                     } else {
                         Log::warning("Employee {$employeeId} not found in current schedules for removal (request_id={$req->id})");
                     }
@@ -1519,7 +1466,6 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
                     $employee->status = 'assigned';
                     $employee->save();
 
-                    Log::info("Employee {$employeeId} assigned to new schedule {$schedule->id}");
                 }
 
                 // Update request status
@@ -1527,13 +1473,6 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
                 $req->fulfilled_by = $validated['fulfilled_by'];
                 $req->save();
 
-                Log::info('Manpower request fulfilled', [
-                    'request_id' => $req->id,
-                    'fulfilled_by' => $validated['fulfilled_by'],
-                    'employees_added' => $employeesToAdd,
-                    'employees_removed' => $employeesToRemove,
-                    'date' => $req->date
-                ]);
             });
         } catch (\Exception $e) {
             Log::error('Fulfillment Error: ' . $e->getMessage(), [
@@ -1786,7 +1725,6 @@ $totalScore = ($mlScore * 0.7) + ($baseScore * 0.3);
                         $scheduleId = $schedule->id;
                         $schedule->delete();
 
-                        Log::info("Employee {$employeeId} removed from schedule {$scheduleId} during revision");
                     } else {
                         Log::warning("Employee {$employeeId} not found in current schedules for removal (request_id={$req->id})");
                     }
@@ -1829,20 +1767,12 @@ $totalScore = ($mlScore * 0.7) + ($baseScore * 0.3);
                     $employee->status = 'assigned';
                     $employee->save();
 
-                    Log::info("Employee {$employeeId} assigned to new schedule {$schedule->id} during revision");
                 }
 
                 // Update request status (still fulfilled but with revision)
                 $req->fulfilled_by = $validated['fulfilled_by'];
                 $req->save();
 
-                Log::info('Manpower request revised', [
-                    'request_id' => $req->id,
-                    'fulfilled_by' => $validated['fulfilled_by'],
-                    'employees_added' => $employeesToAdd,
-                    'employees_removed' => $employeesToRemove,
-                    'date' => $req->date
-                ]);
             });
         } catch (\Exception $e) {
             Log::error('Revision Error: ' . $e->getMessage(), [

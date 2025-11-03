@@ -18,71 +18,96 @@ use Illuminate\Support\Facades\Http;
 
 class ScheduleController extends Controller
 {
-    public function index(Request $request): Response
-{
-    $query = Schedule::with([
-        'employee',
-        'subSection.section',
-        'manPowerRequest.shift',
-        'manPowerRequest.subSection.section'
-    ]);
+      public function index(Request $request): Response
+    {
+        // Return the page immediately with minimal data
+        // Don't load schedules here - they'll be loaded via AJAX
+        $sections = Section::all();
+        $subSections = SubSection::with('section')->get();
 
-    $startDate = $request->input('start_date');
-    $endDate = $request->input('end_date');
-    $sectionId = $request->input('section');
-    $subSectionId = $request->input('sub_section');
-
-    if ($startDate && $endDate) {
-        $query->whereBetween('date', [
-            Carbon::parse($startDate)->startOfDay(),
-            Carbon::parse($endDate)->endOfDay()
+        return Inertia::render('Schedules/Index', [
+            'schedules' => [], // Start with empty array for instant page load
+            'sections' => $sections,
+            'subSections' => $subSections,
+            'filters' => [
+                'start_date' => $request->input('start_date'),
+                'end_date' => $request->input('end_date'),
+                'section' => $request->input('section'),
+                'sub_section' => $request->input('sub_section'),
+            ]
         ]);
     }
 
-    if ($sectionId) {
-        $query->whereHas('manPowerRequest.subSection', function ($q) use ($sectionId) {
-            $q->where('section_id', $sectionId);
-        });
+    /**
+     * API endpoint to load schedule data (called after page loads)
+     */
+    public function getScheduleData(Request $request)
+    {
+        try {
+            $query = Schedule::with([
+                'employee',
+                'subSection.section',
+                'manPowerRequest.shift',
+                'manPowerRequest.subSection.section'
+            ]);
+
+            $startDate = $request->input('start_date');
+            $endDate = $request->input('end_date');
+            $sectionId = $request->input('section');
+            $subSectionId = $request->input('sub_section');
+
+            if ($startDate && $endDate) {
+                $query->whereBetween('date', [
+                    Carbon::parse($startDate)->startOfDay(),
+                    Carbon::parse($endDate)->endOfDay()
+                ]);
+            }
+
+            if ($sectionId) {
+                $query->whereHas('manPowerRequest.subSection', function ($q) use ($sectionId) {
+                    $q->where('section_id', $sectionId);
+                });
+            }
+
+            if ($subSectionId) {
+                $query->whereHas('manPowerRequest', function ($q) use ($subSectionId) {
+                    $q->where('sub_section_id', $subSectionId);
+                });
+            }
+
+            // ORDER BY shift: pagi -> siang -> malam
+            $query->leftJoin('man_power_requests', 'schedules.man_power_request_id', '=', 'man_power_requests.id')
+                  ->leftJoin('shifts', 'man_power_requests.shift_id', '=', 'shifts.id')
+                  ->orderByRaw("
+                      CASE 
+                          WHEN shifts.name LIKE '%pagi%' THEN 1
+                          WHEN shifts.name LIKE '%siang%' THEN 2
+                          WHEN shifts.name LIKE '%malam%' THEN 3
+                          ELSE 4
+                      END
+                  ")
+                  ->orderBy('shifts.name')
+                  ->orderBy('date')
+                  ->select('schedules.*');
+
+            $schedules = $query->get();
+
+            return response()->json([
+                'schedules' => $schedules,
+                'last_updated' => now()->toISOString(),
+                'success' => true
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to load schedule data: ' . $e->getMessage());
+            return response()->json([
+                'schedules' => [],
+                'last_updated' => now()->toISOString(),
+                'success' => false,
+                'error' => 'Failed to load schedule data'
+            ], 500);
+        }
     }
-
-    if ($subSectionId) {
-        $query->whereHas('manPowerRequest', function ($q) use ($subSectionId) {
-            $q->where('sub_section_id', $subSectionId);
-        });
-    }
-
-    // ORDER BY shift: pagi -> siang -> malam
-    $query->leftJoin('man_power_requests', 'schedules.man_power_request_id', '=', 'man_power_requests.id')
-          ->leftJoin('shifts', 'man_power_requests.shift_id', '=', 'shifts.id')
-          ->orderByRaw("
-              CASE 
-                  WHEN shifts.name LIKE '%pagi%' THEN 1
-                  WHEN shifts.name LIKE '%siang%' THEN 2
-                  WHEN shifts.name LIKE '%malam%' THEN 3
-                  ELSE 4
-              END
-          ")
-          ->orderBy('shifts.name')
-          ->orderBy('date')
-          ->select('schedules.*');
-
-    $schedules = $query->get();
-
-    $sections = Section::all();
-    $subSections = SubSection::with('section')->get();
-
-    return Inertia::render('Schedules/Index', [
-        'schedules' => $schedules,
-        'sections' => $sections,
-        'subSections' => $subSections,
-        'filters' => [
-            'start_date' => $startDate,
-            'end_date' => $endDate,
-            'section' => $sectionId,
-            'sub_section' => $subSectionId,
-        ]
-    ]);
-}
 
     public function edit($id): Response
     {
@@ -458,78 +483,78 @@ class ScheduleController extends Controller
         }
     }
 
-  public function getUpdatedSchedules(Request $request)
-{
-    $query = Schedule::with([
-        'employee',
-        'subSection.section',
-        'manPowerRequest.shift',
-        'manPowerRequest.subSection.section'
-    ]);
-
-    $startDate = $request->input('start_date');
-    $endDate = $request->input('end_date');
-    $sectionId = $request->input('section');
-    $subSectionId = $request->input('sub_section');
-    $lastUpdate = $request->input('last_update');
-
-    // Apply date filters
-    if ($startDate && $endDate) {
-        $query->whereBetween('date', [
-            Carbon::parse($startDate)->startOfDay(),
-            Carbon::parse($endDate)->endOfDay()
+ public function getUpdatedSchedules(Request $request)
+    {
+        $query = Schedule::with([
+            'employee',
+            'subSection.section',
+            'manPowerRequest.shift',
+            'manPowerRequest.subSection.section'
         ]);
-    }
 
-    // Apply section filter
-    if ($sectionId) {
-        $query->whereHas('manPowerRequest.subSection', function ($q) use ($sectionId) {
-            $q->where('section_id', $sectionId);
-        });
-    }
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+        $sectionId = $request->input('section');
+        $subSectionId = $request->input('sub_section');
+        $lastUpdate = $request->input('last_update');
 
-    // Apply sub-section filter
-    if ($subSectionId) {
-        $query->whereHas('manPowerRequest', function ($q) use ($subSectionId) {
-            $q->where('sub_section_id', $subSectionId);
-        });
-    }
+        // Apply date filters
+        if ($startDate && $endDate) {
+            $query->whereBetween('date', [
+                Carbon::parse($startDate)->startOfDay(),
+                Carbon::parse($endDate)->endOfDay()
+            ]);
+        }
 
-    // ORDER BY shift: pagi -> siang -> malam
-    $query->leftJoin('man_power_requests', 'schedules.man_power_request_id', '=', 'man_power_requests.id')
-          ->leftJoin('shifts', 'man_power_requests.shift_id', '=', 'shifts.id')
-          ->orderByRaw("
-              CASE 
-                  WHEN shifts.name LIKE '%pagi%' THEN 1
-                  WHEN shifts.name LIKE '%siang%' THEN 2
-                  WHEN shifts.name LIKE '%malam%' THEN 3
-                  ELSE 4
-              END
-          ")
-          ->orderBy('shifts.name')
-          ->orderBy('date')
-          ->select('schedules.*'); // Important: select schedules columns only
+        // Apply section filter
+        if ($sectionId) {
+            $query->whereHas('manPowerRequest.subSection', function ($q) use ($sectionId) {
+                $q->where('section_id', $sectionId);
+            });
+        }
 
-    // Get ALL schedules with current filters
-    $schedules = $query->get();
+        // Apply sub-section filter
+        if ($subSectionId) {
+            $query->whereHas('manPowerRequest', function ($q) use ($subSectionId) {
+                $q->where('sub_section_id', $subSectionId);
+            });
+        }
 
-    // Check if data has changed since last update
-    $latestUpdate = $schedules->max('updated_at') ?? now();
-    
-    if ($lastUpdate && $latestUpdate <= Carbon::parse($lastUpdate)) {
+        // ORDER BY shift: pagi -> siang -> malam
+        $query->leftJoin('man_power_requests', 'schedules.man_power_request_id', '=', 'man_power_requests.id')
+              ->leftJoin('shifts', 'man_power_requests.shift_id', '=', 'shifts.id')
+              ->orderByRaw("
+                  CASE 
+                      WHEN shifts.name LIKE '%pagi%' THEN 1
+                      WHEN shifts.name LIKE '%siang%' THEN 2
+                      WHEN shifts.name LIKE '%malam%' THEN 3
+                      ELSE 4
+                  END
+              ")
+              ->orderBy('shifts.name')
+              ->orderBy('date')
+              ->select('schedules.*');
+
+        // Get ALL schedules with current filters
+        $schedules = $query->get();
+
+        // Check if data has changed since last update
+        $latestUpdate = $schedules->max('updated_at') ?? now();
+        
+        if ($lastUpdate && $latestUpdate <= Carbon::parse($lastUpdate)) {
+            return response()->json([
+                'schedules' => [],
+                'last_updated' => $lastUpdate,
+                'unchanged' => true
+            ]);
+        }
+
         return response()->json([
-            'schedules' => [],
-            'last_updated' => $lastUpdate,
-            'unchanged' => true
+            'schedules' => $schedules,
+            'last_updated' => $latestUpdate->toISOString(),
+            'unchanged' => false
         ]);
     }
-
-    return response()->json([
-        'schedules' => $schedules,
-        'last_updated' => $latestUpdate->toISOString(),
-        'unchanged' => false
-    ]);
-}
 
 
 }

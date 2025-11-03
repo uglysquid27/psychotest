@@ -37,6 +37,84 @@ const LoadingOverlay = () => {
   );
 };
 
+const ContentLoadingSkeleton = () => {
+  return (
+    <div className="min-h-screen dark:bg-gray-900 p-4 sm:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto py-6">
+        {/* Welcome Header Skeleton */}
+        <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 sm:p-8 mb-8 shadow-2xl border border-gray-100 dark:border-gray-700">
+          <div className="h-8 bg-gray-300 dark:bg-gray-600 rounded w-3/4 mb-2 animate-pulse"></div>
+          <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/2 animate-pulse"></div>
+        </div>
+
+        {/* Filter Section Skeleton */}
+        <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 sm:p-8 mb-8 shadow-2xl border border-gray-100 dark:border-gray-700">
+          <div className="h-6 bg-gray-300 dark:bg-gray-600 rounded w-1/4 mb-4 animate-pulse"></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            {[...Array(5)].map((_, index) => (
+              <div key={index}>
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2 animate-pulse"></div>
+                <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Content Skeleton */}
+        <div className="space-y-6">
+          {[...Array(3)].map((_, index) => (
+            <div key={index}>
+              {/* Date Header Skeleton */}
+              <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl p-6 mb-6">
+                <div className="h-8 bg-gray-300 dark:bg-gray-600 rounded w-1/3 mx-auto animate-pulse"></div>
+              </div>
+
+              {/* Section Skeleton */}
+              <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-2xl border border-gray-100 dark:border-gray-700 mb-6">
+                <div className="flex justify-between items-start mb-6">
+                  <div className="space-y-2">
+                    <div className="h-6 bg-gray-300 dark:bg-gray-600 rounded w-48 animate-pulse"></div>
+                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-64 animate-pulse"></div>
+                  </div>
+                  <div className="flex gap-4">
+                    <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-32 animate-pulse"></div>
+                    <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-40 animate-pulse"></div>
+                  </div>
+                </div>
+
+                {/* Shifts Grid Skeleton */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {[...Array(3)].map((_, shiftIndex) => (
+                    <div key={shiftIndex} className="border border-gray-200 dark:border-gray-600 rounded-xl p-4 bg-gray-50 dark:bg-gray-700">
+                      <div className="mb-3 space-y-2">
+                        <div className="h-5 bg-gray-300 dark:bg-gray-600 rounded w-3/4 mx-auto animate-pulse"></div>
+                        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mx-auto animate-pulse"></div>
+                        <div className="flex justify-center gap-2">
+                          <div className="h-6 bg-gray-300 dark:bg-gray-600 rounded w-8 animate-pulse"></div>
+                          <div className="h-6 bg-gray-300 dark:bg-gray-600 rounded w-8 animate-pulse"></div>
+                          <div className="h-6 bg-gray-300 dark:bg-gray-600 rounded w-8 animate-pulse"></div>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {[...Array(4)].map((_, rowIndex) => (
+                          <div key={rowIndex} className="flex justify-between">
+                            <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-2/3 animate-pulse"></div>
+                            <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-8 animate-pulse"></div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibility, user, onToggleVisibility, isAnyExpanded, onExpand, lastUpdate }) => {
     const [expandedSection, setExpandedSection] = useState(false);
     const [coworkersData, setCoworkersData] = useState(null);
@@ -497,10 +575,11 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
 };
 
 const Index = () => {
-    const { schedules: initialSchedules, filters, sections, subSections, auth } = usePage().props;
+    const { filters, sections, subSections, auth } = usePage().props;
     const user = auth?.user;
     
-    const [schedules, setSchedules] = useState(initialSchedules);
+    const [schedules, setSchedules] = useState([]);
+    const [isDataLoaded, setIsDataLoaded] = useState(false);
     const [lastUpdate, setLastUpdate] = useState(null);
     const [startDate, setStartDate] = useState(filters.start_date || '');
     const [endDate, setEndDate] = useState(filters.end_date || '');
@@ -508,10 +587,117 @@ const Index = () => {
     const [selectedSubSection, setSelectedSubSection] = useState(filters.sub_section || '');
     const [currentPage, setCurrentPage] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
-    const [isInitialLoading, setIsInitialLoading] = useState(false);
     const [expandedSectionId, setExpandedSectionId] = useState(null);
 
     const itemsPerPage = 3;
+
+    // Load schedule data after component mounts
+    useEffect(() => {
+        const loadScheduleData = async () => {
+            try {
+                const params = new URLSearchParams({
+                    start_date: startDate || '',
+                    end_date: endDate || '',
+                    section: selectedSection || '',
+                    sub_section: selectedSubSection || ''
+                });
+                
+                const response = await fetch(`/schedules/data?${params}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    setSchedules(data.schedules);
+                    setLastUpdate(data.last_updated);
+                }
+            } catch (error) {
+                console.error('Failed to load schedule data:', error);
+            } finally {
+                setIsDataLoaded(true);
+            }
+        };
+
+        loadScheduleData();
+    }, []); // Empty dependency array - only run once on mount
+
+    // Update data when filters change
+    useEffect(() => {
+        if (!isDataLoaded) return; // Don't run on initial load
+
+        const loadFilteredData = async () => {
+            setIsLoading(true);
+            try {
+                const params = new URLSearchParams({
+                    start_date: startDate || '',
+                    end_date: endDate || '',
+                    section: selectedSection || '',
+                    sub_section: selectedSubSection || ''
+                });
+                
+                const response = await fetch(`/schedules/data?${params}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    setSchedules(data.schedules);
+                    setLastUpdate(data.last_updated);
+                    setCurrentPage(1); // Reset to first page
+                }
+            } catch (error) {
+                console.error('Failed to load filtered schedule data:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadFilteredData();
+    }, [startDate, endDate, selectedSection, selectedSubSection, isDataLoaded]);
+
+    // Background polling for updates
+    useEffect(() => {
+        if (!isDataLoaded || isLoading) return; // Don't poll during initial load or manual filtering
+    
+        const pollInterval = 15000; // 15 seconds
+        
+        const fetchUpdates = async () => {
+            try {
+                // Use the same filters as current display
+                const params = new URLSearchParams({
+                    last_update: lastUpdate || '',
+                    start_date: startDate || '',
+                    end_date: endDate || '',
+                    section: selectedSection || '',
+                    sub_section: selectedSubSection || ''
+                });
+                
+                const response = await fetch(`/schedules/updates?${params}`, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Only update if data actually changed
+                    if (!data.unchanged && data.last_updated !== lastUpdate) {
+                        // Replace ALL schedules with the complete updated dataset
+                        setSchedules(data.schedules);
+                        setLastUpdate(data.last_updated);
+                        
+                        console.log('Schedule data updated automatically - complete dataset refreshed');
+                    }
+                }
+            } catch (error) {
+                console.log('Background update failed:', error);
+                // Fail silently - don't show errors to users for background updates
+            }
+        };
+
+        // Start polling
+        const intervalId = setInterval(fetchUpdates, pollInterval);
+        
+        // Cleanup on unmount
+        return () => clearInterval(intervalId);
+    }, [isDataLoaded, isLoading, lastUpdate, startDate, endDate, selectedSection, selectedSubSection]);
 
     // Define role-based section access
     const getAccessibleSections = () => {
@@ -544,83 +730,6 @@ const Index = () => {
     const accessibleSections = getAccessibleSections();
     const isAdmin = user?.role === 'admin';
 
-    // Handle initial page load
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setIsInitialLoading(false);
-        }, 500);
-
-        return () => clearTimeout(timer);
-    }, []);
-
-    // Update state when props change (from manual filtering)
-    useEffect(() => {
-        setSchedules(initialSchedules);
-        setStartDate(filters.start_date || '');
-        setEndDate(filters.end_date || '');
-        setSelectedSection(filters.section || '');
-        setSelectedSubSection(filters.sub_section || '');
-        setCurrentPage(1);
-    }, [initialSchedules, filters]);
-
-    useEffect(() => {
-    if (isLoading) return; // Don't poll during manual filtering
-    
-    const pollInterval = 15000; // 15 seconds
-    
-    const fetchUpdates = async () => {
-        try {
-            // Use the same filters as current display
-            const params = new URLSearchParams({
-                last_update: lastUpdate || '',
-                start_date: startDate || '',
-                end_date: endDate || '',
-                section: selectedSection || '',
-                sub_section: selectedSubSection || ''
-            });
-            
-            const response = await fetch(`/schedules/updates?${params}`, {
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                }
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
-                
-                // Only update if data actually changed
-                if (!data.unchanged && data.last_updated !== lastUpdate) {
-                    // Replace ALL schedules with the complete updated dataset
-                    setSchedules(data.schedules);
-                    setLastUpdate(data.last_updated);
-                    
-                    console.log('Schedule data updated automatically - complete dataset refreshed');
-                }
-            }
-        } catch (error) {
-            console.log('Background update failed:', error);
-            // Fail silently - don't show errors to users for background updates
-        }
-    };
-
-    // Start polling
-    const intervalId = setInterval(fetchUpdates, pollInterval);
-    
-    // Cleanup on unmount
-    return () => clearInterval(intervalId);
-}, [isLoading, lastUpdate, startDate, endDate, selectedSection, selectedSubSection]);
-
-useEffect(() => {
-    setSchedules(initialSchedules);
-    // Set lastUpdate berdasarkan updated_at terbaru dari initial data
-    if (initialSchedules.length > 0) {
-        const latestUpdate = Math.max(...initialSchedules.map(s => 
-            new Date(s.updated_at || s.created_at).getTime()
-        ));
-        setLastUpdate(new Date(latestUpdate).toISOString());
-    }
-}, [initialSchedules]);
-
     const filteredSubSections = useMemo(() => {
         if (!selectedSection) return subSections;
         return subSections.filter(sub => sub.section_id == selectedSection);
@@ -628,6 +737,8 @@ useEffect(() => {
 
     // Apply filters only for display - but polling always gets ALL data
     const filteredAndGroupedSchedules = useMemo(() => {
+        if (!isDataLoaded) return {};
+
         let filteredSchedules = [...schedules];
 
         // Apply section filter for display only
@@ -685,7 +796,7 @@ useEffect(() => {
 
             return acc;
         }, {});
-    }, [schedules, selectedSection, selectedSubSection, startDate, endDate, accessibleSections]);
+    }, [schedules, selectedSection, selectedSubSection, startDate, endDate, accessibleSections, isDataLoaded]);
 
     const sortedDates = useMemo(() =>
         Object.keys(filteredAndGroupedSchedules).sort((a, b) =>
@@ -756,11 +867,11 @@ useEffect(() => {
         }
     };
 
-    // Show loading overlay during initial load or filter loading
-    if (isInitialLoading) {
+    // Show loading skeleton while data is loading
+    if (!isDataLoaded) {
         return (
             <AuthenticatedLayout header={<h2 className="text-xl font-semibold text-gray-800 dark:text-white">Agenda Penjadwalan</h2>}>
-                <LoadingOverlay />
+                <ContentLoadingSkeleton />
             </AuthenticatedLayout>
         );
     }
