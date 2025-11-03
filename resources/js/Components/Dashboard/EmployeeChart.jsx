@@ -1,3 +1,4 @@
+// EmployeeChart.jsx
 import React, { useState, useEffect } from 'react';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import {
@@ -10,9 +11,7 @@ import {
     Legend,
     ArcElement
 } from 'chart.js';
-import dayjs from 'dayjs';
 
-// Register all required components for both Bar and Doughnut charts
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
 
 const EmployeeChart = ({
@@ -27,11 +26,11 @@ const EmployeeChart = ({
     fetchModalData,
     applyFilters
 }) => {
-    const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
     useEffect(() => {
         const handleResize = () => {
-            setIsMobile(window.innerWidth < 640);
+            setIsMobile(window.innerWidth < 768);
         };
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
@@ -45,36 +44,43 @@ const EmployeeChart = ({
                 position: 'top',
                 labels: {
                     boxWidth: 12,
-                    padding: 20,
+                    padding: 15,
                     usePointStyle: true,
                     color: 'rgba(55, 65, 81, 1)',
+                    font: {
+                        size: isMobile ? 10 : 12
+                    }
                 },
             },
             tooltip: {
                 callbacks: {
-                    label: ctx => `${ctx.dataset.label}: ${ctx.raw}`,
-                    title: ctx => {
-                        const label = ctx[0].label;
-                        if (label.includes('Week')) {
-                            return label;
-                        }
-                        return dayjs(label).isValid()
-                            ? dayjs(label).format('DD MMM YYYY')
-                            : label;
+                    label: (context) => {
+                        return `${context.dataset.label}: ${Math.round(context.raw)}`;
                     }
                 },
-                animation: { duration: 300 },
                 padding: 10,
-                backgroundColor: 'rgba(0, 0, 0, 0.8)'
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                titleFont: {
+                    size: isMobile ? 10 : 12
+                },
+                bodyFont: {
+                    size: isMobile ? 10 : 12
+                }
             }
         },
         scales: {
             x: {
-                grid: { display: false },
+                grid: { 
+                    display: false,
+                    color: 'rgba(0, 0, 0, 0.1)'
+                },
                 ticks: {
-                    maxRotation: 45,
-                    minRotation: 45,
+                    maxRotation: isMobile ? 90 : 45,
+                    minRotation: isMobile ? 90 : 45,
                     color: 'rgba(107, 114, 128, 1)',
+                    font: {
+                        size: isMobile ? 9 : 11
+                    }
                 }
             },
             y: {
@@ -82,17 +88,31 @@ const EmployeeChart = ({
                 ticks: {
                     precision: 0,
                     color: 'rgba(107, 114, 128, 1)',
+                    font: {
+                        size: isMobile ? 9 : 11
+                    },
+                    callback: function(value) {
+                        return Math.round(value);
+                    }
                 },
+                grid: {
+                    color: 'rgba(0, 0, 0, 0.05)'
+                }
             }
         },
         animation: {
-            duration: 1000,
+            duration: 800,
             easing: 'easeOutQuart'
         },
         onClick,
         responsiveAnimationDuration: 0,
         layout: {
-            padding: { top: 20, right: 20, bottom: 20, left: 20 }
+            padding: { 
+                top: 10, 
+                right: 10, 
+                bottom: 10, 
+                left: 10 
+            }
         }
     });
 
@@ -103,12 +123,12 @@ const EmployeeChart = ({
             legend: {
                 position: 'bottom',
                 labels: {
-                    boxWidth: 12,
-                    padding: 20,
+                    boxWidth: 10,
+                    padding: 15,
                     usePointStyle: true,
                     color: 'rgba(55, 65, 81, 1)',
                     font: {
-                        size: 10
+                        size: isMobile ? 9 : 11
                     }
                 },
                 align: 'center',
@@ -117,22 +137,20 @@ const EmployeeChart = ({
                 callbacks: {
                     label: (context) => {
                         const label = context.label || '';
-                        const value = context.raw || 0;
+                        const value = Math.round(context.raw);
                         const total = context.chart.data.datasets[0].data.reduce((acc, curr) => acc + curr, 0);
-                        const percentage = ((value / total) * 100).toFixed(2);
+                        const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
                         return `${label}: ${value} (${percentage}%)`;
                     },
                 },
-                padding: 10,
-                backgroundColor: 'rgba(0, 0, 0, 0.8)'
-            },
-            title: {
-                display: true,
-                text: 'Overall Employee Assignments',
-                font: {
-                    size: 16
+                padding: 8,
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                titleFont: {
+                    size: isMobile ? 10 : 12
                 },
-                color: 'rgba(55, 65, 81, 1)',
+                bodyFont: {
+                    size: isMobile ? 10 : 12
+                }
             }
         },
         onClick,
@@ -142,7 +160,6 @@ const EmployeeChart = ({
         }
     });
     
-    // Function to transform bar chart data into doughnut chart data
     const getDoughnutData = () => {
         if (!data || !data.datasets || data.datasets.length === 0) {
             return { labels: [], datasets: [] };
@@ -153,17 +170,17 @@ const EmployeeChart = ({
             const sectionJobs = data.labels.filter(label => label.includes(s.name));
             return sectionJobs.reduce((sum, label) => {
                 const index = data.labels.indexOf(label);
-                return sum + data.datasets[0].data[index];
+                return sum + (data.datasets[0]?.data[index] || 0);
             }, 0);
         });
 
         const backgroundColors = [
-            'rgba(255, 99, 132, 0.8)',
-            'rgba(54, 162, 235, 0.8)',
-            'rgba(255, 206, 86, 0.8)',
-            'rgba(75, 192, 192, 0.8)',
-            'rgba(153, 102, 255, 0.8)',
-            'rgba(255, 159, 64, 0.8)',
+            'rgba(99, 102, 241, 0.8)',
+            'rgba(16, 185, 129, 0.8)',
+            'rgba(245, 158, 11, 0.8)',
+            'rgba(239, 68, 68, 0.8)',
+            'rgba(139, 92, 246, 0.8)',
+            'rgba(14, 165, 233, 0.8)',
         ];
 
         return {
@@ -171,11 +188,11 @@ const EmployeeChart = ({
             datasets: [
                 {
                     label: 'Assigned Employees',
-                    data: counts,
+                    data: counts.map(count => Math.round(count)),
                     backgroundColor: backgroundColors.slice(0, labels.length),
                     borderColor: 'rgba(255, 255, 255, 1)',
                     borderWidth: 2,
-                    hoverOffset: 4
+                    hoverOffset: 8
                 }
             ]
         };
@@ -186,9 +203,7 @@ const EmployeeChart = ({
             const elementIndex = elements[0].index;
             const label = isMobile ? getDoughnutData().labels[elementIndex] : data.labels[elementIndex];
 
-            // Logic to handle click for both bar and doughnut charts
             if (isMobile) {
-                // For doughnut chart, open modal with filtered data for the clicked section
                 const sectionId = sections.find(s => s.name === label)?.id;
                 if (sectionId) {
                     const params = new URLSearchParams();
@@ -215,7 +230,6 @@ const EmployeeChart = ({
                     }));
                 }
             } else {
-                // Original bar chart click logic
                 const subSectionId = data.subSectionIds?.[elementIndex];
                 const subSectionName = data.labels[elementIndex];
                 const params = new URLSearchParams();
@@ -242,10 +256,14 @@ const EmployeeChart = ({
         }
     };
 
+    const chartData = isMobile ? getDoughnutData() : data;
+
     return (
         <div className="w-full bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl shadow-lg border border-white/30 dark:border-gray-600/30 p-4 sm:p-6 relative transition-all duration-300">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
-                <h3 className="text-lg font-medium whitespace-nowrap text-gray-800 dark:text-gray-100">Employee Assignments</h3>
+                <h3 className="text-lg font-semibold whitespace-nowrap text-gray-800 dark:text-gray-100">
+                    Employee Assignments
+                </h3>
                 <div className="flex flex-wrap gap-2 items-center w-full sm:w-auto">
                     {!isMobile && (
                         <select
@@ -270,17 +288,18 @@ const EmployeeChart = ({
                     )}
                 </div>
             </div>
+            
             <div
                 className="relative"
                 style={{
                     height: `${height}px`,
-                    minHeight: isMobile ? '400px' : '300px'
+                    minHeight: isMobile ? '350px' : '300px'
                 }}
             >
-                {data.labels.length > 0 && data.datasets.some(dataset => dataset.data.length > 0) ? (
+                {chartData.labels.length > 0 && chartData.datasets.some(dataset => dataset.data.length > 0) ? (
                     isMobile ? (
                         <Doughnut
-                            data={getDoughnutData()}
+                            data={chartData}
                             options={getDoughnutChartOptions((e, elements) => {
                                 if (elements.length) {
                                     handleChartClick(elements);
@@ -289,7 +308,7 @@ const EmployeeChart = ({
                         />
                     ) : (
                         <Bar
-                            data={data}
+                            data={chartData}
                             options={getBarChartOptions((e, elements) => {
                                 if (elements.length) {
                                     handleChartClick(elements);
@@ -299,24 +318,28 @@ const EmployeeChart = ({
                         />
                     )
                 ) : (
-                    <div className="h-full flex items-center justify-center text-gray-500">
-                        No data available for selected filters
+                    <div className="h-full flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 p-4">
+                        <svg className="w-16 h-16 text-gray-300 dark:text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                        <p className="text-center text-sm">No data available for selected filters</p>
                     </div>
                 )}
             </div>
+            
             <div className="mt-4">
-                <label className="text-xs text-gray-500 dark:text-gray-400">Adjust Height:</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 mb-2 block">Adjust Chart Height</label>
                 <input
                     type="range"
                     min="300"
                     max="800"
                     value={height}
                     onChange={handleResize}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 slider-thumb"
                 />
             </div>
         </div>
     );
 };
 
-export default EmployeeChart;
+export default EmployeeChart;   

@@ -1,7 +1,7 @@
+// SummaryCards.jsx
 import React from 'react';
 import { motion } from 'framer-motion';
 import { cardVariants } from '@/Animations';
-import { router } from '@inertiajs/react';
 
 const SummaryCards = ({ summary, setModalState, formatDate }) => {
     const handleCardClick = async (title, url, columns) => {
@@ -30,6 +30,7 @@ const SummaryCards = ({ summary, setModalState, formatDate }) => {
             value: summary.activeEmployeesCount,
             total: summary.totalEmployeesCount,
             color: 'indigo',
+            icon: '👥',
             onClick: () => handleCardClick(
                 'Active Employees',
                 route('dashboard.employees.active'),
@@ -46,6 +47,7 @@ const SummaryCards = ({ summary, setModalState, formatDate }) => {
             value: summary.pendingRequestsCount,
             total: summary.totalRequestsCount,
             color: 'yellow',
+            icon: '⏳',
             onClick: () => handleCardClick(
                 'Pending Requests',
                 route('dashboard.requests.pending'),
@@ -62,6 +64,7 @@ const SummaryCards = ({ summary, setModalState, formatDate }) => {
             value: summary.fulfilledRequestsCount,
             total: summary.totalRequestsCount,
             color: 'green',
+            icon: '✅',
             onClick: () => handleCardClick(
                 'Fulfilled Requests',
                 route('dashboard.requests.fulfilled'),
@@ -78,6 +81,7 @@ const SummaryCards = ({ summary, setModalState, formatDate }) => {
             value: summary.thisWeekSchedulesCount,
             total: summary.totalSchedulesCount,
             color: 'blue',
+            icon: '📅',
             onClick: () => handleCardClick(
                 'Upcoming Schedules',
                 route('dashboard.schedules.upcoming'),
@@ -91,52 +95,78 @@ const SummaryCards = ({ summary, setModalState, formatDate }) => {
         }
     ];
 
+    const getColorClasses = (color) => {
+        const colors = {
+            indigo: 'from-indigo-500 to-purple-600 border-indigo-200 dark:border-indigo-800',
+            yellow: 'from-yellow-500 to-amber-600 border-yellow-200 dark:border-yellow-800',
+            green: 'from-green-500 to-emerald-600 border-green-200 dark:border-green-800',
+            blue: 'from-blue-500 to-cyan-600 border-blue-200 dark:border-blue-800'
+        };
+        return colors[color] || colors.indigo;
+    };
+
     return (
-        <motion.div className="grid grid-cols-2 gap-4 mb-8 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {cardData.map((card, index) => (
                 <motion.div
                     key={index}
                     variants={cardVariants}
                     onClick={card.onClick}
-                    whileHover={{ y: -5, boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)' }}
+                    whileHover={{ 
+                        y: -4, 
+                        scale: 1.02,
+                        transition: { duration: 0.2 }
+                    }}
                     whileTap={{ scale: 0.98 }}
                     className={`
-                        bg-white/90 dark:bg-gray-800/90 
-                        backdrop-blur-md 
-                        rounded-2xl 
-                        shadow-lg 
-                        border border-white/30 dark:border-gray-600/30 
-                        p-6 
+                        relative overflow-hidden
+                        bg-gradient-to-br ${getColorClasses(card.color)}
+                        rounded-2xl shadow-lg
+                        border
+                        p-4 sm:p-5
                         cursor-pointer 
                         transition-all 
-                        duration-300 
-                        ${card.color === 'indigo' ? 'border-t-indigo-500 border-t-4' :
-                          card.color === 'yellow' ? 'border-t-yellow-500 border-t-4' :
-                          card.color === 'green' ? 'border-t-green-500 border-t-4' :
-                          card.color === 'blue' ? 'border-t-blue-500 border-t-4' : ''}
+                        duration-300
+                        group
                     `}
                 >
-                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">{card.title}</h3>
-                    <div className="mt-2 flex items-baseline">
-                        <div className="w-20 sm:w-24">
-                            <span className={`text-2xl sm:text-3xl font-bold ${
-                                card.color === 'indigo' ? 'text-indigo-600 dark:text-indigo-400' :
-                                card.color === 'yellow' ? 'text-yellow-600 dark:text-yellow-400' :
-                                card.color === 'green' ? 'text-green-600 dark:text-green-400' :
-                                card.color === 'blue' ? 'text-blue-600 dark:text-blue-400' : ''
-                            }`}>
-                                {typeof card.value === 'number' ? card.value.toLocaleString() : 'N/A'}
-                            </span>
+                    <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                            <div className="text-white/80 text-sm font-medium mb-1">
+                                {card.title}
+                            </div>
+                            <div className="flex items-baseline space-x-2">
+                                <span className="text-2xl sm:text-3xl font-bold text-white">
+                                    {typeof card.value === 'number' ? card.value.toLocaleString() : 'N/A'}
+                                </span>
+                                {card.hasOwnProperty('total') && (
+                                    <span className="text-white/70 text-sm">
+                                        / {typeof card.total === 'number' ? card.total.toLocaleString() : 'N/A'}
+                                    </span>
+                                )}
+                            </div>
                         </div>
-                        {card.hasOwnProperty('total') && (
-                            <span className="ml-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-                                / {typeof card.total === 'number' ? card.total.toLocaleString() : 'N/A'}
-                            </span>
-                        )}
+                        <div className="text-2xl sm:text-3xl opacity-80 group-hover:scale-110 transition-transform duration-300">
+                            {card.icon}
+                        </div>
                     </div>
+                    
+                    {/* Progress bar */}
+                    {card.hasOwnProperty('total') && card.total > 0 && (
+                        <div className="mt-3">
+                            <div className="w-full bg-white/30 rounded-full h-1.5">
+                                <div 
+                                    className="bg-white h-1.5 rounded-full transition-all duration-500 ease-out"
+                                    style={{ 
+                                        width: `${Math.min(100, (card.value / card.total) * 100)}%` 
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    )}
                 </motion.div>
             ))}
-        </motion.div>
+        </div>
     );
 };
 
