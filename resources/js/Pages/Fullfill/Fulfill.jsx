@@ -27,6 +27,13 @@ export default function Fulfill({
         );
     }, [request]);
 
+    const isShrinkSubsection = useMemo(() => {
+        return (
+            request?.sub_section?.name?.toLowerCase() === "shrink" ||
+            request?.subSection?.name?.toLowerCase() === "shrink"
+        );
+    }, [request]);
+
     const normalizeGender = (gender) => {
         if (!gender) {
             return "male";
@@ -330,8 +337,10 @@ export default function Fulfill({
 
     // Check if there are any currently scheduled employees
     const hasScheduledEmployees = useMemo(() => {
-        return selectedIds.some(id => {
-            const emp = allSortedEligibleEmployees.find(e => String(e.id) === id);
+        return selectedIds.some((id) => {
+            const emp = allSortedEligibleEmployees.find(
+                (e) => String(e.id) === id
+            );
             return emp?.isCurrentlyScheduled;
         });
     }, [selectedIds, allSortedEligibleEmployees]);
@@ -429,48 +438,73 @@ export default function Fulfill({
     ]);
 
     const lineAssignments = useMemo(() => {
-        if (!isPutwaySubsection) return {};
+    if (!isPutwaySubsection && !isShrinkSubsection) return {};
 
-        const assignments = {};
-        selectedIds.forEach((id, index) => {
-            assignments[id] = ((index % 2) + 1).toString();
-        });
+    const assignments = {};
+    selectedIds.forEach((id, index) => {
+        if (isPutwaySubsection) {
+            assignments[id] = {
+                number: ((index % 2) + 1).toString(),
+                label: `Line ${(index % 2) + 1}`
+            };
+        } else if (isShrinkSubsection) {
+            assignments[id] = {
+                number: ((index % 4) + 1).toString(),
+                label: `Shrink ${(index % 4) + 1}`
+            };
+        }
+    });
 
-        return assignments;
-    }, [isPutwaySubsection, selectedIds]);
+    return assignments;
+}, [isPutwaySubsection, isShrinkSubsection, selectedIds]);
 
     const bulkLineAssignments = useMemo(() => {
-        const assignments = {};
+    const assignments = {};
 
-        Object.keys(bulkSelectedEmployees).forEach((requestId) => {
-            const request = sameDayRequests.find(
-                (req) => String(req.id) === requestId
-            );
-            if (!request) return;
+    Object.keys(bulkSelectedEmployees).forEach((requestId) => {
+        const request = sameDayRequests.find(
+            (req) => String(req.id) === requestId
+        );
+        if (!request) return;
 
-            const isPutway =
-                request?.sub_section?.name?.toLowerCase() === "putway" ||
-                request?.subSection?.name?.toLowerCase() === "putway";
+        const isPutway =
+            request?.sub_section?.name?.toLowerCase() === "putway" ||
+            request?.subSection?.name?.toLowerCase() === "putway";
+        
+        const isShrink =
+            request?.sub_section?.name?.toLowerCase() === "shrink" ||
+            request?.subSection?.name?.toLowerCase() === "shrink";
 
-            if (isPutway) {
-                const employeeIds = bulkSelectedEmployees[requestId] || [];
-                employeeIds.forEach((id, index) => {
-                    const key = `${requestId}-${id}`;
-                    assignments[key] = ((index % 2) + 1).toString();
-                });
-            }
-        });
+        if (isPutway || isShrink) {
+            const employeeIds = bulkSelectedEmployees[requestId] || [];
+            employeeIds.forEach((id, index) => {
+                const key = `${requestId}-${id}`;
+                if (isPutway) {
+                    assignments[key] = {
+                        number: ((index % 2) + 1).toString(),
+                        label: `Line ${(index % 2) + 1}`
+                    };
+                } else if (isShrink) {
+                    assignments[key] = {
+                        number: ((index % 4) + 1).toString(),
+                        label: `Shrink ${(index % 4) + 1}`
+                    };
+                }
+            });
+        }
+    });
 
-        return assignments;
-    }, [bulkSelectedEmployees, sameDayRequests]);
+    return assignments;
+}, [bulkSelectedEmployees, sameDayRequests]);
 
-    const getBulkLineAssignment = useCallback(
-        (requestId, employeeId) => {
-            const key = `${requestId}-${employeeId}`;
-            return bulkLineAssignments[key] || null;
-        },
-        [bulkLineAssignments]
-    );
+   const getBulkLineAssignment = useCallback(
+    (requestId, employeeId) => {
+        const key = `${requestId}-${employeeId}`;
+        return bulkLineAssignments[key] || null;
+    },
+    [bulkLineAssignments]
+);
+
 
     useEffect(() => {
         if (errors?.fulfillment_error) {
@@ -501,6 +535,72 @@ export default function Fulfill({
             });
         },
         []
+    );
+
+    const handleBulkSubmit = useCallback(
+        (strategy, visibility) => {
+            setBackendError(null);
+
+            const hasIncompleteAssignments = selectedBulkRequests.some(
+                (requestId) => {
+                    const employees = bulkSelectedEmployees[requestId] || [];
+                    const request = sameDayRequests.find(
+                        (req) => String(req.id) === requestId
+                    );
+                    return (
+                        request && employees.length < request.requested_amount
+                    );
+                }
+            );
+
+            if (hasIncompleteAssignments) {
+                setBackendError(
+                    "Beberapa request belum terisi penuh. Silakan lengkapi semua assignment terlebih dahulu."
+                );
+                return;
+            }
+
+            const bulkData = {};
+            selectedBulkRequests.forEach((requestId) => {
+                const employees = bulkSelectedEmployees[requestId] || [];
+                if (employees.length > 0) {
+                    bulkData[requestId] = employees;
+                }
+            });
+
+            router.post(
+                route("manpower-requests.bulk-fulfill"),
+                {
+                    request_ids: selectedBulkRequests,
+                    employee_selections: bulkData,
+                    strategy: strategy,
+                    visibility: visibility,
+                    status: "pending",
+                },
+                {
+                    onSuccess: () => {
+                        console.log("Bulk fulfill successful");
+                        setBulkSelectedEmployees({});
+                        setSelectedBulkRequests([]);
+                        setBulkMode(false);
+                        router.visit(route("manpower-requests.index"));
+                    },
+                    onError: (errors) => {
+                        console.error("Bulk fulfill error:", errors);
+                        if (errors.fulfillment_error) {
+                            setBackendError(errors.fulfillment_error);
+                        } else if (errors.message) {
+                            setBackendError(errors.message);
+                        } else {
+                            setBackendError(
+                                "Terjadi kesalahan saat memproses bulk fulfillment"
+                            );
+                        }
+                    },
+                }
+            );
+        },
+        [selectedBulkRequests, bulkSelectedEmployees, sameDayRequests]
     );
 
     const handleSubmit = useCallback(
@@ -691,72 +791,6 @@ export default function Fulfill({
             sameDayRequests,
             request.sub_section_id,
         ]
-    );
-
-    const handleBulkSubmit = useCallback(
-        (strategy, visibility) => {
-            setBackendError(null);
-
-            const hasIncompleteAssignments = selectedBulkRequests.some(
-                (requestId) => {
-                    const employees = bulkSelectedEmployees[requestId] || [];
-                    const request = sameDayRequests.find(
-                        (req) => String(req.id) === requestId
-                    );
-                    return (
-                        request && employees.length < request.requested_amount
-                    );
-                }
-            );
-
-            if (hasIncompleteAssignments) {
-                setBackendError(
-                    "Beberapa request belum terisi penuh. Silakan lengkapi semua assignment terlebih dahulu."
-                );
-                return;
-            }
-
-            const bulkData = {};
-            selectedBulkRequests.forEach((requestId) => {
-                const employees = bulkSelectedEmployees[requestId] || [];
-                if (employees.length > 0) {
-                    bulkData[requestId] = employees;
-                }
-            });
-
-            router.post(
-                route("manpower-requests.bulk-fulfill"),
-                {
-                    request_ids: selectedBulkRequests,
-                    employee_selections: bulkData,
-                    strategy: strategy,
-                    visibility: visibility,
-                    status: "pending",
-                },
-                {
-                    onSuccess: () => {
-                        console.log("Bulk fulfill successful");
-                        setBulkSelectedEmployees({});
-                        setSelectedBulkRequests([]);
-                        setBulkMode(false);
-                        router.visit(route("manpower-requests.index"));
-                    },
-                    onError: (errors) => {
-                        console.error("Bulk fulfill error:", errors);
-                        if (errors.fulfillment_error) {
-                            setBackendError(errors.fulfillment_error);
-                        } else if (errors.message) {
-                            setBackendError(errors.message);
-                        } else {
-                            setBackendError(
-                                "Terjadi kesalahan saat memproses bulk fulfillment"
-                            );
-                        }
-                    },
-                }
-            );
-        },
-        [selectedBulkRequests, bulkSelectedEmployees, sameDayRequests]
     );
 
     const openChangeModal = useCallback((index) => {
@@ -1262,59 +1296,46 @@ export default function Fulfill({
                     />
                 )}
 
-                {isPutwaySubsection && !bulkMode && (
-                    <div className="bg-purple-50 dark:bg-purple-900/20 shadow-md mb-6 p-4 border border-purple-200 dark:border-purple-700 rounded-lg">
-                        <h3 className="mb-3 font-bold text-purple-800 dark:text-purple-300 text-lg">
-                            Informasi Penugasan Line (Putway)
-                        </h3>
-                        <p className="mb-2 text-purple-700 dark:text-purple-300">
-                            Karyawan akan ditugaskan secara bergantian ke Line 1
-                            dan Line 2.
-                        </p>
-                        <div className="gap-4 grid grid-cols-2 mt-3">
-                            <div className="bg-purple-100 dark:bg-purple-800/30 p-3 rounded">
-                                <h4 className="font-medium text-purple-800 dark:text-purple-200">
-                                    Line 1
-                                </h4>
-                                <div className="space-y-1 mt-2">
-                                    {selectedIds
-                                        .filter((_, index) => index % 2 === 0)
-                                        .map((id, index) => {
-                                            const emp = getEmployeeDetails(id);
-                                            return emp ? (
-                                                <div
-                                                    key={id}
-                                                    className="text-purple-700 dark:text-purple-200 text-xs"
-                                                >
-                                                    {index * 2 + 1}. {emp.name}
-                                                </div>
-                                            ) : null;
-                                        })}
-                                </div>
-                            </div>
-                            <div className="bg-purple-100 dark:bg-purple-800/30 p-3 rounded">
-                                <h4 className="font-medium text-purple-800 dark:text-purple-200">
-                                    Line 2
-                                </h4>
-                                <div className="space-y-1 mt-2">
-                                    {selectedIds
-                                        .filter((_, index) => index % 2 === 1)
-                                        .map((id, index) => {
-                                            const emp = getEmployeeDetails(id);
-                                            return emp ? (
-                                                <div
-                                                    key={id}
-                                                    className="text-purple-700 dark:text-purple-200 text-xs"
-                                                >
-                                                    {index * 2 + 2}. {emp.name}
-                                                </div>
-                                            ) : null;
-                                        })}
-                                </div>
-                            </div>
-                        </div>
+                {(isPutwaySubsection || isShrinkSubsection) && !bulkMode && (
+    <div className={`${isPutwaySubsection ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-700' : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'} shadow-md mb-6 p-4 border rounded-lg`}>
+        <h3 className={`mb-3 font-bold ${isPutwaySubsection ? 'text-purple-800 dark:text-purple-300' : 'text-blue-800 dark:text-blue-300'} text-lg`}>
+            Informasi Penugasan {isPutwaySubsection ? 'Line' : 'Shrink'} ({isPutwaySubsection ? 'Putway' : 'Shrink'})
+        </h3>
+        <p className={`mb-2 ${isPutwaySubsection ? 'text-purple-700 dark:text-purple-300' : 'text-blue-700 dark:text-blue-300'}`}>
+            {isPutwaySubsection 
+                ? "Karyawan akan ditugaskan secara bergantian ke Line 1 dan Line 2."
+                : "Karyawan akan ditugaskan secara bergantian ke Shrink 1, 2, 3, dan 4."}
+        </p>
+        <div className={`gap-4 grid ${isPutwaySubsection ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-4'} mt-3`}>
+            {Array.from({ length: isPutwaySubsection ? 2 : 4 }).map((_, lineIndex) => (
+                <div key={lineIndex} className={`${isPutwaySubsection ? 'bg-purple-100 dark:bg-purple-800/30' : 'bg-blue-100 dark:bg-blue-800/30'} p-3 rounded`}>
+                    <h4 className={`font-medium ${isPutwaySubsection ? 'text-purple-800 dark:text-purple-200' : 'text-blue-800 dark:text-blue-200'}`}>
+                        {isPutwaySubsection ? 'Line' : 'Shrink'} {lineIndex + 1}
+                    </h4>
+                    <div className="space-y-1 mt-2">
+                        {selectedIds
+                            .filter((_, index) => 
+                                isPutwaySubsection 
+                                    ? index % 2 === lineIndex
+                                    : index % 4 === lineIndex
+                            )
+                            .map((id, positionIndex) => {
+                                const emp = getEmployeeDetails(id);
+                                return emp ? (
+                                    <div
+                                        key={id}
+                                        className={`${isPutwaySubsection ? 'text-purple-700 dark:text-purple-200' : 'text-blue-700 dark:text-blue-200'} text-xs`}
+                                    >
+                                        {positionIndex + 1}. {emp.name}
+                                    </div>
+                                ) : null;
+                            })}
                     </div>
-                )}
+                </div>
+            ))}
+        </div>
+    </div>
+)}
 
                 {!bulkMode && (
                     <>
@@ -1352,6 +1373,7 @@ export default function Fulfill({
                                 multiSelectMode={multiSelectMode}
                                 toggleMultiSelectMode={toggleMultiSelectMode}
                                 isPutwaySubsection={isPutwaySubsection}
+                                isShrinkSubsection={isShrinkSubsection}
                                 lineAssignments={lineAssignments}
                             />
 

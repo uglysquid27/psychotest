@@ -164,9 +164,9 @@ export default function Dashboard() {
                         <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">
                             Dashboard Overview
                         </h2>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                        {/* <div className="text-sm text-gray-600 dark:text-gray-400">
                             Last updated: {dayjs().format('DD MMMM YYYY, HH:mm')}
-                        </div>
+                        </div> */}
                     </div>
                 }
             >
@@ -179,7 +179,7 @@ export default function Dashboard() {
                     className="py-4 sm:py-6 px-3 sm:px-4 lg:px-6 space-y-4 sm:space-y-6"
                 >
                     {/* Summary Cards */}
-                    <div className={cardStyle}>
+                           <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl shadow-lg border border-white/30 dark:border-gray-600/30 p-4 sm:p-6 transition-all duration-300 hover:shadow-xl">
                         <SummaryCards
                             summary={summary}
                             setModalState={setModalState}

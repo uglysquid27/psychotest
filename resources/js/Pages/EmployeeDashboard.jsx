@@ -451,48 +451,51 @@ export default function EmployeeDashboard() {
                                                                                                     </span>
                                                                                                 </div>
                                                                                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                                                                    {timeData.employees.map((emp, index) => {
-                                                                                                        const isCurrentUser =
-                                                                                                            String(emp.employee?.id) === String(auth.user.id) ||
-                                                                                                            Number(emp.employee?.id) === Number(auth.user.id);
+                                                                                                   {timeData.employees.map((emp, index) => {
+    const isCurrentUser =
+        String(emp.employee?.id) === String(auth.user.id) ||
+        Number(emp.employee?.id) === Number(auth.user.id);
 
-                                                                                                        const shouldShowLine = emp.sub_section === 'Putway' && emp.line;
+    const shouldShowLine = emp.sub_section === 'Putway' && emp.line;
+    const shouldShowShrink = emp.sub_section === 'Shrink' && emp.line;
 
-                                                                                                        return (
-                                                                                                            <div
-                                                                                                                key={emp.id || index}
-                                                                                                                className={`rounded-lg p-3 text-xs ${isCurrentUser
-                                                                                                                    ? 'bg-blue-100 dark:bg-blue-900/40 border-2 border-blue-500 dark:border-blue-400'
-                                                                                                                    : 'bg-gray-50 dark:bg-gray-700'
-                                                                                                                    }`}
-                                                                                                            >
-                                                                                                                <div className="font-medium text-gray-800 dark:text-gray-200 flex items-center">
-                                                                                                                    {emp.employee?.name || 'N/A'}
-                                                                                                                    {isCurrentUser && (
-                                                                                                                        <span className="ml-2 bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">
-                                                                                                                            Anda
-                                                                                                                        </span>
-                                                                                                                    )}
-                                                                                                                </div>
-                                                                                                                <div className="text-gray-600 dark:text-gray-400 mt-1">
-                                                                                                                    NIK: {emp.employee?.nik || 'N/A'}
-                                                                                                                </div>
-                                                                                                                <div className="text-gray-600 dark:text-gray-400">
-                                                                                                                    Sub Bagian: {emp.sub_section || 'N/A'} {shouldShowLine ? `Line ${emp.line}` : ''}
-                                                                                                                </div>
+    return (
+        <div
+            key={emp.id || index}
+            className={`rounded-lg p-3 text-xs ${isCurrentUser
+                ? 'bg-blue-100 dark:bg-blue-900/40 border-2 border-blue-500 dark:border-blue-400'
+                : 'bg-gray-50 dark:bg-gray-700'
+                }`}
+        >
+            <div className="font-medium text-gray-800 dark:text-gray-200 flex items-center">
+                {emp.employee?.name || 'N/A'}
+                {isCurrentUser && (
+                    <span className="ml-2 bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">
+                        Anda
+                    </span>
+                )}
+            </div>
+            <div className="text-gray-600 dark:text-gray-400 mt-1">
+                NIK: {emp.employee?.nik || 'N/A'}
+            </div>
+            <div className="text-gray-600 dark:text-gray-400">
+                Sub Bagian: {emp.sub_section || 'N/A'} 
+                {shouldShowLine ? ` Line ${emp.line}` : ''}
+                {shouldShowShrink ? `  ${emp.line}` : ''}
+            </div>
 
-                                                                                                                <div className="mt-2">
-                                                                                                                    <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${emp.status === 'accepted' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                                                                                                                        emp.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
-                                                                                                                            'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                                                                                                                        }`}>
-                                                                                                                        {emp.status === 'accepted' ? 'Diterima' :
-                                                                                                                            emp.status === 'rejected' ? 'Ijin' : 'Menunggu'}
-                                                                                                                    </span>
-                                                                                                                </div>
-                                                                                                            </div>
-                                                                                                        );
-                                                                                                    })}
+            <div className="mt-2">
+                <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${emp.status === 'accepted' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                    emp.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                    }`}>
+                    {emp.status === 'accepted' ? 'Diterima' :
+                        emp.status === 'rejected' ? 'Ijin' : 'Menunggu'}
+                </span>
+            </div>
+        </div>
+    );
+})}
                                                                                                 </div>
                                                                                             </div>
                                                                                         );

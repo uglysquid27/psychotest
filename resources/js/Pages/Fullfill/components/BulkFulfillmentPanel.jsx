@@ -1,12 +1,12 @@
 // BulkFulfillmentPanel.jsx
 import { useState, useMemo, useCallback } from 'react';
+import { router } from '@inertiajs/react';
 
 export default function BulkFulfillmentPanel({
     sameDayRequests,
     currentRequest,
     selectedBulkRequests,
     toggleBulkRequestSelection,
-    handleBulkSubmit,
     processing,
     bulkSelectedEmployees,
     openBulkChangeModal,
@@ -16,10 +16,16 @@ export default function BulkFulfillmentPanel({
 }) {
     const [strategy, setStrategy] = useState('optimal');
     const [visibility, setVisibility] = useState('private');
+    const [backendError, setBackendError] = useState(null);
 
     const isPutwayRequest = useCallback((request) => {
         return request?.sub_section?.name?.toLowerCase() === 'putway' ||
                request?.subSection?.name?.toLowerCase() === 'putway';
+    }, []);
+
+    const isShrinkRequest = useCallback((request) => {
+        return request?.sub_section?.name?.toLowerCase() === 'shrink' ||
+               request?.subSection?.name?.toLowerCase() === 'shrink';
     }, []);
 
     const sameSubsectionRequests = useMemo(() => {
@@ -106,6 +112,210 @@ export default function BulkFulfillmentPanel({
         return stats;
     }, [selectedBulkRequests, bulkSelectedEmployees, sameSubsectionRequests]);
 
+    // ADD THE MISSING handleBulkSubmit FUNCTION
+    const handleBulkSubmit = useCallback(
+        (strategy, visibility) => {
+            setBackendError(null);
+
+            const hasIncompleteAssignments = selectedBulkRequests.some(
+                (requestId) => {
+                    const employees = bulkSelectedEmployees[requestId] || [];
+                    const request = sameSubsectionRequests.find(
+                        (req) => String(req.id) === requestId
+                    );
+                    return (
+                        request && employees.length < request.requested_amount
+                    );
+                }
+            );
+
+            if (hasIncompleteAssignments) {
+                setBackendError(
+                    "Beberapa request belum terisi penuh. Silakan lengkapi semua assignment terlebih dahulu."
+                );
+                return;
+            }
+
+            const bulkData = {};
+            selectedBulkRequests.forEach((requestId) => {
+                const employees = bulkSelectedEmployees[requestId] || [];
+                if (employees.length > 0) {
+                    bulkData[requestId] = employees;
+                }
+            });
+
+            router.post(
+                route("manpower-requests.bulk-fulfill"),
+                {
+                    request_ids: selectedBulkRequests,
+                    employee_selections: bulkData,
+                    strategy: strategy,
+                    visibility: visibility,
+                    status: "pending",
+                },
+                {
+                    onSuccess: () => {
+                        console.log("Bulk fulfill successful");
+                        router.visit(route("manpower-requests.index"));
+                    },
+                    onError: (errors) => {
+                        console.error("Bulk fulfill error:", errors);
+                        if (errors.fulfillment_error) {
+                            setBackendError(errors.fulfillment_error);
+                        } else if (errors.message) {
+                            setBackendError(errors.message);
+                        } else {
+                            setBackendError(
+                                "Terjadi kesalahan saat memproses bulk fulfillment"
+                            );
+                        }
+                    },
+                }
+            );
+        },
+        [selectedBulkRequests, bulkSelectedEmployees, sameSubsectionRequests]
+    );
+
+    // Auto-assign function
+    const handleAutoFulfill = useCallback(
+        (strategy) => {
+            const newBulkSelections = { ...bulkSelectedEmployees };
+            const requestsToFulfill = sameSubsectionRequests.filter(
+                (req) =>
+                    selectedBulkRequests.includes(String(req.id)) &&
+                    req.status !== 'fulfilled'
+            );
+
+            const usedEmployeeIds = new Set(
+                Object.values(newBulkSelections)
+                    .flat()
+                    .filter((id) => id)
+            );
+
+            let availableEmployees = allSortedEligibleEmployees.filter(
+                (emp) =>
+                    !usedEmployeeIds.has(String(emp.id)) &&
+                    emp.status === 'available'
+            );
+
+            // Sort based on strategy
+            if (strategy === 'same_section') {
+                availableEmployees.sort((a, b) => {
+                    const aIsSame = a.subSections.some(
+                        (ss) => String(ss.id) === String(currentRequest.sub_section_id)
+                    );
+                    const bIsSame = b.subSections.some(
+                        (ss) => String(ss.id) === String(currentRequest.sub_section_id)
+                    );
+                    if (aIsSame !== bIsSame) return aIsSame ? -1 : 1;
+
+                    const aTotalScore = a.final_score || a.total_score || 0;
+                    const bTotalScore = b.final_score || b.total_score || 0;
+                    return bTotalScore - aTotalScore;
+                });
+            } else if (strategy === 'balanced') {
+                availableEmployees.sort((a, b) => {
+                    const aWorkload = a.work_days_14_days || 0;
+                    const bWorkload = b.work_days_14_days || 0;
+                    return aWorkload - bWorkload;
+                });
+            } else {
+                // optimal strategy - sort by final score
+                availableEmployees.sort((a, b) => {
+                    const aScore = a.final_score || a.total_score || 0;
+                    const bScore = b.final_score || b.total_score || 0;
+                    return bScore - aScore;
+                });
+            }
+
+            requestsToFulfill.forEach((req) => {
+                const requiredMale = req.male_count || 0;
+                const requiredFemale = req.female_count || 0;
+                const totalRequired = req.requested_amount;
+
+                const maleCandidates = availableEmployees.filter(
+                    (emp) =>
+                        emp.gender === 'male' &&
+                        !usedEmployeeIds.has(String(emp.id)) &&
+                        emp.status === 'available'
+                );
+
+                const femaleCandidates = availableEmployees.filter(
+                    (emp) =>
+                        emp.gender === 'female' &&
+                        !usedEmployeeIds.has(String(emp.id)) &&
+                        emp.status === 'available'
+                );
+
+                const selectedForRequest = [];
+
+                // Select males first
+                for (
+                    let i = 0;
+                    i < requiredMale && maleCandidates.length > 0;
+                    i++
+                ) {
+                    const candidate = maleCandidates.shift();
+                    selectedForRequest.push(String(candidate.id));
+                    usedEmployeeIds.add(String(candidate.id));
+                    availableEmployees = availableEmployees.filter(
+                        (emp) => String(emp.id) !== String(candidate.id)
+                    );
+                }
+
+                // Select females next
+                for (
+                    let i = 0;
+                    i < requiredFemale && femaleCandidates.length > 0;
+                    i++
+                ) {
+                    const candidate = femaleCandidates.shift();
+                    selectedForRequest.push(String(candidate.id));
+                    usedEmployeeIds.add(String(candidate.id));
+                    availableEmployees = availableEmployees.filter(
+                        (emp) => String(emp.id) !== String(candidate.id)
+                    );
+                }
+
+                // Fill remaining slots with any available employees
+                const remainingSlots = totalRequired - selectedForRequest.length;
+                if (remainingSlots > 0) {
+                    const otherCandidates = availableEmployees
+                        .filter(
+                            (emp) =>
+                                !usedEmployeeIds.has(String(emp.id)) &&
+                                emp.status === 'available'
+                        )
+                        .slice(0, remainingSlots);
+
+                    otherCandidates.forEach((candidate) => {
+                        selectedForRequest.push(String(candidate.id));
+                        usedEmployeeIds.add(String(candidate.id));
+                        availableEmployees = availableEmployees.filter(
+                            (emp) => String(emp.id) !== String(candidate.id)
+                        );
+                    });
+                }
+
+                newBulkSelections[String(req.id)] = selectedForRequest;
+            });
+
+            // Update state
+            Object.keys(newBulkSelections).forEach(requestId => {
+                if (!selectedBulkRequests.includes(requestId)) {
+                    delete newBulkSelections[requestId];
+                }
+            });
+        },
+        [
+            allSortedEligibleEmployees,
+            bulkSelectedEmployees,
+            sameSubsectionRequests,
+            selectedBulkRequests,
+            currentRequest.sub_section_id,
+        ]
+    );
+
     return (
         <div className="bg-gradient-to-br from-blue-50 dark:from-blue-900/20 to-indigo-100 dark:to-indigo-900/20 shadow-lg mb-6 p-4 sm:p-6 border border-blue-200 dark:border-blue-700 rounded-xl">
             <div className="flex flex-col sm:flex-row items-start sm:items-center mb-4">
@@ -119,6 +329,14 @@ export default function BulkFulfillmentPanel({
                     <p className="text-blue-600 dark:text-blue-400 text-sm sm:text-base">Penuhi semua request untuk sub-bagian "{currentRequest.sub_section?.name}" secara sekaligus</p>
                 </div>
             </div>
+
+            {/* Error Display */}
+            {backendError && (
+                <div className="bg-red-100 dark:bg-red-900/20 mb-4 p-3 border border-red-400 dark:border-red-600 rounded-lg text-red-700 dark:text-red-300">
+                    <p className="font-semibold">Error:</p>
+                    <p>{backendError}</p>
+                </div>
+            )}
 
             <div className="gap-4 sm:gap-6 grid grid-cols-1 md:grid-cols-2 mb-6">
                 <div className="bg-white dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
@@ -223,6 +441,21 @@ export default function BulkFulfillmentPanel({
                                 </label>
                             </div>
                         </div>
+                        
+                        {/* Auto-assign Button */}
+                        <div className="pt-2">
+                            <button
+                                onClick={() => handleAutoFulfill(strategy)}
+                                disabled={selectedBulkRequests.length === 0}
+                                className={`w-full px-4 py-2 rounded-lg font-medium text-sm sm:text-base ${
+                                    selectedBulkRequests.length === 0
+                                        ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed text-gray-700 dark:text-gray-300'
+                                        : 'bg-green-600 hover:bg-green-700 text-white'
+                                }`}
+                            >
+                                🔄 Auto-Assign {selectedBulkRequests.length} Request
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -233,6 +466,28 @@ export default function BulkFulfillmentPanel({
                     <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-base sm:text-lg">
                         Daftar Request untuk Sub-Bagian "{currentRequest.sub_section?.name}"
                     </h4>
+                    <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
+                        <span>Pilih semua:</span>
+                        <input
+                            type="checkbox"
+                            checked={selectedBulkRequests.length === sameSubsectionRequests.length}
+                            onChange={(e) => {
+                                if (e.target.checked) {
+                                    // Select all
+                                    const allIds = sameSubsectionRequests.map(req => String(req.id));
+                                    selectedBulkRequests.forEach(id => {
+                                        if (!allIds.includes(id)) {
+                                            allIds.push(id);
+                                        }
+                                    });
+                                } else {
+                                    // Deselect all
+                                    selectedBulkRequests.forEach(id => {});
+                                }
+                            }}
+                            className="rounded"
+                        />
+                    </div>
                 </div>
 
                 <div className="max-h-96 overflow-y-auto">
@@ -244,6 +499,8 @@ export default function BulkFulfillmentPanel({
                             const isSelected = selectedBulkRequests.includes(String(req.id));
                             const assignedEmployees = bulkSelectedEmployees[String(req.id)] || [];
                             const assignedCount = assignedEmployees.filter(id => id).length;
+                            const isPutway = isPutwayRequest(req);
+                            const isShrink = isShrinkRequest(req);
 
                             return (
                                 <div
@@ -276,6 +533,11 @@ export default function BulkFulfillmentPanel({
                                                     {req.status === 'fulfilled' && (
                                                         <span className="bg-green-100 dark:bg-green-800 px-2 py-1 rounded-full text-green-800 dark:text-green-200 text-xs whitespace-nowrap">
                                                             Sudah Dipenuhi
+                                                        </span>
+                                                    )}
+                                                    {(isPutway || isShrink) && (
+                                                        <span className={`${isPutway ? 'bg-purple-100 dark:bg-purple-800' : 'bg-blue-100 dark:bg-blue-800'} px-2 py-1 rounded-full ${isPutway ? 'text-purple-800 dark:text-purple-200' : 'text-blue-800 dark:text-blue-200'} text-xs whitespace-nowrap`}>
+                                                            {isPutway ? 'Putway' : 'Shrink'} - {isPutway ? '2 Lines' : '4 Shrinks'}
                                                         </span>
                                                     )}
                                                 </div>
@@ -343,14 +605,16 @@ export default function BulkFulfillmentPanel({
                                                 </span>
                                             </div>
                                             
-                                            {/* Tampilkan informasi line assignment untuk putway */}
-                                            {isPutwayRequest(req) && (
-                                                <div className="mb-3 p-2 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-200 dark:border-purple-700">
-                                                    <div className="flex items-center text-purple-700 dark:text-purple-300 text-xs">
+                                            {/* Tampilkan informasi line assignment untuk putway dan shrink */}
+                                            {(isPutway || isShrink) && (
+                                                <div className={`mb-3 p-2 ${isPutway ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-700' : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'} rounded border`}>
+                                                    <div className={`flex items-center ${isPutway ? 'text-purple-700 dark:text-purple-300' : 'text-blue-700 dark:text-blue-300'} text-xs`}>
                                                         <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                                                             <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                                                         </svg>
-                                                        Penugasan Line: Karyawan akan ditugaskan bergantian ke Line 1 dan Line 2
+                                                        {isPutway 
+                                                            ? "Penugasan Line: Karyawan akan ditugaskan bergantian ke Line 1 dan Line 2"
+                                                            : "Penugasan Shrink: Karyawan akan ditugaskan bergantian ke Shrink 1, 2, 3, dan 4"}
                                                     </div>
                                                 </div>
                                             )}
@@ -359,7 +623,7 @@ export default function BulkFulfillmentPanel({
                                                 {Array.from({ length: req.requested_amount }).map((_, index) => {
                                                     const employeeId = assignedEmployees[index];
                                                     const employee = employeeId ? getEmployeeDetails(employeeId) : null;
-                                                    const lineAssignment = isPutwayRequest(req) && employeeId ? 
+                                                    const lineAssignment = (isPutway || isShrink) && employeeId ? 
                                                         getBulkLineAssignment(String(req.id), employeeId) : null;
 
                                                     return (
@@ -375,8 +639,8 @@ export default function BulkFulfillmentPanel({
                                                                 <span className="text-gray-500 dark:text-gray-400 text-xs">
                                                                     #{index + 1}
                                                                     {lineAssignment && (
-                                                                        <span className="ml-1 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 px-1 rounded text-xs">
-                                                                            Line {lineAssignment}
+                                                                        <span className={`ml-1 ${isPutway ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'} px-1 rounded text-xs`}>
+                                                                            {lineAssignment.label}
                                                                         </span>
                                                                     )}
                                                                 </span>
@@ -391,26 +655,26 @@ export default function BulkFulfillmentPanel({
                                                                 )}
                                                             </div>
 
-                                                        {employee ? (
-    <div className="mb-2">
-        <div className="font-medium text-gray-900 dark:text-gray-100 text-xs sm:text-sm truncate">
-            {employee.name}
-        </div>
-        <div className="text-gray-500 dark:text-gray-400 text-xs truncate">
-            {employee.type} - {employee.subSections?.[0]?.name || '-'}
-        </div>
-        {/* ADD ML SCORES */}
-        <div className="text-gray-400 dark:text-gray-500 text-xs mt-1 grid grid-cols-3 gap-1">
-            <div>Base: {(employee.total_score || 0).toFixed(2)}</div>
-            <div>ML: {(employee.ml_score || 0).toFixed(2)}</div>
-            <div>Final: {(employee.final_score || 0).toFixed(2)}</div>
-        </div>
-    </div>
-) : (
-    <div className="text-gray-500 dark:text-gray-400 text-xs italic mb-2">
-        Belum dipilih
-    </div>
-)}
+                                                            {employee ? (
+                                                                <div className="mb-2">
+                                                                    <div className="font-medium text-gray-900 dark:text-gray-100 text-xs sm:text-sm truncate">
+                                                                        {employee.name}
+                                                                    </div>
+                                                                    <div className="text-gray-500 dark:text-gray-400 text-xs truncate">
+                                                                        {employee.type} - {employee.subSections?.[0]?.name || '-'}
+                                                                    </div>
+                                                                    {/* ML SCORES */}
+                                                                    <div className="text-gray-400 dark:text-gray-500 text-xs mt-1 grid grid-cols-3 gap-1">
+                                                                        <div>Base: {(employee.total_score || 0).toFixed(2)}</div>
+                                                                        <div>ML: {(employee.ml_score || 0).toFixed(2)}</div>
+                                                                        <div>Final: {(employee.final_score || 0).toFixed(2)}</div>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-gray-500 dark:text-gray-400 text-xs italic mb-2">
+                                                                    Belum dipilih
+                                                                </div>
+                                                            )}
 
                                                             <button
                                                                 type="button"
@@ -427,39 +691,34 @@ export default function BulkFulfillmentPanel({
                                                 })}
                                             </div>
                                             
-                                            {/* Tampilkan summary line assignment untuk putway */}
-                                            {isPutwayRequest(req) && assignedCount > 0 && (
+                                            {/* Tampilkan summary line assignment untuk putway dan shrink */}
+                                            {(isPutway || isShrink) && assignedCount > 0 && (
                                                 <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-200 dark:border-gray-600">
                                                     <h6 className="font-medium text-gray-700 dark:text-gray-300 text-sm mb-2">
-                                                        Preview Penugasan Line:
+                                                        Preview Penugasan {isPutway ? 'Line' : 'Shrink'}:
                                                     </h6>
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3 text-xs">
-                                                        <div className="bg-purple-50 dark:bg-purple-900/20 p-2 sm:p-3 rounded">
-                                                            <div className="font-medium text-purple-700 dark:text-purple-300 mb-2 text-xs sm:text-sm">Line 1</div>
-                                                            {assignedEmployees
-                                                                .filter((_, idx) => (idx % 2) === 0)
-                                                                .map((id, idx) => {
-                                                                    const emp = getEmployeeDetails(id);
-                                                                    return emp ? (
-                                                                        <div key={id} className="text-purple-600 dark:text-purple-400 py-1 text-xs truncate">
-                                                                            {idx * 2 + 1}. {emp.name} ({emp.gender === 'female' ? 'P' : 'L'})
-                                                                        </div>
-                                                                    ) : null;
-                                                                })}
-                                                        </div>
-                                                        <div className="bg-purple-50 dark:bg-purple-900/20 p-2 sm:p-3 rounded">
-                                                            <div className="font-medium text-purple-700 dark:text-purple-300 mb-2 text-xs sm:text-sm">Line 2</div>
-                                                            {assignedEmployees
-                                                                .filter((_, idx) => (idx % 2) === 1)
-                                                                .map((id, idx) => {
-                                                                    const emp = getEmployeeDetails(id);
-                                                                    return emp ? (
-                                                                        <div key={id} className="text-purple-600 dark:text-purple-400 py-1 text-xs truncate">
-                                                                            {idx * 2 + 2}. {emp.name} ({emp.gender === 'female' ? 'P' : 'L'})
-                                                                        </div>
-                                                                    ) : null;
-                                                                })}
-                                                        </div>
+                                                    <div className={`grid ${isPutway ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-4'} gap-2 sm:gap-3 text-xs`}>
+                                                        {Array.from({ length: isPutway ? 2 : 4 }).map((_, lineIndex) => (
+                                                            <div key={lineIndex} className={`${isPutway ? 'bg-purple-50 dark:bg-purple-900/20' : 'bg-blue-50 dark:bg-blue-900/20'} p-2 sm:p-3 rounded`}>
+                                                                <div className={`font-medium ${isPutway ? 'text-purple-700 dark:text-purple-300' : 'text-blue-700 dark:text-blue-300'} mb-2 text-xs sm:text-sm`}>
+                                                                    {isPutway ? 'Line' : 'Shrink'} {lineIndex + 1}
+                                                                </div>
+                                                                {assignedEmployees
+                                                                    .filter((_, idx) => 
+                                                                        isPutway 
+                                                                            ? (idx % 2) === lineIndex
+                                                                            : (idx % 4) === lineIndex
+                                                                    )
+                                                                    .map((id, idx) => {
+                                                                        const emp = getEmployeeDetails(id);
+                                                                        return emp ? (
+                                                                            <div key={id} className={`${isPutway ? 'text-purple-600 dark:text-purple-400' : 'text-blue-600 dark:text-blue-400'} py-1 text-xs truncate`}>
+                                                                                {idx + 1}. {emp.name} ({emp.gender === 'female' ? 'P' : 'L'})
+                                                                            </div>
+                                                                        ) : null;
+                                                                    })}
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 </div>
                                             )}
@@ -488,27 +747,40 @@ export default function BulkFulfillmentPanel({
                     {selectedBulkRequests.length} request terpilih dari {totalRequests} • 
                     {assignmentStats.totalAssigned} dari {assignmentStats.totalSelected} karyawan terisi
                 </div>
-                <button
-                    onClick={() => handleBulkSubmit(strategy, visibility)}
-                    disabled={processing || selectedBulkRequests.length === 0 || hasIncompleteAssignments}
-                    className={`px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold text-white transition-colors text-sm sm:text-base w-full sm:w-auto ${
-                        processing || selectedBulkRequests.length === 0 || hasIncompleteAssignments
-                            ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
-                            : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700'
-                    }`}
-                >
-                    {processing ? (
-                        <span className="flex items-center justify-center sm:justify-start">
-                            <svg className="mr-2 -ml-1 w-4 h-4 text-white animate-spin" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Memproses...
-                        </span>
-                    ) : (
-                        `Penuhi ${selectedBulkRequests.length} Request`
-                    )}
-                </button>
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                    <button
+                        onClick={() => handleAutoFulfill(strategy)}
+                        disabled={selectedBulkRequests.length === 0}
+                        className={`px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-medium text-sm sm:text-base ${
+                            selectedBulkRequests.length === 0
+                                ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed text-gray-700 dark:text-gray-300'
+                                : 'bg-green-600 hover:bg-green-700 text-white'
+                        }`}
+                    >
+                        Auto-Assign
+                    </button>
+                    <button
+                        onClick={() => handleBulkSubmit(strategy, visibility)}
+                        disabled={processing || selectedBulkRequests.length === 0 || hasIncompleteAssignments}
+                        className={`px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold text-white transition-colors text-sm sm:text-base w-full sm:w-auto ${
+                            processing || selectedBulkRequests.length === 0 || hasIncompleteAssignments
+                                ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
+                                : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700'
+                        }`}
+                    >
+                        {processing ? (
+                            <span className="flex items-center justify-center sm:justify-start">
+                                <svg className="mr-2 -ml-1 w-4 h-4 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Memproses...
+                            </span>
+                        ) : (
+                            `Penuhi ${selectedBulkRequests.length} Request`
+                        )}
+                    </button>
+                </div>
             </div>
         </div>
     );

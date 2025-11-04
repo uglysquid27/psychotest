@@ -699,7 +699,7 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
         return $selected->take($totalRequired);
     }
 
-    public function bulkStore(Request $request)
+     public function bulkStore(Request $request)
     {
         $request->validate([
             'request_ids' => 'required|array',
@@ -784,7 +784,7 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
                     continue;
                 }
 
-                // Create schedules with line assignment for putway subsection
+                // Create schedules with line assignment for putway and shrink subsections
                 $createdSchedules = [];
                 foreach ($selectedEmployeeIds as $index => $employeeId) {
                     $data = [
@@ -796,10 +796,15 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
                         'visibility' => $request->visibility ?? 'private',
                     ];
 
-                    // Add line for putway subsection - SAME LOGIC AS SINGLE MODE
-                    if ($manpowerRequest->subSection && strtolower($manpowerRequest->subSection->name) === 'putway') {
-                        $data['line'] = strval((($index % 2) + 1)); // 1,2,1,2...
-                    }
+                    // Add line for putway subsection
+if ($manpowerRequest->subSection && strtolower($manpowerRequest->subSection->name) === 'putway') {
+    $data['line'] = strval((($index % 2) + 1)); // '1','2','1','2...
+}
+
+// Add line for shrink subsection
+if ($manpowerRequest->subSection && strtolower($manpowerRequest->subSection->name) === 'shrink') {
+    $data['line'] = strval((($index % 4) + 1)); // '1','2','3','4','1','2','3','4...
+}
 
                     $schedule = Schedule::create($data);
                     $createdSchedules[] = $schedule->id;
@@ -1395,7 +1400,7 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
     }
 
 
-    public function store(Request $request, $id)
+      public function store(Request $request, $id)
     {
         $validated = $request->validate([
             'employee_ids' => 'required|array',
@@ -1457,9 +1462,14 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
                     ];
 
                     // Tambahkan line kalau subsection putway
-                    if (strtolower($req->subSection->name) === 'putway') {
-                        $data['line'] = (($index % 2) + 1); // 1,2,1,2...
-                    }
+if (strtolower($req->subSection->name) === 'putway') {
+    $data['line'] = strval((($index % 2) + 1)); // '1','2','1','2...
+}
+
+// Tambahkan line kalau subsection shrink
+if (strtolower($req->subSection->name) === 'shrink') {
+    $data['line'] = strval((($index % 4) + 1)); // '1','2','3','4','1','2','3','4...
+}
 
                     $schedule = Schedule::create($data);
 
@@ -1678,7 +1688,7 @@ $totalScore = ($mlScore * 0.7) + ($baseScore * 0.3);
     /**
      * Update the revised fulfillment
      */
-    public function updateRevision(Request $request, $id)
+     public function updateRevision(Request $request, $id)
     {
         $validated = $request->validate([
             'employee_ids' => 'required|array',
@@ -1758,9 +1768,14 @@ $totalScore = ($mlScore * 0.7) + ($baseScore * 0.3);
                     ];
 
                     // Tambahkan line kalau subsection putway
-                    if (strtolower($req->subSection->name) === 'putway') {
-                        $data['line'] = (($index % 2) + 1); // 1,2,1,2...
-                    }
+if (strtolower($req->subSection->name) === 'putway') {
+    $data['line'] = strval((($index % 2) + 1)); // '1','2','1','2...
+}
+
+// Tambahkan line kalau subsection shrink
+if (strtolower($req->subSection->name) === 'shrink') {
+    $data['line'] = strval((($index % 4) + 1)); // '1','2','3','4','1','2','3','4...
+}
 
                     $schedule = Schedule::create($data);
 
