@@ -1,7 +1,6 @@
 import { useForm } from "@inertiajs/react";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import dayjs from "dayjs";
 import { router } from "@inertiajs/react";
 
 import RequestDetails from "./components/RequestDetails";
@@ -10,6 +9,8 @@ import EmployeeSelection from "./components/EmployeeSelection";
 import ConfirmationSection from "./components/ComfirmationSection";
 import EmployeeModal from "./components/EmployeeModal";
 import BulkFulfillmentPanel from "./components/BulkFulfillmentPanel";
+import LineAssignmentConfig from "./components/LineAssignmentConfig";
+// import LineAssignmentDisplay from "./components/LineAssignmentDisplay";
 
 export default function Fulfill({
     request,
@@ -20,19 +21,9 @@ export default function Fulfill({
     message,
     auth,
 }) {
-    const isPutwaySubsection = useMemo(() => {
-        return (
-            request?.sub_section?.name?.toLowerCase() === "putway" ||
-            request?.subSection?.name?.toLowerCase() === "putway"
-        );
-    }, [request]);
-
-    const isShrinkSubsection = useMemo(() => {
-        return (
-            request?.sub_section?.name?.toLowerCase() === "shrink" ||
-            request?.subSection?.name?.toLowerCase() === "shrink"
-        );
-    }, [request]);
+    // Line assignment state
+    const [lineAssignmentConfig, setLineAssignmentConfig] = useState({});
+    const [draggingEmployee, setDraggingEmployee] = useState(null);
 
     const normalizeGender = (gender) => {
         if (!gender) {
@@ -320,6 +311,7 @@ export default function Fulfill({
         employee_ids: initialSelectedIds,
         fulfilled_by: auth.user.id,
         visibility: "private",
+        line_assignment_config: {},
     });
 
     const [selectedIds, setSelectedIds] = useState(() =>
@@ -335,6 +327,194 @@ export default function Fulfill({
     const [activeBulkRequest, setActiveBulkRequest] = useState(null);
     const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
 
+    // Line Assignment Functions
+    const initializeLineConfig = useCallback((request) => {
+    const defaultLines = 2;
+    
+    const lineCounts = Array.from({ length: defaultLines }, (_, i) => 
+        Math.ceil(request.requested_amount / defaultLines)
+    );
+    
+    // Adjust to match total exactly
+    let totalAssigned = lineCounts.reduce((sum, count) => sum + count, 0);
+    let index = 0;
+    while (totalAssigned > request.requested_amount && lineCounts.length > 0) {
+        if (lineCounts[index] > 1) {
+            lineCounts[index]--;
+            totalAssigned--;
+        }
+        index = (index + 1) % lineCounts.length;
+    }
+
+    return {
+        enabled: true,
+        lineCount: defaultLines,
+        lineCounts: lineCounts,
+        employeesPerLine: Array.from({ length: defaultLines }, () => [])
+    };
+}, []);
+
+    const handleLineConfigChange = useCallback((requestId, field, value) => {
+    setLineAssignmentConfig(prev => {
+        const config = { ...prev[requestId] };
+        
+        console.log('🔧 Line config change:', {
+            requestId,
+            field,
+            value,
+            currentConfig: config
+        });
+        
+        if (field === 'enabled') {
+            if (value && !config.enabled) {
+                const requestToUse = requestId === String(request.id) ? request : 
+                    sameDayRequests.find(req => String(req.id) === requestId);
+                const newConfig = initializeLineConfig(requestToUse);
+                
+                console.log('✅ Initialized line config:', newConfig);
+                
+                return {
+                    ...prev,
+                    [requestId]: newConfig
+                };
+            } else {
+                return {
+                    ...prev,
+                    [requestId]: { enabled: false, lineCount: 0, lineCounts: [], employeesPerLine: [] }
+                };
+            }
+        }
+        
+        // IMPORTANT: For lineCounts, directly set the value
+        if (field === 'lineCounts') {
+            const newConfig = {
+                ...config,
+                lineCounts: value,
+                lineCount: value.length
+            };
+            
+            console.log('📊 Updated lineCounts:', {
+                requestId,
+                newLineCounts: value,
+                newLineCount: value.length
+            });
+            
+            return {
+                ...prev,
+                [requestId]: newConfig
+            };
+        }
+        
+        if (field === 'lineCount') {
+            const newLineCount = parseInt(value) || 1;
+            
+            const newConfig = {
+                ...config,
+                lineCount: newLineCount
+            };
+            
+            console.log('🔢 Updated lineCount:', {
+                requestId,
+                newLineCount
+            });
+            
+            return {
+                ...prev,
+                [requestId]: newConfig
+            };
+        }
+        
+        return { ...prev };
+    });
+}, [initializeLineConfig, request, sameDayRequests]);
+
+    const handleLineEmployeeCountChange = useCallback((requestId, lineIndex, newCount) => {
+        setLineAssignmentConfig(prev => {
+            const config = { ...prev[requestId] };
+            const newLineCounts = [...(config.lineCounts || [])];
+            newLineCounts[lineIndex] = parseInt(newCount) || 0;
+            
+            return {
+                ...prev,
+                [requestId]: {
+                    ...config,
+                    lineCounts: newLineCounts
+                }
+            };
+        });
+    }, []);
+
+    // Drag and Drop Handlers
+    const handleDragStart = useCallback((e, requestId, sourceLineIndex, employeeIndex) => {
+        setDraggingEmployee({ requestId, sourceLineIndex, employeeIndex });
+        e.dataTransfer.effectAllowed = 'move';
+    }, []);
+
+    const handleDragOver = useCallback((e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+    }, []);
+
+    const handleDrop = useCallback((e, requestId, targetLineIndex) => {
+        e.preventDefault();
+        
+        if (!draggingEmployee || draggingEmployee.requestId !== requestId) return;
+
+        const { sourceLineIndex, employeeIndex } = draggingEmployee;
+        
+        if (sourceLineIndex === targetLineIndex) return;
+
+        setLineAssignmentConfig(prev => {
+            const config = { ...prev[requestId] };
+            const newEmployeesPerLine = [...(config.employeesPerLine || [])];
+            
+            // Remove employee from source line
+            const [movedEmployee] = newEmployeesPerLine[sourceLineIndex].splice(employeeIndex, 1);
+            
+            // Add employee to target line
+            newEmployeesPerLine[targetLineIndex].push(movedEmployee);
+            
+            return {
+                ...prev,
+                [requestId]: {
+                    ...config,
+                    employeesPerLine: newEmployeesPerLine
+                }
+            };
+        });
+        
+        setDraggingEmployee(null);
+    }, [draggingEmployee]);
+
+    const getAssignedLine = useCallback((config, employeeIndex) => {
+    if (!config?.enabled || !config.lineCounts) return null;
+    
+    let cumulative = 0;
+    for (let i = 0; i < config.lineCounts.length; i++) {
+        cumulative += config.lineCounts[i];
+        if (employeeIndex < cumulative) {
+            return (i + 1).toString();
+        }
+    }
+    return config.lineCounts.length.toString();
+}, []);
+
+
+    // Initialize line config for current request - FIXED to prevent infinite loop
+    useEffect(() => {
+        if (request && !lineAssignmentConfig[request.id]) {
+            setLineAssignmentConfig(prev => ({
+                ...prev,
+                [request.id]: initializeLineConfig(request)
+            }));
+        }
+    }, [request, lineAssignmentConfig]); // Removed initializeLineConfig from dependencies
+
+    // Update form data with line assignment config
+    useEffect(() => {
+        setData("line_assignment_config", lineAssignmentConfig);
+    }, [lineAssignmentConfig, setData]);
+
     // Check if there are any currently scheduled employees
     const hasScheduledEmployees = useMemo(() => {
         return selectedIds.some((id) => {
@@ -345,6 +525,7 @@ export default function Fulfill({
         });
     }, [selectedIds, allSortedEligibleEmployees]);
 
+    // Validate and clean up bulk requests
     useEffect(() => {
         const allValidRequestIds = new Set();
 
@@ -394,7 +575,7 @@ export default function Fulfill({
 
     useEffect(() => {
         setData("employee_ids", selectedIds);
-    }, [selectedIds]);
+    }, [selectedIds, setData]);
 
     const genderStats = useMemo(() => {
         const stats = {
@@ -438,73 +619,69 @@ export default function Fulfill({
     ]);
 
     const lineAssignments = useMemo(() => {
-    if (!isPutwaySubsection && !isShrinkSubsection) return {};
-
     const assignments = {};
-    selectedIds.forEach((id, index) => {
-        if (isPutwaySubsection) {
-            assignments[id] = {
-                number: ((index % 2) + 1).toString(),
-                label: `Line ${(index % 2) + 1}`
-            };
-        } else if (isShrinkSubsection) {
-            assignments[id] = {
-                number: ((index % 4) + 1).toString(),
-                label: `Shrink ${(index % 4) + 1}`
-            };
-        }
-    });
+    const config = lineAssignmentConfig[request.id];
+    
+    if (config?.enabled && config.lineCounts) {
+        // Use configured line assignment
+        selectedIds.forEach((id, index) => {
+            let cumulative = 0;
+            for (let i = 0; i < config.lineCounts.length; i++) {
+                cumulative += config.lineCounts[i];
+                if (index < cumulative) {
+                    assignments[id] = {
+                        number: (i + 1).toString(),
+                        label: `Line ${i + 1}`
+                    };
+                    break;
+                }
+            }
+        });
+    }
 
     return assignments;
-}, [isPutwaySubsection, isShrinkSubsection, selectedIds]);
+}, [selectedIds, lineAssignmentConfig, request.id]);
 
     const bulkLineAssignments = useMemo(() => {
-    const assignments = {};
+        const assignments = {};
 
-    Object.keys(bulkSelectedEmployees).forEach((requestId) => {
-        const request = sameDayRequests.find(
-            (req) => String(req.id) === requestId
-        );
-        if (!request) return;
+        Object.keys(bulkSelectedEmployees).forEach((requestId) => {
+            const request = sameDayRequests.find(
+                (req) => String(req.id) === requestId
+            );
+            if (!request) return;
 
-        const isPutway =
-            request?.sub_section?.name?.toLowerCase() === "putway" ||
-            request?.subSection?.name?.toLowerCase() === "putway";
-        
-        const isShrink =
-            request?.sub_section?.name?.toLowerCase() === "shrink" ||
-            request?.subSection?.name?.toLowerCase() === "shrink";
-
-        if (isPutway || isShrink) {
+            const config = lineAssignmentConfig[requestId];
             const employeeIds = bulkSelectedEmployees[requestId] || [];
+            
             employeeIds.forEach((id, index) => {
                 const key = `${requestId}-${id}`;
-                if (isPutway) {
+                if (config?.enabled) {
                     assignments[key] = {
-                        number: ((index % 2) + 1).toString(),
-                        label: `Line ${(index % 2) + 1}`
+                        number: getAssignedLine(config, index),
+                        label: `Line ${getAssignedLine(config, index)}`
                     };
-                } else if (isShrink) {
+                } else {
+                    // Default assignment for all subsections
+                    const lineCount = 2;
                     assignments[key] = {
-                        number: ((index % 4) + 1).toString(),
-                        label: `Shrink ${(index % 4) + 1}`
+                        number: ((index % lineCount) + 1).toString(),
+                        label: `Line ${(index % lineCount) + 1}`
                     };
                 }
             });
-        }
-    });
+        });
 
-    return assignments;
-}, [bulkSelectedEmployees, sameDayRequests]);
+        return assignments;
+    }, [bulkSelectedEmployees, sameDayRequests, lineAssignmentConfig, getAssignedLine]);
 
-   const getBulkLineAssignment = useCallback(
-    (requestId, employeeId) => {
-        const key = `${requestId}-${employeeId}`;
-        return bulkLineAssignments[key] || null;
-    },
-    [bulkLineAssignments]
-);
-
+    const getBulkLineAssignment = useCallback(
+        (requestId, employeeId) => {
+            const key = `${requestId}-${employeeId}`;
+            return bulkLineAssignments[key] || null;
+        },
+        [bulkLineAssignments]
+    );
 
     useEffect(() => {
         if (errors?.fulfillment_error) {
@@ -576,6 +753,7 @@ export default function Fulfill({
                     strategy: strategy,
                     visibility: visibility,
                     status: "pending",
+                    line_assignment_config: lineAssignmentConfig,
                 },
                 {
                     onSuccess: () => {
@@ -600,67 +778,85 @@ export default function Fulfill({
                 }
             );
         },
-        [selectedBulkRequests, bulkSelectedEmployees, sameDayRequests]
+        [selectedBulkRequests, bulkSelectedEmployees, sameDayRequests, lineAssignmentConfig]
     );
 
-    const handleSubmit = useCallback(
-        (e) => {
-            e.preventDefault();
-            setBackendError(null);
+    // Replace the existing getAssignedLine method in your controller with this:
 
-            const selectedEmployees = selectedIds.map((id) =>
-                allSortedEligibleEmployees.find((e) => String(e.id) === id)
+// In your Fulfill.jsx, update the handleSubmit to log the config being sent:
+
+const handleSubmit = useCallback(
+    (e) => {
+        e.preventDefault();
+        setBackendError(null);
+
+        const selectedEmployees = selectedIds.map((id) =>
+            allSortedEligibleEmployees.find((e) => String(e.id) === id)
+        );
+
+        const maleCount = selectedEmployees.filter(
+            (e) => e?.gender === "male"
+        ).length;
+        const femaleCount = selectedEmployees.filter(
+            (e) => e?.gender === "female"
+        ).length;
+
+        if (request.male_count > 0 && maleCount < request.male_count) {
+            alert(
+                `Diperlukan minimal ${request.male_count} karyawan laki-laki`
             );
+            return;
+        }
 
-            const maleCount = selectedEmployees.filter(
-                (e) => e?.gender === "male"
-            ).length;
-            const femaleCount = selectedEmployees.filter(
-                (e) => e?.gender === "female"
-            ).length;
+        if (
+            request.female_count > 0 &&
+            femaleCount < request.female_count
+        ) {
+            alert(
+                `Diperlukan minimal ${request.female_count} karyawan perempuan`
+            );
+            return;
+        }
 
-            if (request.male_count > 0 && maleCount < request.male_count) {
-                alert(
-                    `Diperlukan minimal ${request.male_count} karyawan laki-laki`
-                );
-                return;
-            }
+        // Debug: Log the line assignment config before submit
+        console.log('📋 Submitting with line assignment config:', {
+            requestId: request.id,
+            fullConfig: lineAssignmentConfig,
+            requestConfig: lineAssignmentConfig[request.id]
+        });
 
-            if (
-                request.female_count > 0 &&
-                femaleCount < request.female_count
-            ) {
-                alert(
-                    `Diperlukan minimal ${request.female_count} karyawan perempuan`
-                );
-                return;
-            }
+        const submitData = {
+            employee_ids: selectedIds,
+            fulfilled_by: auth.user.id,
+            is_revision: request.status === "fulfilled",
+            visibility: data.visibility,
+            line_assignment_config: lineAssignmentConfig,
+        };
 
-            setData({
-                employee_ids: selectedIds,
-                fulfilled_by: auth.user.id,
-                is_revision: request.status === "fulfilled",
-                visibility: data.visibility,
-            });
+        console.log('📤 Full submit data:', submitData);
 
-            post(route("manpower-requests.fulfill.store", request.id), {
-                onSuccess: () => router.visit(route("manpower-requests.index")),
-                onError: (errors) => {
-                    if (errors.fulfillment_error) {
-                        setBackendError(errors.fulfillment_error);
-                    }
-                },
-            });
-        },
-        [
-            selectedIds,
-            request,
-            allSortedEligibleEmployees,
-            post,
-            auth.user.id,
-            data.visibility,
-        ]
-    );
+        post(route("manpower-requests.fulfill.store", request.id), {
+            data: submitData,
+            onSuccess: () => router.visit(route("manpower-requests.index")),
+            onError: (errors) => {
+                console.error('❌ Submit errors:', errors);
+                if (errors.fulfillment_error) {
+                    setBackendError(errors.fulfillment_error);
+                }
+            },
+        });
+    },
+    [
+        selectedIds,
+        request,
+        allSortedEligibleEmployees,
+        post,
+        auth.user.id,
+        data.visibility,
+        lineAssignmentConfig,
+        setData,
+    ]
+);
 
     const handleAutoFulfill = useCallback(
         (strategy, requestIds) => {
@@ -1021,6 +1217,7 @@ export default function Fulfill({
             sameDayRequests,
         ]
     );
+
     const handleMultiSelect = useCallback(
         (newSelectedIds) => {
             const newIdsStr = newSelectedIds.map((id) => String(id));
@@ -1170,6 +1367,16 @@ export default function Fulfill({
             });
 
             setBulkSelectedEmployees(initialSelections);
+
+            // Initialize line config for bulk requests
+            allRequests.forEach(req => {
+                if (!lineAssignmentConfig[String(req.id)]) {
+                    setLineAssignmentConfig(prev => ({
+                        ...prev,
+                        [String(req.id)]: initializeLineConfig(req)
+                    }));
+                }
+            });
         }
     }, [
         bulkMode,
@@ -1177,6 +1384,8 @@ export default function Fulfill({
         request,
         selectedIds,
         allSortedEligibleEmployees,
+        lineAssignmentConfig,
+        initializeLineConfig,
     ]);
 
     const toggleBulkRequestSelection = useCallback((requestId) => {
@@ -1293,48 +1502,32 @@ export default function Fulfill({
                         allSortedEligibleEmployees={allSortedEligibleEmployees}
                         handleAutoFulfill={handleAutoFulfill}
                         getBulkLineAssignment={getBulkLineAssignment}
+                        lineAssignmentConfig={lineAssignmentConfig}
+                        handleLineConfigChange={handleLineConfigChange}
+                        handleLineEmployeeCountChange={handleLineEmployeeCountChange}
+                        handleDragStart={handleDragStart}
+                        handleDragOver={handleDragOver}
+                        handleDrop={handleDrop}
+                        LineAssignmentConfig={LineAssignmentConfig}
                     />
                 )}
 
-                {(isPutwaySubsection || isShrinkSubsection) && !bulkMode && (
-    <div className={`${isPutwaySubsection ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-700' : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'} shadow-md mb-6 p-4 border rounded-lg`}>
-        <h3 className={`mb-3 font-bold ${isPutwaySubsection ? 'text-purple-800 dark:text-purple-300' : 'text-blue-800 dark:text-blue-300'} text-lg`}>
-            Informasi Penugasan {isPutwaySubsection ? 'Line' : 'Shrink'} ({isPutwaySubsection ? 'Putway' : 'Shrink'})
-        </h3>
-        <p className={`mb-2 ${isPutwaySubsection ? 'text-purple-700 dark:text-purple-300' : 'text-blue-700 dark:text-blue-300'}`}>
-            {isPutwaySubsection 
-                ? "Karyawan akan ditugaskan secara bergantian ke Line 1 dan Line 2."
-                : "Karyawan akan ditugaskan secara bergantian ke Shrink 1, 2, 3, dan 4."}
-        </p>
-        <div className={`gap-4 grid ${isPutwaySubsection ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-4'} mt-3`}>
-            {Array.from({ length: isPutwaySubsection ? 2 : 4 }).map((_, lineIndex) => (
-                <div key={lineIndex} className={`${isPutwaySubsection ? 'bg-purple-100 dark:bg-purple-800/30' : 'bg-blue-100 dark:bg-blue-800/30'} p-3 rounded`}>
-                    <h4 className={`font-medium ${isPutwaySubsection ? 'text-purple-800 dark:text-purple-200' : 'text-blue-800 dark:text-blue-200'}`}>
-                        {isPutwaySubsection ? 'Line' : 'Shrink'} {lineIndex + 1}
-                    </h4>
-                    <div className="space-y-1 mt-2">
-                        {selectedIds
-                            .filter((_, index) => 
-                                isPutwaySubsection 
-                                    ? index % 2 === lineIndex
-                                    : index % 4 === lineIndex
-                            )
-                            .map((id, positionIndex) => {
-                                const emp = getEmployeeDetails(id);
-                                return emp ? (
-                                    <div
-                                        key={id}
-                                        className={`${isPutwaySubsection ? 'text-purple-700 dark:text-purple-200' : 'text-blue-700 dark:text-blue-200'} text-xs`}
-                                    >
-                                        {positionIndex + 1}. {emp.name}
-                                    </div>
-                                ) : null;
-                            })}
-                    </div>
-                </div>
-            ))}
-        </div>
-    </div>
+                {/* Line Assignment Configuration for Current Request */}
+              {!bulkMode && (
+    <LineAssignmentConfig
+        requestId={String(request.id)}
+        request={request}
+        lineAssignmentConfig={lineAssignmentConfig}
+        handleLineConfigChange={handleLineConfigChange}
+        handleLineEmployeeCountChange={handleLineEmployeeCountChange}
+        handleDragStart={handleDragStart}
+        handleDragOver={handleDragOver}
+        handleDrop={handleDrop}
+        bulkSelectedEmployees={bulkSelectedEmployees}
+        selectedIds={selectedIds}
+        getEmployeeDetails={getEmployeeDetails}
+        bulkMode={bulkMode}
+    />
 )}
 
                 {!bulkMode && (
@@ -1372,8 +1565,6 @@ export default function Fulfill({
                                 openChangeModal={openChangeModal}
                                 multiSelectMode={multiSelectMode}
                                 toggleMultiSelectMode={toggleMultiSelectMode}
-                                isPutwaySubsection={isPutwaySubsection}
-                                isShrinkSubsection={isShrinkSubsection}
                                 lineAssignments={lineAssignments}
                             />
 

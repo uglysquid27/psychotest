@@ -699,150 +699,150 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
         return $selected->take($totalRequired);
     }
 
-     public function bulkStore(Request $request)
-    {
-        $request->validate([
-            'request_ids' => 'required|array',
-            'request_ids.*' => 'exists:man_power_requests,id',
-            'employee_selections' => 'required|array',
-            'strategy' => 'required|in:optimal,same_section,balanced',
-            'visibility' => 'in:public,private',
-            'status' => 'in:pending,accepted,rejected'
-        ]);
+//      public function bulkStore(Request $request)
+//     {
+//         $request->validate([
+//             'request_ids' => 'required|array',
+//             'request_ids.*' => 'exists:man_power_requests,id',
+//             'employee_selections' => 'required|array',
+//             'strategy' => 'required|in:optimal,same_section,balanced',
+//             'visibility' => 'in:public,private',
+//             'status' => 'in:pending,accepted,rejected'
+//         ]);
 
-        DB::beginTransaction();
-        try {
-            $results = [];
-            $successCount = 0;
-            $failureCount = 0;
-            $employeeSelections = $request->employee_selections;
-            $status = $request->status ?? 'pending';
+//         DB::beginTransaction();
+//         try {
+//             $results = [];
+//             $successCount = 0;
+//             $failureCount = 0;
+//             $employeeSelections = $request->employee_selections;
+//             $status = $request->status ?? 'pending';
 
-            foreach ($request->request_ids as $id) {
+//             foreach ($request->request_ids as $id) {
 
-                $manpowerRequest = ManPowerRequest::with(['subSection', 'schedules'])->findOrFail($id);
+//                 $manpowerRequest = ManPowerRequest::with(['subSection', 'schedules'])->findOrFail($id);
 
-                // Skip if already fulfilled
-                if ($manpowerRequest->status === 'fulfilled') {
-                    $results[$id] = 'already fulfilled';
-                    $failureCount++;
-                    Log::warning('REQUEST ALREADY FULFILLED - SKIPPING', ['request_id' => $id]);
-                    continue;
-                }
+//                 // Skip if already fulfilled
+//                 if ($manpowerRequest->status === 'fulfilled') {
+//                     $results[$id] = 'already fulfilled';
+//                     $failureCount++;
+//                     Log::warning('REQUEST ALREADY FULFILLED - SKIPPING', ['request_id' => $id]);
+//                     continue;
+//                 }
 
-                // Get selected employee IDs for this request
-                $selectedEmployeeIds = $employeeSelections[$id] ?? [];
+//                 // Get selected employee IDs for this request
+//                 $selectedEmployeeIds = $employeeSelections[$id] ?? [];
 
-                // Validate employee selection count
-                if (count($selectedEmployeeIds) !== $manpowerRequest->requested_amount) {
-                    $results[$id] = 'invalid employee selection count';
-                    $failureCount++;
-                    Log::error('INVALID EMPLOYEE SELECTION COUNT - SKIPPING', [
-                        'request_id' => $id,
-                        'selected' => count($selectedEmployeeIds),
-                        'expected' => $manpowerRequest->requested_amount
-                    ]);
-                    continue;
-                }
+//                 // Validate employee selection count
+//                 if (count($selectedEmployeeIds) !== $manpowerRequest->requested_amount) {
+//                     $results[$id] = 'invalid employee selection count';
+//                     $failureCount++;
+//                     Log::error('INVALID EMPLOYEE SELECTION COUNT - SKIPPING', [
+//                         'request_id' => $id,
+//                         'selected' => count($selectedEmployeeIds),
+//                         'expected' => $manpowerRequest->requested_amount
+//                     ]);
+//                     continue;
+//                 }
 
-                // Validate gender requirements
-                $maleCount = 0;
-                $femaleCount = 0;
+//                 // Validate gender requirements
+//                 $maleCount = 0;
+//                 $femaleCount = 0;
 
-                foreach ($selectedEmployeeIds as $employeeId) {
-                    $employee = Employee::find($employeeId);
-                    if (!$employee) {
-                        throw new \Exception("Employee {$employeeId} not found");
-                    }
+//                 foreach ($selectedEmployeeIds as $employeeId) {
+//                     $employee = Employee::find($employeeId);
+//                     if (!$employee) {
+//                         throw new \Exception("Employee {$employeeId} not found");
+//                     }
 
-                    if ($employee->gender === 'male') {
-                        $maleCount++;
-                    } elseif ($employee->gender === 'female') {
-                        $femaleCount++;
-                    }
-                }
+//                     if ($employee->gender === 'male') {
+//                         $maleCount++;
+//                     } elseif ($employee->gender === 'female') {
+//                         $femaleCount++;
+//                     }
+//                 }
 
-                if ($manpowerRequest->male_count > 0 && $maleCount < $manpowerRequest->male_count) {
-                    $results[$id] = 'insufficient male employees';
-                    $failureCount++;
-                    Log::error('INSUFFICIENT MALE EMPLOYEES - SKIPPING', [
-                        'request_id' => $id,
-                        'actual' => $maleCount,
-                        'required' => $manpowerRequest->male_count
-                    ]);
-                    continue;
-                }
+//                 if ($manpowerRequest->male_count > 0 && $maleCount < $manpowerRequest->male_count) {
+//                     $results[$id] = 'insufficient male employees';
+//                     $failureCount++;
+//                     Log::error('INSUFFICIENT MALE EMPLOYEES - SKIPPING', [
+//                         'request_id' => $id,
+//                         'actual' => $maleCount,
+//                         'required' => $manpowerRequest->male_count
+//                     ]);
+//                     continue;
+//                 }
 
-                if ($manpowerRequest->female_count > 0 && $femaleCount < $manpowerRequest->female_count) {
-                    $results[$id] = 'insufficient female employees';
-                    $failureCount++;
-                    Log::error('INSUFFICIENT FEMALE EMPLOYEES - SKIPPING', [
-                        'request_id' => $id,
-                        'actual' => $femaleCount,
-                        'required' => $manpowerRequest->female_count
-                    ]);
-                    continue;
-                }
+//                 if ($manpowerRequest->female_count > 0 && $femaleCount < $manpowerRequest->female_count) {
+//                     $results[$id] = 'insufficient female employees';
+//                     $failureCount++;
+//                     Log::error('INSUFFICIENT FEMALE EMPLOYEES - SKIPPING', [
+//                         'request_id' => $id,
+//                         'actual' => $femaleCount,
+//                         'required' => $manpowerRequest->female_count
+//                     ]);
+//                     continue;
+//                 }
 
-                // Create schedules with line assignment for putway and shrink subsections
-                $createdSchedules = [];
-                foreach ($selectedEmployeeIds as $index => $employeeId) {
-                    $data = [
-                        'employee_id' => $employeeId,
-                        'sub_section_id' => $manpowerRequest->sub_section_id,
-                        'man_power_request_id' => $manpowerRequest->id,
-                        'date' => $manpowerRequest->date,
-                        'status' => $status,
-                        'visibility' => $request->visibility ?? 'private',
-                    ];
+//                 // Create schedules with line assignment for putway and shrink subsections
+//                 $createdSchedules = [];
+//                 foreach ($selectedEmployeeIds as $index => $employeeId) {
+//                     $data = [
+//                         'employee_id' => $employeeId,
+//                         'sub_section_id' => $manpowerRequest->sub_section_id,
+//                         'man_power_request_id' => $manpowerRequest->id,
+//                         'date' => $manpowerRequest->date,
+//                         'status' => $status,
+//                         'visibility' => $request->visibility ?? 'private',
+//                     ];
 
-                    // Add line for putway subsection
-if ($manpowerRequest->subSection && strtolower($manpowerRequest->subSection->name) === 'putway') {
-    $data['line'] = strval((($index % 2) + 1)); // '1','2','1','2...
-}
+//                     // Add line for putway subsection
+// if ($manpowerRequest->subSection && strtolower($manpowerRequest->subSection->name) === 'putway') {
+//     $data['line'] = strval((($index % 2) + 1)); // '1','2','1','2...
+// }
 
-// Add line for shrink subsection
-if ($manpowerRequest->subSection && strtolower($manpowerRequest->subSection->name) === 'shrink') {
-    $data['line'] = strval((($index % 4) + 1)); // '1','2','3','4','1','2','3','4...
-}
+// // Add line for shrink subsection
+// if ($manpowerRequest->subSection && strtolower($manpowerRequest->subSection->name) === 'shrink') {
+//     $data['line'] = strval((($index % 4) + 1)); // '1','2','3','4','1','2','3','4...
+// }
 
-                    $schedule = Schedule::create($data);
-                    $createdSchedules[] = $schedule->id;
+//                     $schedule = Schedule::create($data);
+//                     $createdSchedules[] = $schedule->id;
 
-                }
+//                 }
 
-                // Update request status
-                $manpowerRequest->update([
-                    'status' => 'fulfilled',
-                    'fulfilled_by' => auth()->id()
-                ]);
+//                 // Update request status
+//                 $manpowerRequest->update([
+//                     'status' => 'fulfilled',
+//                     'fulfilled_by' => auth()->id()
+//                 ]);
 
-                $results[$id] = 'fulfilled - ' . count($selectedEmployeeIds) . ' employees assigned';
-                $successCount++;
-            }
+//                 $results[$id] = 'fulfilled - ' . count($selectedEmployeeIds) . ' employees assigned';
+//                 $successCount++;
+//             }
 
-            DB::commit();
+//             DB::commit();
 
-            return redirect()->route('manpower-requests.index')->with([
-                'success' => 'Bulk fulfill completed: ' . $successCount . ' successful, ' . $failureCount . ' failed',
-                'bulk_results' => $results
-            ]);
+//             return redirect()->route('manpower-requests.index')->with([
+//                 'success' => 'Bulk fulfill completed: ' . $successCount . ' successful, ' . $failureCount . ' failed',
+//                 'bulk_results' => $results
+//             ]);
 
-        } catch (\Exception $e) {
-            DB::rollBack();
+//         } catch (\Exception $e) {
+//             DB::rollBack();
 
-            Log::error('=== BULK FULFILLMENT FAILED ===', [
-                'error_message' => $e->getMessage(),
-                'error_trace' => $e->getTraceAsString(),
-                'request_data' => $request->except(['employee_selections']),
-                'timestamp' => now()->toDateTimeString()
-            ]);
+//             Log::error('=== BULK FULFILLMENT FAILED ===', [
+//                 'error_message' => $e->getMessage(),
+//                 'error_trace' => $e->getTraceAsString(),
+//                 'request_data' => $request->except(['employee_selections']),
+//                 'timestamp' => now()->toDateTimeString()
+//             ]);
 
-            return redirect()->back()->withErrors([
-                'fulfillment_error' => 'Bulk fulfill failed: ' . $e->getMessage()
-            ]);
-        }
-    }
+//             return redirect()->back()->withErrors([
+//                 'fulfillment_error' => 'Bulk fulfill failed: ' . $e->getMessage()
+//             ]);
+//         }
+//     }
 
     public function bulkFulfill(Request $request)
     {
@@ -1400,104 +1400,344 @@ if ($manpowerRequest->subSection && strtolower($manpowerRequest->subSection->nam
     }
 
 
-      public function store(Request $request, $id)
-    {
-        $validated = $request->validate([
-            'employee_ids' => 'required|array',
-            'employee_ids.*' => 'exists:employees,id',
-            'fulfilled_by' => 'required|exists:users,id',
-            'visibility' => 'in:public,private'
-        ]);
+public function store(Request $request, $id)
+{
+    $validated = $request->validate([
+        'employee_ids' => 'required|array',
+        'employee_ids.*' => 'exists:employees,id',
+        'fulfilled_by' => 'required|exists:users,id',
+        'visibility' => 'in:public,private',
+        'line_assignment_config' => 'sometimes|array'
+    ]);
 
-        $req = ManPowerRequest::with(['schedules.employee', 'subSection'])->findOrFail($id);
+    $req = ManPowerRequest::with(['schedules.employee', 'subSection'])->findOrFail($id);
 
-        try {
-            DB::transaction(function () use ($validated, $req) {
-                $currentSchedules = $req->schedules;
-                $currentEmployeeIds = $currentSchedules->pluck('employee_id')->toArray();
-                $newEmployeeIds = $validated['employee_ids'];
+    try {
+        DB::transaction(function () use ($validated, $req) {
+            $currentSchedules = $req->schedules;
+            $currentEmployeeIds = $currentSchedules->pluck('employee_id')->toArray();
+            $newEmployeeIds = $validated['employee_ids'];
+            $lineAssignmentConfig = $validated['line_assignment_config'] ?? [];
 
-                // Hapus yang lama
-                $employeesToRemove = array_diff($currentEmployeeIds, $newEmployeeIds);
-                foreach ($employeesToRemove as $employeeId) {
-                    $schedule = $currentSchedules->where('employee_id', $employeeId)->first();
-                    if ($schedule) {
-                        $employee = $schedule->employee;
-                        $employee->status = 'available';
-                        $employee->save();
+            // Identify employees to remove (not in new selection)
+            $employeesToRemove = array_diff($currentEmployeeIds, $newEmployeeIds);
+            
+            // For employees to remove, update their schedule status to 'rejected' instead of deleting
+            foreach ($employeesToRemove as $employeeId) {
+                $schedule = $currentSchedules->where('employee_id', $employeeId)->first();
+                if ($schedule) {
+                    // Update schedule status to 'rejected' instead of deleting
+                    $schedule->update([
+                        'status' => 'rejected'
+                    ]);
 
-                        $scheduleId = $schedule->id;
-                        $schedule->delete();
-
-                    } else {
-                        Log::warning("Employee {$employeeId} not found in current schedules for removal (request_id={$req->id})");
-                    }
-                }
-
-                // Tambahkan yang baru
-                $employeesToAdd = array_diff($newEmployeeIds, $currentEmployeeIds);
-                foreach (array_values($employeesToAdd) as $index => $employeeId) {
-                    $employee = Employee::where('id', $employeeId)
-                        ->where(function ($query) {
-                            $query->where('status', 'available')
-                                ->orWhere('status', 'assigned');
-                        })
-                        ->where('cuti', 'no')
-                        ->whereDoesntHave('schedules', function ($query) use ($req) {
-                            $query->where('date', $req->date)
-                                ->where('man_power_request_id', '!=', $req->id);
-                        })
-                        ->first();
-
-                    if (!$employee) {
-                        throw new \Exception("Karyawan ID {$employeeId} tidak tersedia, sedang cuti, atau sudah dijadwalkan pada tanggal ini.");
-                    }
-
-                    $data = [
-                        'employee_id' => $employeeId,
-                        'sub_section_id' => $req->sub_section_id,
-                        'man_power_request_id' => $req->id,
-                        'date' => $req->date,
-                        'visibility' => $validated['visibility'] ?? 'private',
-                    ];
-
-                    // Tambahkan line kalau subsection putway
-if (strtolower($req->subSection->name) === 'putway') {
-    $data['line'] = strval((($index % 2) + 1)); // '1','2','1','2...
-}
-
-// Tambahkan line kalau subsection shrink
-if (strtolower($req->subSection->name) === 'shrink') {
-    $data['line'] = strval((($index % 4) + 1)); // '1','2','3','4','1','2','3','4...
-}
-
-                    $schedule = Schedule::create($data);
-
-                    $employee->status = 'assigned';
+                    // Update employee status back to available
+                    $employee = $schedule->employee;
+                    $employee->status = 'available';
                     $employee->save();
 
+                    Log::info("Employee {$employeeId} rejected for request {$req->id}", [
+                        'schedule_id' => $schedule->id,
+                        'request_id' => $req->id
+                    ]);
+                } else {
+                    Log::warning("Employee {$employeeId} not found in current schedules for rejection (request_id={$req->id})");
+                }
+            }
+
+            // Add new employees
+            $employeesToAdd = array_diff($newEmployeeIds, $currentEmployeeIds);
+            
+            // Get line assignment config for this request
+            $requestLineConfig = $lineAssignmentConfig[$req->id] ?? null;
+            $hasLineAssignment = $requestLineConfig && ($requestLineConfig['enabled'] ?? false);
+            
+            foreach (array_values($employeesToAdd) as $index => $employeeId) {
+                $employee = Employee::where('id', $employeeId)
+                    ->where(function ($query) {
+                        $query->where('status', 'available')
+                            ->orWhere('status', 'assigned');
+                    })
+                    ->where('cuti', 'no')
+                    ->whereDoesntHave('schedules', function ($query) use ($req) {
+                        $query->where('date', $req->date)
+                            ->where('man_power_request_id', '!=', $req->id)
+                            ->where('status', '!=', 'rejected'); // Exclude rejected schedules
+                    })
+                    ->first();
+
+                if (!$employee) {
+                    throw new \Exception("Karyawan ID {$employeeId} tidak tersedia, sedang cuti, atau sudah dijadwalkan pada tanggal ini.");
                 }
 
-                // Update request status
-                $req->status = 'fulfilled';
-                $req->fulfilled_by = $validated['fulfilled_by'];
-                $req->save();
+                $data = [
+                    'employee_id' => $employeeId,
+                    'sub_section_id' => $req->sub_section_id,
+                    'man_power_request_id' => $req->id,
+                    'date' => $req->date,
+                    'status' => 'pending', // Default status for new assignments
+                    'visibility' => $validated['visibility'] ?? 'private',
+                ];
 
-            });
-        } catch (\Exception $e) {
-            Log::error('Fulfillment Error: ' . $e->getMessage(), [
-                'exception' => $e,
-                'request_id' => $id,
-                'user_id' => auth()->id()
+                // Apply line assignment if enabled
+                if ($hasLineAssignment) {
+                    $lineNumber = $this->getAssignedLine($requestLineConfig, $index);
+                    if ($lineNumber) {
+                        $data['line'] = $lineNumber;
+                        Log::debug("Line assignment", [
+                            'employee_id' => $employeeId,
+                            'employee_index' => $index,
+                            'line_number' => $lineNumber,
+                            'config' => $requestLineConfig
+                        ]);
+                    }
+                } else {
+                    // No line assignment - use default behavior
+                    $data['line'] = null;
+                }
+
+                $schedule = Schedule::create($data);
+
+                $employee->status = 'assigned';
+                $employee->save();
+            }
+
+            // Also update status for existing employees who are kept (in case they were previously rejected)
+            $employeesToKeep = array_intersect($currentEmployeeIds, $newEmployeeIds);
+            foreach ($employeesToKeep as $employeeId) {
+                $schedule = $currentSchedules->where('employee_id', $employeeId)->first();
+                if ($schedule && $schedule->status === 'rejected') {
+                    // Reactivate previously rejected schedule
+                    $schedule->update([
+                        'status' => 'pending'
+                    ]);
+                    
+                    Log::info("Reactivated previously rejected schedule", [
+                        'schedule_id' => $schedule->id,
+                        'employee_id' => $employeeId,
+                        'request_id' => $req->id
+                    ]);
+                }
+            }
+
+            // Update request status
+            $req->status = 'fulfilled';
+            $req->fulfilled_by = $validated['fulfilled_by'];
+            $req->save();
+        });
+    } catch (\Exception $e) {
+        Log::error('Fulfillment Error: ' . $e->getMessage(), [
+            'exception' => $e,
+            'request_id' => $id,
+            'user_id' => auth()->id()
+        ]);
+
+        return back()->withErrors(['fulfillment_error' => $e->getMessage()]);
+    }
+
+    return redirect()
+        ->route('manpower-requests.index')
+        ->with('success', 'Permintaan berhasil dipenuhi');
+}
+
+// Add this helper method to calculate line assignment
+private function getAssignedLine($config, $employeeIndex)
+{
+    // Check if line assignment is enabled
+    if (!($config['enabled'] ?? false)) {
+        return null;
+    }
+
+    $lineCounts = $config['lineCounts'] ?? [];
+    
+    // If no line counts configured, return null (no assignment)
+    if (empty($lineCounts)) {
+        Log::warning('Line assignment enabled but lineCounts is empty', [
+            'config' => $config,
+            'employee_index' => $employeeIndex
+        ]);
+        return null;
+    }
+
+    // Calculate cumulative counts to determine which line the employee belongs to
+    $cumulative = 0;
+    foreach ($lineCounts as $lineIndex => $lineCount) {
+        $cumulative += $lineCount;
+        if ($employeeIndex < $cumulative) {
+            $assignedLine = (string)($lineIndex + 1);
+            
+            Log::debug('Line assignment calculated', [
+                'employee_index' => $employeeIndex,
+                'line_number' => $assignedLine,
+                'cumulative' => $cumulative,
+                'line_counts' => $lineCounts
+            ]);
+            
+            return $assignedLine;
+        }
+    }
+    
+    // Fallback: if we exceed the configured counts, assign to last line
+    $lastLine = (string)count($lineCounts);
+    
+    Log::warning('Employee index exceeds configured line counts', [
+        'employee_index' => $employeeIndex,
+        'total_configured' => $cumulative,
+        'assigned_to_last_line' => $lastLine,
+        'line_counts' => $lineCounts
+    ]);
+    
+    return $lastLine;
+}
+
+// Also update the bulkStore method to handle line assignment:
+public function bulkStore(Request $request)
+{
+    $request->validate([
+        'request_ids' => 'required|array',
+        'request_ids.*' => 'exists:man_power_requests,id',
+        'employee_selections' => 'required|array',
+        'strategy' => 'required|in:optimal,same_section,balanced',
+        'visibility' => 'in:public,private',
+        'status' => 'in:pending,accepted,rejected',
+        'line_assignment_config' => 'sometimes|array'
+    ]);
+
+    DB::beginTransaction();
+    try {
+        $results = [];
+        $successCount = 0;
+        $failureCount = 0;
+        $employeeSelections = $request->employee_selections;
+        $status = $request->status ?? 'pending';
+        $lineAssignmentConfig = $request->line_assignment_config ?? [];
+
+        foreach ($request->request_ids as $id) {
+            $manpowerRequest = ManPowerRequest::with(['subSection', 'schedules'])->findOrFail($id);
+
+            // Skip if already fulfilled
+            if ($manpowerRequest->status === 'fulfilled') {
+                $results[$id] = 'already fulfilled';
+                $failureCount++;
+                Log::warning('REQUEST ALREADY FULFILLED - SKIPPING', ['request_id' => $id]);
+                continue;
+            }
+
+            // Get selected employee IDs for this request
+            $selectedEmployeeIds = $employeeSelections[$id] ?? [];
+
+            // Validate employee selection count
+            if (count($selectedEmployeeIds) !== $manpowerRequest->requested_amount) {
+                $results[$id] = 'invalid employee selection count';
+                $failureCount++;
+                Log::error('INVALID EMPLOYEE SELECTION COUNT - SKIPPING', [
+                    'request_id' => $id,
+                    'selected' => count($selectedEmployeeIds),
+                    'expected' => $manpowerRequest->requested_amount
+                ]);
+                continue;
+            }
+
+            // Validate gender requirements
+            $maleCount = 0;
+            $femaleCount = 0;
+
+            foreach ($selectedEmployeeIds as $employeeId) {
+                $employee = Employee::find($employeeId);
+                if (!$employee) {
+                    throw new \Exception("Employee {$employeeId} not found");
+                }
+
+                if ($employee->gender === 'male') {
+                    $maleCount++;
+                } elseif ($employee->gender === 'female') {
+                    $femaleCount++;
+                }
+            }
+
+            if ($manpowerRequest->male_count > 0 && $maleCount < $manpowerRequest->male_count) {
+                $results[$id] = 'insufficient male employees';
+                $failureCount++;
+                Log::error('INSUFFICIENT MALE EMPLOYEES - SKIPPING', [
+                    'request_id' => $id,
+                    'actual' => $maleCount,
+                    'required' => $manpowerRequest->male_count
+                ]);
+                continue;
+            }
+
+            if ($manpowerRequest->female_count > 0 && $femaleCount < $manpowerRequest->female_count) {
+                $results[$id] = 'insufficient female employees';
+                $failureCount++;
+                Log::error('INSUFFICIENT FEMALE EMPLOYEES - SKIPPING', [
+                    'request_id' => $id,
+                    'actual' => $femaleCount,
+                    'required' => $manpowerRequest->female_count
+                ]);
+                continue;
+            }
+
+            // Get line assignment config for this request
+            $requestLineConfig = $lineAssignmentConfig[$id] ?? null;
+            $hasLineAssignment = $requestLineConfig && ($requestLineConfig['enabled'] ?? false);
+
+            // Create schedules with line assignment for ALL subsections
+            $createdSchedules = [];
+            foreach ($selectedEmployeeIds as $index => $employeeId) {
+                $data = [
+                    'employee_id' => $employeeId,
+                    'sub_section_id' => $manpowerRequest->sub_section_id,
+                    'man_power_request_id' => $manpowerRequest->id,
+                    'date' => $manpowerRequest->date,
+                    'status' => $status,
+                    'visibility' => $request->visibility ?? 'private',
+                ];
+
+                // Apply line assignment for ALL subsections if enabled
+                if ($hasLineAssignment) {
+                    $lineNumber = $this->getAssignedLine($requestLineConfig, $index);
+                    if ($lineNumber) {
+                        $data['line'] = $lineNumber;
+                    }
+                }
+                // If line assignment is disabled, line will be null (no line assignment)
+
+                $schedule = Schedule::create($data);
+                $createdSchedules[] = $schedule->id;
+            }
+
+            // Update request status
+            $manpowerRequest->update([
+                'status' => 'fulfilled',
+                'fulfilled_by' => auth()->id()
             ]);
 
-            return back()->withErrors(['fulfillment_error' => $e->getMessage()]);
+            $results[$id] = 'fulfilled - ' . count($selectedEmployeeIds) . ' employees assigned';
+            $successCount++;
         }
 
-        return redirect()
-            ->route('manpower-requests.index')
-            ->with('success', 'Permintaan berhasil dipenuhi');
+        DB::commit();
+
+        return redirect()->route('manpower-requests.index')->with([
+            'success' => 'Bulk fulfill completed: ' . $successCount . ' successful, ' . $failureCount . ' failed',
+            'bulk_results' => $results
+        ]);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+
+        Log::error('=== BULK FULFILLMENT FAILED ===', [
+            'error_message' => $e->getMessage(),
+            'error_trace' => $e->getTraceAsString(),
+            'request_data' => $request->except(['employee_selections']),
+            'timestamp' => now()->toDateTimeString()
+        ]);
+
+        return redirect()->back()->withErrors([
+            'fulfillment_error' => 'Bulk fulfill failed: ' . $e->getMessage()
+        ]);
     }
+}
 
     /**
      * Show the form for revising a fulfilled request

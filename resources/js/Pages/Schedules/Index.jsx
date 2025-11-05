@@ -552,11 +552,11 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
                                                         {emp.employee?.nik || 'N/A'}
                                                     </td>
                                                     <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
-                                                        {emp.sub_section || 'N/A'}
-                                                    </td>
-                                                    <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
-                                                        {emp.line || '-'}
-                                                    </td>
+    {emp.sub_section || 'N/A'}
+</td>
+<td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
+    {emp.sub_section === 'Shrink' && emp.line ? `Shrink ${emp.line}` : emp.line || '-'}
+</td>
                                                     <td className="px-4 py-2 text-sm">
                                                         {getStatusBadge(emp.status, emp.rejection_reason)}
                                                     </td>
