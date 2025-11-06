@@ -6,11 +6,25 @@ export default function BulkEmployeeModal({
     setShowModal,
     request,
     allSortedEligibleEmployees,
-    selectNewEmployee
+    selectNewEmployee,
+    loading = false,
+    bulkMode = false,
+    selectedEmployeeIds = [],
+    onBulkSelect
 }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedSubSection, setSelectedSubSection] = useState('all');
     const [failedImages, setFailedImages] = useState(new Set());
+    const [localSelectedEmployees, setLocalSelectedEmployees] = useState([]);
+
+    // Initialize local selected employees when modal opens or bulkMode changes
+    useMemo(() => {
+        if (bulkMode && showModal) {
+            setLocalSelectedEmployees(selectedEmployeeIds || []);
+        } else {
+            setLocalSelectedEmployees([]);
+        }
+    }, [bulkMode, showModal, selectedEmployeeIds]);
 
     const availableSubSections = useMemo(() => {
         const subSectionMap = new Map();
@@ -56,37 +70,45 @@ export default function BulkEmployeeModal({
         return filtered;
     }, [allSortedEligibleEmployees, searchTerm, selectedSubSection]);
 
-    const sameSubSectionEmployees = useMemo(() => {
+    // Group employees by same/other subsection with selected employees on top
+    const { sameSubSectionSelected, sameSubSectionUnselected, otherSubSectionSelected, otherSubSectionUnselected } = useMemo(() => {
         const reqSubId = String(request?.sub_section_id);
-        if (!reqSubId) return [];
+        
+        const sameSubSectionSelected = [];
+        const sameSubSectionUnselected = [];
+        const otherSubSectionSelected = [];
+        const otherSubSectionUnselected = [];
 
-        return filteredEmployees.filter(emp => {
-            if (!emp.subSections || !Array.isArray(emp.subSections)) return false;
+        filteredEmployees.forEach(emp => {
+            const isSelected = localSelectedEmployees.includes(emp.id);
+            const isSameSubsection = reqSubId && emp.subSections?.some(ss => String(ss.id) === reqSubId);
 
-            return emp.subSections.some(ss => {
-                if (!ss || !ss.id) return false;
-
-                const ssId = String(ss.id);
-                return ssId === reqSubId;
-            });
+            if (isSameSubsection) {
+                if (isSelected) {
+                    sameSubSectionSelected.push(emp);
+                } else {
+                    sameSubSectionUnselected.push(emp);
+                }
+            } else {
+                if (isSelected) {
+                    otherSubSectionSelected.push(emp);
+                } else {
+                    otherSubSectionUnselected.push(emp);
+                }
+            }
         });
-    }, [filteredEmployees, request?.sub_section_id]);
 
-    const otherSubSectionEmployees = useMemo(() => {
-        const reqSubId = String(request?.sub_section_id);
-        if (!reqSubId) return filteredEmployees;
+        return {
+            sameSubSectionSelected,
+            sameSubSectionUnselected,
+            otherSubSectionSelected,
+            otherSubSectionUnselected
+        };
+    }, [filteredEmployees, localSelectedEmployees, request?.sub_section_id]);
 
-        return filteredEmployees.filter(emp => {
-            if (!emp.subSections || !Array.isArray(emp.subSections)) return true;
-
-            return !emp.subSections.some(ss => {
-                if (!ss || !ss.id) return false;
-
-                const ssId = String(ss.id);
-                return ssId === reqSubId;
-            });
-        });
-    }, [filteredEmployees, request?.sub_section_id]);
+    // Combined arrays for display (selected first, then unselected, but maintaining same/other grouping)
+    const sameSubSectionEmployees = [...sameSubSectionSelected, ...sameSubSectionUnselected];
+    const otherSubSectionEmployees = [...otherSubSectionSelected, ...otherSubSectionUnselected];
 
     const handleImageError = (employeeId, e) => {
         if (!failedImages.has(employeeId)) {
@@ -98,6 +120,41 @@ export default function BulkEmployeeModal({
         if (fallback) {
             fallback.style.display = 'flex';
         }
+    };
+
+    // Handle employee selection in bulk mode
+    const handleBulkEmployeeSelect = (employeeId) => {
+        if (!bulkMode) return;
+
+        setLocalSelectedEmployees(prev => {
+            if (prev.includes(employeeId)) {
+                return prev.filter(id => id !== employeeId);
+            } else {
+                return [...prev, employeeId];
+            }
+        });
+    };
+
+    // Handle single employee selection (non-bulk mode)
+    const handleSingleEmployeeSelect = (employeeId) => {
+        if (bulkMode) return;
+        
+        console.log('Employee selected in modal:', employeeId);
+        selectNewEmployee(employeeId);
+        setShowModal(false);
+    };
+
+    // Apply bulk selection and close modal
+    const applyBulkSelection = () => {
+        if (onBulkSelect && bulkMode) {
+            onBulkSelect(localSelectedEmployees);
+        }
+        setShowModal(false);
+    };
+
+    // Clear all selections in bulk mode
+    const clearBulkSelection = () => {
+        setLocalSelectedEmployees([]);
     };
 
     const UserIcon = ({ className = "w-6 h-6" }) => (
@@ -132,16 +189,11 @@ export default function BulkEmployeeModal({
         return photoPath;
     };
 
-    // In BulkEmployeeModal.jsx, make sure the handleEmployeeSelect is working correctly
-const handleEmployeeSelect = (employeeId) => {
-  console.log('Employee selected in modal:', employeeId);
-  selectNewEmployee(employeeId);
-};
-
     const renderEmployeeCard = (emp) => {
         const empId = String(emp.id);
         const imageFailed = failedImages.has(empId);
         const photoUrl = getEmployeePhotoUrl(emp);
+        const isSelected = bulkMode && localSelectedEmployees.includes(empId);
 
         let displaySubSectionName = 'Tidak Ada Bagian';
         if (emp.subSections && emp.subSections.length > 0) {
@@ -158,17 +210,40 @@ const handleEmployeeSelect = (employeeId) => {
         return (
             <div
                 key={empId}
-                onClick={() => handleEmployeeSelect(empId)}
-                className={`cursor-pointer text-left p-3 rounded-md border transition relative hover:bg-blue-50 dark:hover:bg-blue-900/20 ${
-                    isFemale
+                onClick={() => bulkMode ? handleBulkEmployeeSelect(empId) : handleSingleEmployeeSelect(empId)}
+                className={`cursor-pointer text-left p-3 rounded-md border transition relative ${
+                    bulkMode 
+                        ? isSelected
+                            ? 'bg-blue-100 border-blue-400 dark:bg-blue-900/40 dark:border-blue-500 ring-2 ring-blue-300 dark:ring-blue-600'
+                            : 'hover:bg-gray-50 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600'
+                        : 'hover:bg-blue-50 dark:hover:bg-blue-900/20 border-blue-200 dark:border-blue-700'
+                } ${
+                    isFemale && !bulkMode
                         ? 'border-pink-200 dark:border-pink-700'
-                        : 'border-blue-200 dark:border-blue-700'
+                        : !bulkMode ? 'border-blue-200 dark:border-blue-700' : ''
                 }`}
             >
+                {/* Selection indicator for bulk mode */}
+                {bulkMode && (
+                    <div className="absolute top-2 right-2">
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                            isSelected 
+                                ? 'bg-blue-500 border-blue-500' 
+                                : 'bg-white border-gray-300 dark:bg-gray-600 dark:border-gray-400'
+                        }`}>
+                            {isSelected && (
+                                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                </svg>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 <div className="flex justify-between items-start">
                     <div className="flex-1">
                         <div className="flex items-center space-x-3">
-                            <div className="flex-shrink-0">
+                            {/* <div className="flex-shrink-0">
                                 {photoUrl && !imageFailed ? (
                                     <img
                                         src={photoUrl}
@@ -181,7 +256,7 @@ const handleEmployeeSelect = (employeeId) => {
                                         <UserIcon className="w-6 h-6 text-gray-500 dark:text-gray-400" />
                                     </div>
                                 )}
-                            </div>
+                            </div> */}
                             <div>
                                 <strong className="text-gray-900 dark:text-gray-100">{emp.name}</strong>
                                 <div className="mt-1 text-gray-500 dark:text-gray-400 text-xs">
@@ -211,6 +286,42 @@ const handleEmployeeSelect = (employeeId) => {
                         </div>
                     </div>
                 </div>
+
+                {/* Bulk selection hint */}
+                {bulkMode && (
+                    <div className="mt-2 text-center">
+                        <span className="text-blue-600 dark:text-blue-400 text-xs">
+                            {isSelected ? 'Selected' : 'Click to select'}
+                        </span>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    // Render employee section with selected employees first
+    const renderEmployeeSection = (employees, title, isSameSubsection = false) => {
+        if (employees.length === 0) return null;
+
+        const selectedCount = employees.filter(emp => localSelectedEmployees.includes(emp.id)).length;
+        const totalCount = employees.length;
+
+        return (
+            <div className="mb-8">
+                <h4 className="mb-4 font-semibold text-lg text-gray-700 dark:text-gray-300 flex items-center">
+                    <span className={`w-3 h-3 rounded-full mr-2 ${
+                        isSameSubsection ? 'bg-green-500' : 'bg-blue-500'
+                    }`}></span>
+                    {title} - {totalCount} orang
+                    {bulkMode && selectedCount > 0 && (
+                        <span className="ml-2 bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 px-2 py-1 rounded-full text-sm">
+                            {selectedCount} terpilih
+                        </span>
+                    )}
+                </h4>
+                <div className="gap-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                    {employees.map(renderEmployeeCard)}
+                </div>
             </div>
         );
     };
@@ -230,7 +341,7 @@ const handleEmployeeSelect = (employeeId) => {
                 <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
                     <div className="flex items-center space-x-4">
                         <h3 className="font-bold text-xl text-gray-900 dark:text-gray-100">
-                            Pilih Karyawan Pengganti
+                            {bulkMode ? 'Pilih Karyawan (Multiple)' : 'Pilih Karyawan Pengganti'}
                         </h3>
                         <span className="text-sm text-gray-600 dark:text-gray-400">
                             {request?.sub_section_name} - {request?.shift_name}
@@ -245,6 +356,38 @@ const handleEmployeeSelect = (employeeId) => {
                         </svg>
                     </button>
                 </div>
+
+                {/* Bulk Selection Header */}
+                {bulkMode && (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-700 p-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                                <div className="flex items-center space-x-2">
+                                    <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                                    <span className="font-semibold text-blue-800 dark:text-blue-300">
+                                        Mode Pilihan Multiple
+                                    </span>
+                                </div>
+                                <span className="text-sm text-blue-700 dark:text-blue-400">
+                                    Pilih beberapa karyawan untuk shift ini
+                                </span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <span className="text-sm text-blue-700 dark:text-blue-400">
+                                    Terpilih: {localSelectedEmployees.length} karyawan
+                                </span>
+                                {localSelectedEmployees.length > 0 && (
+                                    <button
+                                        onClick={clearBulkSelection}
+                                        className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-sm"
+                                    >
+                                        Hapus Semua
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Search and Filter Section */}
                 <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
@@ -303,35 +446,24 @@ const handleEmployeeSelect = (employeeId) => {
                         Menampilkan {filteredEmployees.length} dari {allSortedEligibleEmployees.length} karyawan
                         {searchTerm && ` • Pencarian: "${searchTerm}"`}
                         {selectedSubSection !== 'all' && ` • Filter: ${availableSubSections.find(s => s.id === selectedSubSection)?.section_name} - ${availableSubSections.find(s => s.id === selectedSubSection)?.name}`}
+                        {bulkMode && ` • ${localSelectedEmployees.length} karyawan terpilih`}
                     </div>
                 </div>
 
                 {/* Employee List */}
                 <div className="overflow-y-auto max-h-[50vh] p-6">
-                    {/* Same Sub-Section Employees */}
-                    {sameSubSectionEmployees.length > 0 && (
-                        <div className="mb-8">
-                            <h4 className="mb-4 font-semibold text-lg text-gray-700 dark:text-gray-300 flex items-center">
-                                <span className="w-3 h-3 bg-green-500 rounded-full mr-2"></span>
-                                Karyawan dari Sub-Bagian Sama ({request?.sub_section_name || 'Unknown'}) - {sameSubSectionEmployees.length} orang
-                            </h4>
-                            <div className="gap-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                                {sameSubSectionEmployees.map(renderEmployeeCard)}
-                            </div>
-                        </div>
+                    {/* Same Sub-Section Employees - Selected First */}
+                    {sameSubSectionEmployees.length > 0 && renderEmployeeSection(
+                        sameSubSectionEmployees,
+                        `Karyawan dari Sub-Bagian Sama (${request?.sub_section_name || 'Unknown'})`,
+                        true
                     )}
 
-                    {/* Other Sub-Section Employees */}
-                    {otherSubSectionEmployees.length > 0 && (
-                        <div>
-                            <h4 className="mb-4 font-semibold text-lg text-gray-700 dark:text-gray-300 flex items-center">
-                                <span className="w-3 h-3 bg-blue-500 rounded-full mr-2"></span>
-                                Karyawan dari Sub-Bagian Lain - {otherSubSectionEmployees.length} orang
-                            </h4>
-                            <div className="gap-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                                {otherSubSectionEmployees.map(renderEmployeeCard)}
-                            </div>
-                        </div>
+                    {/* Other Sub-Section Employees - Selected First */}
+                    {otherSubSectionEmployees.length > 0 && renderEmployeeSection(
+                        otherSubSectionEmployees,
+                        'Karyawan dari Sub-Bagian Lain',
+                        false
                     )}
 
                     {/* No Results */}
@@ -351,7 +483,7 @@ const handleEmployeeSelect = (employeeId) => {
                 </div>
 
                 {/* Footer */}
-                <div className="flex justify-end p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+                <div className="flex justify-between p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
                     <button
                         type="button"
                         onClick={() => setShowModal(false)}
@@ -359,6 +491,25 @@ const handleEmployeeSelect = (employeeId) => {
                     >
                         Tutup
                     </button>
+                    
+                    {bulkMode && (
+                        <div className="flex space-x-3">
+                            <button
+                                onClick={clearBulkSelection}
+                                disabled={localSelectedEmployees.length === 0}
+                                className="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 disabled:bg-gray-400 text-white rounded-md transition-colors"
+                            >
+                                Hapus Pilihan ({localSelectedEmployees.length})
+                            </button>
+                            <button
+                                onClick={applyBulkSelection}
+                                disabled={localSelectedEmployees.length === 0}
+                                className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-md transition-colors"
+                            >
+                                Terapkan {localSelectedEmployees.length} Karyawan
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

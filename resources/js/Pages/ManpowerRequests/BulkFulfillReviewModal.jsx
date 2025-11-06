@@ -1,4 +1,4 @@
-// resources/js/Pages/ManpowerRequests/BulkFulfillPreviewModal.jsx
+// resources/js/Pages/ManpowerRequests/BulkFulfillReviewModal.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import BulkEmployeeModal from './components/BulkEmployeeModal';
@@ -22,6 +22,8 @@ const BulkFulfillPreviewModal = ({
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [modifiedAssignments, setModifiedAssignments] = useState({});
   const [processingRequests, setProcessingRequests] = useState([]);
+  const [bulkSelectionMode, setBulkSelectionMode] = useState(false);
+  const [bulkSelectedEmployees, setBulkSelectedEmployees] = useState([]);
 
   const isProcessing = processingRequests.length > 0;
 
@@ -31,6 +33,8 @@ const BulkFulfillPreviewModal = ({
     } else {
       setPreviewData(null);
       setModifiedAssignments({});
+      setBulkSelectionMode(false);
+      setBulkSelectedEmployees([]);
     }
   }, [open, strategy, selectedRequests]);
 
@@ -71,22 +75,42 @@ const BulkFulfillPreviewModal = ({
         setAvailableEmployees(response.data.employees);
       } else {
         setAvailableEmployees([]);
-        toast.error(response.data.message || 'Failed to load available employees');
+        console.error(response.data.message || 'Failed to load available employees');
       }
     } catch (error) {
       console.error('Failed to fetch available employees:', error);
       setAvailableEmployees([]);
-      toast.error('Failed to load available employees. Please try again.');
+      console.error('Failed to load available employees. Please try again.');
     } finally {
       setLoadingEmployees(false);
     }
   };
 
-  const openEmployeeModal = (requestId, employeeIndex) => {
+  const openEmployeeModal = (requestId, employeeIndex, bulkMode = false) => {
     setCurrentRequestId(requestId);
     setCurrentEmployeeIndex(employeeIndex);
     fetchAvailableEmployees(requestId);
+    
+    // If bulk mode, pass the current assignments
+    if (bulkMode) {
+      const currentAssignments = modifiedAssignments[requestId] || 
+        previewData?.results[requestId]?.employees?.map(emp => emp.id) || [];
+      setBulkSelectedEmployees(currentAssignments);
+    }
+    
     setShowEmployeeModal(true);
+  };
+
+  // Add this function to handle bulk selection from the modal
+  const handleBulkEmployeeSelect = (selectedEmployeeIds) => {
+    if (!currentRequestId) return;
+
+    setModifiedAssignments(prev => ({
+      ...prev,
+      [currentRequestId]: selectedEmployeeIds
+    }));
+
+    console.log(`Bulk assigned ${selectedEmployeeIds.length} employees to request ${currentRequestId}`);
   };
 
   const selectNewEmployee = (employeeId) => {
@@ -108,7 +132,76 @@ const BulkFulfillPreviewModal = ({
     setShowEmployeeModal(false);
     setCurrentRequestId(null);
     setCurrentEmployeeIndex(null);
-    toast.success('Employee selected successfully');
+    console.log('Employee selected successfully');
+  };
+
+  // Bulk selection functions
+  const toggleBulkSelectionMode = () => {
+    if (bulkSelectionMode) {
+      // Cancel bulk selection mode
+      setBulkSelectedEmployees([]);
+    }
+    setBulkSelectionMode(!bulkSelectionMode);
+  };
+
+  const toggleBulkEmployeeSelection = (employeeId) => {
+    setBulkSelectedEmployees(prev => {
+      if (prev.includes(employeeId)) {
+        return prev.filter(id => id !== employeeId);
+      } else {
+        return [...prev, employeeId];
+      }
+    });
+  };
+
+  const applyBulkSelection = () => {
+    if (bulkSelectedEmployees.length === 0) {
+      console.log('No employees selected for bulk assignment');
+      return;
+    }
+
+    setModifiedAssignments(prev => {
+      const newAssignments = { ...prev };
+      
+      // Apply bulk selection to all requests that need employees
+      Object.keys(previewData.results).forEach(requestId => {
+        const requestData = previewData.results[requestId];
+        
+        // Skip already fulfilled requests or requests without data
+        if (requestData.status === 'already_fulfilled' || !requestData.request) return;
+        
+        const requestedAmount = requestData.request.requested_amount;
+        const currentEmployees = newAssignments[requestId] || [];
+        
+        // Create new assignment array
+        const newAssignment = [];
+        
+        // Fill with bulk selected employees first
+        for (let i = 0; i < requestedAmount && i < bulkSelectedEmployees.length; i++) {
+          newAssignment.push(bulkSelectedEmployees[i]);
+        }
+        
+        // If we need more employees than available in bulk selection, keep original ones
+        if (newAssignment.length < requestedAmount) {
+          const remainingSlots = requestedAmount - newAssignment.length;
+          const originalEmployees = currentEmployees.slice(newAssignment.length, newAssignment.length + remainingSlots);
+          newAssignment.push(...originalEmployees);
+        }
+        
+        newAssignments[requestId] = newAssignment;
+      });
+      
+      return newAssignments;
+    });
+
+    // Exit bulk selection mode
+    setBulkSelectionMode(false);
+    setBulkSelectedEmployees([]);
+    console.log(`Bulk applied ${bulkSelectedEmployees.length} employees to all requests`);
+  };
+
+  const clearBulkSelection = () => {
+    setBulkSelectedEmployees([]);
   };
 
   const getCurrentAssignments = () => {
@@ -121,7 +214,7 @@ const BulkFulfillPreviewModal = ({
           const availableEmployee = availableEmployees.find(emp => String(emp.id) === String(employeeId));
           if (availableEmployee) return availableEmployee;
           
-          const originalEmployee = data.employees.find(emp => String(emp.id) === String(employeeId));
+          const originalEmployee = data.employees?.find(emp => String(emp.id) === String(employeeId));
           if (originalEmployee) return originalEmployee;
           
           return { 
@@ -144,107 +237,107 @@ const BulkFulfillPreviewModal = ({
   };
 
   const handleConfirm = async () => {
-  try {
-    setProcessingRequests(prev => [...prev, ...selectedRequests]);
-    
-    const employeeSelections = {};
-    
-    selectedRequests.forEach(requestId => {
-      if (modifiedAssignments[requestId]) {
-        employeeSelections[requestId] = modifiedAssignments[requestId].map(id => 
-          typeof id === 'string' ? parseInt(id) : id
-        );
-      } else if (previewData?.results[requestId]?.employees) {
-        employeeSelections[requestId] = previewData.results[requestId].employees.map(emp => 
-          typeof emp.id === 'string' ? parseInt(emp.id) : emp.id
-        );
-      } else {
-        employeeSelections[requestId] = [];
-      }
-    });
-
-    const hasValidSelections = Object.values(employeeSelections).some(employees => 
-      employees?.length > 0
-    );
-
-    if (!hasValidSelections) {
-      toast.error('No valid employee assignments found. Please assign employees before confirming.');
-      return;
-    }
-
-    const requestData = {
-      request_ids: selectedRequests.map(id => typeof id === 'string' ? parseInt(id) : id),
-      strategy: strategy,
-      employee_selections: employeeSelections
-    };
-
-    let response;
-    const uniqueSubsections = [...new Set(selectedRequests.map(reqId => {
-      const request = allRequests.find(r => r.id === reqId);
-      return request?.sub_section?.id;
-    }).filter(Boolean))];
-
-    if (uniqueSubsections.length > 1) {
-      response = await axios.post(route('manpower-requests.bulk-fulfill-multi-subsection'), requestData);
-    } else {
-      response = await axios.post(route('manpower-requests.bulk-fulfill'), requestData);
-    }
-    
-    if (response.data.success) {
-      // Pass success data to parent
-      onConfirm({
-        success: true,
-        data: response.data,
-        message: response.data.message || `Successfully fulfilled ${selectedRequests.length} requests`,
-        modifiedAssignments
-      });
-    } else {
-      // Pass warning data to parent
-      onConfirm({
-        success: false,
-        data: response.data,
-        message: response.data.message || 'Some requests failed to fulfill',
-        isWarning: true,
-        modifiedAssignments
-      });
-    }
-    
-  } catch (error) {
-    console.error('Bulk fulfill error:', error);
-    
-    let errorMessage = 'Failed to fulfill requests';
-    
-    if (error.response?.status === 400) {
-      const errorData = error.response.data;
-      if (errorData.message === 'No valid requests found to fulfill') {
-        const fulfilledRequests = allRequests.filter(req => 
-          selectedRequests.includes(req.id) && req.status === 'fulfilled'
-        );
-        
-        if (fulfilledRequests.length > 0) {
-          errorMessage = `Some requests are already fulfilled: ${fulfilledRequests.map(r => `#${r.id}`).join(', ')}`;
+    try {
+      setProcessingRequests(prev => [...prev, ...selectedRequests]);
+      
+      const employeeSelections = {};
+      
+      selectedRequests.forEach(requestId => {
+        if (modifiedAssignments[requestId]) {
+          employeeSelections[requestId] = modifiedAssignments[requestId].map(id => 
+            typeof id === 'string' ? parseInt(id) : id
+          );
+        } else if (previewData?.results[requestId]?.employees) {
+          employeeSelections[requestId] = previewData.results[requestId].employees.map(emp => 
+            typeof emp.id === 'string' ? parseInt(emp.id) : emp.id
+          );
         } else {
-          errorMessage = 'No valid requests found. They may be already fulfilled or invalid.';
+          employeeSelections[requestId] = [];
+        }
+      });
+
+      const hasValidSelections = Object.values(employeeSelections).some(employees => 
+        employees?.length > 0
+      );
+
+      if (!hasValidSelections) {
+        console.error('No valid employee assignments found. Please assign employees before confirming.');
+        return;
+      }
+
+      const requestData = {
+        request_ids: selectedRequests.map(id => typeof id === 'string' ? parseInt(id) : id),
+        strategy: strategy,
+        employee_selections: employeeSelections
+      };
+
+      let response;
+      const uniqueSubsections = [...new Set(selectedRequests.map(reqId => {
+        const request = allRequests.find(r => r.id === reqId);
+        return request?.sub_section?.id;
+      }).filter(Boolean))];
+
+      if (uniqueSubsections.length > 1) {
+        response = await axios.post(route('manpower-requests.bulk-fulfill-multi-subsection'), requestData);
+      } else {
+        response = await axios.post(route('manpower-requests.bulk-fulfill'), requestData);
+      }
+      
+      if (response.data.success) {
+        // Pass success data to parent
+        onConfirm({
+          success: true,
+          data: response.data,
+          message: response.data.message || `Successfully fulfilled ${selectedRequests.length} requests`,
+          modifiedAssignments
+        });
+      } else {
+        // Pass warning data to parent
+        onConfirm({
+          success: false,
+          data: response.data,
+          message: response.data.message || 'Some requests failed to fulfill',
+          isWarning: true,
+          modifiedAssignments
+        });
+      }
+      
+    } catch (error) {
+      console.error('Bulk fulfill error:', error);
+      
+      let errorMessage = 'Failed to fulfill requests';
+      
+      if (error.response?.status === 400) {
+        const errorData = error.response.data;
+        if (errorData.message === 'No valid requests found to fulfill') {
+          const fulfilledRequests = allRequests.filter(req => 
+            selectedRequests.includes(req.id) && req.status === 'fulfilled'
+          );
+          
+          if (fulfilledRequests.length > 0) {
+            errorMessage = `Some requests are already fulfilled: ${fulfilledRequests.map(r => `#${r.id}`).join(', ')}`;
+          } else {
+            errorMessage = 'No valid requests found. They may be already fulfilled or invalid.';
+          }
+        } else {
+          errorMessage = errorData.message || 'Invalid request data';
         }
       } else {
-        errorMessage = errorData.message || 'Invalid request data';
+        errorMessage = error.response?.data?.message || 'Failed to fulfill requests';
       }
-    } else {
-      errorMessage = error.response?.data?.message || 'Failed to fulfill requests';
+      
+      // Pass error data to parent
+      onConfirm({
+        success: false,
+        error: error,
+        message: errorMessage,
+        modifiedAssignments: {}
+      });
+    } finally {
+      setProcessingRequests([]);
+      // Don't call onClose here - let parent handle it after showing result modal
     }
-    
-    // Pass error data to parent
-    onConfirm({
-      success: false,
-      error: error,
-      message: errorMessage,
-      modifiedAssignments: {}
-    });
-  } finally {
-    setProcessingRequests([]);
-    // Don't call onClose here - let parent handle it after showing result modal
-  }
-};
+  };
 
   const currentAssignments = useMemo(() => getCurrentAssignments(), [previewData, modifiedAssignments, availableEmployees]);
 
@@ -266,6 +359,27 @@ const BulkFulfillPreviewModal = ({
       gender_breakdown: genderBreakdown
     };
   }, [previewData, currentAssignments]);
+
+  // Get all unique employees for bulk selection
+  const allAvailableEmployees = useMemo(() => {
+    const employees = new Map();
+    
+    availableEmployees.forEach(emp => {
+      if (!employees.has(emp.id)) {
+        employees.set(emp.id, emp);
+      }
+    });
+    
+    Object.values(currentAssignments).forEach(assignment => {
+      assignment.forEach(emp => {
+        if (!employees.has(emp.id)) {
+          employees.set(emp.id, emp);
+        }
+      });
+    });
+    
+    return Array.from(employees.values());
+  }, [availableEmployees, currentAssignments]);
 
   if (!open) return null;
 
@@ -293,6 +407,51 @@ const BulkFulfillPreviewModal = ({
             </button>
           </div>
 
+          {/* Bulk Selection Controls */}
+          {bulkSelectionMode && (
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border-b border-yellow-200 dark:border-yellow-700 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
+                    <span className="font-semibold text-yellow-800 dark:text-yellow-300">
+                      Bulk Selection Mode
+                    </span>
+                  </div>
+                  <span className="text-sm text-yellow-700 dark:text-yellow-400">
+                    Select employees to apply to all requests
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-yellow-700 dark:text-yellow-400">
+                    Selected: {bulkSelectedEmployees.length} employees
+                  </span>
+                  {bulkSelectedEmployees.length > 0 && (
+                    <button
+                      onClick={clearBulkSelection}
+                      className="px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white rounded text-sm"
+                    >
+                      Clear
+                    </button>
+                  )}
+                  <button
+                    onClick={applyBulkSelection}
+                    disabled={bulkSelectedEmployees.length === 0}
+                    className="px-3 py-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded text-sm"
+                  >
+                    Apply to All
+                  </button>
+                  <button
+                    onClick={toggleBulkSelectionMode}
+                    className="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="p-6 overflow-y-auto max-h-[60vh]">
             {loadingPreview ? (
               <div className="flex justify-center items-center py-12">
@@ -306,29 +465,42 @@ const BulkFulfillPreviewModal = ({
             ) : previewData ? (
               <div className="space-y-6">
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-                  <h3 className="font-semibold text-blue-800 dark:text-blue-300 mb-3">Summary</h3>
+                  <div className="flex justify-between items-center mb-3">
+                    <h3 className="font-semibold text-blue-800 dark:text-blue-300">Summary</h3>
+                    {!bulkSelectionMode && (
+                      <button
+                        onClick={toggleBulkSelectionMode}
+                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm flex items-center space-x-1"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        <span>Bulk Select Employees</span>
+                      </button>
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="text-center">
                       <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                        {summary.total_requests}
+                        {summary?.total_requests || 0}
                       </div>
                       <div className="text-sm text-blue-700 dark:text-blue-400">Total Requests</div>
                     </div>
                     <div className="text-center">
                       <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                        {summary.total_employees}
+                        {summary?.total_employees || 0}
                       </div>
                       <div className="text-sm text-green-700 dark:text-green-400">Total Employees</div>
                     </div>
                     <div className="text-center">
                       <div className="text-2xl font-bold text-blue-500">
-                        {summary.gender_breakdown.male}
+                        {summary?.gender_breakdown?.male || 0}
                       </div>
                       <div className="text-sm text-blue-700 dark:text-blue-400">Male</div>
                     </div>
                     <div className="text-center">
                       <div className="text-2xl font-bold text-pink-500">
-                        {summary.gender_breakdown.female}
+                        {summary?.gender_breakdown?.female || 0}
                       </div>
                       <div className="text-sm text-pink-700 dark:text-pink-400">Female</div>
                     </div>
@@ -337,7 +509,7 @@ const BulkFulfillPreviewModal = ({
                     <div>
                       <span className="font-medium text-blue-700 dark:text-blue-400">Subsections:</span>{' '}
                       <span className="text-blue-600 dark:text-blue-300">
-                        {summary.unique_subsections.join(', ')}
+                        {summary?.unique_subsections?.join(', ') || 'N/A'}
                       </span>
                     </div>
                     <div>
@@ -351,11 +523,68 @@ const BulkFulfillPreviewModal = ({
                   </div>
                 </div>
 
+                {/* Bulk Selection Employee Pool */}
+                {bulkSelectionMode && (
+                  <div className="border-2 border-yellow-300 dark:border-yellow-600 rounded-lg p-4 bg-yellow-50 dark:bg-yellow-900/10">
+                    <h4 className="font-semibold text-yellow-800 dark:text-yellow-300 mb-3 flex items-center">
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Select Employees for Bulk Assignment ({bulkSelectedEmployees.length} selected)
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-40 overflow-y-auto">
+                      {allAvailableEmployees.map(employee => {
+                        const isSelected = bulkSelectedEmployees.includes(employee.id);
+                        return (
+                          <div
+                            key={`bulk-${employee.id}`}
+                            onClick={() => toggleBulkEmployeeSelection(employee.id)}
+                            className={`cursor-pointer p-3 rounded-lg border transition-all ${
+                              isSelected
+                                ? 'bg-yellow-100 border-yellow-500 dark:bg-yellow-900/40 dark:border-yellow-400'
+                                : 'bg-white border-gray-200 dark:bg-gray-700 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                            }`}
+                          >
+                            <div className="flex justify-between items-center">
+                              <div className="flex-1">
+                                <div className="font-medium text-gray-900 dark:text-gray-100">
+                                  {employee.name}
+                                </div>
+                                <div className="text-xs text-gray-600 dark:text-gray-400">
+                                  NIK: {employee.id} • {employee.gender === 'female' ? '♀' : '♂'}
+                                </div>
+                              </div>
+                              {isSelected && (
+                                <div className="w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center">
+                                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {allAvailableEmployees.length === 0 && (
+                      <div className="text-center py-4 text-yellow-700 dark:text-yellow-400">
+                        No available employees found for bulk selection
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {Object.entries(previewData.results).map(([requestId, data]) => {
+                  // Add safety check for data.request
+                  if (!data.request) {
+                    console.warn(`Missing request data for request ID: ${requestId}`, data);
+                    return null; // Skip rendering this request
+                  }
+
                   const currentEmployees = currentAssignments[requestId] || [];
                   const isModified = modifiedAssignments[requestId] && 
                     JSON.stringify(modifiedAssignments[requestId]) !== 
-                    JSON.stringify(data.employees.map(emp => emp.id));
+                    JSON.stringify(data.employees?.map(emp => emp.id) || []);
 
                   return (
                     <div key={requestId} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
@@ -386,6 +615,19 @@ const BulkFulfillPreviewModal = ({
                           <span className="bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-2 py-1 rounded text-xs">
                             {currentEmployees.length}/{data.request.requested_amount}
                           </span>
+                          {/* Add bulk edit button for this specific request */}
+                          {!bulkSelectionMode && (
+                            <button
+                              onClick={() => openEmployeeModal(requestId, null, true)}
+                              className="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs flex items-center space-x-1"
+                              title="Bulk edit employees for this request"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                              </svg>
+                              <span>Bulk Edit</span>
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -410,8 +652,10 @@ const BulkFulfillPreviewModal = ({
                             return (
                               <div 
                                 key={`${employeeId}-${index}`} 
-                                className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 hover:shadow-md transition-shadow cursor-pointer group"
-                                onClick={() => !isProcessing && openEmployeeModal(requestId, index)}
+                                className={`bg-gray-50 dark:bg-gray-700 rounded-lg p-3 transition-shadow cursor-pointer group ${
+                                  bulkSelectionMode ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-md'
+                                }`}
+                                onClick={() => !isProcessing && !bulkSelectionMode && openEmployeeModal(requestId, index)}
                               >
                                 <div className="flex justify-between items-start mb-2">
                                   <div className="flex-1">
@@ -435,7 +679,9 @@ const BulkFulfillPreviewModal = ({
                                 </div>
                                 <div className="mt-2 text-center">
                                   <span className="text-blue-600 dark:text-blue-400 text-xs group-hover:underline">
-                                    {isProcessing ? 'Processing...' : 'Click to change employee'}
+                                    {isProcessing ? 'Processing...' : 
+                                     bulkSelectionMode ? 'Bulk selection active' : 
+                                     'Click to change employee'}
                                   </span>
                                 </div>
                               </div>
@@ -456,7 +702,11 @@ const BulkFulfillPreviewModal = ({
 
           <div className="flex justify-between items-center p-6 border-t border-gray-200 dark:border-gray-700">
             <div className="text-sm text-gray-600 dark:text-gray-400">
-              💡 Click on any employee card to change the assignment
+              {bulkSelectionMode ? (
+                '💡 Select employees to apply to all requests, then click "Apply to All"'
+              ) : (
+                '💡 Click on any employee card to change the assignment, or use bulk selection'
+              )}
             </div>
             <div className="flex space-x-3">
               <button
@@ -468,7 +718,7 @@ const BulkFulfillPreviewModal = ({
               </button>
               <button
                 onClick={handleConfirm}
-                disabled={loadingPreview || error || isProcessing}
+                disabled={loadingPreview || error || isProcessing || bulkSelectionMode}
                 className="px-4 py-2 bg-green-600 dark:bg-green-500 text-white rounded-md hover:bg-green-700 dark:hover:bg-green-600 disabled:opacity-50 flex items-center"
               >
                 {isProcessing ? (
@@ -493,6 +743,9 @@ const BulkFulfillPreviewModal = ({
           allSortedEligibleEmployees={availableEmployees}
           selectNewEmployee={selectNewEmployee}
           loading={loadingEmployees}
+          bulkMode={currentEmployeeIndex === null} // null index means bulk mode
+          selectedEmployeeIds={currentEmployeeIndex === null ? modifiedAssignments[currentRequestId] : []}
+          onBulkSelect={handleBulkEmployeeSelect}
         />
       )}
     </>
