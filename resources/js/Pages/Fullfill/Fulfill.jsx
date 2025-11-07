@@ -10,6 +10,7 @@ import EmployeeSelection from "./components/EmployeeSelection";
 import ConfirmationSection from "./components/ComfirmationSection";
 import EmployeeModal from "./components/EmployeeModal";
 import BulkFulfillmentPanel from "./components/BulkFulfillmentPanel";
+import LineAssignmentConfig from "./components/LineAssignmentConfig";
 
 export default function Fulfill({
     request,
@@ -20,12 +21,10 @@ export default function Fulfill({
     message,
     auth,
 }) {
-    const isPutwaySubsection = useMemo(() => {
-        return (
-            request?.sub_section?.name?.toLowerCase() === "putway" ||
-            request?.subSection?.name?.toLowerCase() === "putway"
-        );
-    }, [request]);
+    const [enableLineAssignment, setEnableLineAssignment] = useState(false);
+    const [lineAssignments, setLineAssignments] = useState({});
+    const [lineAssignmentConfig, setLineAssignmentConfig] = useState({});
+    
 
     const normalizeGender = (gender) => {
         if (!gender) {
@@ -79,7 +78,6 @@ export default function Fulfill({
             isCurrentlyScheduled: currentScheduledIds
                 .map((id) => String(id))
                 .includes(String(emp.id)),
-            // ADD ML SCORES
             ml_score: emp.ml_score || 0,
             final_score: emp.final_score || emp.total_score || 0,
         }));
@@ -104,7 +102,6 @@ export default function Fulfill({
 
             if (aIsSame !== bIsSame) return aIsSame ? -1 : 1;
 
-            // USE ML-ENHANCED FINAL SCORE INSTEAD OF TOTAL SCORE
             if (a.final_score !== b.final_score) {
                 return b.final_score - a.final_score;
             }
@@ -124,7 +121,6 @@ export default function Fulfill({
             if (aGenderMatch !== bGenderMatch)
                 return aGenderMatch - bGenderMatch;
 
-            // Keep existing type and weight sorting
             if (a.type === "bulanan" && b.type === "harian") return -1;
             if (a.type === "harian" && b.type === "bulanan") return 1;
 
@@ -281,7 +277,6 @@ export default function Fulfill({
 
             selected.push(...remainingSameSub.map((e) => String(e.id)));
 
-            // If still not enough, get from other subsections
             if (selected.length < request.requested_amount) {
                 const remainingOtherSub = allSortedEligibleEmployees
                     .filter(
@@ -313,6 +308,8 @@ export default function Fulfill({
         employee_ids: initialSelectedIds,
         fulfilled_by: auth.user.id,
         visibility: "private",
+        enable_line_assignment: false,
+        line_assignments: {},
     });
 
     const [selectedIds, setSelectedIds] = useState(() =>
@@ -327,6 +324,42 @@ export default function Fulfill({
     const [bulkSelectedEmployees, setBulkSelectedEmployees] = useState({});
     const [activeBulkRequest, setActiveBulkRequest] = useState(null);
     const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
+    
+    // Initialize bulk selected employees when entering bulk mode
+    useEffect(() => {
+        if (bulkMode) {
+            // Initialize current request's employees
+            const currentRequestId = String(request.id);
+            setBulkSelectedEmployees(prev => ({
+                ...prev,
+                [currentRequestId]: initialSelectedIds
+            }));
+        }
+    }, [bulkMode, request.id, initialSelectedIds]);
+
+useEffect(() => {
+    const initialLineAssignments = {};
+    initialSelectedIds.forEach((id, index) => {
+        initialLineAssignments[String(id)] = String((index % 2) + 1);
+    });
+    setLineAssignments(initialLineAssignments);
+    
+    const initialConfig = {
+        enabled: false,
+        lineCount: 2,
+        lineCounts: Array(2).fill(Math.ceil(request.requested_amount / 2))
+    };
+    
+    setLineAssignmentConfig({
+        [request.id]: initialConfig
+    });
+    
+    // Set the initial enableLineAssignment state
+    setEnableLineAssignment(initialConfig.enabled);
+    
+    // console.log('🔄 Initial line assignments:', initialLineAssignments);
+    // console.log('🔄 Initial enableLineAssignment:', initialConfig.enabled);
+}, [initialSelectedIds, request.id, request.requested_amount]);
 
     // Check if there are any currently scheduled employees
     const hasScheduledEmployees = useMemo(() => {
@@ -339,53 +372,34 @@ export default function Fulfill({
     useEffect(() => {
         const allValidRequestIds = new Set();
 
-        sameDayRequests.forEach((req) => {
-            allValidRequestIds.add(String(req.id));
+        sameDayRequests.forEach(req => {
+            if (req.id && req.id !== request.id) {
+                allValidRequestIds.add(String(req.id));
+            }
         });
 
-        allValidRequestIds.add(String(request.id));
-
-        const sameSubsectionRequests = sameDayRequests.filter(
-            (req) =>
-                String(req.sub_section_id) === String(request.sub_section_id) &&
-                req.status !== "fulfilled"
-        );
-        sameSubsectionRequests.forEach((req) => {
-            allValidRequestIds.add(String(req.id));
-        });
-
-        const invalidRequests = selectedBulkRequests.filter(
-            (id) => !allValidRequestIds.has(id)
+        const validSelected = selectedBulkRequests.filter(id =>
+            allValidRequestIds.has(String(id))
         );
 
-        if (invalidRequests.length > 0) {
-            setSelectedBulkRequests((prev) =>
-                prev.filter((id) => allValidRequestIds.has(id))
-            );
-
-            setBulkSelectedEmployees((prev) => {
-                const cleaned = { ...prev };
-                invalidRequests.forEach((invalidId) => {
-                    delete cleaned[invalidId];
-                });
-                return cleaned;
-            });
+        if (validSelected.length !== selectedBulkRequests.length) {
+            setSelectedBulkRequests(validSelected);
         }
-    }, [
-        sameDayRequests,
-        request.sub_section_id,
-        request.status,
-        request.id,
-        selectedBulkRequests,
-    ]);
+    }, [sameDayRequests, request.id, selectedBulkRequests]);
 
     useEffect(() => {
-        setSelectedIds(initialSelectedIds.map((id) => String(id)));
+        setSelectedIds(initialSelectedIds.map(id => String(id)));
     }, [initialSelectedIds]);
 
     useEffect(() => {
         setData("employee_ids", selectedIds);
-    }, [selectedIds]);
+    }, [selectedIds, setData]);
+
+    useEffect(() => {
+        if (message) {
+            setBackendError(message);
+        }
+    }, [message]);
 
     const genderStats = useMemo(() => {
         const stats = {
@@ -428,138 +442,121 @@ export default function Fulfill({
         request.female_count,
     ]);
 
-    const lineAssignments = useMemo(() => {
-        if (!isPutwaySubsection) return {};
-
-        const assignments = {};
-        selectedIds.forEach((id, index) => {
-            assignments[id] = ((index % 2) + 1).toString();
+// In Fulfill.jsx, update the handleLineConfigChange function:
+const handleLineConfigChange = (requestId, type, data) => {
+    // console.log('🔄 Line config change:', { requestId, type, data });
+    
+    if (type === 'line_assignment') {
+        const { employeeId, newLine } = data;
+        setLineAssignments(prev => {
+            const newAssignments = {
+                ...prev,
+                [employeeId]: newLine
+            };
+            // console.log('📝 Updated line assignments:', newAssignments);
+            return newAssignments;
         });
-
-        return assignments;
-    }, [isPutwaySubsection, selectedIds]);
-
-    const bulkLineAssignments = useMemo(() => {
-        const assignments = {};
-
-        Object.keys(bulkSelectedEmployees).forEach((requestId) => {
-            const request = sameDayRequests.find(
-                (req) => String(req.id) === requestId
-            );
-            if (!request) return;
-
-            const isPutway =
-                request?.sub_section?.name?.toLowerCase() === "putway" ||
-                request?.subSection?.name?.toLowerCase() === "putway";
-
-            if (isPutway) {
-                const employeeIds = bulkSelectedEmployees[requestId] || [];
-                employeeIds.forEach((id, index) => {
-                    const key = `${requestId}-${id}`;
-                    assignments[key] = ((index % 2) + 1).toString();
-                });
-            }
+    } else if (type === 'fullConfig') {
+        // console.log('🔄 Updating line assignment config for request:', requestId);
+        // console.log('🔄 New config enabled status:', data.enabled);
+        
+        setLineAssignmentConfig(prev => {
+            const newConfig = {
+                ...prev,
+                [requestId]: data
+            };
+            return newConfig;
         });
-
-        return assignments;
-    }, [bulkSelectedEmployees, sameDayRequests]);
-
-    const getBulkLineAssignment = useCallback(
-        (requestId, employeeId) => {
-            const key = `${requestId}-${employeeId}`;
-            return bulkLineAssignments[key] || null;
-        },
-        [bulkLineAssignments]
-    );
-
-    useEffect(() => {
-        if (errors?.fulfillment_error) {
-            setBackendError(errors.fulfillment_error);
+        
+        // CRITICAL: Update the enableLineAssignment state
+        // This ensures the main form knows when line assignment is enabled
+        if (requestId === String(request.id)) {
+            // console.log('✅ Setting enableLineAssignment to:', data.enabled);
+            setEnableLineAssignment(data.enabled);
         }
-    }, [errors]);
+    }
+};
 
-    const handleBulkEmployeeChange = useCallback(
-        (requestId, index, newEmployeeId) => {
-            setBulkSelectedEmployees((prev) => {
-                const currentEmployees = prev[requestId] || [];
+// Also add an effect to sync enableLineAssignment with the config
+useEffect(() => {
+    const currentConfig = lineAssignmentConfig[request.id];
+    if (currentConfig) {
+        // console.log('🔄 Syncing enableLineAssignment from config:', currentConfig.enabled);
+        setEnableLineAssignment(currentConfig.enabled);
+    }
+}, [lineAssignmentConfig, request.id]);
 
-                if (
-                    newEmployeeId !== currentEmployees[index] &&
-                    currentEmployees.includes(newEmployeeId)
-                ) {
-                    alert("Karyawan ini sudah dipilih untuk request ini");
-                    return prev;
-                }
+    const handleEmployeeSelect = (employeeId) => {
+        const stringId = String(employeeId);
+        setSelectedIds((prev) => {
+            if (prev.includes(stringId)) {
+                return prev.filter((id) => id !== stringId);
+            }
+            if (prev.length >= request.requested_amount) {
+                return prev;
+            }
+            return [...prev, stringId];
+        });
+    };
 
-                const newEmployees = [...currentEmployees];
-                newEmployees[index] = newEmployeeId;
+    const handleReplaceEmployee = (index) => {
+        setChangingEmployeeIndex(index);
+        setShowModal(true);
+    };
 
-                return {
-                    ...prev,
-                    [requestId]: newEmployees,
-                };
-            });
-        },
-        []
-    );
-
-    const handleSubmit = useCallback(
-        (e) => {
-            e.preventDefault();
-            setBackendError(null);
-
-            const selectedEmployees = selectedIds.map((id) =>
-                allSortedEligibleEmployees.find((e) => String(e.id) === id)
+    const handleModalEmployeeSelect = (employee) => {
+        if (activeBulkRequest) {
+            // Handle bulk mode employee selection
+            handleBulkEmployeeChange(
+                activeBulkRequest.requestId,
+                activeBulkRequest.index,
+                String(employee.id)
             );
+            setActiveBulkRequest(null);
+        } else if (changingEmployeeIndex !== null) {
+            // Handle single mode employee replacement
+            const newSelectedIds = [...selectedIds];
+            newSelectedIds[changingEmployeeIndex] = String(employee.id);
+            setSelectedIds(newSelectedIds);
+            setChangingEmployeeIndex(null);
+        } else {
+            // Handle direct employee selection
+            handleEmployeeSelect(employee.id);
+        }
+        setShowModal(false);
+    };
 
-            const maleCount = selectedEmployees.filter(
-                (e) => e?.gender === "male"
-            ).length;
-            const femaleCount = selectedEmployees.filter(
-                (e) => e?.gender === "female"
-            ).length;
+    const openBulkChangeModal = useCallback(
+        (requestId, index) => {
+            const requestIdStr = String(requestId);
 
-            if (request.male_count > 0 && maleCount < request.male_count) {
-                alert(
-                    `Diperlukan minimal ${request.male_count} karyawan laki-laki`
+            const requestExists =
+                sameDayRequests.some(
+                    (req) => String(req.id) === requestIdStr
+                ) || String(requestIdStr) === String(request.id);
+
+            if (!requestExists) {
+                console.error(
+                    "❌ Cannot open modal: Request not found",
+                    requestIdStr
                 );
+
+                setSelectedBulkRequests((prev) =>
+                    prev.filter((id) => id !== requestIdStr)
+                );
+                setBulkSelectedEmployees((prev) => {
+                    const cleaned = { ...prev };
+                    delete cleaned[requestIdStr];
+                    return cleaned;
+                });
+                alert("Request tidak valid telah dihapus dari seleksi.");
                 return;
             }
 
-            if (
-                request.female_count > 0 &&
-                femaleCount < request.female_count
-            ) {
-                alert(
-                    `Diperlukan minimal ${request.female_count} karyawan perempuan`
-                );
-                return;
-            }
-
-            setData({
-                employee_ids: selectedIds,
-                fulfilled_by: auth.user.id,
-                is_revision: request.status === "fulfilled",
-                visibility: data.visibility,
-            });
-
-            post(route("manpower-requests.fulfill.store", request.id), {
-                onSuccess: () => router.visit(route("manpower-requests.index")),
-                onError: (errors) => {
-                    if (errors.fulfillment_error) {
-                        setBackendError(errors.fulfillment_error);
-                    }
-                },
-            });
+            setActiveBulkRequest({ requestId: requestIdStr, index });
+            setShowModal(true);
         },
-        [
-            selectedIds,
-            request,
-            allSortedEligibleEmployees,
-            post,
-            auth.user.id,
-            data.visibility,
-        ]
+        [sameDayRequests, request.id]
     );
 
     const handleAutoFulfill = useCallback(
@@ -571,16 +568,21 @@ export default function Fulfill({
                     req.status !== "fulfilled"
             );
 
-            const usedEmployeeIds = new Set(
-                Object.values(newBulkSelections)
-                    .flat()
-                    .filter((id) => id)
-            );
+            // Also include current request if it's in the requestIds
+            const allRequests = [...requestsToFulfill];
+            if (requestIds.includes(String(request.id))) {
+                const currentAlreadyIncluded = allRequests.some(
+                    req => String(req.id) === String(request.id)
+                );
+                if (!currentAlreadyIncluded) {
+                    allRequests.push(request);
+                }
+            }
+
+            const usedEmployeeIds = new Set();
 
             let availableEmployees = allSortedEligibleEmployees.filter(
-                (emp) =>
-                    !usedEmployeeIds.has(String(emp.id)) &&
-                    emp.status === "available"
+                (emp) => emp.status === "available"
             );
 
             if (strategy === "same_section") {
@@ -613,7 +615,7 @@ export default function Fulfill({
                 });
             }
 
-            requestsToFulfill.forEach((req) => {
+            allRequests.forEach((req) => {
                 const requiredMale = req.male_count || 0;
                 const requiredFemale = req.female_count || 0;
                 const totalRequired = req.requested_amount;
@@ -689,7 +691,7 @@ export default function Fulfill({
             allSortedEligibleEmployees,
             bulkSelectedEmployees,
             sameDayRequests,
-            request.sub_section_id,
+            request,
         ]
     );
 
@@ -700,11 +702,11 @@ export default function Fulfill({
             const hasIncompleteAssignments = selectedBulkRequests.some(
                 (requestId) => {
                     const employees = bulkSelectedEmployees[requestId] || [];
-                    const request = sameDayRequests.find(
-                        (req) => String(req.id) === requestId
-                    );
+                    const req = sameDayRequests.find(
+                        (r) => String(r.id) === requestId
+                    ) || (String(request.id) === requestId ? request : null);
                     return (
-                        request && employees.length < request.requested_amount
+                        req && employees.length < req.requested_amount
                     );
                 }
             );
@@ -735,7 +737,7 @@ export default function Fulfill({
                 },
                 {
                     onSuccess: () => {
-                        console.log("Bulk fulfill successful");
+                        // console.log("Bulk fulfill successful");
                         setBulkSelectedEmployees({});
                         setSelectedBulkRequests([]);
                         setBulkMode(false);
@@ -756,277 +758,138 @@ export default function Fulfill({
                 }
             );
         },
-        [selectedBulkRequests, bulkSelectedEmployees, sameDayRequests]
+        [selectedBulkRequests, bulkSelectedEmployees, sameDayRequests, request]
     );
 
-    const openChangeModal = useCallback((index) => {
-        setChangingEmployeeIndex(index);
-        setShowModal(true);
-    }, []);
-
-    const openBulkChangeModal = useCallback(
-        (requestId, index) => {
-            const requestIdStr = String(requestId);
-
-            const requestExists =
-                sameDayRequests.some(
-                    (req) => String(req.id) === requestIdStr
-                ) || String(requestIdStr) === String(request.id);
-
-            if (!requestExists) {
-                console.error(
-                    "❌ Cannot open modal: Request not found",
-                    requestIdStr
-                );
-
-                setSelectedBulkRequests((prev) =>
-                    prev.filter((id) => id !== requestIdStr)
-                );
-                setBulkSelectedEmployees((prev) => {
-                    const cleaned = { ...prev };
-                    delete cleaned[requestIdStr];
-                    return cleaned;
-                });
-                alert("Request tidak valid telah dihapus dari seleksi.");
-                return;
-            }
-
-            setActiveBulkRequest({ requestId: requestIdStr, index });
-            setShowModal(true);
-        },
-        [sameDayRequests, request.id]
-    );
-
-    const selectNewEmployee = useCallback(
-        (newEmployeeId) => {
-            if (changingEmployeeIndex === null && activeBulkRequest === null) {
-                return;
-            }
-
-            const newEmployeeIdStr = String(newEmployeeId);
-
-            if (activeBulkRequest) {
-                const { requestId, index } = activeBulkRequest;
-                const currentEmployees = bulkSelectedEmployees[requestId] || [];
-                const currentEmployeesStr = currentEmployees.map((id) =>
-                    String(id)
-                );
-
-                let bulkRequest = sameDayRequests.find(
-                    (req) => String(req.id) === requestId
-                );
-
-                if (!bulkRequest && String(requestId) === String(request.id)) {
-                    bulkRequest = request;
-                }
-
-                if (!bulkRequest) {
-                    console.error("❌ Bulk request not found:", requestId);
-
-                    if (String(requestId) !== String(request.id)) {
-                        setSelectedBulkRequests((prev) =>
-                            prev.filter((id) => id !== requestId)
-                        );
-                        setBulkSelectedEmployees((prev) => {
-                            const cleaned = { ...prev };
-                            delete cleaned[requestId];
-                            return cleaned;
-                        });
-                        alert(
-                            "Request tidak valid telah dihapus dari seleksi. Silakan refresh halaman dan coba lagi."
-                        );
-                    } else {
-                        alert(
-                            "Request saat ini tidak ditemukan. Silakan refresh halaman."
-                        );
-                    }
-
-                    setShowModal(false);
-                    setActiveBulkRequest(null);
-                    return;
-                }
-
-                const newEmployee = allSortedEligibleEmployees.find(
-                    (e) => String(e.id) === newEmployeeIdStr
-                );
-                const currentEmp = allSortedEligibleEmployees.find(
-                    (e) => String(e.id) === String(currentEmployees[index])
-                );
-
-                if (!newEmployee) {
-                    alert("Karyawan tidak ditemukan");
-                    return;
-                }
-
-                let newMaleCount = currentEmployees.filter((id) => {
-                    const emp = allSortedEligibleEmployees.find(
-                        (e) => String(e.id) === String(id)
-                    );
-                    return emp?.gender === "male";
-                }).length;
-
-                let newFemaleCount = currentEmployees.filter((id) => {
-                    const emp = allSortedEligibleEmployees.find(
-                        (e) => String(e.id) === String(id)
-                    );
-                    return emp?.gender === "female";
-                }).length;
-
-                if (currentEmp) {
-                    if (currentEmp.gender === "male") newMaleCount--;
-                    if (currentEmp.gender === "female") newFemaleCount--;
-                }
-
-                if (newEmployee.gender === "male") newMaleCount++;
-                if (newEmployee.gender === "female") newFemaleCount++;
+    const handleBulkEmployeeChange = useCallback(
+        (requestId, index, newEmployeeId) => {
+            setBulkSelectedEmployees((prev) => {
+                const currentEmployees = prev[requestId] || [];
 
                 if (
-                    bulkRequest.male_count > 0 &&
-                    newMaleCount > bulkRequest.male_count
+                    newEmployeeId !== currentEmployees[index] &&
+                    currentEmployees.includes(newEmployeeId)
                 ) {
-                    alert(
-                        `Maksimum ${bulkRequest.male_count} karyawan laki-laki diperbolehkan untuk request ini`
-                    );
-                    return;
-                }
-
-                if (
-                    bulkRequest.female_count > 0 &&
-                    newFemaleCount > bulkRequest.female_count
-                ) {
-                    alert(
-                        `Maksimum ${bulkRequest.female_count} karyawan perempuan diperbolehkan untuk request ini`
-                    );
-                    return;
+                    alert("Karyawan ini sudah dipilih untuk request ini");
+                    return prev;
                 }
 
                 const newEmployees = [...currentEmployees];
                 newEmployees[index] = newEmployeeId;
 
-                setBulkSelectedEmployees((prev) => ({
+                return {
                     ...prev,
                     [requestId]: newEmployees,
-                }));
-
-                setShowModal(false);
-                setActiveBulkRequest(null);
-                return;
-            }
-
-            const newIds = [...selectedIds];
-            const currentEmpId = newIds[changingEmployeeIndex];
-
-            if (
-                newEmployeeIdStr !== String(currentEmpId) &&
-                newIds.map((id) => String(id)).includes(newEmployeeIdStr)
-            ) {
-                alert("Karyawan ini sudah dipilih");
-                return;
-            }
-
-            const newEmployee = allSortedEligibleEmployees.find(
-                (e) => String(e.id) === newEmployeeIdStr
-            );
-            const currentEmp = allSortedEligibleEmployees.find(
-                (e) => String(e.id) === String(currentEmpId)
-            );
-
-            let newMaleCount = selectedIds.filter((id) => {
-                const emp = allSortedEligibleEmployees.find(
-                    (e) => String(e.id) === String(id)
-                );
-                return emp?.gender === "male";
-            }).length;
-
-            let newFemaleCount = selectedIds.filter((id) => {
-                const emp = allSortedEligibleEmployees.find(
-                    (e) => String(e.id) === String(id)
-                );
-                return emp?.gender === "female";
-            }).length;
-
-            if (currentEmp) {
-                if (currentEmp.gender === "male") newMaleCount--;
-                if (currentEmp.gender === "female") newFemaleCount--;
-            }
-
-            if (newEmployee.gender === "male") newMaleCount++;
-            if (newEmployee.gender === "female") newFemaleCount++;
-
-            if (request.male_count > 0 && newMaleCount > request.male_count) {
-                alert(
-                    `Maksimum ${request.male_count} karyawan laki-laki diperbolehkan`
-                );
-                return;
-            }
-
-            if (
-                request.female_count > 0 &&
-                newFemaleCount > request.female_count
-            ) {
-                alert(
-                    `Maksimum ${request.female_count} karyawan perempuan diperbolehkan`
-                );
-                return;
-            }
-
-            newIds[changingEmployeeIndex] = newEmployeeId;
-            setSelectedIds(newIds);
-
-            setShowModal(false);
-            setChangingEmployeeIndex(null);
+                };
+            });
         },
-        [
-            changingEmployeeIndex,
-            selectedIds,
-            allSortedEligibleEmployees,
-            request.male_count,
-            request.female_count,
-            activeBulkRequest,
-            bulkSelectedEmployees,
-            sameDayRequests,
-        ]
+        []
     );
-    const handleMultiSelect = useCallback(
-        (newSelectedIds) => {
-            const newIdsStr = newSelectedIds.map((id) => String(id));
 
-            const selectedEmployees = newIdsStr
-                .map((id) =>
-                    allSortedEligibleEmployees.find((e) => String(e.id) === id)
-                )
-                .filter(Boolean);
-
-            const maleCount = selectedEmployees.filter(
-                (e) => e.gender === "male"
-            ).length;
-            const femaleCount = selectedEmployees.filter(
-                (e) => e.gender === "female"
-            ).length;
-
-            if (request.male_count > 0 && maleCount > request.male_count) {
-                alert(
-                    `Maksimum ${request.male_count} karyawan laki-laki diperbolehkan`
-                );
-                return false;
-            }
-
-            if (
-                request.female_count > 0 &&
-                femaleCount > request.female_count
-            ) {
-                alert(
-                    `Maksimum ${request.female_count} karyawan perempuan diperbolehkan`
-                );
-                return false;
-            }
-
-            // If validation passes, update the selection
-            setSelectedIds(newIdsStr);
-            return true;
+    const getBulkLineAssignment = useCallback(
+        (requestId, employeeId) => {
+            const requestEmployees = bulkSelectedEmployees[requestId] || [];
+            const index = requestEmployees.indexOf(employeeId);
+            return index !== -1 ? ((index % 2) + 1).toString() : "1";
         },
-        [allSortedEligibleEmployees, request.male_count, request.female_count]
+        [bulkSelectedEmployees]
     );
+
+    const handleClearSelection = () => {
+        setSelectedIds([]);
+    };
+
+    const [formData, setFormData] = useState({
+    employee_ids: initialSelectedIds,
+    fulfilled_by: auth.user.id,
+    visibility: "private",
+    enable_line_assignment: false,
+    line_assignments: {},
+});
+
+const handleSubmit = (e) => {
+    e.preventDefault();
+    setBackendError(null);
+
+    const stringSelectedIds = selectedIds.map(id => String(id));
+    
+    const processedLineAssignments = {};
+    Object.entries(lineAssignments).forEach(([employeeId, line]) => {
+        processedLineAssignments[String(employeeId)] = String(line);
+    });
+
+    const currentConfig = lineAssignmentConfig[request.id] || {};
+    const isLineAssignmentEnabled = currentConfig.enabled || enableLineAssignment;
+
+    // console.log('=== FINAL CHECK BEFORE SUBMISSION ===');
+    // console.log('🔍 isLineAssignmentEnabled:', isLineAssignmentEnabled);
+    // console.log('🔍 processedLineAssignments:', processedLineAssignments);
+
+    // Use router.post directly instead of useForm's post
+    router.post(route("manpower-requests.fulfill.store", request.id), {
+        employee_ids: stringSelectedIds,
+        fulfilled_by: auth.user.id,
+        visibility: data.visibility,
+        enable_line_assignment: isLineAssignmentEnabled,
+        line_assignments: isLineAssignmentEnabled ? processedLineAssignments : {},
+        is_revision: request.status === "fulfilled",
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            // console.log('✅ Submission successful with line assignment:', isLineAssignmentEnabled);
+            router.visit(route("manpower-requests.index"));
+        },
+        onError: (errors) => {
+            console.error('❌ Submission errors:', errors);
+            if (errors.fulfillment_error) {
+                setBackendError(errors.fulfillment_error);
+            }
+        },
+    });
+};
+
+
+useEffect(() => {
+    const currentConfig = lineAssignmentConfig[request.id];
+    if (currentConfig) {
+        // console.log('🔄 Syncing enableLineAssignment from config:', currentConfig.enabled);
+        setEnableLineAssignment(currentConfig.enabled);
+        
+        // Also ensure line assignments are initialized when enabled
+        if (currentConfig.enabled && selectedIds.length > 0) {
+            const initialAssignments = {};
+            selectedIds.forEach((id, index) => {
+                initialAssignments[id] = ((index % (currentConfig.lineCount || 2)) + 1).toString();
+            });
+            setLineAssignments(initialAssignments);
+        }
+    }
+}, [lineAssignmentConfig, request.id, selectedIds]);
+
+    const handleLineAssignmentChange = (employeeId, newLine) => {
+        setLineAssignments(prev => ({
+            ...prev,
+            [employeeId]: newLine
+        }));
+    };
+
+    const handleLineAssignmentConfigChange = (config) => {
+        setLineAssignmentConfig(prev => ({
+            ...prev,
+            [request.id]: config
+        }));
+    };
+
+    const handleEnableLineAssignment = (enabled) => {
+        setEnableLineAssignment(enabled);
+        if (!enabled) {
+            const resetAssignments = {};
+            selectedIds.forEach((id, index) => {
+                resetAssignments[id] = ((index % 2) + 1).toString();
+            });
+            setLineAssignments(resetAssignments);
+        }
+    };
 
     const getEmployeeDetails = useCallback(
         (id) => {
@@ -1038,123 +901,15 @@ export default function Fulfill({
         [allSortedEligibleEmployees]
     );
 
-    const toggleMultiSelectMode = useCallback(() => {
-        setMultiSelectMode((prev) => !prev);
-    }, []);
+    const lineAssignmentsForDisplay = useMemo(() => {
+        if (!enableLineAssignment) return {};
 
-    const toggleBulkMode = useCallback(() => {
-        setBulkMode((prev) => !prev);
-        if (!bulkMode) {
-            const nonFulfilledSameSubsectionRequests = sameDayRequests.filter(
-                (req) =>
-                    req.sub_section_id === request.sub_section_id &&
-                    req.status !== "fulfilled"
-            );
-
-            const allRequests = [...nonFulfilledSameSubsectionRequests];
-            if (
-                request.status !== "fulfilled" &&
-                !allRequests.some((req) => req.id === request.id)
-            ) {
-                allRequests.push(request);
-            }
-
-            setSelectedBulkRequests(allRequests.map((req) => String(req.id)));
-
-            const initialSelections = {};
-            let usedEmployeeIds = new Set();
-
-            if (request.status !== "fulfilled") {
-                initialSelections[String(request.id)] = [...selectedIds];
-                selectedIds.forEach((id) => usedEmployeeIds.add(id));
-            }
-
-            allRequests.forEach((req) => {
-                const reqId = String(req.id);
-                if (
-                    reqId === String(request.id) &&
-                    request.status !== "fulfilled"
-                )
-                    return;
-
-                const requiredMale = req.male_count || 0;
-                const requiredFemale = req.female_count || 0;
-                const totalRequired = req.requested_amount;
-
-                const availableEmployees = allSortedEligibleEmployees.filter(
-                    (emp) =>
-                        !usedEmployeeIds.has(String(emp.id)) &&
-                        emp.status === "available"
-                );
-
-                const selectedForRequest = [];
-
-                const maleCandidates = availableEmployees
-                    .filter(
-                        (emp) =>
-                            emp.gender === "male" && emp.status === "available"
-                    )
-                    .slice(0, requiredMale);
-
-                maleCandidates.forEach((emp) => {
-                    selectedForRequest.push(String(emp.id));
-                    usedEmployeeIds.add(String(emp.id));
-                });
-
-                const femaleCandidates = availableEmployees
-                    .filter(
-                        (emp) =>
-                            emp.gender === "female" &&
-                            !usedEmployeeIds.has(String(emp.id)) &&
-                            emp.status === "available"
-                    )
-                    .slice(0, requiredFemale);
-
-                femaleCandidates.forEach((emp) => {
-                    selectedForRequest.push(String(emp.id));
-                    usedEmployeeIds.add(String(emp.id));
-                });
-
-                const remainingSlots =
-                    totalRequired - selectedForRequest.length;
-                if (remainingSlots > 0) {
-                    const otherCandidates = availableEmployees
-                        .filter(
-                            (emp) =>
-                                !usedEmployeeIds.has(String(emp.id)) &&
-                                emp.status === "available"
-                        )
-                        .slice(0, remainingSlots);
-
-                    otherCandidates.forEach((emp) => {
-                        selectedForRequest.push(String(emp.id));
-                        usedEmployeeIds.add(String(emp.id));
-                    });
-                }
-
-                initialSelections[reqId] = selectedForRequest;
-            });
-
-            setBulkSelectedEmployees(initialSelections);
-        }
-    }, [
-        bulkMode,
-        sameDayRequests,
-        request,
-        selectedIds,
-        allSortedEligibleEmployees,
-    ]);
-
-    const toggleBulkRequestSelection = useCallback((requestId) => {
-        const requestIdStr = String(requestId);
-        setSelectedBulkRequests((prev) => {
-            if (prev.includes(requestIdStr)) {
-                return prev.filter((id) => id !== requestIdStr);
-            } else {
-                return [...prev, requestIdStr];
-            }
+        const assignments = {};
+        selectedIds.forEach((id, index) => {
+            assignments[id] = lineAssignments[id] || ((index % 2) + 1).toString();
         });
-    }, []);
+        return assignments;
+    }, [enableLineAssignment, selectedIds, lineAssignments]);
 
     if (
         request.status === "fulfilled" &&
@@ -1204,23 +959,27 @@ export default function Fulfill({
                     <h2 className="font-semibold text-gray-800 dark:text-gray-200 text-xl">
                         Penuhi Request Man Power
                     </h2>
-                    {/* Only show bulk mode button if there are no scheduled employees */}
-                    {!hasScheduledEmployees && (
-                        <div className="flex items-center space-x-4">
-                            <button
-                                onClick={toggleBulkMode}
-                                className={`px-4 py-2 rounded-md font-medium transition-colors ${
-                                    bulkMode
-                                        ? "bg-purple-600 hover:bg-purple-700 text-white"
-                                        : "bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
-                                }`}
-                            >
-                                {bulkMode
-                                    ? "Keluar Mode Bulk"
-                                    : "Mode Bulk Fulfill"}
-                            </button>
-                        </div>
-                    )}
+                   {!hasScheduledEmployees && (
+    <div className="flex items-center space-x-4">
+        <button
+            disabled
+            title="UNDER MAINTENANCE"
+            className={`px-4 py-2 rounded-md font-medium transition-colors cursor-not-allowed relative group ${
+                bulkMode
+                    ? "bg-purple-600 text-white opacity-70"
+                    : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 opacity-70"
+            }`}
+        >
+            {bulkMode ? "Keluar Mode Bulk" : "Mode Bulk Fulfill"}
+
+            {/* Tooltip */}
+            <span className="absolute bottom-full mb-1 hidden group-hover:block text-xs text-white bg-black px-2 py-1 rounded-md">
+                UNDER MAINTENANCE
+            </span>
+        </button>
+    </div>
+)}
+
                 </div>
             }
             user={auth.user}
@@ -1250,70 +1009,29 @@ export default function Fulfill({
                         sameDayRequests={sameDayRequests}
                         currentRequest={request}
                         selectedBulkRequests={selectedBulkRequests}
-                        toggleBulkRequestSelection={toggleBulkRequestSelection}
+                        setSelectedBulkRequests={setSelectedBulkRequests}
+                        toggleBulkRequestSelection={(requestId) => {
+                            const requestIdStr = String(requestId);
+                            setSelectedBulkRequests((prev) => {
+                                if (prev.includes(requestIdStr)) {
+                                    return prev.filter((id) => id !== requestIdStr);
+                                } else {
+                                    return [...prev, requestIdStr];
+                                }
+                            });
+                        }}
                         handleBulkSubmit={handleBulkSubmit}
                         processing={processing}
                         bulkSelectedEmployees={bulkSelectedEmployees}
+                        setBulkSelectedEmployees={setBulkSelectedEmployees}
                         openBulkChangeModal={openBulkChangeModal}
                         getEmployeeDetails={getEmployeeDetails}
                         allSortedEligibleEmployees={allSortedEligibleEmployees}
                         handleAutoFulfill={handleAutoFulfill}
                         getBulkLineAssignment={getBulkLineAssignment}
+                        lineAssignmentConfig={lineAssignmentConfig}
+                        handleLineConfigChange={handleLineConfigChange}
                     />
-                )}
-
-                {isPutwaySubsection && !bulkMode && (
-                    <div className="bg-purple-50 dark:bg-purple-900/20 shadow-md mb-6 p-4 border border-purple-200 dark:border-purple-700 rounded-lg">
-                        <h3 className="mb-3 font-bold text-purple-800 dark:text-purple-300 text-lg">
-                            Informasi Penugasan Line (Putway)
-                        </h3>
-                        <p className="mb-2 text-purple-700 dark:text-purple-300">
-                            Karyawan akan ditugaskan secara bergantian ke Line 1
-                            dan Line 2.
-                        </p>
-                        <div className="gap-4 grid grid-cols-2 mt-3">
-                            <div className="bg-purple-100 dark:bg-purple-800/30 p-3 rounded">
-                                <h4 className="font-medium text-purple-800 dark:text-purple-200">
-                                    Line 1
-                                </h4>
-                                <div className="space-y-1 mt-2">
-                                    {selectedIds
-                                        .filter((_, index) => index % 2 === 0)
-                                        .map((id, index) => {
-                                            const emp = getEmployeeDetails(id);
-                                            return emp ? (
-                                                <div
-                                                    key={id}
-                                                    className="text-purple-700 dark:text-purple-200 text-xs"
-                                                >
-                                                    {index * 2 + 1}. {emp.name}
-                                                </div>
-                                            ) : null;
-                                        })}
-                                </div>
-                            </div>
-                            <div className="bg-purple-100 dark:bg-purple-800/30 p-3 rounded">
-                                <h4 className="font-medium text-purple-800 dark:text-purple-200">
-                                    Line 2
-                                </h4>
-                                <div className="space-y-1 mt-2">
-                                    {selectedIds
-                                        .filter((_, index) => index % 2 === 1)
-                                        .map((id, index) => {
-                                            const emp = getEmployeeDetails(id);
-                                            return emp ? (
-                                                <div
-                                                    key={id}
-                                                    className="text-purple-700 dark:text-purple-200 text-xs"
-                                                >
-                                                    {index * 2 + 2}. {emp.name}
-                                                </div>
-                                            ) : null;
-                                        })}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 )}
 
                 {!bulkMode && (
@@ -1348,11 +1066,25 @@ export default function Fulfill({
                                 request={request}
                                 selectedIds={selectedIds}
                                 getEmployeeDetails={getEmployeeDetails}
-                                openChangeModal={openChangeModal}
+                                openChangeModal={(index) => {
+                                    setChangingEmployeeIndex(index);
+                                    setShowModal(true);
+                                }}
                                 multiSelectMode={multiSelectMode}
-                                toggleMultiSelectMode={toggleMultiSelectMode}
-                                isPutwaySubsection={isPutwaySubsection}
-                                lineAssignments={lineAssignments}
+                                toggleMultiSelectMode={() => setMultiSelectMode(!multiSelectMode)}
+                                enableLineAssignment={enableLineAssignment}
+                                lineAssignments={lineAssignmentsForDisplay}
+                            />
+
+                            <LineAssignmentConfig
+                                requestId={request.id}
+                                request={request}
+                                lineAssignmentConfig={lineAssignmentConfig}
+                                handleLineConfigChange={handleLineConfigChange}
+                                getEmployeeDetails={getEmployeeDetails}
+                                bulkMode={false}
+                                bulkSelectedEmployees={{}}
+                                selectedIds={selectedIds}
                             />
 
                             <div className="bg-white dark:bg-gray-800 shadow-md mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
@@ -1396,7 +1128,6 @@ export default function Fulfill({
                                     </label>
                                 </div>
                             </div>
-
                             <ConfirmationSection
                                 auth={auth}
                                 processing={processing}
@@ -1409,29 +1140,23 @@ export default function Fulfill({
                 <EmployeeModal
                     showModal={showModal}
                     setShowModal={setShowModal}
-                    request={
-                        activeBulkRequest
-                            ? sameDayRequests.find(
-                                  (req) =>
-                                      String(req.id) ===
-                                      activeBulkRequest.requestId
-                              ) || request
-                            : request
-                    }
+                    request={request}
                     allSortedEligibleEmployees={allSortedEligibleEmployees}
-                    selectedIds={
-                        activeBulkRequest
-                            ? bulkSelectedEmployees[
-                                  activeBulkRequest.requestId
-                              ] || []
-                            : selectedIds
+                    selectedIds={bulkMode && activeBulkRequest ? 
+                        (bulkSelectedEmployees[activeBulkRequest.requestId] || []) : 
+                        selectedIds
                     }
-                    selectNewEmployee={selectNewEmployee}
-                    handleMultiSelect={handleMultiSelect}
+                    selectNewEmployee={handleModalEmployeeSelect}
+                    handleMultiSelect={(newSelectedIds) => {
+                        const newIdsStr = newSelectedIds.map((id) => String(id));
+                        setSelectedIds(newIdsStr);
+                        return true;
+                    }}
                     multiSelectMode={multiSelectMode}
-                    toggleMultiSelectMode={toggleMultiSelectMode}
-                    isBulkMode={!!activeBulkRequest}
+                    toggleMultiSelectMode={() => setMultiSelectMode(!multiSelectMode)}
+                    isBulkMode={bulkMode}
                     isLoading={isLoadingEmployees}
+                    activeBulkRequest={activeBulkRequest}
                 />
             </div>
         </AuthenticatedLayout>

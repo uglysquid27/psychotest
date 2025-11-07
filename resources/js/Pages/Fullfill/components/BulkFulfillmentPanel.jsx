@@ -1,18 +1,23 @@
-// BulkFulfillmentPanel.jsx
+// BulkFulfillmentPanel.jsx - FIXED VERSION
 import { useState, useMemo, useCallback } from 'react';
 
 export default function BulkFulfillmentPanel({
     sameDayRequests,
     currentRequest,
     selectedBulkRequests,
+    setSelectedBulkRequests, // FIXED: Now properly used
     toggleBulkRequestSelection,
     handleBulkSubmit,
     processing,
     bulkSelectedEmployees,
+    setBulkSelectedEmployees, // FIXED: Now properly used
     openBulkChangeModal,
     getEmployeeDetails,
     allSortedEligibleEmployees,
-    getBulkLineAssignment
+    getBulkLineAssignment,
+    handleAutoFulfill,
+    lineAssignmentConfig = {},
+    handleLineConfigChange
 }) {
     const [strategy, setStrategy] = useState('optimal');
     const [visibility, setVisibility] = useState('private');
@@ -50,14 +55,14 @@ export default function BulkFulfillmentPanel({
 
     // Calculate how many requests have been fully assigned
     const fullyAssignedRequests = useMemo(() => {
-        return Object.keys(bulkSelectedEmployees).filter(
+        return selectedBulkRequests.filter(
             requestId => {
                 const employees = bulkSelectedEmployees[requestId] || [];
                 const request = sameSubsectionRequests.find(req => String(req.id) === requestId);
                 return request && employees.length === request.requested_amount && employees.every(id => id);
             }
         ).length;
-    }, [bulkSelectedEmployees, sameSubsectionRequests]);
+    }, [bulkSelectedEmployees, sameSubsectionRequests, selectedBulkRequests]);
 
     const allRequestsFullyAssigned = useMemo(() => {
         return selectedBulkRequests.every(requestId => {
@@ -98,13 +103,57 @@ export default function BulkFulfillmentPanel({
                     shift: request.shift?.name || 'No Shift',
                     name: request.sub_section?.name || 'Unknown'
                 };
-            } else {
-                console.warn('❌ Selected bulk request not found in sameSubsectionRequests:', requestId);
             }
         });
 
         return stats;
     }, [selectedBulkRequests, bulkSelectedEmployees, sameSubsectionRequests]);
+
+    const handleAutoFill = () => {
+        handleAutoFulfill(strategy, selectedBulkRequests);
+    };
+
+    const handleLineAssignmentToggle = (requestId, enabled) => {
+        const request = sameSubsectionRequests.find(req => String(req.id) === requestId);
+        if (!request) return;
+
+        handleLineConfigChange(requestId, 'fullConfig', {
+            ...lineAssignmentConfig[requestId],
+            enabled,
+            lineCount: 2,
+            lineCounts: enabled ? [
+                Math.ceil(request.requested_amount / 2), 
+                Math.floor(request.requested_amount / 2)
+            ] : []
+        });
+    };
+
+    const handleClearAll = () => {
+        // FIXED: Properly clear all selections
+        setSelectedBulkRequests([]);
+        
+        // Reset bulk selected employees for all requests
+        const resetEmployees = {};
+        Object.keys(bulkSelectedEmployees).forEach(key => {
+            resetEmployees[key] = [];
+        });
+        setBulkSelectedEmployees(resetEmployees);
+    };
+
+    const handleSelectAll = () => {
+        const allIds = sameSubsectionRequests.map(req => String(req.id));
+        setSelectedBulkRequests(allIds);
+        
+        // Initialize employee arrays for all selected requests
+        const newBulkSelectedEmployees = { ...bulkSelectedEmployees };
+        allIds.forEach(id => {
+            // If already has employees, keep them; otherwise initialize empty array
+            if (!newBulkSelectedEmployees[id]) {
+                newBulkSelectedEmployees[id] = [];
+            }
+        });
+        setBulkSelectedEmployees(newBulkSelectedEmployees);
+    };
 
     return (
         <div className="bg-gradient-to-br from-blue-50 dark:from-blue-900/20 to-indigo-100 dark:to-indigo-900/20 shadow-lg mb-6 p-4 sm:p-6 border border-blue-200 dark:border-blue-700 rounded-xl">
@@ -116,7 +165,9 @@ export default function BulkFulfillmentPanel({
                 </div>
                 <div>
                     <h3 className="font-bold text-blue-800 dark:text-blue-300 text-xl sm:text-2xl">Bulk Fulfillment</h3>
-                    <p className="text-blue-600 dark:text-blue-400 text-sm sm:text-base">Penuhi semua request untuk sub-bagian "{currentRequest.sub_section?.name}" secara sekaligus</p>
+                    <p className="text-blue-600 dark:text-blue-400 text-sm sm:text-base">
+                        Penuhi semua request untuk sub-bagian "{currentRequest.sub_section?.name}" secara sekaligus
+                    </p>
                 </div>
             </div>
 
@@ -164,18 +215,6 @@ export default function BulkFulfillmentPanel({
                                 </span>
                             </div>
                         )}
-                        <div className="flex justify-between">
-                            <span className="text-gray-600 dark:text-gray-400">Sub-Bagian:</span>
-                            <span className="font-medium text-gray-900 dark:text-gray-100">
-                                {currentRequest.sub_section?.name}
-                            </span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span className="text-gray-600 dark:text-gray-400">Tanggal:</span>
-                            <span className="font-medium text-gray-900 dark:text-gray-100">
-                                {new Date(currentRequest.date).toLocaleDateString('id-ID')}
-                            </span>
-                        </div>
                     </div>
                 </div>
 
@@ -223,6 +262,25 @@ export default function BulkFulfillmentPanel({
                                 </label>
                             </div>
                         </div>
+                        <div className="flex justify-between space-x-2">
+                            <button
+                                onClick={handleAutoFill}
+                                disabled={selectedBulkRequests.length === 0}
+                                className={`flex-1 px-4 py-2 rounded-lg font-medium text-sm ${
+                                    selectedBulkRequests.length === 0
+                                        ? 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed'
+                                        : 'bg-green-600 hover:bg-green-700 text-white'
+                                }`}
+                            >
+                                Auto Fill Selected
+                            </button>
+                            <button
+                                onClick={handleClearAll}
+                                className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-sm"
+                            >
+                                Clear All
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -233,6 +291,17 @@ export default function BulkFulfillmentPanel({
                     <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-base sm:text-lg">
                         Daftar Request untuk Sub-Bagian "{currentRequest.sub_section?.name}"
                     </h4>
+                    <div className="flex items-center space-x-2">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                            {selectedBulkRequests.length} of {sameSubsectionRequests.length} selected
+                        </span>
+                        <button
+                            onClick={handleSelectAll}
+                            className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded"
+                        >
+                            Select All
+                        </button>
+                    </div>
                 </div>
 
                 <div className="max-h-96 overflow-y-auto">
@@ -244,6 +313,7 @@ export default function BulkFulfillmentPanel({
                             const isSelected = selectedBulkRequests.includes(String(req.id));
                             const assignedEmployees = bulkSelectedEmployees[String(req.id)] || [];
                             const assignedCount = assignedEmployees.filter(id => id).length;
+                            const enableLineAssignment = lineAssignmentConfig[String(req.id)]?.enabled || false;
 
                             return (
                                 <div
@@ -253,15 +323,21 @@ export default function BulkFulfillmentPanel({
                                             ? 'bg-blue-100 dark:bg-blue-900/40 border-2 border-blue-300 dark:border-blue-600'
                                             : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
                                     } ${isCurrentRequest ? 'ring-2 ring-yellow-400 dark:ring-yellow-500' : ''}`}
-                                    onClick={() => toggleBulkRequestSelection(req.id)}
+                                    onClick={(e) => {
+                                        // Only toggle selection if clicking on the main container
+                                        if (e.target.type !== 'checkbox' && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'SELECT' && e.target.type !== 'radio') {
+                                            toggleBulkRequestSelection(req.id);
+                                        }
+                                    }}
                                 >
                                     <div className="flex justify-between items-start">
                                         <div className="flex items-start space-x-2 sm:space-x-3 flex-1">
                                             <input
                                                 type="checkbox"
                                                 checked={isSelected}
-                                                onChange={() => {}}
+                                                onChange={() => toggleBulkRequestSelection(req.id)}
                                                 className="mt-1"
+                                                onClick={(e) => e.stopPropagation()}
                                             />
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-2 mb-2">
@@ -270,12 +346,17 @@ export default function BulkFulfillmentPanel({
                                                     </div>
                                                     {isCurrentRequest && (
                                                         <span className="bg-yellow-100 dark:bg-yellow-800 px-2 py-1 rounded-full text-yellow-800 dark:text-yellow-200 text-xs whitespace-nowrap">
-                                                            Request Saat Ini
+                                                            Request Saat Ini (ID: {req.id})
                                                         </span>
                                                     )}
                                                     {req.status === 'fulfilled' && (
                                                         <span className="bg-green-100 dark:bg-green-800 px-2 py-1 rounded-full text-green-800 dark:text-green-200 text-xs whitespace-nowrap">
                                                             Sudah Dipenuhi
+                                                        </span>
+                                                    )}
+                                                    {enableLineAssignment && (
+                                                        <span className="bg-purple-100 dark:bg-purple-800 px-2 py-1 rounded-full text-purple-800 dark:text-purple-200 text-xs whitespace-nowrap">
+                                                            Line Assignment
                                                         </span>
                                                     )}
                                                 </div>
@@ -327,6 +408,27 @@ export default function BulkFulfillmentPanel({
                                         </div>
                                     </div>
 
+                                    {/* Line Assignment Toggle */}
+                                    {isSelected && (
+                                        <div className="mt-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-200 dark:border-purple-700">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-sm font-medium text-purple-800 dark:text-purple-300">
+                                                    Konfigurasi Line Assignment
+                                                </span>
+                                                <label className="flex items-center space-x-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={enableLineAssignment}
+                                                        onChange={(e) => handleLineAssignmentToggle(String(req.id), e.target.checked)}
+                                                        className="rounded text-purple-600 focus:ring-purple-500"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    />
+                                                    <span className="text-sm text-purple-700 dark:text-purple-300">Aktifkan Line Assignment</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {/* Employee Selection for Bulk Request */}
                                     {isSelected && (
                                         <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-200 dark:border-gray-600">
@@ -343,8 +445,7 @@ export default function BulkFulfillmentPanel({
                                                 </span>
                                             </div>
                                             
-                                            {/* Tampilkan informasi line assignment untuk putway */}
-                                            {isPutwayRequest(req) && (
+                                            {(isPutwayRequest(req) || enableLineAssignment) && (
                                                 <div className="mb-3 p-2 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-200 dark:border-purple-700">
                                                     <div className="flex items-center text-purple-700 dark:text-purple-300 text-xs">
                                                         <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
@@ -359,7 +460,7 @@ export default function BulkFulfillmentPanel({
                                                 {Array.from({ length: req.requested_amount }).map((_, index) => {
                                                     const employeeId = assignedEmployees[index];
                                                     const employee = employeeId ? getEmployeeDetails(employeeId) : null;
-                                                    const lineAssignment = isPutwayRequest(req) && employeeId ? 
+                                                    const lineAssignment = (isPutwayRequest(req) || enableLineAssignment) && employeeId ? 
                                                         getBulkLineAssignment(String(req.id), employeeId) : null;
 
                                                     return (
@@ -391,26 +492,25 @@ export default function BulkFulfillmentPanel({
                                                                 )}
                                                             </div>
 
-                                                        {employee ? (
-    <div className="mb-2">
-        <div className="font-medium text-gray-900 dark:text-gray-100 text-xs sm:text-sm truncate">
-            {employee.name}
-        </div>
-        <div className="text-gray-500 dark:text-gray-400 text-xs truncate">
-            {employee.type} - {employee.subSections?.[0]?.name || '-'}
-        </div>
-        {/* ADD ML SCORES */}
-        <div className="text-gray-400 dark:text-gray-500 text-xs mt-1 grid grid-cols-3 gap-1">
-            <div>Base: {(employee.total_score || 0).toFixed(2)}</div>
-            <div>ML: {(employee.ml_score || 0).toFixed(2)}</div>
-            <div>Final: {(employee.final_score || 0).toFixed(2)}</div>
-        </div>
-    </div>
-) : (
-    <div className="text-gray-500 dark:text-gray-400 text-xs italic mb-2">
-        Belum dipilih
-    </div>
-)}
+                                                            {employee ? (
+                                                                <div className="mb-2">
+                                                                    <div className="font-medium text-gray-900 dark:text-gray-100 text-xs sm:text-sm truncate">
+                                                                        {employee.name}
+                                                                    </div>
+                                                                    <div className="text-gray-500 dark:text-gray-400 text-xs truncate">
+                                                                        {employee.type} - {employee.subSections?.[0]?.name || '-'}
+                                                                    </div>
+                                                                    <div className="text-gray-400 dark:text-gray-500 text-xs mt-1 grid grid-cols-3 gap-1">
+                                                                        <div>Base: {(employee.total_score || 0).toFixed(2)}</div>
+                                                                        <div>ML: {(employee.ml_score || 0).toFixed(2)}</div>
+                                                                        <div>Final: {(employee.final_score || 0).toFixed(2)}</div>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-gray-500 dark:text-gray-400 text-xs italic mb-2">
+                                                                    Belum dipilih
+                                                                </div>
+                                                            )}
 
                                                             <button
                                                                 type="button"
@@ -427,8 +527,8 @@ export default function BulkFulfillmentPanel({
                                                 })}
                                             </div>
                                             
-                                            {/* Tampilkan summary line assignment untuk putway */}
-                                            {isPutwayRequest(req) && assignedCount > 0 && (
+                                            {/* Display line assignment summary */}
+                                            {(isPutwayRequest(req) || enableLineAssignment) && assignedCount > 0 && (
                                                 <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-200 dark:border-gray-600">
                                                     <h6 className="font-medium text-gray-700 dark:text-gray-300 text-sm mb-2">
                                                         Preview Penugasan Line:

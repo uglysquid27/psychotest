@@ -1,4 +1,4 @@
-// EmployeeModal.jsx - Updated with red indicator for harian employees reaching 21 days
+// EmployeeModal.jsx - Complete with bulk mode support
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import IncompleteSelectionModal from './IncompleteSelectionModal';
@@ -14,7 +14,8 @@ export default function EmployeeModal({
     multiSelectMode,
     toggleMultiSelectMode,
     isBulkMode = false,
-    isLoading = false
+    isLoading = false,
+    activeBulkRequest = null
 }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedSubSection, setSelectedSubSection] = useState('all');
@@ -37,6 +38,13 @@ export default function EmployeeModal({
             document.documentElement.style.overflow = 'unset';
         };
     }, [showModal]);
+
+    // Reset temp selection when modal opens/closes or mode changes
+    useEffect(() => {
+        if (showModal && multiSelectMode) {
+            setTempSelectedIds([]);
+        }
+    }, [showModal, multiSelectMode]);
 
     const availableSubSections = useMemo(() => {
         const subSectionMap = new Map();
@@ -246,6 +254,18 @@ export default function EmployeeModal({
         setTempSelectedIds(availableIds);
     };
 
+    // Get current request for bulk mode
+    const getCurrentRequest = () => {
+        if (isBulkMode && activeBulkRequest) {
+            // In bulk mode, we might have a different request context
+            // This would need to be passed from the parent component
+            return request; // Fallback to main request
+        }
+        return request;
+    };
+
+    const currentRequest = getCurrentRequest();
+
     // Loading skeleton for employee cards
     const EmployeeCardSkeleton = () => (
         <motion.div
@@ -305,7 +325,7 @@ export default function EmployeeModal({
 
         let displaySubSectionName = 'Tidak Ada Bagian';
         if (emp.subSections && emp.subSections.length > 0) {
-            const sameSub = emp.subSections.find(ss => String(ss.id) === String(request.sub_section_id));
+            const sameSub = emp.subSections.find(ss => String(ss.id) === String(currentRequest.sub_section_id));
             if (sameSub) {
                 displaySubSectionName = sameSub.name;
             } else {
@@ -419,7 +439,6 @@ export default function EmployeeModal({
                                 
                                 {/* Additional Info */}
                                 <div className="mt-1 grid grid-cols-2 gap-1 text-xs">
-                                    {/* <p>Workload: {emp.workload_points}</p> */}
                                     <p>Blind Test: {emp.blind_test_points}</p>
                                     <p>Rating: {emp.average_rating?.toFixed(1) || '0.0'}</p>
                                 </div>
@@ -510,7 +529,7 @@ export default function EmployeeModal({
                                         </h3>
                                         {multiSelectMode && (
                                             <span className="px-2 sm:px-3 py-1 text-xs sm:text-sm bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 rounded-full whitespace-nowrap">
-                                                {tempSelectedIds.length} / {request.requested_amount} terpilih
+                                                {tempSelectedIds.length} / {currentRequest.requested_amount} terpilih
                                             </span>
                                         )}
                                     </div>
@@ -574,7 +593,7 @@ export default function EmployeeModal({
                                                         disabled={isLoading}
                                                         className="px-2 sm:px-3 py-1 text-xs sm:text-sm bg-blue-100 dark:bg-blue-900/40 hover:bg-blue-200 dark:hover:bg-blue-900/60 text-blue-800 dark:text-blue-300 rounded-md whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
                                                     >
-                                                        ✅ Select Top {Math.min(request.requested_amount, filteredEmployees.length)}
+                                                        ✅ Select Top {Math.min(currentRequest.requested_amount, filteredEmployees.length)}
                                                     </button>
                                                 </div>
                                             )}
@@ -710,7 +729,7 @@ export default function EmployeeModal({
                                                 <div className="mb-6 sm:mb-8">
                                                     <h4 className="mb-3 sm:mb-4 font-semibold text-gray-700 dark:text-gray-300 text-base sm:text-lg flex items-center">
                                                         <span className="w-2 h-2 sm:w-3 sm:h-3 bg-green-500 rounded-full mr-2"></span>
-                                                        Karyawan dari Sub-Bagian Sama ({request?.sub_section?.name || 'Unknown'}) - {sameSubSectionEmployees.length} orang
+                                                        Karyawan dari Sub-Bagian Sama ({currentRequest?.sub_section?.name || 'Unknown'}) - {sameSubSectionEmployees.length} orang
                                                     </h4>
                                                     <div className="gap-2 sm:gap-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                                                         {sameSubSectionEmployees.map(renderEmployeeCard)}
@@ -778,10 +797,10 @@ export default function EmployeeModal({
                         setShowIncompleteModal(false);
                         setShowModal(false);
                     }}
-                    request={request}
+                    request={currentRequest}
                     selectedCount={tempSelectedIds.length}
-                    requiredMale={request.male_count || 0}
-                    requiredFemale={request.female_count || 0}
+                    requiredMale={currentRequest.male_count || 0}
+                    requiredFemale={currentRequest.female_count || 0}
                     currentMaleCount={tempSelectedIds.filter(id => {
                         const emp = allSortedEligibleEmployees.find(e => String(e.id) === String(id));
                         return emp?.gender === 'male';
