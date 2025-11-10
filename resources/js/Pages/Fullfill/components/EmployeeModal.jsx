@@ -172,49 +172,61 @@ export default function EmployeeModal({
     };
 
     const toggleEmployeeSelection = (employeeId) => {
-        if (!multiSelectMode) {
-            selectNewEmployee(employeeId);
-            return;
+    console.log('🎯 toggleEmployeeSelection called', { employeeId, multiSelectMode });
+    
+    if (!multiSelectMode) {
+        // In single mode, we're either replacing an employee or selecting a new one
+        // Find the actual employee object
+        const selectedEmployee = allSortedEligibleEmployees.find(emp => String(emp.id) === String(employeeId));
+        console.log('🔍 Selected employee for single mode:', selectedEmployee);
+        
+        if (selectedEmployee) {
+            selectNewEmployee(selectedEmployee); // Pass the employee object, not just ID
+        } else {
+            console.error('❌ Employee not found:', employeeId);
         }
+        return;
+    }
 
-        setTempSelectedIds(prev => {
-            const prevStr = prev.map(id => String(id));
-            const employeeIdStr = String(employeeId);
-            const isCurrentlySelected = prevStr.includes(employeeIdStr);
-            const newEmployee = allSortedEligibleEmployees.find(e => String(e.id) === employeeIdStr);
+    // ... rest of multi-select logic remains the same
+    setTempSelectedIds(prev => {
+        const prevStr = prev.map(id => String(id));
+        const employeeIdStr = String(employeeId);
+        const isCurrentlySelected = prevStr.includes(employeeIdStr);
+        const newEmployee = allSortedEligibleEmployees.find(e => String(e.id) === employeeIdStr);
 
-            if (isCurrentlySelected) {
-                const newIds = prev.filter(id => String(id) !== employeeIdStr);
-                return newIds;
-            } else {
-                if (prev.length >= request.requested_amount) {
-                    alert(`Maksimum ${request.requested_amount} karyawan dapat dipilih`);
-                    return prev;
-                }
-
-                const currentSelection = prevStr.map(id =>
-                    allSortedEligibleEmployees.find(e => String(e.id) === id)
-                ).filter(Boolean);
-
-                const newSelectionWithEmployee = [...currentSelection, newEmployee];
-                const maleCount = newSelectionWithEmployee.filter(e => e.gender === 'male').length;
-                const femaleCount = newSelectionWithEmployee.filter(e => e.gender === 'female').length;
-
-                if (request.male_count > 0 && maleCount > request.male_count) {
-                    alert(`Maksimum ${request.male_count} karyawan laki-laki diperbolehkan`);
-                    return prev;
-                }
-
-                if (request.female_count > 0 && femaleCount > request.female_count) {
-                    alert(`Maksimum ${request.female_count} karyawan perempuan diperbolehkan`);
-                    return prev;
-                }
-
-                const newIds = [...prev, employeeId];
-                return newIds;
+        if (isCurrentlySelected) {
+            const newIds = prev.filter(id => String(id) !== employeeIdStr);
+            return newIds;
+        } else {
+            if (prev.length >= request.requested_amount) {
+                alert(`Maksimum ${request.requested_amount} karyawan dapat dipilih`);
+                return prev;
             }
-        });
-    };
+
+            const currentSelection = prevStr.map(id =>
+                allSortedEligibleEmployees.find(e => String(e.id) === id)
+            ).filter(Boolean);
+
+            const newSelectionWithEmployee = [...currentSelection, newEmployee];
+            const maleCount = newSelectionWithEmployee.filter(e => e.gender === 'male').length;
+            const femaleCount = newSelectionWithEmployee.filter(e => e.gender === 'female').length;
+
+            if (request.male_count > 0 && maleCount > request.male_count) {
+                alert(`Maksimum ${request.male_count} karyawan laki-laki diperbolehkan`);
+                return prev;
+            }
+
+            if (request.female_count > 0 && femaleCount > request.female_count) {
+                alert(`Maksimum ${request.female_count} karyawan perempuan diperbolehkan`);
+                return prev;
+            }
+
+            const newIds = [...prev, employeeId];
+            return newIds;
+        }
+    });
+};
 
     const applyMultiSelection = () => {
         const finalSelection = tempSelectedIds.map(id => {

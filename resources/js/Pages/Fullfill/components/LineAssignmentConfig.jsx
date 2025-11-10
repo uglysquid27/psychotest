@@ -10,18 +10,22 @@ const LineAssignmentConfig = React.memo(({
     getEmployeeDetails,
     bulkMode = false,
     bulkSelectedEmployees,
-    selectedIds
+    selectedIds,
+    lineAssignments = {}
 }) => {
     const config = lineAssignmentConfig[requestId] || { enabled: false, lineCount: 2, lineCounts: [] };
     
-    // Simplified state - only track what's necessary
+    // Local state
     const [localConfig, setLocalConfig] = useState({
         enabled: config.enabled,
         lineCount: config.lineCount || 2,
         lineCounts: config.lineCounts || []
     });
 
-    // Single effect to sync with parent config
+    // NEW: Local line assignments state
+    const [localLineAssignments, setLocalLineAssignments] = useState({});
+
+    // Sync with parent config
     useEffect(() => {
         setLocalConfig({
             enabled: config.enabled,
@@ -30,7 +34,27 @@ const LineAssignmentConfig = React.memo(({
         });
     }, [config.enabled, config.lineCount, config.lineCounts]);
 
-    // Debounced config updates to prevent rapid re-renders
+    // NEW: Initialize local line assignments from parent
+    useEffect(() => {
+        // console.log('🔄 INITIALIZING LOCAL LINE ASSIGNMENTS FROM PARENT', {
+        //     parentLineAssignments: lineAssignments,
+        //     selectedIds
+        // });
+
+        if (Object.keys(lineAssignments).length > 0) {
+            setLocalLineAssignments(lineAssignments);
+        } else {
+            // Create initial assignments
+            const initialAssignments = {};
+            selectedIds.forEach((id, index) => {
+                initialAssignments[String(id)] = ((index % localConfig.lineCount) + 1).toString();
+            });
+            setLocalLineAssignments(initialAssignments);
+            // console.log('📝 Created initial assignments:', initialAssignments);
+        }
+    }, [lineAssignments, selectedIds, localConfig.lineCount]);
+
+    // Debounced config updates
     useEffect(() => {
         const timeoutId = setTimeout(() => {
             if (JSON.stringify(localConfig) !== JSON.stringify(config)) {
@@ -41,7 +65,7 @@ const LineAssignmentConfig = React.memo(({
         return () => clearTimeout(timeoutId);
     }, [localConfig, config, requestId, handleLineConfigChange]);
 
-    // Simplified line count calculation
+    // Calculate line counts
     const calculateLineCounts = useCallback((lineCount, requestedAmount) => {
         const baseCount = Math.floor(requestedAmount / lineCount);
         const remainder = requestedAmount % lineCount;
@@ -51,40 +75,37 @@ const LineAssignmentConfig = React.memo(({
         );
     }, []);
 
-const handleToggleEnabled = useCallback((enabled) => {
-    // console.log('🎯 Toggle line assignment enabled:', enabled);
-    
-    const newConfig = {
-        ...localConfig,
-        enabled,
-        lineCounts: enabled ? calculateLineCounts(localConfig.lineCount, request.requested_amount) : []
-    };
-    
-    setLocalConfig(newConfig);
-    
-    // Immediately update the parent with the new enabled state
-    handleLineConfigChange(requestId, 'fullConfig', newConfig);
-    
-    // Also update line assignments when enabling
-    if (enabled) {
-        const employeesForLine = bulkMode 
-            ? (bulkSelectedEmployees[requestId] || [])
-            : (selectedIds || []);
-            
-        const newLineAssignments = {};
-        employeesForLine.forEach((employeeId, index) => {
-            newLineAssignments[employeeId] = ((index % localConfig.lineCount) + 1).toString();
-        });
+    const handleToggleEnabled = useCallback((enabled) => {
+        const newConfig = {
+            ...localConfig,
+            enabled,
+            lineCounts: enabled ? calculateLineCounts(localConfig.lineCount, request.requested_amount) : []
+        };
         
-        // Update line assignments in parent
-        Object.entries(newLineAssignments).forEach(([employeeId, line]) => {
-            handleLineConfigChange(requestId, 'line_assignment', {
-                employeeId,
-                newLine: line
+        setLocalConfig(newConfig);
+        handleLineConfigChange(requestId, 'fullConfig', newConfig);
+        
+        if (enabled) {
+            const employeesForLine = bulkMode 
+                ? (bulkSelectedEmployees[requestId] || [])
+                : (selectedIds || []);
+                
+            const newLineAssignments = {};
+            employeesForLine.forEach((employeeId, index) => {
+                newLineAssignments[employeeId] = ((index % localConfig.lineCount) + 1).toString();
             });
-        });
-    }
-}, [localConfig, request.requested_amount, calculateLineCounts, requestId, handleLineConfigChange, bulkMode, bulkSelectedEmployees, selectedIds]);
+            
+            setLocalLineAssignments(newLineAssignments);
+            
+            // Update parent with all assignments
+            Object.entries(newLineAssignments).forEach(([employeeId, line]) => {
+                handleLineConfigChange(requestId, 'line_assignment', {
+                    employeeId,
+                    newLine: line
+                });
+            });
+        }
+    }, [localConfig, request.requested_amount, calculateLineCounts, requestId, handleLineConfigChange, bulkMode, bulkSelectedEmployees, selectedIds]);
 
     const handleLineCountChange = useCallback((newLineCount) => {
         const lineCount = Math.max(1, Math.min(6, parseInt(newLineCount) || 2));
@@ -95,9 +116,26 @@ const handleToggleEnabled = useCallback((enabled) => {
         };
         setLocalConfig(newConfig);
         handleLineConfigChange(requestId, 'fullConfig', newConfig);
-    }, [localConfig, request.requested_amount, calculateLineCounts, requestId, handleLineConfigChange]);
 
-    // Memoized derived data - simplified
+        // Reassign employees when line count changes
+        if (localConfig.enabled) {
+            const newAssignments = {};
+            selectedIds.forEach((id, index) => {
+                newAssignments[String(id)] = ((index % lineCount) + 1).toString();
+            });
+            setLocalLineAssignments(newAssignments);
+            
+            // Update parent
+            Object.entries(newAssignments).forEach(([employeeId, line]) => {
+                handleLineConfigChange(requestId, 'line_assignment', {
+                    employeeId,
+                    newLine: line
+                });
+            });
+        }
+    }, [localConfig, request.requested_amount, calculateLineCounts, requestId, handleLineConfigChange, selectedIds]);
+
+    // Get employees for display
     const employeesForLine = useMemo(() => {
         if (!selectedIds) return [];
         return bulkMode 
@@ -112,7 +150,7 @@ const handleToggleEnabled = useCallback((enabled) => {
             .filter(Boolean);
     }, [employeesForLine, getEmployeeDetails]);
 
-    // This is the key function - get current line assignments for display
+    // NEW: Completely different distribution logic - group by actual line assignments
     const getEmployeesByLine = useCallback(() => {
         const lines = {};
         
@@ -125,21 +163,33 @@ const handleToggleEnabled = useCallback((enabled) => {
             lines[i] = [];
         }
 
-        // Distribute employees to lines based on lineCounts
-        let employeeIndex = 0;
-        localConfig.lineCounts.forEach((lineCapacity, lineIndex) => {
-            const lineNumber = lineIndex + 1;
-            const lineEmployees = selectedEmployees.slice(employeeIndex, employeeIndex + lineCapacity);
-            lines[lineNumber] = lineEmployees;
-            employeeIndex += lineCapacity;
+        // console.log('🔄 NEW DISTRIBUTION LOGIC - Grouping by actual assignments', {
+        //     selectedEmployees: selectedEmployees.map(emp => ({ id: emp.id, name: emp.name })),
+        //     localLineAssignments,
+        //     lineCount: localConfig.lineCount
+        // });
+
+        // Group employees by their assigned line
+        selectedEmployees.forEach(employee => {
+            const assignedLine = localLineAssignments[employee.id] || '1';
+            
+            if (lines[assignedLine]) {
+                lines[assignedLine].push(employee);
+            } else {
+                // Fallback to line 1 if assignment is invalid
+                lines['1'].push(employee);
+            }
         });
-        
+
+        // console.log('✅ FINAL DISTRIBUTION WITH NEW LOGIC');
+        // Object.entries(lines).forEach(([line, employees]) => {
+        //     // console.log(`Line ${line}:`, employees.map(emp => `${emp.name} (${emp.id})`));
+        // });
+
         return lines;
-    }, [selectedEmployees, localConfig.lineCounts, localConfig.lineCount]);
+    }, [selectedEmployees, localLineAssignments, localConfig.lineCount]);
 
     const totalRequested = request.requested_amount;
-    const totalAllocated = localConfig.lineCounts.reduce((sum, count) => sum + count, 0);
-    const totalAssigned = employeesForLine.length;
 
     const handleLineCountChangeForLine = (lineIndex, newCount) => {
         const newLineCounts = [...localConfig.lineCounts];
@@ -156,37 +206,76 @@ const handleToggleEnabled = useCallback((enabled) => {
         }
     };
 
-    const moveEmployee = (employeeId, fromLine, toLine) => {
-        if (fromLine !== toLine) {
-            const fromCount = localConfig.lineCounts[parseInt(fromLine) - 1] || 0;
-            const toCount = localConfig.lineCounts[parseInt(toLine) - 1] || 0;
-            
-            // Check if move is allowed based on line capacity
-            if (toCount > 0) {
-                // Update line assignments in parent component
-                handleLineConfigChange(requestId, 'line_assignment', {
-                    employeeId,
-                    newLine: toLine
-                });
-                
-                // Update line counts
-                const newLineCounts = [...localConfig.lineCounts];
-                newLineCounts[parseInt(fromLine) - 1] = fromCount - 1;
-                newLineCounts[parseInt(toLine) - 1] = toCount + 1;
-                
-                const newConfig = {
-                    ...localConfig,
-                    lineCounts: newLineCounts
-                };
-                setLocalConfig(newConfig);
-                handleLineConfigChange(requestId, 'fullConfig', newConfig);
-            }
+    // NEW: Completely different move logic - direct assignment update
+    const moveEmployee = useCallback((employeeId, fromLine, toLine) => {
+        // console.log('🔄 NEW MOVE LOGIC - Direct assignment update', {
+        //     employeeId,
+        //     fromLine,
+        //     toLine,
+        //     currentAssignments: localLineAssignments
+        // });
+
+        if (fromLine === toLine) {
+            console.log('🚫 Same line, no move needed');
+            return;
         }
-    };
+
+        // Update the local assignment immediately
+        const newAssignments = {
+            ...localLineAssignments,
+            [employeeId]: toLine
+        };
+
+        // console.log('📝 Updated local assignments:', newAssignments);
+        setLocalLineAssignments(newAssignments);
+
+        // Update parent component
+        handleLineConfigChange(requestId, 'line_assignment', {
+            employeeId,
+            newLine: toLine
+        });
+
+        // console.log('✅ MOVE COMPLETED WITH NEW LOGIC', {
+        //     movedEmployeeId: employeeId,
+        //     fromLine,
+        //     toLine
+        // });
+
+        // Recalculate line counts based on actual assignments
+        const newLineCounts = Array(localConfig.lineCount).fill(0);
+        Object.values(newAssignments).forEach(line => {
+            const lineIndex = parseInt(line) - 1;
+            if (lineIndex >= 0 && lineIndex < localConfig.lineCount) {
+                newLineCounts[lineIndex]++;
+            }
+        });
+
+        // console.log('📊 Recalculated line counts:', newLineCounts);
+
+        const newConfig = {
+            ...localConfig,
+            lineCounts: newLineCounts
+        };
+        
+        setLocalConfig(newConfig);
+        handleLineConfigChange(requestId, 'fullConfig', newConfig);
+    }, [localLineAssignments, localConfig, requestId, handleLineConfigChange]);
 
     const employeesByLine = getEmployeesByLine();
 
-    // Simplified render - break into smaller components
+    // Log current state for debugging
+    // useEffect(() => {
+    //     // console.log('📊 CURRENT STATE', {
+    //     //     localLineAssignments,
+    //     //     employeesByLine: Object.keys(employeesByLine).reduce((acc, line) => {
+    //     //         acc[line] = employeesByLine[line].map(emp => `${emp.name} (${emp.id})`);
+    //     //         return acc;
+    //     //     }, {}),
+    //     //     lineCounts: localConfig.lineCounts
+    //     // });
+    // }, [localLineAssignments, employeesByLine, localConfig.lineCounts]);
+
+    // Render functions
     const renderLineConfig = () => (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {localConfig.lineCounts.map((count, lineIndex) => (
@@ -293,6 +382,19 @@ const handleToggleEnabled = useCallback((enabled) => {
                             type="button"
                             onClick={() => {
                                 // Reset all to line 1
+                                const resetAssignments = {};
+                                selectedIds.forEach(id => {
+                                    resetAssignments[String(id)] = '1';
+                                });
+                                
+                                setLocalLineAssignments(resetAssignments);
+                                Object.entries(resetAssignments).forEach(([employeeId, line]) => {
+                                    handleLineConfigChange(requestId, 'line_assignment', {
+                                        employeeId,
+                                        newLine: line
+                                    });
+                                });
+
                                 const newLineCounts = [request.requested_amount, ...Array(localConfig.lineCount - 1).fill(0)];
                                 const newConfig = {
                                     ...localConfig,
@@ -376,7 +478,15 @@ const LineAssignmentItem = React.memo(({ lineNumber, employees, allocated, getEm
                                                 <button
                                                     key={targetLine}
                                                     type="button"
-                                                    onClick={() => onMoveEmployee(emp.id, lineNumber, targetLine)}
+                                                    onClick={() => {
+                                                        // console.log('🖱️ MOVE BUTTON CLICKED - NEW LOGIC', {
+                                                        //     employeeId: emp.id,
+                                                        //     employeeName: emp.name,
+                                                        //     fromLine: lineNumber,
+                                                        //     toLine: targetLine
+                                                        // });
+                                                        onMoveEmployee(emp.id, lineNumber, targetLine);
+                                                    }}
                                                     className="px-2 py-1 text-xs bg-white border border-purple-300 text-purple-700 rounded hover:bg-purple-50 transition-colors"
                                                     title={`Pindah ke Line ${targetLine}`}
                                                 >

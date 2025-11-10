@@ -12,6 +12,7 @@ export default function EmployeeSelection({
     lineAssignments
 }) {
     
+    
     // Check if any selected employees are assigned to other requests
     const hasAssignedEmployees = selectedIds.some(id => {
         const emp = getEmployeeDetails(id);
@@ -222,6 +223,7 @@ export default function EmployeeSelection({
                     </motion.div>
                 ))}
             </div>
+            
 
             {/* Warning Message for Assigned Employees */}
             {hasAssignedEmployees && (
