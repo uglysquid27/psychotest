@@ -1,3 +1,4 @@
+// Fulfill.jsx - Updated with BulkFulfillment button
 import { useForm } from "@inertiajs/react";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
@@ -325,6 +326,19 @@ export default function Fulfill({
     const [activeBulkRequest, setActiveBulkRequest] = useState(null);
     const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
     
+    // Check if there are same subsection requests available for bulk mode
+    const hasSameSectionRequests = useMemo(() => {
+    const currentSectionId = String(request.subSection?.section_id);
+    if (!currentSectionId) return false;
+    
+    return sameDayRequests.some(req => {
+        const reqSectionId = String(req.subSection?.section_id);
+        return reqSectionId === currentSectionId && 
+               req.status !== 'fulfilled' &&
+               String(req.id) !== String(request.id);
+    });
+}, [sameDayRequests, request]);
+
     // Initialize bulk selected employees when entering bulk mode
     useEffect(() => {
         if (bulkMode) {
@@ -339,11 +353,6 @@ export default function Fulfill({
 
     // NEW: Initialize line assignments only once on component mount
     useEffect(() => {
-        // console.log('🔄 Initializing line assignments on mount', {
-        //     selectedIdsCount: selectedIds.length,
-        //     lineAssignmentsCount: Object.keys(lineAssignments).length
-        // });
-
         if (Object.keys(lineAssignments).length === 0 && selectedIds.length > 0) {
             const currentConfig = lineAssignmentConfig[request.id] || { enabled: false, lineCount: 2 };
             const initialLineAssignments = {};
@@ -352,7 +361,6 @@ export default function Fulfill({
                 initialLineAssignments[String(id)] = ((index % currentConfig.lineCount) + 1).toString();
             });
             
-            // console.log('📝 Created initial line assignments:', initialLineAssignments);
             setLineAssignments(initialLineAssignments);
             
             // Also initialize config
@@ -460,8 +468,6 @@ export default function Fulfill({
     ]);
 
     const handleLineConfigChange = (requestId, type, data) => {
-        // console.log('🔄 Line config change:', { requestId, type, data });
-        
         if (type === 'line_assignment') {
             const { employeeId, newLine } = data;
             setLineAssignments(prev => {
@@ -469,13 +475,9 @@ export default function Fulfill({
                     ...prev,
                     [employeeId]: newLine
                 };
-                console.log('📝 Updated line assignments:', newAssignments);
                 return newAssignments;
             });
         } else if (type === 'fullConfig') {
-            // console.log('🔄 Updating line assignment config for request:', requestId);
-            // console.log('🔄 New config enabled status:', data.enabled);
-            
             setLineAssignmentConfig(prev => {
                 const newConfig = {
                     ...prev,
@@ -486,7 +488,6 @@ export default function Fulfill({
             
             // Update the enableLineAssignment state
             if (requestId === String(request.id)) {
-                // console.log('✅ Setting enableLineAssignment to:', data.enabled);
                 setEnableLineAssignment(data.enabled);
             }
         }
@@ -501,19 +502,7 @@ export default function Fulfill({
     }, [lineAssignmentConfig, request.id]);
 
     const handleModalEmployeeSelect = (employee) => {
-        // console.log('🔄 handleModalEmployeeSelect called', {
-        //     employee: employee?.id,
-        //     employeeName: employee?.name,
-        //     changingEmployeeIndex,
-        //     activeBulkRequest,
-        //     enableLineAssignment,
-        //     currentSelectedIds: selectedIds,
-        //     lineAssignments,
-        //     lineAssignmentConfig: lineAssignmentConfig[request.id]
-        // });
-
         if (activeBulkRequest) {
-            // console.log('📦 Bulk mode selection');
             handleBulkEmployeeChange(
                 activeBulkRequest.requestId,
                 activeBulkRequest.index,
@@ -521,31 +510,14 @@ export default function Fulfill({
             );
             setActiveBulkRequest(null);
         } else if (changingEmployeeIndex !== null) {
-            // console.log('🔧 Single mode employee replacement', {
-            //     index: changingEmployeeIndex,
-            //     currentEmployeeAtPosition: selectedIds[changingEmployeeIndex],
-            //     newEmployee: employee.id
-            // });
-
             const newSelectedIds = [...selectedIds];
             const newEmployeeId = String(employee.id);
             const oldEmployeeId = newSelectedIds[changingEmployeeIndex];
             
-            // console.log('📝 Replacement details', {
-            //     oldEmployeeId,
-            //     newEmployeeId,
-            //     enableLineAssignment
-            // });
-
             // Check if the employee is already selected at a different position
             const existingIndex = newSelectedIds.findIndex(id => String(id) === newEmployeeId);
             
             if (existingIndex !== -1) {
-                // console.log('🔄 Employee already exists at different position, swapping', {
-                //     existingIndex,
-                //     currentIndex: changingEmployeeIndex
-                // });
-                
                 // If employee is already selected elsewhere, swap positions
                 const temp = newSelectedIds[changingEmployeeIndex];
                 newSelectedIds[changingEmployeeIndex] = newSelectedIds[existingIndex];
@@ -553,7 +525,6 @@ export default function Fulfill({
                 
                 // Update line assignments if line assignment is enabled
                 if (enableLineAssignment) {
-                    // console.log('📋 Updating line assignments for swap');
                     setLineAssignments(prev => {
                         const newAssignments = { ...prev };
                         const tempLine = newAssignments[oldEmployeeId];
@@ -563,18 +534,15 @@ export default function Fulfill({
                         newAssignments[newEmployeeId] = tempLine;
                         newAssignments[oldEmployeeId] = existingLine;
                         
-                        // console.log('🔄 Line assignments after swap', newAssignments);
                         return newAssignments;
                     });
                 }
             } else {
-                // console.log('✅ Simple replacement - new employee not in current selection');
                 // Simply replace the employee at the specified index
                 newSelectedIds[changingEmployeeIndex] = newEmployeeId;
                 
                 // Update line assignments if line assignment is enabled
                 if (enableLineAssignment) {
-                    // console.log('📋 Updating line assignments for replacement');
                     setLineAssignments(prev => {
                         const currentLine = prev[oldEmployeeId];
                         const newAssignments = { ...prev };
@@ -583,22 +551,18 @@ export default function Fulfill({
                         newAssignments[newEmployeeId] = currentLine;
                         delete newAssignments[oldEmployeeId];
                         
-                        console.log('📝 Line assignments after replacement', newAssignments);
                         return newAssignments;
                     });
                 }
             }
             
-            // console.log('🎯 Final selected IDs after replacement', newSelectedIds);
             setSelectedIds(newSelectedIds);
             setChangingEmployeeIndex(null);
         } else {
-            // console.log('🎯 Direct employee selection');
             // Handle direct employee selection
             handleEmployeeSelect(employee.id);
         }
         
-        // console.log('🚪 Closing modal');
         setShowModal(false);
     };
 
@@ -609,32 +573,23 @@ export default function Fulfill({
 
     const handleEmployeeSelect = (employeeId) => {
         const stringId = String(employeeId);
-        // console.log('🎯 handleEmployeeSelect called', {
-        //     employeeId: stringId,
-        //     currentSelectedIds: selectedIds,
-        //     enableLineAssignment
-        // });
 
         setSelectedIds((prev) => {
             if (prev.includes(stringId)) {
-                // console.log('❌ Removing employee from selection', stringId);
                 // Remove employee and their line assignment if enabled
                 if (enableLineAssignment) {
                     setLineAssignments(prevAssignments => {
                         const newAssignments = { ...prevAssignments };
                         delete newAssignments[stringId];
-                        // console.log('🗑️ Line assignments after removal', newAssignments);
                         return newAssignments;
                     });
                 }
                 return prev.filter((id) => id !== stringId);
             }
             if (prev.length >= request.requested_amount) {
-                // console.log('🚫 Maximum employees reached, cannot add', stringId);
                 return prev;
             }
             
-            // console.log('✅ Adding new employee to selection', stringId);
             const newSelectedIds = [...prev, stringId];
             
             // Set default line assignment for new employee if enabled
@@ -647,11 +602,6 @@ export default function Fulfill({
                         ...prevAssignments,
                         [stringId]: newLine
                     };
-                    // console.log('📋 New line assignment for employee', {
-                    //     employeeId: stringId,
-                    //     line: newLine,
-                    //     allAssignments: newAssignments
-                    // });
                     return newAssignments;
                 });
             }
@@ -946,11 +896,6 @@ export default function Fulfill({
         const currentConfig = lineAssignmentConfig[request.id] || {};
         const isLineAssignmentEnabled = currentConfig.enabled || enableLineAssignment;
 
-        // console.log('=== FINAL CHECK BEFORE SUBMISSION ===');
-        // console.log('🔍 isLineAssignmentEnabled:', isLineAssignmentEnabled);
-        // console.log('🔍 processedLineAssignments:', processedLineAssignments);
-
-        // Use router.post directly instead of useForm's post
         router.post(route("manpower-requests.fulfill.store", request.id), {
             employee_ids: stringSelectedIds,
             fulfilled_by: auth.user.id,
@@ -961,11 +906,10 @@ export default function Fulfill({
         }, {
             preserveScroll: true,
             onSuccess: () => {
-                // console.log('✅ Submission successful with line assignment:', isLineAssignmentEnabled);
                 router.visit(route("manpower-requests.index"));
             },
             onError: (errors) => {
-                console.error('❌ Submission errors:', errors);
+                console.error('Submission errors:', errors);
                 if (errors.fulfillment_error) {
                     setBackendError(errors.fulfillment_error);
                 }
@@ -992,6 +936,13 @@ export default function Fulfill({
         });
         return assignments;
     }, [enableLineAssignment, selectedIds, lineAssignments]);
+
+    // NEW: Function to navigate to BulkFulfillment page
+    const navigateToBulkFulfillment = () => {
+        router.visit(route('manpower-requests.bulk-fulfillment', {
+            request_id: request.id
+        }));
+    };
 
     if (
         request.status === "fulfilled" &&
@@ -1041,27 +992,20 @@ export default function Fulfill({
                     <h2 className="font-semibold text-gray-800 dark:text-gray-200 text-xl">
                         Penuhi Request Man Power
                     </h2>
-                   {!hasScheduledEmployees && (
+                    {/* UPDATED: Bulk Fulfillment Button */}
+                    {hasSameSectionRequests && (
     <div className="flex items-center space-x-4">
         <button
-            disabled
-            title="UNDER MAINTENANCE"
-            className={`px-4 py-2 rounded-md font-medium transition-colors cursor-not-allowed relative group ${
-                bulkMode
-                    ? "bg-purple-600 text-white opacity-70"
-                    : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 opacity-70"
-            }`}
+            onClick={navigateToBulkFulfillment}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md font-medium transition-colors flex items-center space-x-2"
         >
-            {bulkMode ? "Keluar Mode Bulk" : "Mode Bulk Fulfill"}
-
-            {/* Tooltip */}
-            <span className="absolute bottom-full mb-1 hidden group-hover:block text-xs text-white bg-black px-2 py-1 rounded-md">
-                UNDER MAINTENANCE
-            </span>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            <span>Bulk Fulfillment</span>
         </button>
     </div>
 )}
-
                 </div>
             }
             user={auth.user}
@@ -1086,35 +1030,7 @@ export default function Fulfill({
                     </div>
                 )}
 
-                {bulkMode && (
-                    <BulkFulfillmentPanel
-                        sameDayRequests={sameDayRequests}
-                        currentRequest={request}
-                        selectedBulkRequests={selectedBulkRequests}
-                        setSelectedBulkRequests={setSelectedBulkRequests}
-                        toggleBulkRequestSelection={(requestId) => {
-                            const requestIdStr = String(requestId);
-                            setSelectedBulkRequests((prev) => {
-                                if (prev.includes(requestIdStr)) {
-                                    return prev.filter((id) => id !== requestIdStr);
-                                } else {
-                                    return [...prev, requestIdStr];
-                                }
-                            });
-                        }}
-                        handleBulkSubmit={handleBulkSubmit}
-                        processing={processing}
-                        bulkSelectedEmployees={bulkSelectedEmployees}
-                        setBulkSelectedEmployees={setBulkSelectedEmployees}
-                        openBulkChangeModal={openBulkChangeModal}
-                        getEmployeeDetails={getEmployeeDetails}
-                        allSortedEligibleEmployees={allSortedEligibleEmployees}
-                        handleAutoFulfill={handleAutoFulfill}
-                        getBulkLineAssignment={getBulkLineAssignment}
-                        lineAssignmentConfig={lineAssignmentConfig}
-                        handleLineConfigChange={handleLineConfigChange}
-                    />
-                )}
+                {/* REMOVED: Old bulk mode panel */}
 
                 {!bulkMode && (
                     <>
@@ -1167,7 +1083,7 @@ export default function Fulfill({
                                 bulkMode={false}
                                 bulkSelectedEmployees={{}}
                                 selectedIds={selectedIds}
-                                lineAssignments={lineAssignments} // Pass lineAssignments as prop
+                                lineAssignments={lineAssignments}
                             />
 
                             <div className="bg-white dark:bg-gray-800 shadow-md mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
@@ -1221,26 +1137,26 @@ export default function Fulfill({
                 )}
 
                 <EmployeeModal
-    showModal={showModal}
-    setShowModal={setShowModal}
-    request={request}
-    allSortedEligibleEmployees={allSortedEligibleEmployees}
-    selectedIds={bulkMode && activeBulkRequest ? 
-        (bulkSelectedEmployees[activeBulkRequest.requestId] || []) : 
-        selectedIds
-    }
-    selectNewEmployee={handleModalEmployeeSelect} // This should receive employee object
-    handleMultiSelect={(newSelectedIds) => {
-        const newIdsStr = newSelectedIds.map((id) => String(id));
-        setSelectedIds(newIdsStr);
-        return true;
-    }}
-    multiSelectMode={multiSelectMode}
-    toggleMultiSelectMode={() => setMultiSelectMode(!multiSelectMode)}
-    isBulkMode={bulkMode}
-    isLoading={isLoadingEmployees}
-    activeBulkRequest={activeBulkRequest}
-/>
+                    showModal={showModal}
+                    setShowModal={setShowModal}
+                    request={request}
+                    allSortedEligibleEmployees={allSortedEligibleEmployees}
+                    selectedIds={bulkMode && activeBulkRequest ? 
+                        (bulkSelectedEmployees[activeBulkRequest.requestId] || []) : 
+                        selectedIds
+                    }
+                    selectNewEmployee={handleModalEmployeeSelect}
+                    handleMultiSelect={(newSelectedIds) => {
+                        const newIdsStr = newSelectedIds.map((id) => String(id));
+                        setSelectedIds(newIdsStr);
+                        return true;
+                    }}
+                    multiSelectMode={multiSelectMode}
+                    toggleMultiSelectMode={() => setMultiSelectMode(!multiSelectMode)}
+                    isBulkMode={bulkMode}
+                    isLoading={isLoadingEmployees}
+                    activeBulkRequest={activeBulkRequest}
+                />
             </div>
         </AuthenticatedLayout>
     );

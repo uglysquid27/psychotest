@@ -1609,6 +1609,105 @@ public function store(Request $request, $id)
         ->with('success', 'Permintaan berhasil dipenuhi');
 }
 
+public function bulkFulfillmentPage($id)
+{
+    $request = ManPowerRequest::with(['subSection.section', 'shift'])->findOrFail($id);
+    
+    // Get same day requests from same SECTION
+    $sameDayRequests = ManPowerRequest::with(['subSection.section', 'shift'])
+        ->where('date', $request->date)
+        ->where('id', '!=', $request->id)
+        ->whereHas('subSection', function($query) use ($request) {
+            $query->where('section_id', $request->subSection->section_id);
+        })
+        ->get();
+
+    // Get eligible employees
+    $startDate = Carbon::now()->subDays(6)->startOfDay();
+    $endDate = Carbon::now()->endOfDay();
+
+    $scheduledEmployeeIdsOnRequestDate = Schedule::where('date', $request->date)
+        ->where('man_power_request_id', '!=', $request->id)
+        ->pluck('employee_id')
+        ->toArray();
+
+    $currentScheduledIds = $request->schedules->pluck('employee_id')->toArray();
+
+    $eligibleEmployees = Employee::where(function ($query) use ($currentScheduledIds) {
+        $query->where('status', 'available')
+            ->orWhereIn('id', $currentScheduledIds);
+    })
+        ->where('cuti', 'no')
+        ->whereNotIn('id', array_diff($scheduledEmployeeIdsOnRequestDate, $currentScheduledIds))
+        ->with([
+            'subSections' => function ($query) {
+                $query->with('section');
+            },
+            'workloads',
+            'blindTests',
+            'ratings'
+        ])
+        ->withCount([
+            'schedules' => function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('date', [$startDate, $endDate]);
+            }
+        ])
+        ->with(['schedules.manPowerRequest.shift'])
+        ->get()
+        ->map(function ($employee) use ($request) {
+            $totalWorkingHours = 0;
+            foreach ($employee->schedules as $schedule) {
+                if ($schedule->manPowerRequest && $schedule->manPowerRequest->shift) {
+                    $totalWorkingHours += $schedule->manPowerRequest->shift->hours;
+                }
+            }
+
+            $weeklyScheduleCount = $employee->schedules_count;
+
+            // Calculate ML score and final score
+            $baseScore = $this->calculateBaseScore($employee, $weeklyScheduleCount);
+            $mlScore = $this->calculateMLPriorityScore($employee, $request);
+            $finalScore = ($mlScore * 0.7) + ($baseScore * 0.3);
+
+            $subSectionsData = $employee->subSections->map(function ($subSection) {
+                return [
+                    'id' => $subSection->id,
+                    'name' => $subSection->name,
+                    'section_id' => $subSection->section_id,
+                    'section' => $subSection->section ? [
+                        'id' => $subSection->section->id,
+                        'name' => $subSection->section->name,
+                    ] : null,
+                ];
+            })->toArray();
+
+            return [
+                'id' => $employee->id,
+                'nik' => $employee->nik,
+                'name' => $employee->name,
+                'type' => $employee->type,
+                'status' => $employee->status,
+                'gender' => $employee->gender,
+                'final_score' => $finalScore,
+                'ml_score' => $mlScore,
+                'sub_sections_data' => $subSectionsData,
+                'workload_points' => $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0,
+                'average_rating' => $employee->ratings->avg('rating') ?? 0,
+            ];
+        });
+
+    // Sort employees by final_score (ML-enhanced)
+    $allSortedEligibleEmployees = $eligibleEmployees->sortByDesc('final_score')->values()->all();
+
+    // FIX: Use the correct path with Fulfill/ prefix
+    return Inertia::render('Fullfill/BulkFulfillment', [ // ← CORRECT PATH
+        'auth' => ['user' => auth()->user()],
+        'sameDayRequests' => $sameDayRequests,
+        'currentRequest' => $request,
+        'allSortedEligibleEmployees' => $allSortedEligibleEmployees,
+    ]);
+}
+
     /**
      * Show the form for revising a fulfilled request
      */
