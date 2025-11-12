@@ -1609,6 +1609,8 @@ public function store(Request $request, $id)
         ->with('success', 'Permintaan berhasil dipenuhi');
 }
 
+// In ManPowerRequestFulfillmentController.php - FIXED bulkFulfillmentPage method
+
 public function bulkFulfillmentPage($id)
 {
     $request = ManPowerRequest::with(['subSection.section', 'shift'])->findOrFail($id);
@@ -1622,7 +1624,7 @@ public function bulkFulfillmentPage($id)
         })
         ->get();
 
-    // Get eligible employees
+    // Get eligible employees - FIXED: Properly load subSections relationship
     $startDate = Carbon::now()->subDays(6)->startOfDay();
     $endDate = Carbon::now()->endOfDay();
 
@@ -1640,9 +1642,8 @@ public function bulkFulfillmentPage($id)
         ->where('cuti', 'no')
         ->whereNotIn('id', array_diff($scheduledEmployeeIdsOnRequestDate, $currentScheduledIds))
         ->with([
-            'subSections' => function ($query) {
-                $query->with('section');
-            },
+            // FIX: Properly load the subSections relationship with section
+            'subSections.section', // This will load the pivot relationship
             'workloads',
             'blindTests',
             'ratings'
@@ -1669,20 +1670,29 @@ public function bulkFulfillmentPage($id)
             $mlScore = $this->calculateMLPriorityScore($employee, $request);
             $finalScore = ($mlScore * 0.7) + ($baseScore * 0.3);
 
+            // FIX: Properly format subSections data from the pivot relationship
             $subSectionsData = $employee->subSections->map(function ($subSection) {
                 return [
-                    'id' => $subSection->id,
+                    'id' => (string) $subSection->id,
                     'name' => $subSection->name,
-                    'section_id' => $subSection->section_id,
+                    'section_id' => (string) $subSection->section_id,
                     'section' => $subSection->section ? [
-                        'id' => $subSection->section->id,
+                        'id' => (string) $subSection->section->id,
                         'name' => $subSection->section->name,
                     ] : null,
                 ];
             })->toArray();
 
+            // Debug log to verify subSections data
+            Log::debug('Employee subSections data', [
+                'employee_id' => $employee->id,
+                'employee_name' => $employee->name,
+                'subsections_count' => count($subSectionsData),
+                'subsections' => $subSectionsData
+            ]);
+
             return [
-                'id' => $employee->id,
+                'id' => (string) $employee->id,
                 'nik' => $employee->nik,
                 'name' => $employee->name,
                 'type' => $employee->type,
@@ -1690,17 +1700,37 @@ public function bulkFulfillmentPage($id)
                 'gender' => $employee->gender,
                 'final_score' => $finalScore,
                 'ml_score' => $mlScore,
-                'sub_sections_data' => $subSectionsData,
+                'subSections' => $subSectionsData, // FIX: Changed from sub_sections_data to subSections
                 'workload_points' => $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0,
                 'average_rating' => $employee->ratings->avg('rating') ?? 0,
+                // Add work days data for EmployeeModal
+                'work_days_14_days' => $this->getWorkDaysCount($employee, 14),
+                'work_days_30_days' => $this->getWorkDaysCount($employee, 30),
+                'last_5_shifts' => $this->getLastShifts($employee, 5),
             ];
         });
 
     // Sort employees by final_score (ML-enhanced)
     $allSortedEligibleEmployees = $eligibleEmployees->sortByDesc('final_score')->values()->all();
 
+    // Debug log to check final data
+    Log::info('BulkFulfillmentPage Data', [
+        'request_id' => $request->id,
+        'request_sub_section_id' => $request->sub_section_id,
+        'total_employees' => count($allSortedEligibleEmployees),
+        'employees_with_subsections' => collect($allSortedEligibleEmployees)->filter(function($emp) {
+            return !empty($emp['subSections']);
+        })->count(),
+        'sample_employee_subsections' => collect($allSortedEligibleEmployees)->take(3)->map(function($emp) {
+            return [
+                'employee_id' => $emp['id'],
+                'subsections' => $emp['subSections']
+            ];
+        })
+    ]);
+
     // FIX: Use the correct path with Fulfill/ prefix
-    return Inertia::render('Fullfill/BulkFulfillment', [ // ← CORRECT PATH
+    return Inertia::render('Fullfill/BulkFulfillment', [
         'auth' => ['user' => auth()->user()],
         'sameDayRequests' => $sameDayRequests,
         'currentRequest' => $request,

@@ -1,23 +1,23 @@
 // BulkFulfillment.jsx - COMPLETE with individual employee movement and full screen
-import { useState, useMemo, useCallback, useEffect } from 'react';
-import { useForm, router } from '@inertiajs/react';
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import EmployeeModal from './components/EmployeeModal';
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { useForm, router } from "@inertiajs/react";
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
+import EmployeeModal from "./components/EmployeeModal";
 
 export default function BulkFulfillment({
     auth,
     sameDayRequests = [],
     currentRequest,
     allSortedEligibleEmployees = [],
-    message
+    message,
 }) {
     const [selectedRequests, setSelectedRequests] = useState([]);
     const [bulkSelectedEmployees, setBulkSelectedEmployees] = useState({});
-    const [strategy, setStrategy] = useState('optimal');
-    const [visibility, setVisibility] = useState('private');
+    const [strategy, setStrategy] = useState("optimal");
+    const [visibility, setVisibility] = useState("private");
     const [lineAssignmentConfig, setLineAssignmentConfig] = useState({});
     const [processing, setProcessing] = useState(false);
-    
+
     // New states for EmployeeModal
     const [showEmployeeModal, setShowEmployeeModal] = useState(false);
     const [activeRequestId, setActiveRequestId] = useState(null);
@@ -29,14 +29,19 @@ export default function BulkFulfillment({
 
     // Filter requests from same SECTION that are not fulfilled
     const sameSectionRequests = useMemo(() => {
-        const currentSectionId = String(currentRequest.subSection?.section_id);
-        if (!currentSectionId) return [];
+        const currentSectionId = String(currentRequest.sub_section?.section_id);
+        
+        if (!currentSectionId) {
+            return [];
+        }
 
         const sameSectionReqs = sameDayRequests.filter(req => {
-            const reqSectionId = String(req.subSection?.section_id);
-            return reqSectionId === currentSectionId && 
-                   req.status !== 'fulfilled' &&
-                   String(req.id) !== String(currentRequest.id);
+            const reqSectionId = String(req.sub_section?.section_id);
+            const isSameSection = reqSectionId === currentSectionId;
+            const isNotFulfilled = req.status !== 'fulfilled';
+            const isNotCurrent = String(req.id) !== String(currentRequest.id);
+            
+            return isSameSection && isNotFulfilled && isNotCurrent;
         });
 
         // Always include current request if not fulfilled
@@ -53,7 +58,7 @@ export default function BulkFulfillment({
         const newBulkSelectedEmployees = { ...bulkSelectedEmployees };
         let hasChanges = false;
 
-        selectedRequests.forEach(requestId => {
+        selectedRequests.forEach((requestId) => {
             if (!newBulkSelectedEmployees[requestId]) {
                 newBulkSelectedEmployees[requestId] = [];
                 hasChanges = true;
@@ -61,7 +66,7 @@ export default function BulkFulfillment({
         });
 
         // Remove any request IDs that are no longer selected
-        Object.keys(newBulkSelectedEmployees).forEach(requestId => {
+        Object.keys(newBulkSelectedEmployees).forEach((requestId) => {
             if (!selectedRequests.includes(requestId)) {
                 delete newBulkSelectedEmployees[requestId];
                 hasChanges = true;
@@ -75,9 +80,9 @@ export default function BulkFulfillment({
 
     // Toggle request selection
     const toggleRequestSelection = useCallback((requestId) => {
-        setSelectedRequests(prev => {
+        setSelectedRequests((prev) => {
             if (prev.includes(requestId)) {
-                return prev.filter(id => id !== requestId);
+                return prev.filter((id) => id !== requestId);
             } else {
                 return [...prev, requestId];
             }
@@ -86,7 +91,7 @@ export default function BulkFulfillment({
 
     // Select all requests
     const handleSelectAll = useCallback(() => {
-        const allIds = sameSectionRequests.map(req => String(req.id));
+        const allIds = sameSectionRequests.map((req) => String(req.id));
         setSelectedRequests(allIds);
     }, [sameSectionRequests]);
 
@@ -97,70 +102,86 @@ export default function BulkFulfillment({
     }, []);
 
     // Handle employee selection for a specific request
-    const handleEmployeeSelect = useCallback((requestId, employeeId) => {
-        setBulkSelectedEmployees(prev => {
-            const currentEmployees = prev[requestId] || [];
-            
-            if (currentEmployees.includes(employeeId)) {
-                // Remove employee if already selected
-                return {
-                    ...prev,
-                    [requestId]: currentEmployees.filter(id => id !== employeeId)
-                };
-            } else {
-                // Add employee if not already selected and within limit
-                const request = sameSectionRequests.find(req => String(req.id) === requestId);
-                if (request && currentEmployees.length < request.requested_amount) {
+    const handleEmployeeSelect = useCallback(
+        (requestId, employeeId) => {
+            setBulkSelectedEmployees((prev) => {
+                const currentEmployees = prev[requestId] || [];
+
+                if (currentEmployees.includes(employeeId)) {
+                    // Remove employee if already selected
                     return {
                         ...prev,
-                        [requestId]: [...currentEmployees, employeeId]
+                        [requestId]: currentEmployees.filter(
+                            (id) => id !== employeeId
+                        ),
                     };
+                } else {
+                    // Add employee if not already selected and within limit
+                    const request = sameSectionRequests.find(
+                        (req) => String(req.id) === requestId
+                    );
+                    if (
+                        request &&
+                        currentEmployees.length < request.requested_amount
+                    ) {
+                        return {
+                            ...prev,
+                            [requestId]: [...currentEmployees, employeeId],
+                        };
+                    }
                 }
-            }
-            return prev;
-        });
-    }, [sameSectionRequests]);
+                return prev;
+            });
+        },
+        [sameSectionRequests]
+    );
 
     // Handle employee selection via modal (single employee)
-    const handleSelectNewEmployee = useCallback((employee) => {
-        if (!activeRequestId || activeEmployeeIndex === null) return;
+    const handleSelectNewEmployee = useCallback(
+        (employee) => {
+            if (!activeRequestId || activeEmployeeIndex === null) return;
 
-        setBulkSelectedEmployees(prev => {
-            const currentEmployees = prev[activeRequestId] || [];
-            const newEmployees = [...currentEmployees];
-            
-            // Replace the employee at the specific index
-            if (activeEmployeeIndex < newEmployees.length) {
-                newEmployees[activeEmployeeIndex] = String(employee.id);
-            } else {
-                // Add new employee if index is beyond current array
-                newEmployees.push(String(employee.id));
-            }
-            
-            return {
-                ...prev,
-                [activeRequestId]: newEmployees
-            };
-        });
-        
-        setShowEmployeeModal(false);
-        setActiveRequestId(null);
-        setActiveEmployeeIndex(null);
-    }, [activeRequestId, activeEmployeeIndex]);
+            setBulkSelectedEmployees((prev) => {
+                const currentEmployees = prev[activeRequestId] || [];
+                const newEmployees = [...currentEmployees];
+
+                // Replace the employee at the specific index
+                if (activeEmployeeIndex < newEmployees.length) {
+                    newEmployees[activeEmployeeIndex] = String(employee.id);
+                } else {
+                    // Add new employee if index is beyond current array
+                    newEmployees.push(String(employee.id));
+                }
+
+                return {
+                    ...prev,
+                    [activeRequestId]: newEmployees,
+                };
+            });
+
+            setShowEmployeeModal(false);
+            setActiveRequestId(null);
+            setActiveEmployeeIndex(null);
+        },
+        [activeRequestId, activeEmployeeIndex]
+    );
 
     // Handle multi-select from modal
-    const handleMultiSelect = useCallback((employeeIds) => {
-        if (!activeRequestId) return;
+    const handleMultiSelect = useCallback(
+        (employeeIds) => {
+            if (!activeRequestId) return;
 
-        setBulkSelectedEmployees(prev => ({
-            ...prev,
-            [activeRequestId]: employeeIds.map(id => String(id))
-        }));
-        
-        setShowEmployeeModal(false);
-        setActiveRequestId(null);
-        setActiveEmployeeIndex(null);
-    }, [activeRequestId]);
+            setBulkSelectedEmployees((prev) => ({
+                ...prev,
+                [activeRequestId]: employeeIds.map((id) => String(id)),
+            }));
+
+            setShowEmployeeModal(false);
+            setActiveRequestId(null);
+            setActiveEmployeeIndex(null);
+        },
+        [activeRequestId]
+    );
 
     // Open employee modal for specific request and slot
     const openEmployeeModal = useCallback((requestId, employeeIndex = null) => {
@@ -172,112 +193,190 @@ export default function BulkFulfillment({
 
     // Toggle multi-select mode in modal
     const toggleMultiSelectMode = useCallback(() => {
-        setMultiSelectMode(prev => !prev);
+        setMultiSelectMode((prev) => !prev);
     }, []);
 
-    // Move individual employee to different line - FIXED VERSION
-    const moveEmployeeToLine = useCallback((requestId, employeeId, targetLine) => {
-        setBulkSelectedEmployees(prev => {
-            const currentEmployees = prev[requestId] || [];
-            const config = lineAssignmentConfig[requestId];
-            
-            if (!config || !config.enabled) return prev;
+    // Move individual employee to different line
+    const moveEmployeeToLine = useCallback(
+        (requestId, employeeId, targetLine) => {
+            setBulkSelectedEmployees((prev) => {
+                const currentEmployees = prev[requestId] || [];
+                const config = lineAssignmentConfig[requestId];
 
-            const employeeIndex = currentEmployees.indexOf(employeeId);
-            if (employeeIndex === -1) return prev;
+                if (!config || !config.enabled) return prev;
 
-            // Get current line of the employee
-            const currentLine = getLineAssignment(requestId, employeeId);
-            if (currentLine === targetLine.toString()) return prev; // Already in target line
+                const employeeIndex = currentEmployees.indexOf(employeeId);
+                if (employeeIndex === -1) return prev;
 
-            // Remove employee from current position
-            const employeesWithoutTarget = currentEmployees.filter(id => id !== employeeId);
-            
-            // Calculate target position based on line counts
-            let targetIndex = 0;
-            for (let line = 1; line < targetLine; line++) {
-                targetIndex += config.lineCounts[line - 1] || 0;
-            }
-            
-            // Insert at target position
-            const newEmployees = [
-                ...employeesWithoutTarget.slice(0, targetIndex),
-                employeeId,
-                ...employeesWithoutTarget.slice(targetIndex)
-            ];
+                // Get current line of the employee
+                const currentLine = getLineAssignment(requestId, employeeId);
+                if (currentLine === targetLine.toString()) return prev; // Already in target line
 
-            return {
-                ...prev,
-                [requestId]: newEmployees
-            };
-        });
+                // Remove employee from current position
+                const employeesWithoutTarget = currentEmployees.filter(
+                    (id) => id !== employeeId
+                );
 
-        // Update line counts to reflect the move
-        setLineAssignmentConfig(prev => {
-            const config = prev[requestId];
-            if (!config || !config.enabled) return prev;
-
-            const currentLine = getLineAssignment(requestId, employeeId);
-            if (currentLine === targetLine.toString()) return prev;
-
-            const newLineCounts = [...config.lineCounts];
-            
-            // Decrease count in current line
-            const currentLineIndex = parseInt(currentLine) - 1;
-            if (newLineCounts[currentLineIndex] > 0) {
-                newLineCounts[currentLineIndex]--;
-            }
-            
-            // Increase count in target line
-            const targetLineIndex = targetLine - 1;
-            newLineCounts[targetLineIndex]++;
-            
-            return {
-                ...prev,
-                [requestId]: {
-                    ...config,
-                    lineCounts: newLineCounts
+                // Calculate target position based on line counts
+                let targetIndex = 0;
+                for (let line = 1; line < targetLine; line++) {
+                    targetIndex += config.lineCounts[line - 1] || 0;
                 }
-            };
-        });
-    }, [lineAssignmentConfig]);
+
+                // Insert at target position
+                const newEmployees = [
+                    ...employeesWithoutTarget.slice(0, targetIndex),
+                    employeeId,
+                    ...employeesWithoutTarget.slice(targetIndex),
+                ];
+
+                return {
+                    ...prev,
+                    [requestId]: newEmployees,
+                };
+            });
+
+            // Update line counts to reflect the move
+            setLineAssignmentConfig((prev) => {
+                const config = prev[requestId];
+                if (!config || !config.enabled) return prev;
+
+                const currentLine = getLineAssignment(requestId, employeeId);
+                if (currentLine === targetLine.toString()) return prev;
+
+                const newLineCounts = [...config.lineCounts];
+
+                // Decrease count in current line
+                const currentLineIndex = parseInt(currentLine) - 1;
+                if (newLineCounts[currentLineIndex] > 0) {
+                    newLineCounts[currentLineIndex]--;
+                }
+
+                // Increase count in target line
+                const targetLineIndex = targetLine - 1;
+                newLineCounts[targetLineIndex]++;
+
+                return {
+                    ...prev,
+                    [requestId]: {
+                        ...config,
+                        lineCounts: newLineCounts,
+                    },
+                };
+            });
+        },
+        [lineAssignmentConfig]
+    );
 
     // Adjust line count directly (increase/decrease number of employees in a line)
-    const adjustLineCount = useCallback((requestId, lineNumber, adjustment) => {
-        setLineAssignmentConfig(prev => {
-            const config = prev[requestId];
-            if (!config || !config.enabled) return prev;
+    const adjustLineCount = useCallback(
+        (requestId, lineNumber, adjustment) => {
+            setLineAssignmentConfig((prev) => {
+                const config = prev[requestId];
+                if (!config || !config.enabled) return prev;
 
-            const request = sameSectionRequests.find(req => String(req.id) === requestId);
-            if (!request) return prev;
+                const request = sameSectionRequests.find(
+                    (req) => String(req.id) === requestId
+                );
+                if (!request) return prev;
 
-            const newLineCounts = [...config.lineCounts];
-            const newCount = newLineCounts[lineNumber - 1] + adjustment;
-            
-            // Validate the adjustment
-            const totalAssigned = bulkSelectedEmployees[requestId]?.length || 0;
-            const currentTotalDistributed = newLineCounts.reduce((sum, count) => sum + count, 0);
-            
-            // Check if adjustment is valid
-            if (newCount < 0) return prev; // Can't go below 0
-            if (currentTotalDistributed + adjustment > totalAssigned) {
-                // Can't distribute more than assigned employees
-                return prev;
-            }
-            
-            newLineCounts[lineNumber - 1] = newCount;
-            
-            return {
-                ...prev,
-                [requestId]: {
-                    ...config,
-                    lineCounts: newLineCounts
+                const newLineCounts = [...config.lineCounts];
+                const newCount = newLineCounts[lineNumber - 1] + adjustment;
+
+                // Validate the adjustment
+                const totalAssigned =
+                    bulkSelectedEmployees[requestId]?.length || 0;
+                const currentTotalDistributed = newLineCounts.reduce(
+                    (sum, count) => sum + count,
+                    0
+                );
+
+                // Check if adjustment is valid
+                if (newCount < 0) return prev; // Can't go below 0
+                if (currentTotalDistributed + adjustment > totalAssigned) {
+                    // Can't distribute more than assigned employees
+                    return prev;
                 }
-            };
-        });
-    }, [sameSectionRequests, bulkSelectedEmployees]);
 
-    // Auto-fill employees based on strategy
+                newLineCounts[lineNumber - 1] = newCount;
+
+                return {
+                    ...prev,
+                    [requestId]: {
+                        ...config,
+                        lineCounts: newLineCounts,
+                    },
+                };
+            });
+        },
+        [sameSectionRequests, bulkSelectedEmployees]
+    );
+
+    // Check if employee matches exact subsection
+    const hasExactSubsectionMatch = useCallback((employee, requestSubSectionId) => {
+        return employee.subSections?.some(ss => 
+            String(ss.id) === String(requestSubSectionId)
+        );
+    }, []);
+
+    // Check if employee matches same section
+    const hasSameSectionMatch = useCallback((employee, requestSectionId) => {
+        return employee.subSections?.some(ss => 
+            String(ss.section_id) === String(requestSectionId)
+        );
+    }, []);
+
+    // Sort employees with proper priority: exact subsection > same section > ML score
+    const sortEmployeesForRequest = useCallback((employees, request) => {
+        const requestSubSectionId = String(request.sub_section_id);
+        const requestSectionId = String(request.sub_section?.section_id);
+
+        return [...employees].sort((a, b) => {
+            // Priority 1: Exact subsection match
+            const aExactMatch = hasExactSubsectionMatch(a, requestSubSectionId);
+            const bExactMatch = hasExactSubsectionMatch(b, requestSubSectionId);
+            
+            if (aExactMatch && !bExactMatch) return -1;
+            if (!aExactMatch && bExactMatch) return 1;
+
+            // Priority 2: Same section match
+            const aSameSection = hasSameSectionMatch(a, requestSectionId);
+            const bSameSection = hasSameSectionMatch(b, requestSectionId);
+            
+            if (aSameSection && !bSameSection) return -1;
+            if (!aSameSection && bSameSection) return 1;
+
+            // Priority 3: ML score (final_score)
+            if (a.final_score !== b.final_score) {
+                return b.final_score - a.final_score;
+            }
+
+            // Priority 4: Gender matching with request requirements
+            const aGenderMatch = getGenderMatchScore(a, request);
+            const bGenderMatch = getGenderMatchScore(b, request);
+            if (aGenderMatch !== bGenderMatch) {
+                return aGenderMatch - bGenderMatch;
+            }
+
+            // Priority 5: Employee type (bulanan first)
+            if (a.type === 'bulanan' && b.type === 'harian') return -1;
+            if (a.type === 'harian' && b.type === 'bulanan') return 1;
+
+            return a.id - b.id;
+        });
+    }, [hasExactSubsectionMatch, hasSameSectionMatch]);
+
+    // Get gender matching score (lower is better)
+    const getGenderMatchScore = useCallback((employee, request) => {
+        const maleNeeded = (request.male_count || 0) > 0;
+        const femaleNeeded = (request.female_count || 0) > 0;
+
+        if (maleNeeded && employee.gender === 'male') return 0;
+        if (femaleNeeded && employee.gender === 'female') return 0;
+        return 1; // No match
+    }, []);
+
+    // Auto-fill employees based on strategy with proper subsection priority
     const handleAutoFill = useCallback(() => {
         if (selectedRequests.length === 0) return;
 
@@ -285,190 +384,300 @@ export default function BulkFulfillment({
         const usedEmployeeIds = new Set();
 
         // Get all currently used employees
-        Object.values(newBulkSelectedEmployees).forEach(employees => {
-            employees.forEach(empId => usedEmployeeIds.add(empId));
+        Object.values(newBulkSelectedEmployees).forEach((employees) => {
+            employees.forEach((empId) => usedEmployeeIds.add(empId));
         });
 
         let availableEmployees = allSortedEligibleEmployees.filter(
-            emp => !usedEmployeeIds.has(String(emp.id)) && emp.status === 'available'
+            (emp) =>
+                !usedEmployeeIds.has(String(emp.id)) &&
+                emp.status === "available"
         );
 
-        // Sort based on strategy
-        if (strategy === 'optimal') {
-            availableEmployees.sort((a, b) => b.final_score - a.final_score);
-        } else if (strategy === 'same_section') {
-            // Prioritize employees from same section
-            const currentSectionId = String(currentRequest.subSection?.section_id);
-            availableEmployees.sort((a, b) => {
-                const aIsSameSection = a.subSections?.some(ss => 
-                    String(ss.section_id) === currentSectionId
-                );
-                const bIsSameSection = b.subSections?.some(ss => 
-                    String(ss.section_id) === currentSectionId
-                );
-                
-                if (aIsSameSection !== bIsSameSection) return aIsSameSection ? -1 : 1;
-                return b.final_score - a.final_score;
-            });
-        } else if (strategy === 'balanced') {
-            availableEmployees.sort((a, b) => (a.workload_points || 0) - (b.workload_points || 0));
-        }
-
-        selectedRequests.forEach(requestId => {
-            const request = sameSectionRequests.find(req => String(req.id) === requestId);
+        selectedRequests.forEach((requestId) => {
+            const request = sameSectionRequests.find(
+                (req) => String(req.id) === requestId
+            );
             if (!request) return;
 
             const requiredMale = request.male_count || 0;
             const requiredFemale = request.female_count || 0;
             const totalRequired = request.requested_amount;
 
-            const selectedForRequest = [];
-            const maleCandidates = availableEmployees.filter(emp => emp.gender === 'male');
-            const femaleCandidates = availableEmployees.filter(emp => emp.gender === 'female');
+            // Sort employees for this specific request with proper priority
+            const sortedEmployees = sortEmployeesForRequest(availableEmployees, request);
 
-            // Select required males
+            const selectedForRequest = [];
+            
+            // Select required males with proper priority
+            const maleCandidates = sortedEmployees.filter(
+                (emp) => emp.gender === "male"
+            );
             for (let i = 0; i < requiredMale && maleCandidates.length > 0; i++) {
-                const candidate = maleCandidates.shift();
+                const candidate = maleCandidates[i];
                 selectedForRequest.push(String(candidate.id));
                 usedEmployeeIds.add(String(candidate.id));
-                availableEmployees = availableEmployees.filter(emp => String(emp.id) !== String(candidate.id));
+            }
+
+            // Select required females with proper priority
+            const femaleCandidates = sortedEmployees.filter(
+                (emp) => emp.gender === "female"
+            );
+            for (let i = 0; i < requiredFemale && femaleCandidates.length > 0; i++) {
+                const candidate = femaleCandidates[i];
+                selectedForRequest.push(String(candidate.id));
+                usedEmployeeIds.add(String(candidate.id));
+            }
+
+            // Fill remaining slots with proper priority
+            const remainingSlots = totalRequired - selectedForRequest.length;
+            if (remainingSlots > 0) {
+                const otherCandidates = sortedEmployees
+                    .filter(emp => !selectedForRequest.includes(String(emp.id)))
+                    .slice(0, remainingSlots);
+                
+                otherCandidates.forEach((candidate) => {
+                    selectedForRequest.push(String(candidate.id));
+                    usedEmployeeIds.add(String(candidate.id));
+                });
+            }
+
+            // Update available employees by removing used ones
+            availableEmployees = availableEmployees.filter(
+                (emp) => !selectedForRequest.includes(String(emp.id))
+            );
+
+            newBulkSelectedEmployees[requestId] = selectedForRequest.slice(0, totalRequired);
+        });
+
+        setBulkSelectedEmployees(newBulkSelectedEmployees);
+    }, [
+        selectedRequests,
+        bulkSelectedEmployees,
+        allSortedEligibleEmployees,
+        sameSectionRequests,
+        sortEmployeesForRequest,
+    ]);
+
+    // Auto-fill all requests on page load with proper subsection priority
+    const handleAutoFillAll = useCallback(() => {
+        if (selectedRequests.length === 0) return;
+
+        const newBulkSelectedEmployees = {};
+        const usedEmployeeIds = new Set();
+
+        let availableEmployees = [...allSortedEligibleEmployees].filter(
+            (emp) => emp.status === "available"
+        );
+
+        selectedRequests.forEach((requestId) => {
+            const request = sameSectionRequests.find(
+                (req) => String(req.id) === requestId
+            );
+            if (!request) return;
+
+            const requiredMale = request.male_count || 0;
+            const requiredFemale = request.female_count || 0;
+            const totalRequired = request.requested_amount;
+
+            // Sort employees for this specific request with proper priority
+            const sortedEmployees = sortEmployeesForRequest(
+                availableEmployees.filter(emp => !usedEmployeeIds.has(String(emp.id))),
+                request
+            );
+
+            const selectedForRequest = [];
+            
+            // Select required males
+            const maleCandidates = sortedEmployees.filter(emp => emp.gender === "male");
+            for (let i = 0; i < requiredMale && i < maleCandidates.length; i++) {
+                const candidate = maleCandidates[i];
+                selectedForRequest.push(String(candidate.id));
+                usedEmployeeIds.add(String(candidate.id));
             }
 
             // Select required females
-            for (let i = 0; i < requiredFemale && femaleCandidates.length > 0; i++) {
-                const candidate = femaleCandidates.shift();
+            const femaleCandidates = sortedEmployees.filter(emp => emp.gender === "female");
+            for (let i = 0; i < requiredFemale && i < femaleCandidates.length; i++) {
+                const candidate = femaleCandidates[i];
                 selectedForRequest.push(String(candidate.id));
                 usedEmployeeIds.add(String(candidate.id));
-                availableEmployees = availableEmployees.filter(emp => String(emp.id) !== String(candidate.id));
             }
 
             // Fill remaining slots
             const remainingSlots = totalRequired - selectedForRequest.length;
             if (remainingSlots > 0) {
-                const additionalCandidates = availableEmployees.slice(0, remainingSlots);
-                additionalCandidates.forEach(candidate => {
+                const otherCandidates = sortedEmployees
+                    .filter(emp => !selectedForRequest.includes(String(emp.id)))
+                    .slice(0, remainingSlots);
+                
+                otherCandidates.forEach((candidate) => {
                     selectedForRequest.push(String(candidate.id));
                     usedEmployeeIds.add(String(candidate.id));
                 });
-                availableEmployees = availableEmployees.slice(remainingSlots);
             }
 
             newBulkSelectedEmployees[requestId] = selectedForRequest.slice(0, totalRequired);
         });
 
         setBulkSelectedEmployees(newBulkSelectedEmployees);
-    }, [selectedRequests, strategy, bulkSelectedEmployees, allSortedEligibleEmployees, sameSectionRequests, currentRequest]);
+    }, [
+        selectedRequests,
+        allSortedEligibleEmployees,
+        sameSectionRequests,
+        sortEmployeesForRequest,
+    ]);
+
+    // Auto-fill on initial load for selected requests
+    useEffect(() => {
+        if (selectedRequests.length > 0) {
+            const hasAnySelection = selectedRequests.some(requestId => 
+                bulkSelectedEmployees[requestId]?.length > 0
+            );
+            
+            if (!hasAnySelection) {
+                handleAutoFillAll();
+            }
+        }
+    }, [selectedRequests]);
 
     // Handle line assignment configuration
-    const handleLineConfigChange = useCallback((requestId, enabled) => {
-        const request = sameSectionRequests.find(req => String(req.id) === requestId);
-        if (!request) return;
+    const handleLineConfigChange = useCallback(
+        (requestId, enabled) => {
+            const request = sameSectionRequests.find(
+                (req) => String(req.id) === requestId
+            );
+            if (!request) return;
 
-        setLineAssignmentConfig(prev => ({
-            ...prev,
-            [requestId]: {
-                enabled,
-                lineCount: 2, // Default to 2 lines
-                lineCounts: enabled ? calculateLineCounts(request.requested_amount, 2) : []
-            }
-        }));
-    }, [sameSectionRequests]);
+            setLineAssignmentConfig((prev) => ({
+                ...prev,
+                [requestId]: {
+                    enabled,
+                    lineCount: 2, // Default to 2 lines
+                    lineCounts: enabled
+                        ? calculateLineCounts(request.requested_amount, 2)
+                        : [],
+                },
+            }));
+        },
+        [sameSectionRequests]
+    );
 
     // Handle line count change
-    const handleLineCountChange = useCallback((requestId, lineCount) => {
-        const request = sameSectionRequests.find(req => String(req.id) === requestId);
-        if (!request) return;
+    const handleLineCountChange = useCallback(
+        (requestId, lineCount) => {
+            const request = sameSectionRequests.find(
+                (req) => String(req.id) === requestId
+            );
+            if (!request) return;
 
-        setLineAssignmentConfig(prev => ({
-            ...prev,
-            [requestId]: {
-                ...prev[requestId],
-                lineCount: parseInt(lineCount),
-                lineCounts: calculateLineCounts(request.requested_amount, parseInt(lineCount))
-            }
-        }));
-    }, [sameSectionRequests]);
+            setLineAssignmentConfig((prev) => ({
+                ...prev,
+                [requestId]: {
+                    ...prev[requestId],
+                    lineCount: parseInt(lineCount),
+                    lineCounts: calculateLineCounts(
+                        request.requested_amount,
+                        parseInt(lineCount)
+                    ),
+                },
+            }));
+        },
+        [sameSectionRequests]
+    );
 
     // Calculate line counts based on total employees and number of lines
     const calculateLineCounts = useCallback((totalEmployees, lineCount) => {
         const baseCount = Math.floor(totalEmployees / lineCount);
         const remainder = totalEmployees % lineCount;
-        
+
         const counts = Array(lineCount).fill(baseCount);
         for (let i = 0; i < remainder; i++) {
             counts[i]++;
         }
-        
+
         return counts;
     }, []);
 
     // Get line assignment for an employee
-    const getLineAssignment = useCallback((requestId, employeeId) => {
-        const employees = bulkSelectedEmployees[requestId] || [];
-        const config = lineAssignmentConfig[requestId];
-        if (!config || !config.enabled) return '1';
-        
-        const index = employees.indexOf(employeeId);
-        if (index === -1) return '1';
-        
-        // Distribute employees across lines based on line counts
-        let cumulative = 0;
-        for (let line = 0; line < config.lineCount; line++) {
-            cumulative += config.lineCounts[line];
-            if (index < cumulative) {
-                return (line + 1).toString();
-            }
-        }
-        
-        return '1';
-    }, [bulkSelectedEmployees, lineAssignmentConfig]);
+    const getLineAssignment = useCallback(
+        (requestId, employeeId) => {
+            const employees = bulkSelectedEmployees[requestId] || [];
+            const config = lineAssignmentConfig[requestId];
+            if (!config || !config.enabled) return "1";
 
-    // Get employees by line
-    const getEmployeesByLine = useCallback((requestId, lineNumber) => {
-        const employees = bulkSelectedEmployees[requestId] || [];
-        const config = lineAssignmentConfig[requestId];
-        if (!config || !config.enabled) return [];
+            const index = employees.indexOf(employeeId);
+            if (index === -1) return "1";
 
-        return employees.filter((employeeId, index) => {
+            // Distribute employees across lines based on line counts
             let cumulative = 0;
             for (let line = 0; line < config.lineCount; line++) {
                 cumulative += config.lineCounts[line];
                 if (index < cumulative) {
-                    return (line + 1) === lineNumber;
+                    return (line + 1).toString();
                 }
             }
-            return false;
-        });
-    }, [bulkSelectedEmployees, lineAssignmentConfig]);
+
+            return "1";
+        },
+        [bulkSelectedEmployees, lineAssignmentConfig]
+    );
+
+    // Get employees by line
+    const getEmployeesByLine = useCallback(
+        (requestId, lineNumber) => {
+            const employees = bulkSelectedEmployees[requestId] || [];
+            const config = lineAssignmentConfig[requestId];
+            if (!config || !config.enabled) return [];
+
+            return employees.filter((employeeId, index) => {
+                let cumulative = 0;
+                for (let line = 0; line < config.lineCount; line++) {
+                    cumulative += config.lineCounts[line];
+                    if (index < cumulative) {
+                        return line + 1 === lineNumber;
+                    }
+                }
+                return false;
+            });
+        },
+        [bulkSelectedEmployees, lineAssignmentConfig]
+    );
 
     // Check if a request is a putway request
     const isPutwayRequest = useCallback((request) => {
-        return request?.sub_section?.name?.toLowerCase() === 'putway' ||
-               request?.subSection?.name?.toLowerCase() === 'putway';
+        return request?.sub_section?.name?.toLowerCase() === "putway";
     }, []);
 
     // Get employee details
-    const getEmployeeDetails = useCallback((employeeId) => {
-        return allSortedEligibleEmployees.find(emp => String(emp.id) === String(employeeId));
-    }, [allSortedEligibleEmployees]);
+    const getEmployeeDetails = useCallback(
+        (employeeId) => {
+            return allSortedEligibleEmployees.find(
+                (emp) => String(emp.id) === String(employeeId)
+            );
+        },
+        [allSortedEligibleEmployees]
+    );
 
     // Calculate assignment statistics
     const assignmentStats = useMemo(() => {
         const stats = {
             totalSelected: 0,
             totalAssigned: 0,
-            fullyAssignedRequests: 0
+            fullyAssignedRequests: 0,
         };
 
-        selectedRequests.forEach(requestId => {
-            const request = sameSectionRequests.find(req => String(req.id) === requestId);
+        selectedRequests.forEach((requestId) => {
+            const request = sameSectionRequests.find(
+                (req) => String(req.id) === requestId
+            );
             if (request) {
                 const employees = bulkSelectedEmployees[requestId] || [];
                 const assignedCount = employees.length;
-                
+
                 stats.totalSelected += request.requested_amount;
                 stats.totalAssigned += assignedCount;
-                
+
                 if (assignedCount === request.requested_amount) {
                     stats.fullyAssignedRequests++;
                 }
@@ -480,8 +689,10 @@ export default function BulkFulfillment({
 
     // Check if all selected requests are fully assigned
     const allRequestsFullyAssigned = useMemo(() => {
-        return selectedRequests.every(requestId => {
-            const request = sameSectionRequests.find(req => String(req.id) === requestId);
+        return selectedRequests.every((requestId) => {
+            const request = sameSectionRequests.find(
+                (req) => String(req.id) === requestId
+            );
             const employees = bulkSelectedEmployees[requestId] || [];
             return request && employees.length === request.requested_amount;
         });
@@ -490,7 +701,7 @@ export default function BulkFulfillment({
     // Handle bulk fulfillment submission
     const handleBulkSubmit = useCallback(async () => {
         if (selectedRequests.length === 0 || !allRequestsFullyAssigned) {
-            alert('Please select requests and ensure all are fully assigned');
+            alert("Please select requests and ensure all are fully assigned");
             return;
         }
 
@@ -500,53 +711,92 @@ export default function BulkFulfillment({
             const bulkData = {};
             const lineAssignments = {};
 
-            selectedRequests.forEach(requestId => {
+            selectedRequests.forEach((requestId) => {
                 const employees = bulkSelectedEmployees[requestId] || [];
-                const enableLineAssignment = lineAssignmentConfig[requestId]?.enabled || false;
-                
+                const enableLineAssignment =
+                    lineAssignmentConfig[requestId]?.enabled || false;
+
                 bulkData[requestId] = employees;
 
                 if (enableLineAssignment) {
                     lineAssignments[requestId] = {};
-                    employees.forEach(employeeId => {
-                        lineAssignments[requestId][employeeId] = getLineAssignment(requestId, employeeId);
+                    employees.forEach((employeeId) => {
+                        lineAssignments[requestId][employeeId] =
+                            getLineAssignment(requestId, employeeId);
                     });
                 }
             });
 
-            await router.post(route('manpower-requests.bulk-fulfill'), {
-                request_ids: selectedRequests,
-                employee_selections: bulkData,
-                strategy: strategy,
-                visibility: visibility,
-                status: 'pending',
-                enable_line_assignment: Object.values(lineAssignmentConfig).some(config => config.enabled),
-                line_assignments: lineAssignments
-            }, {
-                onSuccess: () => {
-                    setSelectedRequests([]);
-                    setBulkSelectedEmployees({});
-                    setLineAssignmentConfig({});
-                    router.visit(route('manpower-requests.index'));
+            await router.post(
+                route("manpower-requests.bulk-fulfill"),
+                {
+                    request_ids: selectedRequests,
+                    employee_selections: bulkData,
+                    strategy: strategy,
+                    visibility: visibility,
+                    status: "pending",
+                    enable_line_assignment: Object.values(
+                        lineAssignmentConfig
+                    ).some((config) => config.enabled),
+                    line_assignments: lineAssignments,
                 },
-                onError: (errors) => {
-                    console.error('Bulk fulfillment error:', errors);
-                    alert(errors.message || 'Terjadi kesalahan saat memproses bulk fulfillment');
+                {
+                    onSuccess: () => {
+                        setSelectedRequests([]);
+                        setBulkSelectedEmployees({});
+                        setLineAssignmentConfig({});
+                        router.visit(route("manpower-requests.index"));
+                    },
+                    onError: (errors) => {
+                        alert(
+                            errors.message ||
+                                "Terjadi kesalahan saat memproses bulk fulfillment"
+                        );
+                    },
                 }
-            });
+            );
         } catch (error) {
-            console.error('Bulk fulfillment error:', error);
-            alert('Terjadi kesalahan saat memproses bulk fulfillment');
+            alert("Terjadi kesalahan saat memproses bulk fulfillment");
         } finally {
             setProcessing(false);
         }
-    }, [selectedRequests, bulkSelectedEmployees, strategy, visibility, lineAssignmentConfig, allRequestsFullyAssigned]);
+    }, [
+        selectedRequests,
+        bulkSelectedEmployees,
+        strategy,
+        visibility,
+        lineAssignmentConfig,
+        allRequestsFullyAssigned,
+    ]);
 
-    // Get current request for the modal
+    const getSubSectionIdFromRequest = useCallback((request) => {
+        if (!request) return null;
+        
+        const subSectionId = 
+            request.sub_section?.id || 
+            request.sub_section_id || 
+            request.subSection?.id;
+        
+        return subSectionId ? String(subSectionId) : null;
+    }, []);
+
     const getCurrentModalRequest = useCallback(() => {
-        if (!activeRequestId) return currentRequest;
-        return sameSectionRequests.find(req => String(req.id) === activeRequestId) || currentRequest;
-    }, [activeRequestId, currentRequest, sameSectionRequests]);
+        let targetRequest;
+        
+        if (!activeRequestId) {
+            targetRequest = currentRequest;
+        } else {
+            targetRequest = sameSectionRequests.find(req => String(req.id) === activeRequestId) || currentRequest;
+        }
+        
+        const subSectionId = getSubSectionIdFromRequest(targetRequest);
+        
+        return {
+            ...targetRequest,
+            sub_section_id: subSectionId,
+            sub_section: targetRequest.sub_section || { id: subSectionId }
+        };
+    }, [activeRequestId, currentRequest, sameSectionRequests, getSubSectionIdFromRequest]);
 
     // Get selected employees for the active request in modal
     const getSelectedIdsForModal = useCallback(() => {
@@ -556,243 +806,346 @@ export default function BulkFulfillment({
 
     // Toggle full screen mode
     const toggleFullScreen = useCallback(() => {
-        setIsFullScreen(prev => !prev);
+        setIsFullScreen((prev) => !prev);
     }, []);
 
     // Render line assignment preview with individual employee movement
-    const renderLineAssignmentPreview = useCallback((requestId, assignedEmployees, enableLineAssignment, lineCount, isPutway) => {
-        if (!enableLineAssignment && !isPutway) return null;
+    const renderLineAssignmentPreview = useCallback(
+        (
+            requestId,
+            assignedEmployees,
+            enableLineAssignment,
+            lineCount,
+            isPutway
+        ) => {
+            if (!enableLineAssignment && !isPutway) return null;
 
-        const config = lineAssignmentConfig[requestId];
-        if (!config) return null;
+            const config = lineAssignmentConfig[requestId];
+            if (!config) return null;
 
-        const totalAssigned = assignedEmployees.length;
-        const totalDistributed = config.lineCounts.reduce((sum, count) => sum + count, 0);
+            const totalAssigned = assignedEmployees.length;
+            const totalDistributed = config.lineCounts.reduce(
+                (sum, count) => sum + count,
+                0
+            );
 
-        return (
-            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
-                <h6 className="font-medium text-gray-700 dark:text-gray-300 text-sm mb-2">
-                    Distribusi Karyawan per Line:
-                </h6>
-                
-                {/* Line Count Summary */}
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded border border-blue-200 dark:border-blue-700 mb-4">
-                    <div className="flex justify-between items-center text-sm">
-                        <span className="text-blue-700 dark:text-blue-300">
-                            Total Karyawan Terdistribusi:
-                        </span>
-                        <span className="font-bold text-blue-800 dark:text-blue-200">
-                            {totalDistributed} / {totalAssigned}
-                        </span>
-                    </div>
-                    {totalDistributed !== totalAssigned && (
-                        <div className="text-orange-600 dark:text-orange-400 text-xs mt-1">
-                            ⚠️ Jumlah distribusi tidak sesuai dengan total karyawan
-                        </div>
-                    )}
-                </div>
-
-                {/* Line Controls and Employee Lists */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {Array.from({ length: lineCount }).map((_, lineIndex) => {
-                        const lineNumber = lineIndex + 1;
-                        const currentCount = config.lineCounts[lineIndex] || 0;
-                        const lineEmployees = getEmployeesByLine(requestId, lineNumber);
-                        
-                        return (
-                            <div key={lineIndex} className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded border border-purple-200 dark:border-purple-700">
-                                <div className="font-medium text-purple-700 dark:text-purple-300 mb-2 flex justify-between items-center">
-                                    <span>Line {lineNumber}</span>
-                                    <div className="flex items-center space-x-2">
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                adjustLineCount(requestId, lineNumber, -1);
-                                            }}
-                                            disabled={currentCount <= 0}
-                                            className="w-6 h-6 bg-red-500 hover:bg-red-600 disabled:bg-gray-400 text-white rounded text-sm flex items-center justify-center"
-                                            title="Kurangi 1 slot"
-                                        >
-                                            -
-                                        </button>
-                                        <span className="text-lg font-bold min-w-8 text-center">
-                                            {currentCount}
-                                        </span>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                adjustLineCount(requestId, lineNumber, 1);
-                                            }}
-                                            disabled={totalDistributed >= totalAssigned}
-                                            className="w-6 h-6 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white rounded text-sm flex items-center justify-center"
-                                            title="Tambah 1 slot"
-                                        >
-                                            +
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                {/* Employee List with Movement Controls */}
-                                <div className="mt-2 max-h-48 overflow-y-auto">
-                                    {lineEmployees.map((id, idx) => {
-                                        const emp = getEmployeeDetails(id);
-                                        return emp ? (
-                                            <div key={id} className="flex items-center justify-between text-purple-600 dark:text-purple-400 py-1 text-xs border-b border-purple-100 dark:border-purple-700 last:border-b-0">
-                                                <div className="truncate flex-1">
-                                                    {idx + 1}. {emp.name} ({emp.gender === 'female' ? 'P' : 'L'})
-                                                </div>
-                                                <div className="flex space-x-1 ml-2">
-                                                    {lineCount > 1 && Array.from({ length: lineCount }).map((_, targetLineIndex) => {
-                                                        const targetLine = targetLineIndex + 1;
-                                                        if (targetLine === lineNumber) return null;
-                                                        
-                                                        return (
-                                                            <button
-                                                                key={targetLine}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    moveEmployeeToLine(requestId, id, targetLine);
-                                                                }}
-                                                                className="w-5 h-5 bg-purple-400 hover:bg-purple-500 text-white rounded text-xs flex items-center justify-center"
-                                                                title={`Pindah ke Line ${targetLine}`}
-                                                            >
-                                                                →{targetLine}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        ) : null;
-                                    })}
-                                    {lineEmployees.length === 0 && (
-                                        <div className="text-purple-400 dark:text-purple-500 text-xs italic py-1">
-                                            Belum ada karyawan
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-
-                {/* Quick Distribution Controls */}
-                <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-700">
-                    <h6 className="font-medium text-green-700 dark:text-green-300 text-sm mb-2">
-                        Distribusi Cepat:
+            return (
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                    <h6 className="font-medium text-gray-700 dark:text-gray-300 text-sm mb-2">
+                        Distribusi Karyawan per Line:
                     </h6>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                // Equal distribution
-                                const equalCounts = calculateLineCounts(totalAssigned, lineCount);
-                                setLineAssignmentConfig(prev => ({
-                                    ...prev,
-                                    [requestId]: {
-                                        ...prev[requestId],
-                                        lineCounts: equalCounts
-                                    }
-                                }));
-                            }}
-                            className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs"
-                        >
-                            ⚖️ Distribusi Merata
-                        </button>
-                        
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                // Reset to default distribution
-                                const request = sameSectionRequests.find(req => String(req.id) === requestId);
-                                if (!request) return;
-                                
-                                const defaultCounts = calculateLineCounts(request.requested_amount, lineCount);
-                                setLineAssignmentConfig(prev => ({
-                                    ...prev,
-                                    [requestId]: {
-                                        ...prev[requestId],
-                                        lineCounts: defaultCounts
-                                    }
-                                }));
-                            }}
-                            className="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs"
-                        >
-                            🔄 Reset Default
-                        </button>
-                        
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                // Focus on first line
-                                const newCounts = Array(lineCount).fill(0);
-                                newCounts[0] = totalAssigned;
-                                setLineAssignmentConfig(prev => ({
-                                    ...prev,
-                                    [requestId]: {
-                                        ...prev[requestId],
-                                        lineCounts: newCounts
-                                    }
-                                }));
-                            }}
-                            className="px-2 py-1 bg-orange-500 hover:bg-orange-600 text-white rounded text-xs"
-                        >
-                            🎯 Semua di Line 1
-                        </button>
-                        
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                // Split between first two lines
-                                const newCounts = Array(lineCount).fill(0);
-                                const half = Math.ceil(totalAssigned / 2);
-                                newCounts[0] = half;
-                                newCounts[1] = totalAssigned - half;
-                                setLineAssignmentConfig(prev => ({
-                                    ...prev,
-                                    [requestId]: {
-                                        ...prev[requestId],
-                                        lineCounts: newCounts
-                                    }
-                                }));
-                            }}
-                            className="px-2 py-1 bg-purple-500 hover:bg-purple-600 text-white rounded text-xs"
-                        >
-                            🪓 Bagi Dua
-                        </button>
+
+                    {/* Line Count Summary */}
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded border border-blue-200 dark:border-blue-700 mb-4">
+                        <div className="flex justify-between items-center text-sm">
+                            <span className="text-blue-700 dark:text-blue-300">
+                                Total Karyawan Terdistribusi:
+                            </span>
+                            <span className="font-bold text-blue-800 dark:text-blue-200">
+                                {totalDistributed} / {totalAssigned}
+                            </span>
+                        </div>
+                        {totalDistributed !== totalAssigned && (
+                            <div className="text-orange-600 dark:text-orange-400 text-xs mt-1">
+                                ⚠️ Jumlah distribusi tidak sesuai dengan total
+                                karyawan
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Line Controls and Employee Lists */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {Array.from({ length: lineCount }).map(
+                            (_, lineIndex) => {
+                                const lineNumber = lineIndex + 1;
+                                const currentCount =
+                                    config.lineCounts[lineIndex] || 0;
+                                const lineEmployees = getEmployeesByLine(
+                                    requestId,
+                                    lineNumber
+                                );
+
+                                return (
+                                    <div
+                                        key={lineIndex}
+                                        className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded border border-purple-200 dark:border-purple-700"
+                                    >
+                                        <div className="font-medium text-purple-700 dark:text-purple-300 mb-2 flex justify-between items-center">
+                                            <span>Line {lineNumber}</span>
+                                            <div className="flex items-center space-x-2">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        adjustLineCount(
+                                                            requestId,
+                                                            lineNumber,
+                                                            -1
+                                                        );
+                                                    }}
+                                                    disabled={currentCount <= 0}
+                                                    className="w-6 h-6 bg-red-500 hover:bg-red-600 disabled:bg-gray-400 text-white rounded text-sm flex items-center justify-center"
+                                                    title="Kurangi 1 slot"
+                                                >
+                                                    -
+                                                </button>
+                                                <span className="text-lg font-bold min-w-8 text-center">
+                                                    {currentCount}
+                                                </span>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        adjustLineCount(
+                                                            requestId,
+                                                            lineNumber,
+                                                            1
+                                                        );
+                                                    }}
+                                                    disabled={
+                                                        totalDistributed >=
+                                                        totalAssigned
+                                                    }
+                                                    className="w-6 h-6 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white rounded text-sm flex items-center justify-center"
+                                                    title="Tambah 1 slot"
+                                                >
+                                                    +
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Employee List with Movement Controls */}
+                                        <div className="mt-2 max-h-48 overflow-y-auto">
+                                            {lineEmployees.map((id, idx) => {
+                                                const emp =
+                                                    getEmployeeDetails(id);
+                                                return emp ? (
+                                                    <div
+                                                        key={id}
+                                                        className="flex items-center justify-between text-purple-600 dark:text-purple-400 py-1 text-xs border-b border-purple-100 dark:border-purple-700 last:border-b-0"
+                                                    >
+                                                        <div className="truncate flex-1">
+                                                            {idx + 1}.{" "}
+                                                            {emp.name} (
+                                                            {emp.gender ===
+                                                            "female"
+                                                                ? "P"
+                                                                : "L"}
+                                                            )
+                                                        </div>
+                                                        <div className="flex space-x-1 ml-2">
+                                                            {lineCount > 1 &&
+                                                                Array.from({
+                                                                    length: lineCount,
+                                                                }).map(
+                                                                    (
+                                                                        _,
+                                                                        targetLineIndex
+                                                                    ) => {
+                                                                        const targetLine =
+                                                                            targetLineIndex +
+                                                                            1;
+                                                                        if (
+                                                                            targetLine ===
+                                                                            lineNumber
+                                                                        )
+                                                                            return null;
+
+                                                                        return (
+                                                                            <button
+                                                                                key={
+                                                                                    targetLine
+                                                                                }
+                                                                                onClick={(
+                                                                                    e
+                                                                                ) => {
+                                                                                    e.stopPropagation();
+                                                                                    moveEmployeeToLine(
+                                                                                        requestId,
+                                                                                        id,
+                                                                                        targetLine
+                                                                                    );
+                                                                                }}
+                                                                                className="w-5 h-5 bg-purple-400 hover:bg-purple-500 text-white rounded text-xs flex items-center justify-center"
+                                                                                title={`Pindah ke Line ${targetLine}`}
+                                                                            >
+                                                                                →
+                                                                                {
+                                                                                    targetLine
+                                                                                }
+                                                                            </button>
+                                                                        );
+                                                                    }
+                                                                )}
+                                                        </div>
+                                                    </div>
+                                                ) : null;
+                                            })}
+                                            {lineEmployees.length === 0 && (
+                                                <div className="text-purple-400 dark:text-purple-500 text-xs italic py-1">
+                                                    Belum ada karyawan
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            }
+                        )}
+                    </div>
+
+                    {/* Quick Distribution Controls */}
+                    <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-700">
+                        <h6 className="font-medium text-green-700 dark:text-green-300 text-sm mb-2">
+                            Distribusi Cepat:
+                        </h6>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Equal distribution
+                                    const equalCounts = calculateLineCounts(
+                                        totalAssigned,
+                                        lineCount
+                                    );
+                                    setLineAssignmentConfig((prev) => ({
+                                        ...prev,
+                                        [requestId]: {
+                                            ...prev[requestId],
+                                            lineCounts: equalCounts,
+                                        },
+                                    }));
+                                }}
+                                className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs"
+                            >
+                                ⚖️ Distribusi Merata
+                            </button>
+
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Reset to default distribution
+                                    const request = sameSectionRequests.find(
+                                        (req) => String(req.id) === requestId
+                                    );
+                                    if (!request) return;
+
+                                    const defaultCounts = calculateLineCounts(
+                                        request.requested_amount,
+                                        lineCount
+                                    );
+                                    setLineAssignmentConfig((prev) => ({
+                                        ...prev,
+                                        [requestId]: {
+                                            ...prev[requestId],
+                                            lineCounts: defaultCounts,
+                                        },
+                                    }));
+                                }}
+                                className="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs"
+                            >
+                                🔄 Reset Default
+                            </button>
+
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Focus on first line
+                                    const newCounts = Array(lineCount).fill(0);
+                                    newCounts[0] = totalAssigned;
+                                    setLineAssignmentConfig((prev) => ({
+                                        ...prev,
+                                        [requestId]: {
+                                            ...prev[requestId],
+                                            lineCounts: newCounts,
+                                        },
+                                    }));
+                                }}
+                                className="px-2 py-1 bg-orange-500 hover:bg-orange-600 text-white rounded text-xs"
+                            >
+                                🎯 Semua di Line 1
+                            </button>
+
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Split between first two lines
+                                    const newCounts = Array(lineCount).fill(0);
+                                    const half = Math.ceil(totalAssigned / 2);
+                                    newCounts[0] = half;
+                                    newCounts[1] = totalAssigned - half;
+                                    setLineAssignmentConfig((prev) => ({
+                                        ...prev,
+                                        [requestId]: {
+                                            ...prev[requestId],
+                                            lineCounts: newCounts,
+                                        },
+                                    }));
+                                }}
+                                className="px-2 py-1 bg-purple-500 hover:bg-purple-600 text-white rounded text-xs"
+                            >
+                                🪓 Bagi Dua
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
-        );
-    }, [getEmployeesByLine, getEmployeeDetails, moveEmployeeToLine, adjustLineCount, lineAssignmentConfig, sameSectionRequests, calculateLineCounts]);
+            );
+        },
+        [
+            getEmployeesByLine,
+            getEmployeeDetails,
+            moveEmployeeToLine,
+            adjustLineCount,
+            lineAssignmentConfig,
+            sameSectionRequests,
+            calculateLineCounts,
+        ]
+    );
 
     return (
         <AuthenticatedLayout
             header={
                 <div className="flex justify-between items-center">
                     <h2 className="font-semibold text-gray-800 dark:text-gray-200 text-xl">
-                        Bulk Fulfillment - {currentRequest.subSection?.section?.name || 'Same Section'}
+                        Bulk Fulfillment -{" "}
+                        {currentRequest.sub_section?.section?.name ||
+                            "Same Section"}
                     </h2>
                 </div>
             }
             user={auth.user}
         >
-            <div className={`mx-auto mt-6 ${isFullScreen ? 'max-w-full px-4' : 'max-w-7xl'}`}>
+            <div
+                className={`mx-auto mt-6 ${
+                    isFullScreen ? "max-w-full px-4" : "max-w-7xl"
+                }`}
+            >
                 {/* Header Section */}
                 <div className="bg-gradient-to-br from-blue-50 dark:from-blue-900/20 to-indigo-100 dark:to-indigo-900/20 shadow-lg mb-6 p-6 border border-blue-200 dark:border-blue-700 rounded-xl">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
                         <div className="flex items-start">
                             <div className="bg-blue-100 dark:bg-blue-800/40 mr-0 sm:mr-4 mb-3 sm:mb-0 p-3 rounded-full">
-                                <svg className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                <svg
+                                    className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600 dark:text-blue-400"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M13 10V3L4 14h7v7l9-11h-7z"
+                                    />
                                 </svg>
                             </div>
                             <div>
-                                <h3 className="font-bold text-blue-800 dark:text-blue-300 text-xl sm:text-2xl">Bulk Fulfillment</h3>
+                                <h3 className="font-bold text-blue-800 dark:text-blue-300 text-xl sm:text-2xl">
+                                    Bulk Fulfillment
+                                </h3>
                                 <p className="text-blue-600 dark:text-blue-400 text-sm sm:text-base">
-                                    Penuhi semua request untuk section "{currentRequest.subSection?.section?.name}" secara sekaligus
+                                    Penuhi semua request untuk section "
+                                    {currentRequest.sub_section?.section?.name}" secara sekaligus
                                 </p>
                                 <p className="text-blue-500 dark:text-blue-300 text-xs sm:text-sm mt-1">
-                                    Menampilkan request dari semua sub-bagian dalam section yang sama
+                                    Prioritas: Subsection Exact → Section Sama → ML Score
                                 </p>
                             </div>
                         </div>
@@ -802,15 +1155,35 @@ export default function BulkFulfillment({
                         >
                             {isFullScreen ? (
                                 <>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    <svg
+                                        className="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M6 18L18 6M6 6l12 12"
+                                        />
                                     </svg>
                                     <span>Tutup Full Screen</span>
                                 </>
                             ) : (
                                 <>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                                    <svg
+                                        className="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+                                        />
                                     </svg>
                                     <span>Full Screen</span>
                                 </>
@@ -831,35 +1204,65 @@ export default function BulkFulfillment({
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                         {/* Summary Card */}
                         <div className="bg-white dark:bg-gray-800 p-6 border border-gray-200 dark:border-gray-700 rounded-lg">
-                            <h4 className="mb-4 font-semibold text-gray-900 dark:text-gray-100 text-lg">📊 Ringkasan</h4>
+                            <h4 className="mb-4 font-semibold text-gray-900 dark:text-gray-100 text-lg">
+                                📊 Ringkasan
+                            </h4>
                             <div className="space-y-3">
                                 <div className="flex justify-between">
-                                    <span className="text-gray-600 dark:text-gray-400">Total Request Tersedia:</span>
-                                    <span className="font-medium text-gray-900 dark:text-gray-100">{sameSectionRequests.length}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600 dark:text-gray-400">Request Terpilih:</span>
-                                    <span className="font-medium text-gray-900 dark:text-gray-100">{selectedRequests.length}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600 dark:text-gray-400">Karyawan Terisi:</span>
+                                    <span className="text-gray-600 dark:text-gray-400">
+                                        Total Request Tersedia:
+                                    </span>
                                     <span className="font-medium text-gray-900 dark:text-gray-100">
-                                        {assignmentStats.totalAssigned} / {assignmentStats.totalSelected}
+                                        {sameSectionRequests.length}
                                     </span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-gray-600 dark:text-gray-400">Request Terisi Penuh:</span>
+                                    <span className="text-gray-600 dark:text-gray-400">
+                                        Request Terpilih:
+                                    </span>
                                     <span className="font-medium text-gray-900 dark:text-gray-100">
-                                        {assignmentStats.fullyAssignedRequests} / {selectedRequests.length}
+                                        {selectedRequests.length}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">
+                                        Karyawan Terisi:
+                                    </span>
+                                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                                        {assignmentStats.totalAssigned} /{" "}
+                                        {assignmentStats.totalSelected}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">
+                                        Request Terisi Penuh:
+                                    </span>
+                                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                                        {assignmentStats.fullyAssignedRequests}{" "}
+                                        / {selectedRequests.length}
                                     </span>
                                 </div>
                                 {selectedRequests.length > 0 && (
                                     <div className="flex justify-between">
-                                        <span className={`${allRequestsFullyAssigned ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
+                                        <span
+                                            className={`${
+                                                allRequestsFullyAssigned
+                                                    ? "text-green-600 dark:text-green-400"
+                                                    : "text-yellow-600 dark:text-yellow-400"
+                                            }`}
+                                        >
                                             Status:
                                         </span>
-                                        <span className={`font-medium ${allRequestsFullyAssigned ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'}`}>
-                                            {allRequestsFullyAssigned ? '✅ Siap Diproses' : '⚠️ Periksa Penugasan'}
+                                        <span
+                                            className={`font-medium ${
+                                                allRequestsFullyAssigned
+                                                    ? "text-green-600 dark:text-green-400"
+                                                    : "text-yellow-600 dark:text-yellow-400"
+                                            }`}
+                                        >
+                                            {allRequestsFullyAssigned
+                                                ? "✅ Siap Diproses"
+                                                : "⚠️ Periksa Penugasan"}
                                         </span>
                                     </div>
                                 )}
@@ -868,7 +1271,9 @@ export default function BulkFulfillment({
 
                         {/* Controls Card */}
                         <div className="bg-white dark:bg-gray-800 p-6 border border-gray-200 dark:border-gray-700 rounded-lg">
-                            <h4 className="mb-4 font-semibold text-gray-900 dark:text-gray-100 text-lg">⚙️ Pengaturan</h4>
+                            <h4 className="mb-4 font-semibold text-gray-900 dark:text-gray-100 text-lg">
+                                ⚙️ Pengaturan
+                            </h4>
                             <div className="space-y-4">
                                 <div>
                                     <label className="block mb-2 font-medium text-gray-700 dark:text-gray-300 text-sm">
@@ -876,12 +1281,20 @@ export default function BulkFulfillment({
                                     </label>
                                     <select
                                         value={strategy}
-                                        onChange={(e) => setStrategy(e.target.value)}
+                                        onChange={(e) =>
+                                            setStrategy(e.target.value)
+                                        }
                                         className="bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md w-full text-gray-900 dark:text-gray-100 text-sm"
                                     >
-                                        <option value="optimal">Optimal (Score Tertinggi)</option>
-                                        <option value="same_section">Prioritas Section Sama</option>
-                                        <option value="balanced">Beban Kerja Merata</option>
+                                        <option value="optimal">
+                                            Optimal (Subsection → ML Score)
+                                        </option>
+                                        <option value="same_section">
+                                            Prioritas Section Sama
+                                        </option>
+                                        <option value="balanced">
+                                            Beban Kerja Merata
+                                        </option>
                                     </select>
                                 </div>
                                 <div>
@@ -893,21 +1306,33 @@ export default function BulkFulfillment({
                                             <input
                                                 type="radio"
                                                 value="private"
-                                                checked={visibility === 'private'}
-                                                onChange={() => setVisibility('private')}
+                                                checked={
+                                                    visibility === "private"
+                                                }
+                                                onChange={() =>
+                                                    setVisibility("private")
+                                                }
                                                 className="mr-2"
                                             />
-                                            <span className="text-gray-700 dark:text-gray-300 text-sm">Private</span>
+                                            <span className="text-gray-700 dark:text-gray-300 text-sm">
+                                                Private
+                                            </span>
                                         </label>
                                         <label className="flex items-center">
                                             <input
                                                 type="radio"
                                                 value="public"
-                                                checked={visibility === 'public'}
-                                                onChange={() => setVisibility('public')}
+                                                checked={
+                                                    visibility === "public"
+                                                }
+                                                onChange={() =>
+                                                    setVisibility("public")
+                                                }
                                                 className="mr-2"
                                             />
-                                            <span className="text-gray-700 dark:text-gray-300 text-sm">Public</span>
+                                            <span className="text-gray-700 dark:text-gray-300 text-sm">
+                                                Public
+                                            </span>
                                         </label>
                                     </div>
                                 </div>
@@ -917,11 +1342,22 @@ export default function BulkFulfillment({
                                         disabled={selectedRequests.length === 0}
                                         className={`flex-1 px-4 py-2 rounded-lg font-medium text-sm ${
                                             selectedRequests.length === 0
-                                                ? 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed'
-                                                : 'bg-green-600 hover:bg-green-700 text-white'
+                                                ? "bg-gray-300 dark:bg-gray-600 cursor-not-allowed"
+                                                : "bg-green-600 hover:bg-green-700 text-white"
                                         }`}
                                     >
                                         Auto Fill Selected
+                                    </button>
+                                    <button
+                                        onClick={handleAutoFillAll}
+                                        disabled={selectedRequests.length === 0}
+                                        className={`flex-1 px-4 py-2 rounded-lg font-medium text-sm ${
+                                            selectedRequests.length === 0
+                                                ? "bg-gray-300 dark:bg-gray-600 cursor-not-allowed"
+                                                : "bg-blue-600 hover:bg-blue-700 text-white"
+                                        }`}
+                                    >
+                                        Auto Fill All (Reset)
                                     </button>
                                     <button
                                         onClick={handleClearAll}
@@ -939,11 +1375,13 @@ export default function BulkFulfillment({
                 <div className="bg-white dark:bg-gray-800 mb-6 p-6 border border-gray-200 dark:border-gray-700 rounded-lg">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-2">
                         <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-lg">
-                            Daftar Request untuk Section "{currentRequest.subSection?.section?.name}"
+                            Daftar Request untuk Section "
+                            {currentRequest.sub_section?.section?.name}"
                         </h4>
                         <div className="flex items-center space-x-2">
                             <span className="text-sm text-gray-600 dark:text-gray-400">
-                                {selectedRequests.length} of {sameSectionRequests.length} selected
+                                {selectedRequests.length} of{" "}
+                                {sameSectionRequests.length} selected
                             </span>
                             <button
                                 onClick={handleSelectAll}
@@ -956,8 +1394,18 @@ export default function BulkFulfillment({
                                     onClick={toggleFullScreen}
                                     className="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-sm rounded flex items-center space-x-1"
                                 >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    <svg
+                                        className="w-4 h-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M6 18L18 6M6 6l12 12"
+                                        />
                                     </svg>
                                     <span>Tutup Full Screen</span>
                                 </button>
@@ -965,15 +1413,26 @@ export default function BulkFulfillment({
                         </div>
                     </div>
 
-                    <div className={`space-y-4 ${isFullScreen ? 'max-h-screen overflow-y-auto' : 'max-h-96 overflow-y-auto'}`}>
+                    <div
+                        className={`space-y-4 ${
+                            isFullScreen
+                                ? "max-h-screen overflow-y-auto"
+                                : "max-h-96 overflow-y-auto"
+                        }`}
+                    >
                         {sameSectionRequests.length > 0 ? (
                             sameSectionRequests.map((request) => {
                                 const requestId = String(request.id);
-                                const isSelected = selectedRequests.includes(requestId);
-                                const isCurrentRequest = requestId === String(currentRequest.id);
-                                const assignedEmployees = bulkSelectedEmployees[requestId] || [];
-                                const config = lineAssignmentConfig[requestId] || {};
-                                const enableLineAssignment = config.enabled || false;
+                                const isSelected =
+                                    selectedRequests.includes(requestId);
+                                const isCurrentRequest =
+                                    requestId === String(currentRequest.id);
+                                const assignedEmployees =
+                                    bulkSelectedEmployees[requestId] || [];
+                                const config =
+                                    lineAssignmentConfig[requestId] || {};
+                                const enableLineAssignment =
+                                    config.enabled || false;
                                 const lineCount = config.lineCount || 2;
                                 const isPutway = isPutwayRequest(request);
 
@@ -982,36 +1441,58 @@ export default function BulkFulfillment({
                                         key={requestId}
                                         className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${
                                             isSelected
-                                                ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600'
-                                                : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:border-gray-300'
-                                        } ${isCurrentRequest ? 'ring-2 ring-yellow-400' : ''}`}
-                                        onClick={() => toggleRequestSelection(requestId)}
+                                                ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600"
+                                                : "bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:border-gray-300"
+                                        } ${
+                                            isCurrentRequest
+                                                ? "ring-2 ring-yellow-400"
+                                                : ""
+                                        }`}
+                                        onClick={() =>
+                                            toggleRequestSelection(requestId)
+                                        }
                                     >
                                         <div className="flex justify-between items-start">
                                             <div className="flex items-start space-x-3 flex-1">
                                                 <input
                                                     type="checkbox"
                                                     checked={isSelected}
-                                                    onChange={() => toggleRequestSelection(requestId)}
+                                                    onChange={() =>
+                                                        toggleRequestSelection(
+                                                            requestId
+                                                        )
+                                                    }
                                                     className="mt-1"
-                                                    onClick={(e) => e.stopPropagation()}
+                                                    onClick={(e) =>
+                                                        e.stopPropagation()
+                                                    }
                                                 />
                                                 <div className="flex-1">
                                                     <div className="flex flex-wrap items-center gap-2 mb-3">
                                                         <div className="font-medium text-gray-900 dark:text-gray-100">
-                                                            {request.shift?.name || 'No Shift'} - {request.requested_amount} orang
+                                                            {request.shift
+                                                                ?.name ||
+                                                                "No Shift"}{" "}
+                                                            -{" "}
+                                                            {
+                                                                request.requested_amount
+                                                            }{" "}
+                                                            orang
                                                         </div>
                                                         <span className="bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300 px-2 py-1 rounded-full text-xs">
-                                                            {request.sub_section?.name || request.subSection?.name}
+                                                            {request.sub_section?.name}
                                                         </span>
                                                         {isCurrentRequest && (
                                                             <span className="bg-yellow-100 dark:bg-yellow-800 px-2 py-1 rounded-full text-yellow-800 dark:text-yellow-200 text-xs">
                                                                 Current Request
                                                             </span>
                                                         )}
-                                                        {(isPutway || enableLineAssignment) && (
+                                                        {(isPutway ||
+                                                            enableLineAssignment) && (
                                                             <span className="bg-purple-100 dark:bg-purple-800 px-2 py-1 rounded-full text-purple-800 dark:text-purple-200 text-xs">
-                                                                Line Assignment ({lineCount} lines)
+                                                                Line Assignment
+                                                                ({lineCount}{" "}
+                                                                lines)
                                                             </span>
                                                         )}
                                                     </div>
@@ -1019,40 +1500,66 @@ export default function BulkFulfillment({
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                                                         <div>
                                                             <div className="text-gray-600 dark:text-gray-400 mb-2">
-                                                                <strong>Kebutuhan Gender:</strong>
+                                                                <strong>
+                                                                    Kebutuhan
+                                                                    Gender:
+                                                                </strong>
                                                             </div>
                                                             <div className="flex flex-wrap gap-2">
-                                                                {request.male_count > 0 && (
+                                                                {request.male_count >
+                                                                    0 && (
                                                                     <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 px-2 py-1 rounded text-xs">
-                                                                        Laki: {request.male_count}
+                                                                        Laki:{" "}
+                                                                        {
+                                                                            request.male_count
+                                                                        }
                                                                     </span>
                                                                 )}
-                                                                {request.female_count > 0 && (
+                                                                {request.female_count >
+                                                                    0 && (
                                                                     <span className="bg-pink-100 dark:bg-pink-900/40 text-pink-800 dark:text-pink-300 px-2 py-1 rounded text-xs">
-                                                                        Perempuan: {request.female_count}
+                                                                        Perempuan:{" "}
+                                                                        {
+                                                                            request.female_count
+                                                                        }
                                                                     </span>
                                                                 )}
                                                                 <span className="bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300 px-2 py-1 rounded text-xs">
-                                                                    Total: {request.requested_amount}
+                                                                    Total:{" "}
+                                                                    {
+                                                                        request.requested_amount
+                                                                    }
                                                                 </span>
                                                             </div>
                                                         </div>
 
                                                         <div>
                                                             <div className="text-gray-600 dark:text-gray-400 mb-2">
-                                                                <strong>Progress Penugasan:</strong>
+                                                                <strong>
+                                                                    Progress
+                                                                    Penugasan:
+                                                                </strong>
                                                             </div>
                                                             <div className="flex items-center space-x-2">
                                                                 <div className="flex-1 bg-gray-200 dark:bg-gray-600 rounded-full h-2">
-                                                                    <div 
+                                                                    <div
                                                                         className="bg-green-500 h-2 rounded-full transition-all"
-                                                                        style={{ 
-                                                                            width: `${(assignedEmployees.length / request.requested_amount) * 100}%` 
+                                                                        style={{
+                                                                            width: `${(
+                                                                                assignedEmployees.length /
+                                                                                request.requested_amount
+                                                                            ) * 100}%`,
                                                                         }}
                                                                     ></div>
                                                                 </div>
                                                                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                                                                    {assignedEmployees.length}/{request.requested_amount}
+                                                                    {
+                                                                        assignedEmployees.length
+                                                                    }
+                                                                    /
+                                                                    {
+                                                                        request.requested_amount
+                                                                    }
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -1067,33 +1574,69 @@ export default function BulkFulfillment({
                                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                                                     <div>
                                                         <span className="text-sm font-medium text-purple-800 dark:text-purple-300">
-                                                            Konfigurasi Line Assignment
+                                                            Konfigurasi Line
+                                                            Assignment
                                                         </span>
                                                         <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-                                                            Pilih jumlah line/group untuk penugasan
+                                                            Pilih jumlah
+                                                            line/group untuk
+                                                            penugasan
                                                         </p>
                                                     </div>
-                                                    <div className="flex items-center space-x-3" onClick={(e) => e.stopPropagation()}>
+                                                    <div
+                                                        className="flex items-center space-x-3"
+                                                        onClick={(e) =>
+                                                            e.stopPropagation()
+                                                        }
+                                                    >
                                                         <label className="flex items-center space-x-2">
                                                             <input
                                                                 type="checkbox"
-                                                                checked={enableLineAssignment}
-                                                                onChange={(e) => handleLineConfigChange(requestId, e.target.checked)}
+                                                                checked={
+                                                                    enableLineAssignment
+                                                                }
+                                                                onChange={(e) =>
+                                                                    handleLineConfigChange(
+                                                                        requestId,
+                                                                        e.target
+                                                                            .checked
+                                                                    )
+                                                                }
                                                                 className="rounded text-purple-600 focus:ring-purple-500"
                                                             />
                                                             <span className="text-sm text-purple-700 dark:text-purple-300">
-                                                                Aktifkan Line Assignment
+                                                                Aktifkan Line
+                                                                Assignment
                                                             </span>
                                                         </label>
                                                         {enableLineAssignment && (
                                                             <select
-                                                                value={lineCount}
-                                                                onChange={(e) => handleLineCountChange(requestId, e.target.value)}
+                                                                value={
+                                                                    lineCount
+                                                                }
+                                                                onChange={(e) =>
+                                                                    handleLineCountChange(
+                                                                        requestId,
+                                                                        e.target
+                                                                            .value
+                                                                    )
+                                                                }
                                                                 className="bg-white dark:bg-gray-700 px-2 py-1 border border-purple-300 dark:border-purple-600 rounded text-sm text-purple-800 dark:text-purple-200"
                                                             >
-                                                                {[2, 3, 4, 5, 6].map(num => (
-                                                                    <option key={num} value={num}>
-                                                                        {num} Lines
+                                                                {[
+                                                                    2, 3, 4, 5,
+                                                                    6,
+                                                                ].map((num) => (
+                                                                    <option
+                                                                        key={
+                                                                            num
+                                                                        }
+                                                                        value={
+                                                                            num
+                                                                        }
+                                                                    >
+                                                                        {num}{" "}
+                                                                        Lines
                                                                     </option>
                                                                 ))}
                                                             </select>
@@ -1111,17 +1654,28 @@ export default function BulkFulfillment({
                                                         Karyawan Terpilih:
                                                     </h5>
                                                     <div className="flex items-center space-x-2">
-                                                        <span className={`text-xs px-2 py-1 rounded-full ${
-                                                            assignedEmployees.length === request.requested_amount
-                                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                                                : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-                                                        }`}>
-                                                            {assignedEmployees.length} / {request.requested_amount}
+                                                        <span
+                                                            className={`text-xs px-2 py-1 rounded-full ${
+                                                                assignedEmployees.length ===
+                                                                request.requested_amount
+                                                                    ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                                                                    : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
+                                                            }`}
+                                                        >
+                                                            {
+                                                                assignedEmployees.length
+                                                            }{" "}
+                                                            /{" "}
+                                                            {
+                                                                request.requested_amount
+                                                            }
                                                         </span>
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                openEmployeeModal(requestId);
+                                                                openEmployeeModal(
+                                                                    requestId
+                                                                );
                                                             }}
                                                             className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
                                                         >
@@ -1131,37 +1685,65 @@ export default function BulkFulfillment({
                                                 </div>
 
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                    {Array.from({ length: request.requested_amount }).map((_, index) => {
-                                                        const employeeId = assignedEmployees[index];
-                                                        const employee = employeeId ? getEmployeeDetails(employeeId) : null;
-                                                        const lineAssignment = (isPutway || enableLineAssignment) && employee ? 
-                                                            getLineAssignment(requestId, employeeId) : null;
+                                                    {Array.from({
+                                                        length: request.requested_amount,
+                                                    }).map((_, index) => {
+                                                        const employeeId =
+                                                            assignedEmployees[
+                                                                index
+                                                            ];
+                                                        const employee =
+                                                            employeeId
+                                                                ? getEmployeeDetails(
+                                                                      employeeId
+                                                                  )
+                                                                : null;
+                                                        const lineAssignment =
+                                                            (isPutway ||
+                                                                enableLineAssignment) &&
+                                                            employee
+                                                                ? getLineAssignment(
+                                                                      requestId,
+                                                                      employeeId
+                                                                  )
+                                                                : null;
 
                                                         return (
                                                             <div
                                                                 key={index}
                                                                 className={`p-3 rounded border ${
                                                                     employee
-                                                                        ? 'border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
-                                                                        : 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700'
+                                                                        ? "border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20"
+                                                                        : "border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700"
                                                                 }`}
                                                             >
                                                                 <div className="flex justify-between items-center mb-2">
                                                                     <span className="text-gray-500 dark:text-gray-400 text-xs">
-                                                                        #{index + 1}
+                                                                        #
+                                                                        {index +
+                                                                            1}
                                                                         {lineAssignment && (
                                                                             <span className="ml-1 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 px-1 rounded text-xs">
-                                                                                Line {lineAssignment}
+                                                                                Line{" "}
+                                                                                {
+                                                                                    lineAssignment
+                                                                                }
                                                                             </span>
                                                                         )}
                                                                     </span>
                                                                     {employee && (
-                                                                        <span className={`text-xs px-1 rounded ${
-                                                                            employee.gender === 'female'
-                                                                                ? 'bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300'
-                                                                                : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
-                                                                        }`}>
-                                                                            {employee.gender === 'female' ? 'P' : 'L'}
+                                                                        <span
+                                                                            className={`text-xs px-1 rounded ${
+                                                                                employee.gender ===
+                                                                                "female"
+                                                                                    ? "bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300"
+                                                                                    : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                                                                            }`}
+                                                                        >
+                                                                            {employee.gender ===
+                                                                            "female"
+                                                                                ? "P"
+                                                                                : "L"}
                                                                         </span>
                                                                     )}
                                                                 </div>
@@ -1169,36 +1751,61 @@ export default function BulkFulfillment({
                                                                 {employee ? (
                                                                     <div className="mb-2">
                                                                         <div className="font-medium text-gray-900 dark:text-gray-100 text-sm truncate">
-                                                                            {employee.name}
+                                                                            {
+                                                                                employee.name
+                                                                            }
                                                                         </div>
                                                                         <div className="text-gray-500 dark:text-gray-400 text-xs truncate">
-                                                                            {employee.type} - {employee.subSections?.[0]?.name || '-'}
+                                                                            {
+                                                                                employee.type
+                                                                            }{" "}
+                                                                            -{" "}
+                                                                            {employee
+                                                                                .subSections?.[0]
+                                                                                ?.name ||
+                                                                                "-"}
                                                                         </div>
                                                                         <div className="text-gray-400 dark:text-gray-500 text-xs mt-1">
-                                                                            Score: {(employee.final_score || 0).toFixed(2)}
+                                                                            ML Score:{" "}
+                                                                            {((
+                                                                                employee.final_score || 0
+                                                                            ) * 100).toFixed(1)}%
                                                                         </div>
                                                                     </div>
                                                                 ) : (
                                                                     <div className="text-gray-500 dark:text-gray-400 text-xs italic mb-2">
-                                                                        Belum dipilih
+                                                                        Belum
+                                                                        dipilih
                                                                     </div>
                                                                 )}
 
                                                                 <div className="flex space-x-2">
                                                                     <button
                                                                         type="button"
-                                                                        onClick={(e) => {
+                                                                        onClick={(
+                                                                            e
+                                                                        ) => {
                                                                             e.stopPropagation();
-                                                                            if (employee) {
-                                                                                handleEmployeeSelect(requestId, employeeId);
+                                                                            if (
+                                                                                employee
+                                                                            ) {
+                                                                                handleEmployeeSelect(
+                                                                                    requestId,
+                                                                                    employeeId
+                                                                                );
                                                                             } else {
                                                                                 // Open employee selection modal for this specific slot
-                                                                                openEmployeeModal(requestId, index);
+                                                                                openEmployeeModal(
+                                                                                    requestId,
+                                                                                    index
+                                                                                );
                                                                             }
                                                                         }}
                                                                         className="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 py-1 rounded text-gray-700 dark:text-gray-300 text-xs transition-colors"
                                                                     >
-                                                                        {employee ? 'Hapus' : 'Pilih Karyawan'}
+                                                                        {employee
+                                                                            ? "Hapus"
+                                                                            : "Pilih Karyawan"}
                                                                     </button>
                                                                 </div>
                                                             </div>
@@ -1207,7 +1814,13 @@ export default function BulkFulfillment({
                                                 </div>
 
                                                 {/* Enhanced Line Assignment Preview with Individual Employee Movement */}
-                                                {renderLineAssignmentPreview(requestId, assignedEmployees, enableLineAssignment, lineCount, isPutway)}
+                                                {renderLineAssignmentPreview(
+                                                    requestId,
+                                                    assignedEmployees,
+                                                    enableLineAssignment,
+                                                    lineCount,
+                                                    isPutway
+                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -1215,9 +1828,12 @@ export default function BulkFulfillment({
                             })
                         ) : (
                             <div className="py-8 text-center">
-                                <div className="text-gray-400 dark:text-gray-500 text-4xl mb-2">📋</div>
+                                <div className="text-gray-400 dark:text-gray-500 text-4xl mb-2">
+                                    📋
+                                </div>
                                 <p className="text-gray-500 dark:text-gray-400">
-                                    Tidak ada request untuk section ini pada tanggal yang sama.
+                                    Tidak ada request untuk section ini pada
+                                    tanggal yang sama.
                                 </p>
                             </div>
                         )}
@@ -1227,23 +1843,45 @@ export default function BulkFulfillment({
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div className="text-gray-600 dark:text-gray-400 text-sm">
-                        {selectedRequests.length} request terpilih • 
-                        {assignmentStats.totalAssigned} dari {assignmentStats.totalSelected} karyawan terisi
+                        {selectedRequests.length} request terpilih •
+                        {assignmentStats.totalAssigned} dari{" "}
+                        {assignmentStats.totalSelected} karyawan terisi
                     </div>
                     <button
                         onClick={handleBulkSubmit}
-                        disabled={processing || selectedRequests.length === 0 || !allRequestsFullyAssigned}
+                        disabled={
+                            processing ||
+                            selectedRequests.length === 0 ||
+                            !allRequestsFullyAssigned
+                        }
                         className={`px-6 py-3 rounded-lg font-semibold text-white transition-colors w-full sm:w-auto ${
-                            processing || selectedRequests.length === 0 || !allRequestsFullyAssigned
-                                ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
-                                : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700'
+                            processing ||
+                            selectedRequests.length === 0 ||
+                            !allRequestsFullyAssigned
+                                ? "bg-gray-400 dark:bg-gray-600 cursor-not-allowed"
+                                : "bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
                         }`}
                     >
                         {processing ? (
                             <span className="flex items-center justify-center">
-                                <svg className="mr-2 w-4 h-4 text-white animate-spin" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                <svg
+                                    className="mr-2 w-4 h-4 text-white animate-spin"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <circle
+                                        className="opacity-25"
+                                        cx="12"
+                                        cy="12"
+                                        r="10"
+                                        stroke="currentColor"
+                                        strokeWidth="4"
+                                    ></circle>
+                                    <path
+                                        className="opacity-75"
+                                        fill="currentColor"
+                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                    ></path>
                                 </svg>
                                 Memproses...
                             </span>
@@ -1268,7 +1906,8 @@ export default function BulkFulfillment({
                 isBulkMode={true}
                 isLoading={false}
                 activeBulkRequest={activeRequestId}
-                bulkRequests={sameSectionRequests.filter(req => selectedRequests.includes(String(req.id)))}
+                bulkRequests={sameSectionRequests
+                    .filter((req) => selectedRequests.includes(String(req.id)))}
                 bulkSelectedEmployees={bulkSelectedEmployees}
                 onBulkEmployeeSelect={handleEmployeeSelect}
                 lineAssignmentConfig={lineAssignmentConfig}
