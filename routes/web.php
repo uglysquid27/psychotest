@@ -182,6 +182,7 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     Route::get('/employee-attendance/section-view', [EmployeeSum::class, 'sectionView'])->name('employee-attendance.section-view');
     Route::get('/employee-attendance/incomplete-profiles', [EmployeeSum::class, 'incompleteProfiles'])
         ->name('employee-attendance.incomplete-profiles');
+    Route::post('/employee-attendance/{employee}/reset-cuti', [EmployeeSum::class, 'resetCuti'])->name('employee-attendance.reset-cuti');
     // routes/web.php
     Route::get('/employee-attendance/incomplete-profiles/export', [EmployeeSum::class, 'exportXls'])
         ->name('employee-attendance.incomplete-profiles.exports');

@@ -220,6 +220,20 @@ class EmployeeSum extends Controller
     }
 }
 
+public function resetCuti(Employee $employee)
+{
+    try {
+        $employee->update([
+            'cuti' => 'no'
+        ]);
+
+        return redirect()->back()->with('success', 'Cuti status reset successfully for ' . $employee->name);
+    } catch (\Exception $e) {
+        Log::error('Error resetting cuti status: ' . $e->getMessage());
+        return redirect()->back()->with('error', 'Failed to reset cuti status. Please try again.');
+    }
+}
+
     public function create(): Response
     {
         $sections = Section::with('subSections')->get();
