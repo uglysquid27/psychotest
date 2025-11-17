@@ -725,18 +725,6 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
         'line_assignments' => 'array',
     ]);
 
-    Log::info('=== BULK FULFILLMENT STARTED ===', [
-        'user_id' => auth()->id(),
-        'user_name' => auth()->user()->name,
-        'request_ids' => $request->request_ids,
-        'request_count' => count($request->request_ids),
-        'strategy' => $request->strategy,
-        'visibility' => $request->visibility,
-        'enable_line_assignment' => $request->enable_line_assignment,
-        'timestamp' => now()->toDateTimeString(),
-        'raw_input' => $request->except(['employee_selections', 'line_assignments']),
-    ]);
-
     DB::beginTransaction();
     try {
         $results = [];
@@ -832,8 +820,6 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
                     $data['line'] = $requestLineAssignments[$employeeId];
                 } elseif ($manpowerRequest->subSection && strtolower($manpowerRequest->subSection->name) === 'putway') {
                     $data['line'] = strval((($index % 2) + 1)); // 1,2,1,2...
-                } else {
-                    $data['line'] = '1'; // Default to line 1
                 }
 
                 $schedule = Schedule::create($data);
@@ -1291,13 +1277,6 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
                     default => 0,
                 };
 
-                // $workloadPoints = $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0;
-                // $blindTestResult = $employee->blindTests->sortByDesc('test_date')->first()->result ?? 'Fail';
-                // $blindTestPoints = $blindTestResult === 'Pass' ? 3 : 0;
-                // $averageRating = $employee->ratings->avg('rating') ?? 0;
-    
-                // $totalScore = ($workloadPoints * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
-                // For auto-assign, use the ML-enhanced final score
                 $baseScore = $this->calculateBaseScore($employee, $weeklyScheduleCount);
                 $mlScore = $this->calculateMLPriorityScore($employee, $request);
                 $totalScore = ($mlScore * 0.7) + ($baseScore * 0.3); // Final ML-enhanced score
@@ -1486,11 +1465,11 @@ public function store(Request $request, $id)
             $currentEmployeeIds = $currentSchedules->pluck('employee_id')->toArray();
             $newEmployeeIds = $validated['employee_ids'];
             
-            // Get line assignments if enabled
-            $lineAssignments = $validated['line_assignments'] ?? [];
+            // Get line assignments if enabled - FIX: Check if line assignment is actually enabled
             $enableLineAssignment = $validated['enable_line_assignment'] ?? false;
+            $lineAssignments = $enableLineAssignment ? ($validated['line_assignments'] ?? []) : [];
 
-            Log::info('Line assignment data received', [
+            Log::info('Line assignment data processed', [
                 'enable_line_assignment' => $enableLineAssignment,
                 'line_assignments_count' => count($lineAssignments),
                 'line_assignments' => $lineAssignments,
@@ -1542,7 +1521,7 @@ public function store(Request $request, $id)
                     'visibility' => $validated['visibility'] ?? 'private',
                 ];
 
-                // Determine line assignment - prioritize line assignments from frontend
+                // FIX: Only set line if line assignment is enabled AND assignment exists
                 if ($enableLineAssignment && isset($lineAssignments[$employeeId])) {
                     // Use the assigned line from line assignments
                     $data['line'] = $lineAssignments[$employeeId];
@@ -1551,17 +1530,17 @@ public function store(Request $request, $id)
                         'line' => $lineAssignments[$employeeId],
                         'line_type' => gettype($lineAssignments[$employeeId])
                     ]);
-                } elseif (strtolower($req->subSection->name) === 'putway') {
-                    // Fallback to default line assignment for putway subsection
+                } elseif ($enableLineAssignment && strtolower($req->subSection->name) === 'putway') {
+                    // Fallback to default line assignment for putway subsection only if enabled
                     $data['line'] = '1'; // Default to line 1 for putway
                     Log::info("Setting default line for putway", [
                         'employee_id' => $employeeId,
                         'line' => $data['line']
                     ]);
                 } else {
-                    // Default to line 1 if no specific assignment
-                    $data['line'] = '1';
-                    Log::info("Setting default line 1", [
+                    // Don't set line field at all if line assignment is disabled
+                    // This will use the database default value or NULL
+                    Log::info("Line assignment disabled - not setting line field", [
                         'employee_id' => $employeeId
                     ]);
                 }
@@ -1572,7 +1551,7 @@ public function store(Request $request, $id)
                 $employee->save();
 
                 Log::info("Employee {$employeeId} assigned to new schedule {$schedule->id}", [
-                    'line' => $data['line'] ?? 'N/A',
+                    'line' => $data['line'] ?? 'N/A (not set)',
                     'line_assignment_enabled' => $enableLineAssignment,
                     'schedule_data' => $data
                 ]);
@@ -1927,125 +1906,157 @@ $totalScore = ($mlScore * 0.7) + ($baseScore * 0.3);
     /**
      * Update the revised fulfillment
      */
-    public function updateRevision(Request $request, $id)
-    {
-        $validated = $request->validate([
-            'employee_ids' => 'required|array',
-            'employee_ids.*' => 'exists:employees,id',
-            'fulfilled_by' => 'required|exists:users,id',
-            'visibility' => 'in:public,private'
-        ]);
+public function updateRevision(Request $request, $id)
+{
+    $validated = $request->validate([
+        'employee_ids' => 'required|array',
+        'employee_ids.*' => 'exists:employees,id',
+        'fulfilled_by' => 'required|exists:users,id',
+        'visibility' => 'in:public,private',
+        'enable_line_assignment' => 'boolean',
+        'line_assignments' => 'array',
+        'line_assignments.*' => 'string',
+    ]);
 
-        $req = ManPowerRequest::with(['schedules.employee', 'subSection'])->findOrFail($id);
+    $req = ManPowerRequest::with(['schedules.employee', 'subSection'])->findOrFail($id);
 
-        // Only allow revision for fulfilled requests
-        if ($req->status !== 'fulfilled') {
-            return back()->withErrors(['revision_error' => 'Hanya permintaan yang sudah terpenuhi yang dapat direvisi.']);
-        }
+    // Only allow revision for fulfilled requests
+    if ($req->status !== 'fulfilled') {
+        return back()->withErrors(['revision_error' => 'Hanya permintaan yang sudah terpenuhi yang dapat direvisi.']);
+    }
 
-        try {
-            DB::transaction(function () use ($validated, $req) {
-                $currentSchedules = $req->schedules;
-                $currentEmployeeIds = $currentSchedules->pluck('employee_id')->toArray();
-                $newEmployeeIds = $validated['employee_ids'];
+    try {
+        DB::transaction(function () use ($validated, $req) {
+            $currentSchedules = $req->schedules;
+            $newEmployeeIds = $validated['employee_ids'];
 
-                // Convert all IDs to strings for consistent comparison
-                $currentEmployeeIds = array_map('strval', $currentEmployeeIds);
-                $newEmployeeIds = array_map('strval', $newEmployeeIds);
+            // FIX: Only get line assignments if enabled
+            $enableLineAssignment = $validated['enable_line_assignment'] ?? false;
+            $lineAssignments = $enableLineAssignment ? ($validated['line_assignments'] ?? []) : [];
 
-                // Hapus yang lama
-                $employeesToRemove = array_diff($currentEmployeeIds, $newEmployeeIds);
-                foreach ($employeesToRemove as $employeeId) {
-                    $schedule = $currentSchedules->where('employee_id', $employeeId)->first();
-                    if ($schedule) {
-                        $employee = $schedule->employee;
-
-                        // Only update status if not assigned elsewhere
-                        $otherAssignments = Schedule::where('employee_id', $employeeId)
-                            ->where('man_power_request_id', '!=', $req->id)
-                            ->where('date', $req->date)
-                            ->count();
-
-                        if ($otherAssignments === 0) {
-                            $employee->status = 'available';
-                            $employee->save();
-                        }
-
-                        $scheduleId = $schedule->id;
-                        $schedule->delete();
-
-                        Log::info("Employee {$employeeId} removed from schedule {$scheduleId} during revision");
-                    } else {
-                        Log::warning("Employee {$employeeId} not found in current schedules for removal (request_id={$req->id})");
-                    }
-                }
-
-                // Tambahkan yang baru
-                $employeesToAdd = array_diff($newEmployeeIds, $currentEmployeeIds);
-                foreach (array_values($employeesToAdd) as $index => $employeeId) {
-                    $employee = Employee::where('id', $employeeId)
-                        ->where(function ($query) {
-                            $query->where('status', 'available')
-                                ->orWhere('status', 'assigned');
-                        })
-                        ->where('cuti', 'no')
-                        ->whereDoesntHave('schedules', function ($query) use ($req) {
-                            $query->where('date', $req->date)
-                                ->where('man_power_request_id', '!=', $req->id);
-                        })
-                        ->first();
-
-                    if (!$employee) {
-                        throw new \Exception("Karyawan ID {$employeeId} tidak tersedia, sedang cuti, atau sudah dijadwalkan pada tanggal ini.");
-                    }
-
-                    $data = [
-                        'employee_id' => $employeeId,
-                        'sub_section_id' => $req->sub_section_id,
-                        'man_power_request_id' => $req->id,
-                        'date' => $req->date,
-                        'visibility' => $validated['visibility'] ?? 'private',
-                    ];
-
-                    // Tambahkan line kalau subsection putway
-                    if (strtolower($req->subSection->name) === 'putway') {
-                        $data['line'] = (($index % 2) + 1); // 1,2,1,2...
-                    }
-
-                    $schedule = Schedule::create($data);
-
-                    $employee->status = 'assigned';
-                    $employee->save();
-
-                    Log::info("Employee {$employeeId} assigned to new schedule {$schedule->id} during revision");
-                }
-
-                // Update request status (still fulfilled but with revision)
-                $req->fulfilled_by = $validated['fulfilled_by'];
-                $req->save();
-
-                Log::info('Manpower request revised', [
-                    'request_id' => $req->id,
-                    'fulfilled_by' => $validated['fulfilled_by'],
-                    'employees_added' => $employeesToAdd,
-                    'employees_removed' => $employeesToRemove,
-                    'date' => $req->date
-                ]);
-            });
-        } catch (\Exception $e) {
-            Log::error('Revision Error: ' . $e->getMessage(), [
-                'exception' => $e,
-                'request_id' => $id,
-                'user_id' => auth()->id()
+            Log::info('=== REVISION STARTED ===', [
+                'request_id' => $req->id,
+                'enable_line_assignment' => $enableLineAssignment,
+                'line_assignments_received' => $lineAssignments,
+                'line_assignments_count' => count($lineAssignments),
+                'new_employee_ids' => $newEmployeeIds,
+                'new_employee_ids_count' => count($newEmployeeIds)
             ]);
 
-            return back()->withErrors(['revision_error' => $e->getMessage()]);
-        }
+            // FIXED: Delete all current schedules first
+            if ($currentSchedules->count() > 0) {
+                foreach ($currentSchedules as $schedule) {
+                    $employee = $schedule->employee;
+                    // Only update status if not assigned elsewhere
+                    $otherAssignments = Schedule::where('employee_id', $employee->id)
+                        ->where('man_power_request_id', '!=', $req->id)
+                        ->where('date', $req->date)
+                        ->count();
 
-        return redirect()
-            ->route('manpower-requests.index')
-            ->with('success', 'Revisi permintaan berhasil disimpan');
+                    if ($otherAssignments === 0) {
+                        $employee->status = 'available';
+                        $employee->save();
+                    }
+                    $schedule->delete();
+                    Log::info("Deleted old schedule for employee {$employee->id}");
+                }
+            }
+
+            // FIXED: Create new schedules - only set line if enabled
+            foreach ($newEmployeeIds as $employeeId) {
+                $employee = Employee::where('id', $employeeId)
+                    ->where(function ($query) {
+                        $query->where('status', 'available')
+                            ->orWhere('status', 'assigned');
+                    })
+                    ->where('cuti', 'no')
+                    ->whereDoesntHave('schedules', function ($query) use ($req) {
+                        $query->where('date', $req->date)
+                            ->where('man_power_request_id', '!=', $req->id);
+                    })
+                    ->first();
+
+                if (!$employee) {
+                    throw new \Exception("Karyawan ID {$employeeId} tidak tersedia, sedang cuti, atau sudah dijadwalkan pada tanggal ini.");
+                }
+
+                $data = [
+                    'employee_id' => $employeeId,
+                    'sub_section_id' => $req->sub_section_id,
+                    'man_power_request_id' => $req->id,
+                    'date' => $req->date,
+                    'visibility' => $validated['visibility'] ?? 'private',
+                ];
+
+                // FIX: Only set line if line assignment is enabled AND assignment exists
+                if ($enableLineAssignment && isset($lineAssignments[$employeeId])) {
+                    $data['line'] = $lineAssignments[$employeeId];
+                    Log::info("✅ SET LINE FROM ASSIGNMENT", [
+                        'employee_id' => $employeeId,
+                        'line' => $lineAssignments[$employeeId],
+                        'line_from_request' => $lineAssignments[$employeeId]
+                    ]);
+                } elseif ($enableLineAssignment && strtolower($req->subSection->name) === 'putway') {
+                    // Only set default for putway if line assignment is enabled
+                    $data['line'] = '1';
+                    Log::info("⚡ SET DEFAULT LINE 1 FOR PUTWAY", [
+                        'employee_id' => $employeeId,
+                        'reason' => 'putway_subsection_with_line_assignment_enabled'
+                    ]);
+                } else {
+                    // Don't set line field at all if line assignment is disabled
+                    Log::info("⚡ LINE FIELD NOT SET", [
+                        'employee_id' => $employeeId,
+                        'reason' => $enableLineAssignment ? 'no_line_assignment_provided' : 'line_assignment_disabled'
+                    ]);
+                }
+
+                $schedule = Schedule::create($data);
+
+                $employee->status = 'assigned';
+                $employee->save();
+
+                Log::info("✅ Employee assigned", [
+                    'employee_id' => $employeeId,
+                    'schedule_id' => $schedule->id,
+                    'final_line' => $data['line'] ?? 'N/A (not set)'
+                ]);
+            }
+
+            // Update request status
+            $req->fulfilled_by = $validated['fulfilled_by'];
+            $req->save();
+
+            // FIXED: Verify the final assignments
+            $finalSchedules = Schedule::where('man_power_request_id', $req->id)->get();
+            $finalLineDistribution = $finalSchedules->groupBy('line')->map->count();
+
+            Log::info('=== REVISION COMPLETED SUCCESSFULLY ===', [
+                'request_id' => $req->id,
+                'total_employees' => count($newEmployeeIds),
+                'line_assignment_enabled' => $enableLineAssignment,
+                'final_line_distribution' => $finalLineDistribution,
+                'schedules_with_line_set' => $finalSchedules->whereNotNull('line')->count(),
+                'schedules_without_line' => $finalSchedules->whereNull('line')->count()
+            ]);
+        });
+    } catch (\Exception $e) {
+        Log::error('=== REVISION FAILED ===', [
+            'error_message' => $e->getMessage(),
+            'error_trace' => $e->getTraceAsString(),
+            'request_id' => $id,
+            'user_id' => auth()->id(),
+            'line_assignments_received' => $validated['line_assignments'] ?? [],
+            'enable_line_assignment' => $validated['enable_line_assignment'] ?? false
+        ]);
+
+        return back()->withErrors(['revision_error' => $e->getMessage()]);
     }
+
+    return redirect()
+        ->route('manpower-requests.index')
+        ->with('success', 'Revisi permintaan berhasil disimpan');
+}
 
     /**
      * Calculate base score with proper workload penalty based on recent schedules

@@ -11,19 +11,16 @@ const LineAssignmentConfig = React.memo(({
     bulkMode = false,
     bulkSelectedEmployees,
     selectedIds,
-    lineAssignments = {}
+    lineAssignments = {} // Use parent's lineAssignments directly
 }) => {
     const config = lineAssignmentConfig[requestId] || { enabled: false, lineCount: 2, lineCounts: [] };
     
-    // Local state
+    // Local state for config only
     const [localConfig, setLocalConfig] = useState({
         enabled: config.enabled,
         lineCount: config.lineCount || 2,
         lineCounts: config.lineCounts || []
     });
-
-    // NEW: Local line assignments state
-    const [localLineAssignments, setLocalLineAssignments] = useState({});
 
     // Sync with parent config
     useEffect(() => {
@@ -33,37 +30,6 @@ const LineAssignmentConfig = React.memo(({
             lineCounts: config.lineCounts || []
         });
     }, [config.enabled, config.lineCount, config.lineCounts]);
-
-    // NEW: Initialize local line assignments from parent
-    useEffect(() => {
-        // console.log('🔄 INITIALIZING LOCAL LINE ASSIGNMENTS FROM PARENT', {
-        //     parentLineAssignments: lineAssignments,
-        //     selectedIds
-        // });
-
-        if (Object.keys(lineAssignments).length > 0) {
-            setLocalLineAssignments(lineAssignments);
-        } else {
-            // Create initial assignments
-            const initialAssignments = {};
-            selectedIds.forEach((id, index) => {
-                initialAssignments[String(id)] = ((index % localConfig.lineCount) + 1).toString();
-            });
-            setLocalLineAssignments(initialAssignments);
-            // console.log('📝 Created initial assignments:', initialAssignments);
-        }
-    }, [lineAssignments, selectedIds, localConfig.lineCount]);
-
-    // Debounced config updates
-    useEffect(() => {
-        const timeoutId = setTimeout(() => {
-            if (JSON.stringify(localConfig) !== JSON.stringify(config)) {
-                handleLineConfigChange(requestId, 'fullConfig', localConfig);
-            }
-        }, 100);
-        
-        return () => clearTimeout(timeoutId);
-    }, [localConfig, config, requestId, handleLineConfigChange]);
 
     // Calculate line counts
     const calculateLineCounts = useCallback((lineCount, requestedAmount) => {
@@ -95,8 +61,6 @@ const LineAssignmentConfig = React.memo(({
                 newLineAssignments[employeeId] = ((index % localConfig.lineCount) + 1).toString();
             });
             
-            setLocalLineAssignments(newLineAssignments);
-            
             // Update parent with all assignments
             Object.entries(newLineAssignments).forEach(([employeeId, line]) => {
                 handleLineConfigChange(requestId, 'line_assignment', {
@@ -123,7 +87,6 @@ const LineAssignmentConfig = React.memo(({
             selectedIds.forEach((id, index) => {
                 newAssignments[String(id)] = ((index % lineCount) + 1).toString();
             });
-            setLocalLineAssignments(newAssignments);
             
             // Update parent
             Object.entries(newAssignments).forEach(([employeeId, line]) => {
@@ -150,7 +113,7 @@ const LineAssignmentConfig = React.memo(({
             .filter(Boolean);
     }, [employeesForLine, getEmployeeDetails]);
 
-    // NEW: Completely different distribution logic - group by actual line assignments
+    // Use parent's lineAssignments directly
     const getEmployeesByLine = useCallback(() => {
         const lines = {};
         
@@ -163,15 +126,15 @@ const LineAssignmentConfig = React.memo(({
             lines[i] = [];
         }
 
-        // console.log('🔄 NEW DISTRIBUTION LOGIC - Grouping by actual assignments', {
-        //     selectedEmployees: selectedEmployees.map(emp => ({ id: emp.id, name: emp.name })),
-        //     localLineAssignments,
-        //     lineCount: localConfig.lineCount
-        // });
+        console.log('🔄 Grouping employees by line assignments:', {
+            selectedEmployees: selectedEmployees.map(emp => ({ id: emp.id, name: emp.name })),
+            lineAssignments: lineAssignments,
+            lineCount: localConfig.lineCount
+        });
 
-        // Group employees by their assigned line
+        // Group employees by their assigned line from parent's lineAssignments
         selectedEmployees.forEach(employee => {
-            const assignedLine = localLineAssignments[employee.id] || '1';
+            const assignedLine = lineAssignments[employee.id] || '1';
             
             if (lines[assignedLine]) {
                 lines[assignedLine].push(employee);
@@ -181,13 +144,13 @@ const LineAssignmentConfig = React.memo(({
             }
         });
 
-        // console.log('✅ FINAL DISTRIBUTION WITH NEW LOGIC');
-        // Object.entries(lines).forEach(([line, employees]) => {
-        //     // console.log(`Line ${line}:`, employees.map(emp => `${emp.name} (${emp.id})`));
-        // });
+        console.log('✅ Final line distribution:', Object.keys(lines).reduce((acc, line) => {
+            acc[line] = lines[line].map(emp => `${emp.name} (${emp.id})`);
+            return acc;
+        }, {}));
 
         return lines;
-    }, [selectedEmployees, localLineAssignments, localConfig.lineCount]);
+    }, [selectedEmployees, lineAssignments, localConfig.lineCount]);
 
     const totalRequested = request.requested_amount;
 
@@ -206,51 +169,43 @@ const LineAssignmentConfig = React.memo(({
         }
     };
 
-    // NEW: Completely different move logic - direct assignment update
+    // Use parent's lineAssignments directly - update parent when moving employees
     const moveEmployee = useCallback((employeeId, fromLine, toLine) => {
-        // console.log('🔄 NEW MOVE LOGIC - Direct assignment update', {
-        //     employeeId,
-        //     fromLine,
-        //     toLine,
-        //     currentAssignments: localLineAssignments
-        // });
+        console.log('🔄 Moving employee:', {
+            employeeId,
+            fromLine,
+            toLine,
+            currentLineAssignments: lineAssignments
+        });
 
         if (fromLine === toLine) {
             console.log('🚫 Same line, no move needed');
             return;
         }
 
-        // Update the local assignment immediately
-        const newAssignments = {
-            ...localLineAssignments,
-            [employeeId]: toLine
-        };
-
-        // console.log('📝 Updated local assignments:', newAssignments);
-        setLocalLineAssignments(newAssignments);
-
-        // Update parent component
+        // Update parent component directly
         handleLineConfigChange(requestId, 'line_assignment', {
             employeeId,
             newLine: toLine
         });
 
-        // console.log('✅ MOVE COMPLETED WITH NEW LOGIC', {
-        //     movedEmployeeId: employeeId,
-        //     fromLine,
-        //     toLine
-        // });
+        console.log('✅ Updated parent with new line assignment');
 
         // Recalculate line counts based on actual assignments
+        const newLineAssignments = {
+            ...lineAssignments,
+            [employeeId]: toLine
+        };
+
         const newLineCounts = Array(localConfig.lineCount).fill(0);
-        Object.values(newAssignments).forEach(line => {
+        Object.values(newLineAssignments).forEach(line => {
             const lineIndex = parseInt(line) - 1;
             if (lineIndex >= 0 && lineIndex < localConfig.lineCount) {
                 newLineCounts[lineIndex]++;
             }
         });
 
-        // console.log('📊 Recalculated line counts:', newLineCounts);
+        console.log('📊 Recalculated line counts:', newLineCounts);
 
         const newConfig = {
             ...localConfig,
@@ -259,21 +214,22 @@ const LineAssignmentConfig = React.memo(({
         
         setLocalConfig(newConfig);
         handleLineConfigChange(requestId, 'fullConfig', newConfig);
-    }, [localLineAssignments, localConfig, requestId, handleLineConfigChange]);
+    }, [lineAssignments, localConfig, requestId, handleLineConfigChange]);
 
     const employeesByLine = getEmployeesByLine();
 
     // Log current state for debugging
-    // useEffect(() => {
-    //     // console.log('📊 CURRENT STATE', {
-    //     //     localLineAssignments,
-    //     //     employeesByLine: Object.keys(employeesByLine).reduce((acc, line) => {
-    //     //         acc[line] = employeesByLine[line].map(emp => `${emp.name} (${emp.id})`);
-    //     //         return acc;
-    //     //     }, {}),
-    //     //     lineCounts: localConfig.lineCounts
-    //     // });
-    // }, [localLineAssignments, employeesByLine, localConfig.lineCounts]);
+    useEffect(() => {
+        console.log('📊 CURRENT LINE ASSIGNMENT STATE', {
+            localConfig,
+            lineAssignments,
+            employeesByLine: Object.keys(employeesByLine).reduce((acc, line) => {
+                acc[line] = employeesByLine[line].map(emp => `${emp.name} (${emp.id})`);
+                return acc;
+            }, {}),
+            selectedIds
+        });
+    }, [localConfig, lineAssignments, employeesByLine, selectedIds]);
 
     // Render functions
     const renderLineConfig = () => (
@@ -381,13 +337,14 @@ const LineAssignmentConfig = React.memo(({
                         <button
                             type="button"
                             onClick={() => {
-                                // Reset all to line 1
+                                console.log('🔄 Resetting all to line 1');
+                                // Reset all to line 1 - update parent directly
                                 const resetAssignments = {};
                                 selectedIds.forEach(id => {
                                     resetAssignments[String(id)] = '1';
                                 });
                                 
-                                setLocalLineAssignments(resetAssignments);
+                                // Update parent with all reset assignments
                                 Object.entries(resetAssignments).forEach(([employeeId, line]) => {
                                     handleLineConfigChange(requestId, 'line_assignment', {
                                         employeeId,
@@ -402,6 +359,8 @@ const LineAssignmentConfig = React.memo(({
                                 };
                                 setLocalConfig(newConfig);
                                 handleLineConfigChange(requestId, 'fullConfig', newConfig);
+                                
+                                console.log('✅ Reset all to line 1 completed');
                             }}
                             className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
                         >
@@ -409,6 +368,13 @@ const LineAssignmentConfig = React.memo(({
                         </button>
                     </div>
                 )}
+
+                {/* Debug Info */}
+                <div className="mt-4 p-3 bg-gray-50 rounded border border-gray-200">
+                    <div className="text-xs text-gray-600">
+                        <strong>Debug Info:</strong> {selectedIds.length} karyawan dipilih, {Object.keys(lineAssignments).length} assignment tersimpan
+                    </div>
+                </div>
             </div>
         </div>
     );
@@ -465,6 +431,9 @@ const LineAssignmentItem = React.memo(({ lineNumber, employees, allocated, getEm
                                     <div className="text-xs text-purple-600">
                                         {emp.nik} • {emp.type}
                                     </div>
+                                    <div className="text-xs text-purple-500 mt-1">
+                                        ID: {emp.id}
+                                    </div>
                                 </div>
                             </div>
                             
@@ -479,12 +448,12 @@ const LineAssignmentItem = React.memo(({ lineNumber, employees, allocated, getEm
                                                     key={targetLine}
                                                     type="button"
                                                     onClick={() => {
-                                                        // console.log('🖱️ MOVE BUTTON CLICKED - NEW LOGIC', {
-                                                        //     employeeId: emp.id,
-                                                        //     employeeName: emp.name,
-                                                        //     fromLine: lineNumber,
-                                                        //     toLine: targetLine
-                                                        // });
+                                                        console.log('🖱️ Move button clicked:', {
+                                                            employeeId: emp.id,
+                                                            employeeName: emp.name,
+                                                            fromLine: lineNumber,
+                                                            toLine: targetLine
+                                                        });
                                                         onMoveEmployee(emp.id, lineNumber, targetLine);
                                                     }}
                                                     className="px-2 py-1 text-xs bg-white border border-purple-300 text-purple-700 rounded hover:bg-purple-50 transition-colors"

@@ -51,11 +51,7 @@ class SimpleMLService
                 throw new \Exception("Insufficient training data. Need at least 10 records.");
             }
 
-            Log::info("Starting ML training", [
-                'training_samples' => count($trainingData),
-                'epochs' => $epochs,
-                'learning_rate' => $learningRate
-            ]);
+            
 
             for ($epoch = 0; $epoch < $epochs; $epoch++) {
                 $totalError = 0;
@@ -105,11 +101,7 @@ class SimpleMLService
             
             $this->saveModel();
 
-            Log::info("ML training completed successfully", [
-                'accuracy' => $this->trainingAccuracy,
-                'final_weights' => $this->weights,
-                'final_bias' => $this->bias
-            ]);
+           
 
             return [
                 'success' => true,
@@ -141,10 +133,7 @@ class SimpleMLService
                 $predictions[] = $this->predictSingle($featureSet);
             }
 
-            Log::debug("ML Predictions generated", [
-                'predictions_count' => count($predictions),
-                'sample_predictions' => array_slice($predictions, 0, 5)
-            ]);
+           
 
             return $predictions;
 
@@ -214,12 +203,7 @@ private function extractFeatures($item)
         }
 
         $accuracy = $correct / $total;
-        
-        Log::debug("Accuracy calculation", [
-            'correct' => $correct,
-            'total' => $total,
-            'accuracy' => $accuracy
-        ]);
+
 
         return $accuracy;
     }
@@ -289,13 +273,6 @@ private function extractFeatures($item)
             $this->bias = $data['bias'];
             $this->isTrained = $data['is_trained'];
             $this->trainingAccuracy = $data['accuracy'] ?? 0.0;
-
-            Log::info("ML Model loaded successfully", [
-                'model_file' => $modelFile,
-                'is_trained' => $this->isTrained,
-                'accuracy' => $this->trainingAccuracy,
-                'weights_count' => count($this->weights)
-            ]);
 
             return true;
 

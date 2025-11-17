@@ -1,3 +1,4 @@
+// In Revise.jsx - FIXED line assignment handling
 import { useForm } from '@inertiajs/react';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
@@ -9,6 +10,7 @@ import GenderStats from './components/GenderStats';
 import EmployeeSelection from './components/EmployeeSelection';
 import ConfirmationSection from './components/ComfirmationSection';
 import EmployeeModal from './components/EmployeeModal';
+import LineAssignmentConfig from './components/LineAssignmentConfig';
 
 export default function Revise({
     request = {},
@@ -42,7 +44,8 @@ export default function Revise({
         male_count: request?.male_count || 0,
         female_count: request?.female_count || 0,
         requested_amount: request?.requested_amount || 0,
-        sub_section_id: request?.sub_section_id || ''
+        sub_section_id: request?.sub_section_id || '',
+        id: request?.id || ''
     }), [request]);
 
     // Safe access to auth
@@ -50,11 +53,10 @@ export default function Revise({
         user: auth?.user || {}
     }), [auth]);
 
-    // Check if this is a putway subsection for line assignments
-    const isPutwaySubsection = useMemo(() => {
-        const subsectionName = safeRequest.sub_section?.name || '';
-        return subsectionName.toLowerCase() === 'putway';
-    }, [safeRequest]);
+    // LINE ASSIGNMENT STATE
+    const [enableLineAssignment, setEnableLineAssignment] = useState(false);
+    const [lineAssignments, setLineAssignments] = useState({});
+    const [lineAssignmentConfig, setLineAssignmentConfig] = useState({});
 
     const normalizeGender = (gender) => {
         if (!gender) {
@@ -74,14 +76,14 @@ export default function Revise({
                 subSections: emp.sub_sections_data || emp.sub_sections || [],
                 gender: normalizeGender(emp.gender),
                 originalGender: emp.gender,
-                isCurrentlyScheduled: (currentScheduledIds || []).includes(emp.id)
+                isCurrentlyScheduled: (currentScheduledIds || []).includes(String(emp.id))
             })),
             ...(otherSubSectionEmployees || []).map(emp => ({
                 ...emp,
                 subSections: emp.sub_sections_data || emp.sub_sections || [],
                 gender: normalizeGender(emp.gender),
                 originalGender: emp.gender,
-                isCurrentlyScheduled: (currentScheduledIds || []).includes(emp.id)
+                isCurrentlyScheduled: (currentScheduledIds || []).includes(String(emp.id))
             }))
         ];
     }, [sameSubSectionEmployees, otherSubSectionEmployees, currentScheduledIds]);
@@ -92,7 +94,6 @@ export default function Revise({
                 return a.isCurrentlyScheduled ? -1 : 1;
             }
 
-            // PRIORITIZE SAME SUBSECTION
             const aIsSame = a.subSections.some(ss => String(ss.id) === String(safeRequest?.sub_section_id));
             const bIsSame = b.subSections.some(ss => String(ss.id) === String(safeRequest?.sub_section_id));
 
@@ -124,21 +125,23 @@ export default function Revise({
         return sorted;
     }, [combinedEmployees, safeRequest]);
 
-
     const getEmployeeDetails = useCallback((id) => {
-        return allSortedEligibleEmployees.find(emp => emp.id === id);
+        const idStr = String(id);
+        return allSortedEligibleEmployees.find(emp => String(emp.id) === idStr);
     }, [allSortedEligibleEmployees]);
 
     const initialSelectedIds = useMemo(() => {
         return (currentScheduledIds || []).filter(id =>
-            allSortedEligibleEmployees.some(e => e.id === id)
+            allSortedEligibleEmployees.some(e => String(e.id) === String(id))
         ).slice(0, safeRequest?.requested_amount || 0);
     }, [allSortedEligibleEmployees, safeRequest?.requested_amount, currentScheduledIds]);
 
     const { data, setData, put, processing, errors } = useForm({
         employee_ids: initialSelectedIds,
         fulfilled_by: safeAuth?.user?.id || '',
-        visibility: 'public'
+        visibility: 'public',
+        enable_line_assignment: false,
+        line_assignments: {}
     });
 
     const [selectedIds, setSelectedIds] = useState(initialSelectedIds);
@@ -147,232 +150,556 @@ export default function Revise({
     const [backendError, setBackendError] = useState(null);
     const [multiSelectMode, setMultiSelectMode] = useState(false);
 
+    // LINE ASSIGNMENT INITIALIZATION
+    useEffect(() => {
+        if (Object.keys(lineAssignments).length === 0 && selectedIds.length > 0) {
+            const currentConfig = lineAssignmentConfig[safeRequest.id] || { enabled: false, lineCount: 2 };
+            const initialLineAssignments = {};
+            
+            selectedIds.forEach((id, index) => {
+                initialLineAssignments[String(id)] = ((index % currentConfig.lineCount) + 1).toString();
+            });
+            
+            setLineAssignments(initialLineAssignments);
+            
+            // Also initialize config
+            const initialConfig = {
+                enabled: false,
+                lineCount: 2,
+                lineCounts: calculateLineCounts(2, safeRequest.requested_amount)
+            };
+            
+            setLineAssignmentConfig({
+                [safeRequest.id]: initialConfig
+            });
+        }
+    }, []);
+
+    // Helper function to calculate line counts
+    const calculateLineCounts = useCallback((lineCount, requestedAmount) => {
+        const baseCount = Math.floor(requestedAmount / lineCount);
+        const remainder = requestedAmount % lineCount;
+        
+        return Array.from({ length: lineCount }, (_, i) => 
+            i < remainder ? baseCount + 1 : baseCount
+        );
+    }, []);
+
     useEffect(() => {
         setData('employee_ids', selectedIds);
-    }, [selectedIds]);
+    }, [selectedIds, setData]);
 
-    const handleSelectEmployee = useCallback((id) => {
-        setSelectedIds(prev => {
-            if (prev.includes(id)) {
-                return prev.filter(i => i !== id);
-            } else {
-                return [...prev, id];
+    // Check if there are any currently scheduled employees
+    const hasScheduledEmployees = useMemo(() => {
+        return selectedIds.some(id => {
+            const emp = allSortedEligibleEmployees.find(e => String(e.id) === id);
+            return emp?.isCurrentlyScheduled;
+        });
+    }, [selectedIds, allSortedEligibleEmployees]);
+
+    const genderStats = useMemo(() => {
+        const stats = {
+            total: 0,
+            male: 0,
+            female: 0,
+            male_bulanan: 0,
+            male_harian: 0,
+            female_bulanan: 0,
+            female_harian: 0,
+            required_male: safeRequest.male_count || 0,
+            required_female: safeRequest.female_count || 0,
+            current_scheduled: 0,
+        };
+
+        selectedIds.forEach((id) => {
+            const emp = allSortedEligibleEmployees.find(
+                (e) => String(e.id) === id
+            );
+            if (emp) {
+                stats.total++;
+                if (emp.isCurrentlyScheduled) {
+                    stats.current_scheduled++;
+                }
+                if (emp.gender === 'female') {
+                    stats.female++;
+                    stats[`female_${emp.type}`]++;
+                } else {
+                    stats.male++;
+                    stats[`male_${emp.type}`]++;
+                }
             }
         });
-    }, []);
+
+        return stats;
+    }, [
+        selectedIds,
+        allSortedEligibleEmployees,
+        safeRequest.male_count,
+        safeRequest.female_count,
+    ]);
+
+    // FIXED: LINE CONFIG CHANGE HANDLER - Properly update enableLineAssignment
+    const handleLineConfigChange = (requestId, type, data) => {
+        console.log('🔄 Line config change:', { requestId, type, data });
+        
+        if (type === 'line_assignment') {
+            const { employeeId, newLine } = data;
+            setLineAssignments(prev => {
+                const newAssignments = {
+                    ...prev,
+                    [employeeId]: newLine
+                };
+                return newAssignments;
+            });
+        } else if (type === 'fullConfig') {
+            setLineAssignmentConfig(prev => {
+                const newConfig = {
+                    ...prev,
+                    [requestId]: data
+                };
+                return newConfig;
+            });
+            
+            // FIXED: Always update enableLineAssignment when config changes
+            if (requestId === String(safeRequest.id)) {
+                console.log('🎯 Setting enableLineAssignment to:', data.enabled);
+                setEnableLineAssignment(data.enabled);
+                // Also update form data
+                setData('enable_line_assignment', data.enabled);
+            }
+        }
+    };
+
+    // Sync enableLineAssignment with the config on mount
+    useEffect(() => {
+        const currentConfig = lineAssignmentConfig[safeRequest.id];
+        if (currentConfig) {
+            console.log('🔄 Syncing enableLineAssignment from config:', currentConfig.enabled);
+            setEnableLineAssignment(currentConfig.enabled);
+            setData('enable_line_assignment', currentConfig.enabled);
+        }
+    }, [lineAssignmentConfig, safeRequest.id, setData]);
+
+    // Employee selection handler
+    const handleSelectEmployee = useCallback((id) => {
+        const stringId = String(id);
+
+        setSelectedIds((prev) => {
+            if (prev.includes(stringId)) {
+                // Remove employee and their line assignment if enabled
+                if (enableLineAssignment) {
+                    setLineAssignments(prevAssignments => {
+                        const newAssignments = { ...prevAssignments };
+                        delete newAssignments[stringId];
+                        return newAssignments;
+                    });
+                }
+                return prev.filter((id) => id !== stringId);
+            }
+            if (prev.length >= safeRequest.requested_amount) {
+                return prev;
+            }
+            
+            const newSelectedIds = [...prev, stringId];
+            
+            // Set default line assignment for new employee if enabled
+            if (enableLineAssignment) {
+                setLineAssignments(prevAssignments => {
+                    const currentConfig = lineAssignmentConfig[safeRequest.id];
+                    const lineCount = currentConfig?.lineCount || 2;
+                    const newLine = ((newSelectedIds.length - 1) % lineCount + 1).toString();
+                    const newAssignments = {
+                        ...prevAssignments,
+                        [stringId]: newLine
+                    };
+                    return newAssignments;
+                });
+            }
+            
+            return newSelectedIds;
+        });
+    }, [safeRequest.requested_amount, enableLineAssignment, lineAssignmentConfig, safeRequest.id]);
 
     const handleRemoveEmployee = useCallback((id) => {
-        setSelectedIds(prev => prev.filter(i => i !== id));
-    }, []);
+        const idStr = String(id);
+        setSelectedIds(prev => {
+            const newSelectedIds = prev.filter(i => i !== idStr);
+            
+            // Remove line assignment
+            if (enableLineAssignment) {
+                setLineAssignments(prevAssignments => {
+                    const newAssignments = { ...prevAssignments };
+                    delete newAssignments[idStr];
+                    return newAssignments;
+                });
+            }
+            
+            return newSelectedIds;
+        });
+    }, [enableLineAssignment]);
 
     const handleReplaceEmployee = useCallback((index) => {
         setChangingEmployeeIndex(index);
         setShowModal(true);
+        setMultiSelectMode(false);
     }, []);
 
     const handleModalSelect = useCallback((employee) => {
         if (changingEmployeeIndex !== null) {
-            setSelectedIds(prev => {
-                const newIds = [...prev];
-                newIds[changingEmployeeIndex] = employee.id;
-                return newIds;
-            });
-        } else if (multiSelectMode) {
-            handleSelectEmployee(employee.id);
+            const newSelectedIds = [...selectedIds];
+            const newEmployeeId = String(employee.id);
+            const oldEmployeeId = newSelectedIds[changingEmployeeIndex];
+            
+            // Check if the employee is already selected at a different position
+            const existingIndex = newSelectedIds.findIndex(id => String(id) === newEmployeeId);
+            
+            if (existingIndex !== -1) {
+                // If employee is already selected elsewhere, swap positions
+                const temp = newSelectedIds[changingEmployeeIndex];
+                newSelectedIds[changingEmployeeIndex] = newSelectedIds[existingIndex];
+                newSelectedIds[existingIndex] = temp;
+                
+                // Update line assignments if line assignment is enabled
+                if (enableLineAssignment) {
+                    setLineAssignments(prev => {
+                        const newAssignments = { ...prev };
+                        const tempLine = newAssignments[oldEmployeeId];
+                        const existingLine = newAssignments[newEmployeeId];
+                        
+                        // Swap the line assignments
+                        newAssignments[newEmployeeId] = tempLine;
+                        newAssignments[oldEmployeeId] = existingLine;
+                        
+                        return newAssignments;
+                    });
+                }
+            } else {
+                // Simply replace the employee at the specified index
+                newSelectedIds[changingEmployeeIndex] = newEmployeeId;
+                
+                // Update line assignments if line assignment is enabled
+                if (enableLineAssignment) {
+                    setLineAssignments(prev => {
+                        const currentLine = prev[oldEmployeeId];
+                        const newAssignments = { ...prev };
+                        
+                        // Transfer line assignment from old to new employee
+                        newAssignments[newEmployeeId] = currentLine;
+                        delete newAssignments[oldEmployeeId];
+                        
+                        return newAssignments;
+                    });
+                }
+            }
+            
+            setSelectedIds(newSelectedIds);
+            setChangingEmployeeIndex(null);
         } else {
-            setSelectedIds(prev => [...prev, employee.id]);
+            // Handle direct employee selection
+            handleSelectEmployee(employee.id);
         }
+        
         setShowModal(false);
-        setChangingEmployeeIndex(null);
-        setMultiSelectMode(false);
-    }, [changingEmployeeIndex, handleSelectEmployee, multiSelectMode]);
+    }, [changingEmployeeIndex, handleSelectEmployee, selectedIds, enableLineAssignment]);
 
- const handleSubmit = (e) => {
+    // FIXED: SUBMIT HANDLER - Only submit line assignments when enabled
+    const handleSubmit = (e) => {
         e.preventDefault();
         setBackendError(null);
 
-        if (selectedIds.length !== (safeRequest?.requested_amount || 0)) {
-            setBackendError(`Jumlah karyawan yang dipilih harus ${safeRequest?.requested_amount}`);
-            return;
+        const stringSelectedIds = selectedIds.map(id => String(id));
+        
+        const processedLineAssignments = {};
+        
+        // ONLY process line assignments if line assignment is enabled
+        if (enableLineAssignment) {
+            Object.entries(lineAssignments).forEach(([employeeId, line]) => {
+                // Only include assignments for currently selected employees
+                if (stringSelectedIds.includes(String(employeeId))) {
+                    processedLineAssignments[String(employeeId)] = String(line);
+                }
+            });
         }
 
-        put(route('manpower-requests.update-revision', safeRequest?.id), {
-            data: { // Wrap data in data property
-                employee_ids: selectedIds,
-                fulfilled_by: safeAuth?.user?.id || '',
-                visibility: data.visibility
-            },
+        const currentConfig = lineAssignmentConfig[safeRequest.id] || {};
+        const isLineAssignmentEnabled = currentConfig.enabled || enableLineAssignment;
+
+        console.log('🎯 REVISION SUBMISSION DATA:', {
+            employee_ids: stringSelectedIds,
+            enable_line_assignment: isLineAssignmentEnabled,
+            enableLineAssignment_state: enableLineAssignment,
+            currentConfig_enabled: currentConfig.enabled,
+            line_assignments: processedLineAssignments,
+            line_assignments_count: Object.keys(processedLineAssignments).length,
+            should_submit_line_assignments: isLineAssignmentEnabled
+        });
+
+        // FIXED: Only send line_assignments if line assignment is enabled
+        put(route('manpower-requests.update-revision', safeRequest.id), {
+            employee_ids: stringSelectedIds,
+            fulfilled_by: safeAuth.user.id,
+            visibility: data.visibility,
+            enable_line_assignment: isLineAssignmentEnabled,
+            line_assignments: isLineAssignmentEnabled ? processedLineAssignments : {}, // Send empty object if disabled
+            is_revision: true,
+        }, {
+            preserveScroll: true,
             onSuccess: () => {
-                // Optional: Add any success handling here
-                console.log('Revision successful');
+                console.log('✅ Revision successful');
+                router.visit(route("manpower-requests.index"));
             },
             onError: (errors) => {
+                console.error('❌ Revision failed:', errors);
                 if (errors.revision_error) {
                     setBackendError(errors.revision_error);
-                } else if (errors.message) {
-                    setBackendError(errors.message);
-                } else {
-                    setBackendError('Terjadi kesalahan saat menyimpan revisi');
                 }
-            }
+            },
         });
     };
 
     const selectedEmployees = useMemo(() => {
         return selectedIds.map(id =>
-            allSortedEligibleEmployees.find(emp => emp.id === id)
+            allSortedEligibleEmployees.find(emp => String(emp.id) === String(id))
         ).filter(Boolean);
     }, [selectedIds, allSortedEligibleEmployees]);
 
-    const genderStats = useMemo(() => {
-        const stats = { male: 0, female: 0 };
-        selectedEmployees.forEach(emp => {
-            if (emp.gender === 'male') stats.male++;
-            else if (emp.gender === 'female') stats.female++;
-        });
-        return stats;
-    }, [selectedEmployees]);
-
     const handleAddEmployee = () => {
-        setMultiSelectMode(true);
-        setShowModal(true);
+        if (selectedIds.length < safeRequest.requested_amount) {
+            setMultiSelectMode(true);
+            setShowModal(true);
+            setChangingEmployeeIndex(null);
+        }
     };
 
     const handleMultiSelect = useCallback((newSelectedIds) => {
-    // Validate gender requirements
-    const selectedEmployees = newSelectedIds.map(id =>
-        allSortedEligibleEmployees.find(e => e.id === id)
-    ).filter(Boolean);
+        // Validate gender requirements
+        const selectedEmployees = newSelectedIds.map(id =>
+            allSortedEligibleEmployees.find(e => String(e.id) === String(id))
+        ).filter(Boolean);
 
-    const maleCount = selectedEmployees.filter(e => e.gender === 'male').length;
-    const femaleCount = selectedEmployees.filter(e => e.gender === 'female').length;
+        const maleCount = selectedEmployees.filter(e => e.gender === 'male').length;
+        const femaleCount = selectedEmployees.filter(e => e.gender === 'female').length;
 
-    if (safeRequest.male_count > 0 && maleCount > safeRequest.male_count) {
-        alert(`Maksimum ${safeRequest.male_count} karyawan laki-laki diperbolehkan`);
-        return false;
-    }
+        if (safeRequest.male_count > 0 && maleCount > safeRequest.male_count) {
+            alert(`Maksimum ${safeRequest.male_count} karyawan laki-laki diperbolehkan`);
+            return false;
+        }
 
-    if (safeRequest.female_count > 0 && femaleCount > safeRequest.female_count) {
-        alert(`Maksimum ${safeRequest.female_count} karyawan perempuan diperbolehkan`);
-        return false;
-    }
+        if (safeRequest.female_count > 0 && femaleCount > safeRequest.female_count) {
+            alert(`Maksimum ${safeRequest.female_count} karyawan perempuan diperbolehkan`);
+            return false;
+        }
 
-    // If validation passes, update the selection
-    setSelectedIds(newSelectedIds);
-    return true;
-}, [allSortedEligibleEmployees, safeRequest.male_count, safeRequest.female_count]);
+        // If validation passes, update the selection
+        setSelectedIds(newSelectedIds);
+        
+        // Update line assignments for new selection if enabled
+        if (enableLineAssignment) {
+            const newLineAssignments = {};
+            newSelectedIds.forEach((id, index) => {
+                const currentConfig = lineAssignmentConfig[safeRequest.id];
+                const lineCount = currentConfig?.lineCount || 2;
+                newLineAssignments[String(id)] = ((index % lineCount) + 1).toString();
+            });
+            setLineAssignments(newLineAssignments);
+        }
+        
+        return true;
+    }, [allSortedEligibleEmployees, safeRequest.male_count, safeRequest.female_count, enableLineAssignment, lineAssignmentConfig, safeRequest.id]);
 
-const selectNewEmployee = useCallback((employeeId) => {
-    if (changingEmployeeIndex !== null) {
-        // Replace specific employee
-        setSelectedIds(prev => {
-            const newIds = [...prev];
-            newIds[changingEmployeeIndex] = employeeId;
-            return newIds;
-        });
-        setChangingEmployeeIndex(null);
-    } else if (multiSelectMode) {
-        // Toggle selection in multi-select mode
-        setSelectedIds(prev => {
-            if (prev.includes(employeeId)) {
-                return prev.filter(id => id !== employeeId);
-            } else {
-                return [...prev, employeeId];
+    const selectNewEmployee = useCallback((employee) => {
+        const employeeIdStr = String(employee.id);
+
+        if (changingEmployeeIndex !== null) {
+            const oldEmployeeId = selectedIds[changingEmployeeIndex];
+            
+            setSelectedIds(prev => {
+                const newIds = [...prev];
+                newIds[changingEmployeeIndex] = employeeIdStr;
+                return newIds;
+            });
+
+            // Update line assignments if enabled
+            if (enableLineAssignment && lineAssignments[oldEmployeeId]) {
+                setLineAssignments(prevAssignments => {
+                    const currentLine = prevAssignments[oldEmployeeId];
+                    const newAssignments = { ...prevAssignments };
+                    
+                    newAssignments[employeeIdStr] = currentLine;
+                    delete newAssignments[oldEmployeeId];
+                    
+                    return newAssignments;
+                });
             }
+            
+            setChangingEmployeeIndex(null);
+        } else if (multiSelectMode) {
+            handleSelectEmployee(employeeIdStr);
+        } else {
+            if (selectedIds.length < safeRequest.requested_amount) {
+                handleSelectEmployee(employeeIdStr);
+            }
+        }
+        setShowModal(false);
+    }, [changingEmployeeIndex, multiSelectMode, handleSelectEmployee, selectedIds, safeRequest.requested_amount, enableLineAssignment, lineAssignments]);
+
+    const lineAssignmentsForDisplay = useMemo(() => {
+        if (!enableLineAssignment) return {};
+
+        const assignments = {};
+        selectedIds.forEach((id, index) => {
+            assignments[id] = lineAssignments[id] || ((index % 2) + 1).toString();
         });
-    } else {
-        // Add new employee (single select)
-        setSelectedIds(prev => [...prev, employeeId]);
-    }
-    setShowModal(false);
-}, [changingEmployeeIndex, multiSelectMode]);
+        return assignments;
+    }, [enableLineAssignment, selectedIds, lineAssignments]);
 
+    const handleCloseModal = useCallback(() => {
+        setShowModal(false);
+        setChangingEmployeeIndex(null);
+        setMultiSelectMode(false);
+    }, []);
 
-return (
-    <AuthenticatedLayout
-        user={safeAuth?.user || {}}
-        header={<h2 className="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">Revisi Pemenuhan Permintaan</h2>}
-    >
-        <div className="py-6">
-            <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                <div className="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
-                    <div className="p-6 text-gray-900 dark:text-gray-100">
-                        {/* Wrap everything in a form element */}
-                        <form onSubmit={handleSubmit}>
-                            <div className="mb-6">
-                                <h1 className="text-2xl font-bold mb-2">Revisi Pemenuhan Permintaan</h1>
-                                <p className="text-gray-600 dark:text-gray-400">
-                                    Revisi penugasan karyawan untuk permintaan yang sudah terpenuhi
-                                </p>
-                            </div>
+    // Debug line assignment state
+    useEffect(() => {
+        console.log('🔍 LINE ASSIGNMENT STATE:', {
+            enableLineAssignment,
+            lineAssignments,
+            lineAssignmentConfig: lineAssignmentConfig[safeRequest.id],
+            selectedIds
+        });
+    }, [enableLineAssignment, lineAssignments, lineAssignmentConfig, safeRequest.id, selectedIds]);
 
-                            {backendError && (
-                                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-                                    {backendError}
-                                </div>
-                            )}
-
-                            <RequestDetails request={safeRequest} auth={safeAuth} />
-
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-                                <div className="lg:col-span-2">
-                                    <EmployeeSelection
-                                        selectedEmployees={selectedEmployees}
-                                        selectedIds={selectedIds}
-                                        request={safeRequest}
-                                        isPutwaySubsection={isPutwaySubsection}
-                                        onReplaceEmployee={handleReplaceEmployee}
-                                        onRemoveEmployee={handleRemoveEmployee}
-                                        onAddEmployee={handleAddEmployee}
-                                        isRevision={true}
-                                        auth={safeAuth}
-                                        getEmployeeDetails={getEmployeeDetails}
-                                        openChangeModal={handleReplaceEmployee}
-                                        lineAssignments={{}}
-                                    />
+    return (
+        <AuthenticatedLayout
+            user={safeAuth?.user || {}}
+            header={<h2 className="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">Revisi Pemenuhan Permintaan</h2>}
+        >
+            <div className="py-6">
+                <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                    <div className="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
+                        <div className="p-6 text-gray-900 dark:text-gray-100">
+                            <form onSubmit={handleSubmit}>
+                                <div className="mb-6">
+                                    <h1 className="text-2xl font-bold mb-2">Revisi Pemenuhan Permintaan</h1>
+                                    <p className="text-gray-600 dark:text-gray-400">
+                                        Revisi penugasan karyawan untuk permintaan yang sudah terpenuhi
+                                    </p>
                                 </div>
 
-                                <div className="space-y-6">
-                                    <GenderStats
-                                        genderStats={genderStats}
-                                        request={safeRequest}
-                                    />
+                                {backendError && (
+                                    <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                                        {backendError}
+                                    </div>
+                                )}
 
-                                    <ConfirmationSection
-                                        data={data}
-                                        setData={setData}
-                                        processing={processing}
-                                        errors={errors}
-                                        onSubmit={handleSubmit}
-                                        isRevision={true}
-                                        auth={safeAuth}
-                                    />
+                                <RequestDetails request={safeRequest} auth={safeAuth} />
+
+                                {safeRequest.status === "fulfilled" && (
+                                    <div className="bg-blue-50 dark:bg-blue-900/20 shadow-md mb-6 p-4 border border-blue-200 dark:border-blue-700 rounded-lg">
+                                        <h3 className="mb-3 font-bold text-blue-800 dark:text-blue-300 text-lg">
+                                            Informasi Jadwal Saat Ini
+                                        </h3>
+                                        <p className="text-blue-700 dark:text-blue-300">
+                                            {genderStats.current_scheduled} dari{" "}
+                                            {safeRequest.requested_amount} karyawan sudah
+                                            dijadwalkan sebelumnya.
+                                        </p>
+                                        <p className="mt-1 text-blue-700 dark:text-blue-300">
+                                            Anda dapat mengganti karyawan yang menolak atau
+                                            membiarkan yang sudah menerima.
+                                        </p>
+                                    </div>
+                                )}
+
+                                <GenderStats
+                                    genderStats={genderStats}
+                                    request={safeRequest}
+                                    selectedIds={selectedIds}
+                                    allSortedEligibleEmployees={allSortedEligibleEmployees}
+                                />
+
+                                <LineAssignmentConfig
+                                    requestId={safeRequest.id}
+                                    request={safeRequest}
+                                    lineAssignmentConfig={lineAssignmentConfig}
+                                    handleLineConfigChange={handleLineConfigChange}
+                                    getEmployeeDetails={getEmployeeDetails}
+                                    bulkMode={false}
+                                    bulkSelectedEmployees={{}}
+                                    selectedIds={selectedIds}
+                                    lineAssignments={lineAssignments}
+                                />
+
+                                <div className="bg-white dark:bg-gray-800 shadow-md mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                                    <h3 className="mb-3 font-bold text-gray-900 dark:text-gray-100 text-lg">
+                                        Visibility
+                                    </h3>
+                                    <div className="flex items-center space-x-4">
+                                        <label className="flex items-center">
+                                            <input
+                                                type="radio"
+                                                name="visibility"
+                                                value="private"
+                                                checked={data.visibility === "private"}
+                                                onChange={() => setData("visibility", "private")}
+                                                className="mr-2"
+                                            />
+                                            <span className="text-gray-700 dark:text-gray-300">
+                                                Private
+                                            </span>
+                                        </label>
+                                        <label className="flex items-center">
+                                            <input
+                                                type="radio"
+                                                name="visibility"
+                                                value="public"
+                                                checked={data.visibility === "public"}
+                                                onChange={() => setData("visibility", "public")}
+                                                className="mr-2"
+                                            />
+                                            <span className="text-gray-700 dark:text-gray-300">
+                                                Public
+                                            </span>
+                                        </label>
+                                    </div>
                                 </div>
-                            </div>
-                        </form>
+
+                                <EmployeeSelection
+                                    request={safeRequest}
+                                    selectedIds={selectedIds}
+                                    getEmployeeDetails={getEmployeeDetails}
+                                    openChangeModal={handleReplaceEmployee}
+                                    multiSelectMode={multiSelectMode}
+                                    toggleMultiSelectMode={() => setMultiSelectMode(!multiSelectMode)}
+                                    enableLineAssignment={enableLineAssignment}
+                                    lineAssignments={lineAssignmentsForDisplay}
+                                />
+
+                                <ConfirmationSection
+                                    auth={safeAuth}
+                                    processing={processing}
+                                    isBulkMode={false}
+                                    isRevision={true}
+                                />
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        {/* Modal code remains outside the form */}
-        {showModal && (
             <EmployeeModal
                 showModal={showModal}
-                setShowModal={() => {
-                    setShowModal(false);
-                    setChangingEmployeeIndex(null);
-                    setMultiSelectMode(false);
-                }}
+                setShowModal={handleCloseModal}
                 request={safeRequest}
                 allSortedEligibleEmployees={allSortedEligibleEmployees}
                 selectedIds={selectedIds}
                 selectNewEmployee={selectNewEmployee}
                 handleMultiSelect={handleMultiSelect}
                 multiSelectMode={multiSelectMode}
-                toggleMultiSelectMode={() => setMultiSelectMode(prev => !prev)}
+                toggleMultiSelectMode={() => setMultiSelectMode(!multiSelectMode)}
+                isBulkMode={false}
+                isLoading={false}
             />
-        )}
-    </AuthenticatedLayout>
-);
+        </AuthenticatedLayout>
+    );
 }

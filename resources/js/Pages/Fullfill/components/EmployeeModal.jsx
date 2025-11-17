@@ -1,4 +1,4 @@
-// components/EmployeeModal.jsx - FIXED with proper error handling
+// components/EmployeeModal.jsx - FIXED with proper single select handling
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import IncompleteSelectionModal from './IncompleteSelectionModal';
@@ -242,6 +242,7 @@ export default function EmployeeModal({
         return photoPath;
     };
 
+    // FIXED: Proper single select handling - pass employee object instead of just ID
     const toggleEmployeeSelection = (employeeId) => {
         console.log('🎯 toggleEmployeeSelection called', { 
             employeeId, 
@@ -257,19 +258,21 @@ export default function EmployeeModal({
         }
         
         if (!multiSelectMode) {
-            // In single mode, we're either replacing an employee or selecting a new one
+            // SINGLE SELECT MODE - Just select the employee and close modal
             const selectedEmployee = allSortedEligibleEmployees.find(emp => emp && String(emp.id) === String(employeeId));
             console.log('🔍 Selected employee for single mode:', selectedEmployee);
             
             if (selectedEmployee) {
+                // FIX: Pass the employee OBJECT, not just the ID
                 selectNewEmployee(selectedEmployee);
+                setShowModal(false); // Close modal after selection
             } else {
                 console.error('❌ Employee not found:', employeeId);
             }
             return;
         }
 
-        // Multi-select mode logic
+        // MULTI-SELECT MODE logic
         setTempSelectedIds(prev => {
             const prevStr = prev.map(id => String(id));
             const employeeIdStr = String(employeeId);
@@ -543,8 +546,19 @@ export default function EmployeeModal({
                     </div>
                 )}
 
+                {/* Single Select Mode Indicator */}
+                {!multiSelectMode && !bulkSelectionMode && (
+                    <div className="absolute top-2 right-2">
+                        <div className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 ${
+                            isSelectedInSingle 
+                                ? 'bg-blue-500 border-blue-500' 
+                                : 'border-gray-300 dark:border-gray-600'
+                        }`} />
+                    </div>
+                )}
+
                 <div className="flex justify-between items-start">
-                    <div className={`flex ${multiSelectMode ? 'pr-8' : ''}`}>
+                    <div className={`flex ${multiSelectMode ? 'pr-8' : 'pr-8'}`}>
                         <div className="min-w-0 flex-1">
                             <strong className="text-gray-900 dark:text-gray-100 text-sm sm:text-base block truncate">
                                 {emp.name || 'Unknown Name'}
