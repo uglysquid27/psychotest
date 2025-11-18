@@ -1,5 +1,5 @@
 <?php
-// app/Http/Controllers/ManPowerRequestFulfillmentController.php
+// app/Http\Controllers\ManPowerRequestFulfillmentController.php
 
 namespace App\Http\Controllers;
 
@@ -10,7 +10,6 @@ use App\Models\Workload;
 use App\Models\BlindTest;
 use App\Models\Rating;
 use App\Services\SimpleMLService;
-use App\Services\PHPMachineLearning;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Carbon\Carbon;
@@ -38,7 +37,6 @@ class ManPowerRequestFulfillmentController extends Controller
             ]);
         }
 
-        // Get same day requests for ALL subsections (not just same subsection)
         $sameDayRequests = ManPowerRequest::with(['subSection', 'shift'])
             ->where('date', $request->date)
             ->where('id', '!=', $request->id)
@@ -54,7 +52,6 @@ class ManPowerRequestFulfillmentController extends Controller
 
         $currentScheduledIds = $request->schedules->pluck('employee_id')->toArray();
 
-        // FIX: Properly eager load subSections with section relationship
         $eligibleEmployees = Employee::where(function ($query) use ($currentScheduledIds) {
             $query->where('status', 'available')
                 ->orWhereIn('id', $currentScheduledIds);
@@ -63,7 +60,7 @@ class ManPowerRequestFulfillmentController extends Controller
             ->whereNotIn('id', array_diff($scheduledEmployeeIdsOnRequestDate, $currentScheduledIds))
             ->with([
                 'subSections' => function ($query) {
-                    $query->with('section'); // Ensure section is loaded with each subsection
+                    $query->with('section');
                 },
                 'workloads',
                 'blindTests',
@@ -86,29 +83,19 @@ class ManPowerRequestFulfillmentController extends Controller
 
                 $weeklyScheduleCount = $employee->schedules_count;
 
-                // Calculate work days for 14 days and 30 days
                 $workDays14Days = $this->getWorkDaysCount($employee, 14);
                 $workDays30Days = $this->getWorkDaysCount($employee, 30);
-                
-                // Get last 5 shifts
                 $last5Shifts = $this->getLastShifts($employee, 5);
 
                 $workloadPoints = $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0;
-
                 $blindTestResult = $employee->blindTests->sortByDesc('test_date')->first()->result ?? 'Fail';
                 $blindTestPoints = $blindTestResult === 'Pass' ? 3 : 0;
-
                 $averageRating = $employee->ratings->avg('rating') ?? 0;
 
                 $totalScore = ($workloadPoints * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
-
-                // ADD ML SCORE CALCULATION
                 $mlScore = $this->calculateMLPriorityScore($employee, $request);
-
-                // COMBINE WITH ML SCORE (70% ML + 30% existing logic)
                 $finalScore = ($mlScore * 0.7) + ($totalScore * 0.3);
 
-                // FIX: Properly include section data in subSectionsData
                 $subSectionsData = $employee->subSections->map(function ($subSection) {
                     return [
                         'id' => $subSection->id,
@@ -139,16 +126,14 @@ class ManPowerRequestFulfillmentController extends Controller
                     'blind_test_points' => $blindTestPoints,
                     'average_rating' => $averageRating,
                     'total_score' => $totalScore,
-                    'ml_score' => $mlScore, // NEW: ML priority score
-                    'final_score' => $finalScore, // NEW: Combined score
-                    // NEW: Work days and shift history
+                    'ml_score' => $mlScore,
+                    'final_score' => $finalScore,
                     'work_days_14_days' => $workDays14Days,
                     'work_days_30_days' => $workDays30Days,
                     'last_5_shifts' => $last5Shifts,
                 ];
             });
 
-        // FIX: Updated helper function to properly check section matching
         $splitEmployeesBySubSection = function ($employees, $request) {
             $requestSubSectionId = $request->sub_section_id;
             $requestSectionId = $request->subSection->section_id ?? null;
@@ -178,11 +163,9 @@ class ManPowerRequestFulfillmentController extends Controller
             return [$same, $other];
         };
 
-        // UPDATE: Sort by final_score (ML-enhanced) instead of total_score
         $sortEmployees = function ($employees) {
-            return $employees->sortByDesc('final_score') // Use ML-enhanced score
+            return $employees->sortByDesc('final_score')
                 ->sortByDesc(fn($employee) => $employee['type'] === 'bulanan' ? 1 : 0)
-                ->sortBy('working_day_weight')
                 ->values();
         };
 
@@ -191,7 +174,6 @@ class ManPowerRequestFulfillmentController extends Controller
         $sortedSameSubSectionEmployees = $sortEmployees($sameSubSectionEligible);
         $sortedOtherSubSectionEmployees = $sortEmployees($otherSubSectionEligible);
 
-        // Get ML status for frontend
         $mlService = app(SimpleMLService::class);
         $mlStatus = $mlService->isModelTrained() ? 'trained' : 'not_trained';
         $mlAccuracy = null;
@@ -201,40 +183,24 @@ class ManPowerRequestFulfillmentController extends Controller
             $mlAccuracy = isset($modelInfo['accuracy']) ? round($modelInfo['accuracy'] * 100, 1) : null;
         }
 
-        // Debug logging to help identify issues
-        Log::info('Fulfillment Request Details', [
-            'request_id' => $request->id,
-            'request_sub_section_id' => $request->sub_section_id,
-            'request_section_id' => $request->subSection->section_id ?? null,
-            'total_employees' => $eligibleEmployees->count(),
-            'same_subsection_count' => $sameSubSectionEligible->count(),
-            'other_subsection_count' => $otherSubSectionEligible->count(),
-            'same_day_requests_count' => $sameDayRequests->count(),
+        return Inertia::render('Fullfill/Fulfill', [
+            'request' => $request,
+            'sameSubSectionEmployees' => $sortedSameSubSectionEmployees,
+            'otherSubSectionEmployees' => $sortedOtherSubSectionEmployees,
+            'currentScheduledIds' => $currentScheduledIds,
+            'sameDayRequests' => $sameDayRequests,
             'ml_status' => $mlStatus,
             'ml_accuracy' => $mlAccuracy,
+            'ml_features' => [
+                'work_days_14_days' => 'Work Days (14 days)',
+                'work_days_30_days' => 'Work Days (30 days)', 
+                'shift_priority' => 'Shift Rotation Priority',
+                'current_workload_14_days' => 'Workload (14 days)'
+            ],
+            'auth' => ['user' => auth()->user()]
         ]);
-
-        return Inertia::render('Fullfill/Fulfill', [
-    'request' => $request,
-    'sameSubSectionEmployees' => $sortedSameSubSectionEmployees,
-    'otherSubSectionEmployees' => $sortedOtherSubSectionEmployees,
-    'currentScheduledIds' => $currentScheduledIds,
-    'sameDayRequests' => $sameDayRequests,
-    'ml_status' => $mlStatus,
-    'ml_accuracy' => $mlAccuracy,
-    'ml_features' => [ // NEW: Show what features are being used
-        'work_days_14_days' => 'Work Days (14 days)',
-        'work_days_30_days' => 'Work Days (30 days)', 
-        'shift_priority' => 'Shift Rotation Priority',
-        'current_workload_14_days' => 'Workload (14 days)'
-    ],
-    'auth' => ['user' => auth()->user()]
-]);
     }
 
-    /**
-     * Calculate work days count for an employee within a given period
-     */
     private function getWorkDaysCount($employee, $days = 30)
     {
         $startDate = now()->subDays($days)->startOfDay();
@@ -249,9 +215,6 @@ class ManPowerRequestFulfillmentController extends Controller
             ->count('date');
     }
 
-    /**
-     * Get last N shifts for an employee
-     */
     private function getLastShifts($employee, $limit = 5)
     {
         return $employee->schedules()
@@ -274,179 +237,132 @@ class ManPowerRequestFulfillmentController extends Controller
             ->toArray();
     }
 
-    /**
- * Calculate current workload for 14 days (updated from 7 days)
- */
-private function getCurrentWorkload14Days($employee)
-{
-    $startDate = now()->subDays(14)->startOfDay();
-    $workHours = $employee->schedules()
-        ->where('date', '>=', $startDate)
-        ->with('manPowerRequest.shift')
-        ->get()
-        ->sum(function ($schedule) {
-            return $schedule->manPowerRequest->shift->hours ?? 0;
-        });
-    
-    // Normalize to 0-1 (80 hours max for 2 weeks)
-    return min($workHours / 80, 1.0);
-}
-
-/**
- * Calculate shift priority based on last assigned shift
- */
-private function calculateShiftPriority($employee, $manpowerRequest)
-{
-    try {
-        // Get the last assigned shift for this employee
-        $lastSchedule = $employee->schedules()
-            ->where('date', '<', now()->toDateString())
+    private function getCurrentWorkload14Days($employee)
+    {
+        $startDate = now()->subDays(14)->startOfDay();
+        $workHours = $employee->schedules()
+            ->where('date', '>=', $startDate)
             ->with('manPowerRequest.shift')
-            ->orderBy('date', 'desc')
-            ->first();
-
-        if (!$lastSchedule || !$lastSchedule->manPowerRequest->shift) {
-            return 1.0; // No previous shift, neutral priority
-        }
-
-        $lastShiftOrder = $this->getShiftOrder($lastSchedule->manPowerRequest->shift);
-        $currentShiftOrder = $this->getShiftOrder($manpowerRequest->shift);
-
-        if ($lastShiftOrder === null || $currentShiftOrder === null) {
-            return 1.0; // Unknown shift, neutral priority
-        }
-
-        // Calculate shift priority based on sequential ordering
-        // Shift 1 (pagi) -> lower priority for next Shift 1, higher for Shift 2, highest for Shift 3
-        $shiftDifference = $currentShiftOrder - $lastShiftOrder;
+            ->get()
+            ->sum(function ($schedule) {
+                return $schedule->manPowerRequest->shift->hours ?? 0;
+            });
         
-        if ($shiftDifference === 0) {
-            // Same shift as last time - lower priority
-            return 0.3;
-        } elseif ($shiftDifference === 1) {
-            // Next sequential shift - medium priority
-            return 0.7;
-        } elseif ($shiftDifference === 2) {
-            // Two shifts ahead - highest priority
-            return 1.0;
-        } elseif ($shiftDifference === -1) {
-            // Previous shift - low priority
-            return 0.4;
-        } else {
-            // Other cases - neutral
+        return min($workHours / 80, 1.0);
+    }
+
+    private function calculateShiftPriority($employee, $manpowerRequest)
+    {
+        try {
+            $lastSchedule = $employee->schedules()
+                ->where('date', '<', now()->toDateString())
+                ->with('manPowerRequest.shift')
+                ->orderBy('date', 'desc')
+                ->first();
+
+            if (!$lastSchedule || !$lastSchedule->manPowerRequest->shift) {
+                return 1.0;
+            }
+
+            $lastShiftOrder = $this->getShiftOrder($lastSchedule->manPowerRequest->shift);
+            $currentShiftOrder = $this->getShiftOrder($manpowerRequest->shift);
+
+            if ($lastShiftOrder === null || $currentShiftOrder === null) {
+                return 1.0;
+            }
+
+            $shiftDifference = $currentShiftOrder - $lastShiftOrder;
+            
+            if ($shiftDifference === 0) {
+                return 0.3;
+            } elseif ($shiftDifference === 1) {
+                return 0.7;
+            } elseif ($shiftDifference === 2) {
+                return 1.0;
+            } elseif ($shiftDifference === -1) {
+                return 0.4;
+            } else {
+                return 0.5;
+            }
+        } catch (\Exception $e) {
             return 0.5;
         }
-    } catch (\Exception $e) {
-        Log::warning("Error calculating shift priority: " . $e->getMessage());
-        return 0.5;
     }
-}
 
-/**
- * Map shift names to sequential order
- */
-private function getShiftOrder($shift)
-{
-    try {
-        // Map shift names to sequential order
-        $shiftOrder = [
-            'pagi' => 1,
-            'siang' => 2,
-            'malam' => 3,
-            '1' => 1,
-            '2' => 2,
-            '3' => 3
-        ];
+    private function getShiftOrder($shift)
+    {
+        try {
+            $shiftOrder = [
+                'pagi' => 1,
+                'siang' => 2,
+                'malam' => 3,
+                '1' => 1,
+                '2' => 2,
+                '3' => 3
+            ];
 
-        $shiftName = strtolower($shift->name ?? '');
-        return $shiftOrder[$shiftName] ?? null;
-    } catch (\Exception $e) {
-        Log::warning("Error getting shift order: " . $e->getMessage());
-        return null;
+            $shiftName = strtolower($shift->name ?? '');
+            return $shiftOrder[$shiftName] ?? null;
+        } catch (\Exception $e) {
+            return null;
+        }
     }
-}
 
-/**
- * Fallback ML score calculation when model is not trained
- */
-private function calculateFallbackMLScore($employee, $manpowerRequest)
-{
-    $score = 0.0;
-    
-    // Work days count (fewer days = higher priority)
-    $workDays = $this->getWorkDaysCount($employee, 30);
-    $score += max(0, 1 - ($workDays / 22)) * 0.25;
-    
-    // Rating value
-    $rating = $this->getAverageRating($employee);
-    $score += ($rating / 5) * 0.2;
-    
-    // Test score
-    $testScore = $this->getTestScore($employee);
-    $score += $testScore * 0.15;
-    
-    // Section match
-    $sameSubsection = $this->isSameSubsection($employee, $manpowerRequest) ? 1 : 0;
-    $sameSection = $this->isSameSection($employee, $manpowerRequest) ? 1 : 0;
-    $sectionScore = 0.0;
-    if ($sameSubsection > 0) $sectionScore = 0.15;
-    elseif ($sameSection > 0) $sectionScore = 0.1;
-    $score += $sectionScore;
-    
-    // Shift priority (fallback)
-    $shiftPriority = $this->calculateShiftPriority($employee, $manpowerRequest);
-    $score += $shiftPriority * 0.25;
-    
-    return min(1.0, max(0.0, $score));
-}
+    private function calculateFallbackMLScore($employee, $manpowerRequest)
+    {
+        $score = 0.0;
+        
+        $workDays = $this->getWorkDaysCount($employee, 30);
+        $score += max(0, 1 - ($workDays / 22)) * 0.25;
+        
+        $rating = $this->getAverageRating($employee);
+        $score += ($rating / 5) * 0.2;
+        
+        $testScore = $this->getTestScore($employee);
+        $score += $testScore * 0.15;
+        
+        $sameSubsection = $this->isSameSubsection($employee, $manpowerRequest) ? 1 : 0;
+        $sameSection = $this->isSameSection($employee, $manpowerRequest) ? 1 : 0;
+        $sectionScore = 0.0;
+        if ($sameSubsection > 0) $sectionScore = 0.15;
+        elseif ($sameSection > 0) $sectionScore = 0.1;
+        $score += $sectionScore;
+        
+        $shiftPriority = $this->calculateShiftPriority($employee, $manpowerRequest);
+        $score += $shiftPriority * 0.25;
+        
+        return min(1.0, max(0.0, $score));
+    }
 
-    /**
- * Calculate ML priority score for an employee with updated features
- */
-private function calculateMLPriorityScore($employee, $manpowerRequest)
-{
-    try {
-        $mlService = app(SimpleMLService::class);
+    private function calculateMLPriorityScore($employee, $manpowerRequest)
+    {
+        try {
+            $mlService = app(SimpleMLService::class);
 
-        if (!$mlService->isModelTrained()) {
-            Log::warning('ML model not trained, using fallback score');
+            if (!$mlService->isModelTrained()) {
+                return $this->calculateFallbackMLScore($employee, $manpowerRequest);
+            }
+
+            $features = [
+                'work_days_count' => $this->getWorkDaysCount($employee, 30),
+                'rating_value' => $this->getAverageRating($employee),
+                'test_score' => $this->getTestScore($employee),
+                'gender' => $employee->gender === 'male' ? 1 : 0,
+                'employee_type' => $employee->type === 'bulanan' ? 1 : 0,
+                'same_subsection' => $this->isSameSubsection($employee, $manpowerRequest) ? 1 : 0,
+                'same_section' => $this->isSameSection($employee, $manpowerRequest) ? 1 : 0,
+                'current_workload' => $this->getCurrentWorkload14Days($employee),
+                'shift_priority' => $this->calculateShiftPriority($employee, $manpowerRequest),
+            ];
+
+            $predictions = $mlService->predict([$features]);
+            return $predictions[0] ?? 0.5;
+
+        } catch (\Exception $e) {
             return $this->calculateFallbackMLScore($employee, $manpowerRequest);
         }
-
-        $features = [
-            'work_days_count' => $this->getWorkDaysCount($employee, 30), // 30-day work days
-            'rating_value' => $this->getAverageRating($employee),
-            'test_score' => $this->getTestScore($employee),
-            'gender' => $employee->gender === 'male' ? 1 : 0,
-            'employee_type' => $employee->type === 'bulanan' ? 1 : 0,
-            'same_subsection' => $this->isSameSubsection($employee, $manpowerRequest) ? 1 : 0,
-            'same_section' => $this->isSameSection($employee, $manpowerRequest) ? 1 : 0,
-            'current_workload' => $this->getCurrentWorkload14Days($employee), // UPDATED: 14-day workload
-            'shift_priority' => $this->calculateShiftPriority($employee, $manpowerRequest), // NEW: Shift priority
-        ];
-
-        Log::debug('ML Features for employee', [
-            'employee_id' => $employee->id,
-            'features' => $features
-        ]);
-
-        $predictions = $mlService->predict([$features]);
-        $mlScore = $predictions[0] ?? 0.5;
-
-        Log::debug('ML Prediction result', [
-            'employee_id' => $employee->id,
-            'ml_score' => $mlScore
-        ]);
-
-        return $mlScore;
-
-    } catch (\Exception $e) {
-        Log::error("ML Score calculation failed for employee {$employee->id}: " . $e->getMessage());
-        return $this->calculateFallbackMLScore($employee, $manpowerRequest);
     }
-}
 
-    // Helper methods for ML feature calculation (keep existing ones)
     private function getAverageRating($employee)
     {
         $avgRating = $employee->ratings()->avg('rating');
@@ -472,96 +388,610 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
         return $employee->subSections->contains('section_id', $requestSectionId);
     }
 
-    private function getCurrentWorkload($employee)
+    public function store(Request $request, $id)
     {
-        $startDate = now()->subDays(7)->startOfDay();
-        $workHours = $employee->schedules()
-            ->where('date', '>=', $startDate)
-            ->with('manPowerRequest.shift')
-            ->get()
-            ->sum(function ($schedule) {
-                return $schedule->manPowerRequest->shift->hours ?? 0;
+        $validated = $request->validate([
+            'employee_ids' => 'required|array',
+            'employee_ids.*' => 'exists:employees,id',
+            'fulfilled_by' => 'required|exists:users,id',
+            'visibility' => 'in:public,private',
+            'enable_line_assignment' => 'boolean',
+            'line_assignments' => 'array',
+            'line_assignments.*' => 'string',
+        ]);
+
+        $req = ManPowerRequest::with(['schedules.employee', 'subSection'])->findOrFail($id);
+
+        try {
+            DB::transaction(function () use ($validated, $req) {
+                $currentSchedules = $req->schedules;
+                $newEmployeeIds = $validated['employee_ids'];
+                
+                $enableLineAssignment = $validated['enable_line_assignment'] ?? false;
+                $lineAssignments = $enableLineAssignment ? ($validated['line_assignments'] ?? []) : [];
+
+                if ($currentSchedules->count() > 0) {
+                    foreach ($currentSchedules as $schedule) {
+                        $employee = $schedule->employee;
+                        $otherAssignments = Schedule::where('employee_id', $employee->id)
+                            ->where('man_power_request_id', '!=', $req->id)
+                            ->where('date', $req->date)
+                            ->count();
+
+                        if ($otherAssignments === 0) {
+                            $employee->status = 'available';
+                            $employee->save();
+                        }
+                        $schedule->delete();
+                    }
+                }
+
+                foreach ($newEmployeeIds as $employeeId) {
+                    $employee = Employee::where('id', $employeeId)
+                        ->where(function ($query) {
+                            $query->where('status', 'available')
+                                ->orWhere('status', 'assigned');
+                        })
+                        ->where('cuti', 'no')
+                        ->whereDoesntHave('schedules', function ($query) use ($req) {
+                            $query->where('date', $req->date)
+                                ->where('man_power_request_id', '!=', $req->id);
+                        })
+                        ->first();
+
+                    if (!$employee) {
+                        throw new \Exception("Karyawan ID {$employeeId} tidak tersedia, sedang cuti, atau sudah dijadwalkan pada tanggal ini.");
+                    }
+
+                    $data = [
+                        'employee_id' => $employeeId,
+                        'sub_section_id' => $req->sub_section_id,
+                        'man_power_request_id' => $req->id,
+                        'date' => $req->date,
+                        'visibility' => $validated['visibility'] ?? 'private',
+                    ];
+
+                    if ($enableLineAssignment && isset($lineAssignments[$employeeId])) {
+                        $data['line'] = $lineAssignments[$employeeId];
+                    } elseif ($enableLineAssignment && strtolower($req->subSection->name) === 'putway') {
+                        $data['line'] = '1';
+                    }
+
+                    $schedule = Schedule::create($data);
+
+                    $employee->status = 'assigned';
+                    $employee->save();
+                }
+
+                $req->status = 'fulfilled';
+                $req->fulfilled_by = $validated['fulfilled_by'];
+                $req->save();
             });
-        return min($workHours / 40, 1.0);
+        } catch (\Exception $e) {
+            return back()->withErrors(['fulfillment_error' => $e->getMessage()]);
+        }
+
+        return redirect()
+            ->route('manpower-requests.index')
+            ->with('success', 'Permintaan berhasil dipenuhi');
     }
 
-    // ... KEEP ALL YOUR EXISTING METHODS BELOW (they will automatically use the new data)
-    // The autoSelectEmployees, bulkStore, bulkFulfill, etc. methods remain the same
-
-    /**
-     * Enhanced auto-assign with ML integration
-     */
-    private function autoSelectEmployees(ManPowerRequest $manpowerRequest, string $strategy, array $excludeIds = [])
+    public function bulkStore(Request $request)
     {
-        Log::debug('Starting autoSelectEmployees with ML', [
-            'request_id' => $manpowerRequest->id,
-            'strategy' => $strategy,
-            'exclude_ids_count' => count($excludeIds),
-            'required_male' => $manpowerRequest->male_count,
-            'required_female' => $manpowerRequest->female_count,
-            'total_required' => $manpowerRequest->requested_amount
+        $request->validate([
+            'request_ids' => 'required|array',
+            'request_ids.*' => 'exists:man_power_requests,id',
+            'employee_selections' => 'required|array',
+            'strategy' => 'required|in:optimal,same_section,balanced',
+            'visibility' => 'in:public,private',
+            'status' => 'in:pending,accepted,rejected',
+            'enable_line_assignment' => 'boolean',
+            'line_assignments' => 'array',
         ]);
 
-        // Ensure excludeIds is always an array
-        $excludeIds = $excludeIds ?? [];
+        DB::beginTransaction();
+        try {
+            $results = [];
+            $successCount = 0;
+            $failureCount = 0;
+            $employeeSelections = $request->employee_selections;
+            $lineAssignments = $request->line_assignments ?? [];
+            $status = $request->status ?? 'pending';
+            $enableLineAssignment = $request->enable_line_assignment ?? false;
 
-        // Get employees from same sub-section
-        $sameSubSectionEmployees = Employee::whereHas('subSections', function ($query) use ($manpowerRequest) {
-            $query->where('sub_section_id', $manpowerRequest->sub_section_id);
-        })->whereNotIn('id', $excludeIds)->get();
+            foreach ($request->request_ids as $id) {
+                $manpowerRequest = ManPowerRequest::with(['subSection', 'schedules'])->findOrFail($id);
 
-        Log::debug('Same subsection employees', [
-            'request_id' => $manpowerRequest->id,
-            'same_subsection_count' => $sameSubSectionEmployees->count(),
-            'sub_section_id' => $manpowerRequest->sub_section_id
-        ]);
+                if ($manpowerRequest->status === 'fulfilled') {
+                    $results[$id] = 'already fulfilled';
+                    $failureCount++;
+                    continue;
+                }
 
-        // Get employees from other sub-sections in the same section
-        $otherSubSectionEmployees = Employee::whereHas('subSections.section', function ($query) use ($manpowerRequest) {
-            $query->where('section_id', $manpowerRequest->subSection->section_id);
-        })->whereNotIn('id', $excludeIds)
-            ->whereDoesntHave('subSections', function ($query) use ($manpowerRequest) {
-                $query->where('sub_section_id', $manpowerRequest->sub_section_id);
-            })->get();
+                $selectedEmployeeIds = $employeeSelections[$id] ?? [];
+                $requestLineAssignments = $lineAssignments[$id] ?? [];
 
-        Log::debug('Other subsection employees', [
-            'request_id' => $manpowerRequest->id,
-            'other_subsection_count' => $otherSubSectionEmployees->count(),
-            'section_id' => $manpowerRequest->subSection->section_id ?? 'N/A'
-        ]);
+                if (count($selectedEmployeeIds) !== $manpowerRequest->requested_amount) {
+                    $results[$id] = 'invalid employee selection count';
+                    $failureCount++;
+                    continue;
+                }
 
-        // Combine and normalize employees WITH ML SCORES
-        $combinedEmployees = collect([
-            ...$sameSubSectionEmployees->map(function ($emp) use ($manpowerRequest) {
-                return $this->normalizeEmployeeWithML($emp, $manpowerRequest, true);
-            }),
-            ...$otherSubSectionEmployees->map(function ($emp) use ($manpowerRequest) {
-                return $this->normalizeEmployeeWithML($emp, $manpowerRequest, false);
-            })
-        ]);
+                $maleCount = 0;
+                $femaleCount = 0;
 
-        Log::debug('Combined employees before sorting', [
-            'request_id' => $manpowerRequest->id,
-            'total_combined_count' => $combinedEmployees->count()
-        ]);
+                foreach ($selectedEmployeeIds as $employeeId) {
+                    $employee = Employee::find($employeeId);
+                    if (!$employee) {
+                        throw new \Exception("Employee {$employeeId} not found");
+                    }
 
-        // Sort employees based on strategy (now using ML-enhanced scores)
-        $sortedEmployees = $this->sortEmployeesByStrategyWithML($combinedEmployees, $manpowerRequest, $strategy);
+                    if ($employee->gender === 'male') {
+                        $maleCount++;
+                    } elseif ($employee->gender === 'female') {
+                        $femaleCount++;
+                    }
+                }
 
-        // Select employees based on requirements
-        $selected = $this->selectOptimalEmployees($sortedEmployees, $manpowerRequest);
+                if ($manpowerRequest->male_count > 0 && $maleCount < $manpowerRequest->male_count) {
+                    $results[$id] = 'insufficient male employees';
+                    $failureCount++;
+                    continue;
+                }
 
-        Log::debug('Final employee selection', [
-            'request_id' => $manpowerRequest->id,
-            'final_selected_count' => $selected->count(),
-            'selected_genders' => $selected->groupBy('gender')->map->count(),
-            'used_ml_scores' => $selected->pluck('final_score')->toArray()
-        ]);
+                if ($manpowerRequest->female_count > 0 && $femaleCount < $manpowerRequest->female_count) {
+                    $results[$id] = 'insufficient female employees';
+                    $failureCount++;
+                    continue;
+                }
 
-        return $selected;
+                $createdSchedules = [];
+                foreach ($selectedEmployeeIds as $index => $employeeId) {
+                    $data = [
+                        'employee_id' => $employeeId,
+                        'sub_section_id' => $manpowerRequest->sub_section_id,
+                        'man_power_request_id' => $manpowerRequest->id,
+                        'date' => $manpowerRequest->date,
+                        'status' => $status,
+                        'visibility' => $request->visibility ?? 'private',
+                    ];
+
+                    if ($enableLineAssignment && isset($requestLineAssignments[$employeeId])) {
+                        $data['line'] = $requestLineAssignments[$employeeId];
+                    } elseif ($manpowerRequest->subSection && strtolower($manpowerRequest->subSection->name) === 'putway') {
+                        $data['line'] = strval((($index % 2) + 1));
+                    }
+
+                    $schedule = Schedule::create($data);
+                    $createdSchedules[] = $schedule->id;
+                }
+
+                $manpowerRequest->update([
+                    'status' => 'fulfilled',
+                    'fulfilled_by' => auth()->id()
+                ]);
+
+                $results[$id] = 'fulfilled - ' . count($selectedEmployeeIds) . ' employees assigned';
+                $successCount++;
+            }
+
+            DB::commit();
+
+            return redirect()->route('manpower-requests.index')->with([
+                'success' => 'Bulk fulfill completed: ' . $successCount . ' successful, ' . $failureCount . ' failed',
+                'bulk_results' => $results
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return redirect()->back()->withErrors([
+                'fulfillment_error' => 'Bulk fulfill failed: ' . $e->getMessage()
+            ]);
+        }
     }
 
-    private function normalizeEmployeeWithML($employee, $manpowerRequest, $isSameSubSection)
+    public function revise($id)
+    {
+        $request = ManPowerRequest::with([
+            'subSection.section',
+            'shift',
+            'fulfilledBy',
+            'schedules.employee.subSections.section'
+        ])->findOrFail($id);
+
+        if ($request->status !== 'fulfilled') {
+            abort(403, 'Hanya permintaan yang sudah terpenuhi yang dapat direvisi.');
+        }
+
+        $startDate = Carbon::now()->subDays(6)->startOfDay();
+        $endDate = Carbon::now()->endOfDay();
+
+        $scheduledEmployeeIdsOnRequestDate = Schedule::where('date', $request->date)
+            ->where('man_power_request_id', '!=', $request->id)
+            ->pluck('employee_id')
+            ->toArray();
+
+        $currentScheduledIds = $request->schedules->pluck('employee_id')->toArray();
+
+        $currentScheduledIds = array_map('strval', $currentScheduledIds);
+        $scheduledEmployeeIdsOnRequestDate = array_map('strval', $scheduledEmployeeIdsOnRequestDate);
+
+        $eligibleEmployees = Employee::where(function ($query) use ($currentScheduledIds) {
+            $query->where('status', 'available')
+                ->orWhereIn('id', $currentScheduledIds);
+        })
+            ->where('cuti', 'no')
+            ->whereNotIn('id', array_diff($scheduledEmployeeIdsOnRequestDate, $currentScheduledIds))
+            ->with([
+                'subSections' => function ($query) {
+                    $query->with('section');
+                },
+                'workloads',
+                'blindTests',
+                'ratings'
+            ])
+            ->withCount([
+                'schedules' => function ($query) use ($startDate, $endDate) {
+                    $query->whereBetween('date', [$startDate, $endDate]);
+                }
+            ])
+            ->with(['schedules.manPowerRequest.shift'])
+            ->get()
+            ->map(function ($employee) use ($request) {
+                $totalWorkingHours = 0;
+                foreach ($employee->schedules as $schedule) {
+                    if ($schedule->manPowerRequest && $schedule->manPowerRequest->shift) {
+                        $totalWorkingHours += $schedule->manPowerRequest->shift->hours;
+                    }
+                }
+
+                $weeklyScheduleCount = $employee->schedules_count;
+
+                $baseScore = $this->calculateBaseScore($employee, $weeklyScheduleCount);
+                $mlScore = $this->calculateMLPriorityScore($employee, $request);
+                $totalScore = ($mlScore * 0.7) + ($baseScore * 0.3);
+
+                $subSectionsData = $employee->subSections->map(function ($subSection) {
+                    return [
+                        'id' => (string) $subSection->id,
+                        'name' => $subSection->name,
+                        'section_id' => (string) $subSection->section_id,
+                        'section' => $subSection->section ? [
+                            'id' => (string) $subSection->section->id,
+                            'name' => $subSection->section->name,
+                        ] : null,
+                    ];
+                })->toArray();
+
+                return [
+                    'id' => (string) $employee->id,
+                    'nik' => $employee->nik,
+                    'name' => $employee->name,
+                    'type' => $employee->type,
+                    'status' => $employee->status,
+                    'cuti' => $employee->cuti,
+                    'photo' => $employee->photo,
+                    'gender' => $employee->gender,
+                    'schedules_count' => $employee->schedules_count,
+                    'total_assigned_hours' => $totalWorkingHours,
+                    'sub_sections_data' => $subSectionsData,
+                    'ml_score' => $mlScore,
+                    'total_score' => $totalScore,
+                ];
+            });
+
+        $splitEmployeesBySubSection = function ($employees, $request) {
+            $requestSubSectionId = (string) $request->sub_section_id;
+            $requestSectionId = $request->subSection ? (string) $request->subSection->section_id : null;
+
+            $same = collect();
+            $other = collect();
+
+            foreach ($employees as $employee) {
+                $subSections = collect($employee['sub_sections_data']);
+
+                $hasExactSubSection = $subSections->contains('id', $requestSubSectionId);
+
+                $hasSameSection = false;
+                if ($requestSectionId) {
+                    $hasSameSection = $subSections->contains(function ($ss) use ($requestSectionId) {
+                        return isset($ss['section']['id']) && (string) $ss['section']['id'] === $requestSectionId;
+                    });
+                }
+
+                if ($hasExactSubSection || $hasSameSection) {
+                    $same->push($employee);
+                } else {
+                    $other->push($employee);
+                }
+            }
+
+            return [$same, $other];
+        };
+
+        $sortEmployees = function ($employees) {
+            return $employees->sortByDesc('total_score')
+                ->sortByDesc(fn($employee) => $employee['type'] === 'bulanan' ? 1 : 0)
+                ->values();
+        };
+
+        [$sameSubSectionEligible, $otherSubSectionEligible] = $splitEmployeesBySubSection($eligibleEmployees, $request);
+
+        $sortedSameSubSectionEmployees = $sortEmployees($sameSubSectionEligible);
+        $sortedOtherSubSectionEmployees = $sortEmployees($otherSubSectionEligible);
+
+        $currentScheduledIds = array_map('strval', $currentScheduledIds);
+
+        return Inertia::render('Fullfill/Revise', [
+            'request' => $request,
+            'sameSubSectionEmployees' => $sortedSameSubSectionEmployees,
+            'otherSubSectionEmployees' => $sortedOtherSubSectionEmployees,
+            'currentScheduledIds' => $currentScheduledIds,
+            'auth' => ['user' => auth()->user()]
+        ]);
+    }
+
+    public function updateRevision(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'employee_ids' => 'required|array',
+            'employee_ids.*' => 'exists:employees,id',
+            'fulfilled_by' => 'required|exists:users,id',
+            'visibility' => 'in:public,private',
+            'enable_line_assignment' => 'boolean',
+            'line_assignments' => 'array',
+            'line_assignments.*' => 'string',
+        ]);
+
+        $req = ManPowerRequest::with(['schedules.employee', 'subSection'])->findOrFail($id);
+
+        if ($req->status !== 'fulfilled') {
+            return back()->withErrors(['revision_error' => 'Hanya permintaan yang sudah terpenuhi yang dapat direvisi.']);
+        }
+
+        try {
+            DB::transaction(function () use ($validated, $req) {
+                $currentSchedules = $req->schedules;
+                $newEmployeeIds = $validated['employee_ids'];
+
+                $enableLineAssignment = $validated['enable_line_assignment'] ?? false;
+                $lineAssignments = $enableLineAssignment ? ($validated['line_assignments'] ?? []) : [];
+
+                if ($currentSchedules->count() > 0) {
+                    foreach ($currentSchedules as $schedule) {
+                        $employee = $schedule->employee;
+                        $otherAssignments = Schedule::where('employee_id', $employee->id)
+                            ->where('man_power_request_id', '!=', $req->id)
+                            ->where('date', $req->date)
+                            ->count();
+
+                        if ($otherAssignments === 0) {
+                            $employee->status = 'available';
+                            $employee->save();
+                        }
+                        $schedule->delete();
+                    }
+                }
+
+                foreach ($newEmployeeIds as $employeeId) {
+                    $employee = Employee::where('id', $employeeId)
+                        ->where(function ($query) {
+                            $query->where('status', 'available')
+                                ->orWhere('status', 'assigned');
+                        })
+                        ->where('cuti', 'no')
+                        ->whereDoesntHave('schedules', function ($query) use ($req) {
+                            $query->where('date', $req->date)
+                                ->where('man_power_request_id', '!=', $req->id);
+                        })
+                        ->first();
+
+                    if (!$employee) {
+                        throw new \Exception("Karyawan ID {$employeeId} tidak tersedia, sedang cuti, atau sudah dijadwalkan pada tanggal ini.");
+                    }
+
+                    $data = [
+                        'employee_id' => $employeeId,
+                        'sub_section_id' => $req->sub_section_id,
+                        'man_power_request_id' => $req->id,
+                        'date' => $req->date,
+                        'visibility' => $validated['visibility'] ?? 'private',
+                    ];
+
+                    if ($enableLineAssignment && isset($lineAssignments[$employeeId])) {
+                        $data['line'] = $lineAssignments[$employeeId];
+                    } elseif ($enableLineAssignment && strtolower($req->subSection->name) === 'putway') {
+                        $data['line'] = '1';
+                    }
+
+                    $schedule = Schedule::create($data);
+
+                    $employee->status = 'assigned';
+                    $employee->save();
+                }
+
+                $req->fulfilled_by = $validated['fulfilled_by'];
+                $req->save();
+            });
+        } catch (\Exception $e) {
+            return back()->withErrors(['revision_error' => $e->getMessage()]);
+        }
+
+        return redirect()
+            ->route('manpower-requests.index')
+            ->with('success', 'Revisi permintaan berhasil disimpan');
+    }
+
+    private function calculateBaseScore($employee, $weeklyScheduleCount)
+    {
+        $workloadPenalty = $this->calculateWorkloadPenalty($weeklyScheduleCount);
+
+        $blindTestResult = $employee->blindTests->sortByDesc('test_date')->first()->result ?? 'Fail';
+        $blindTestPoints = $blindTestResult === 'Pass' ? 3 : 0;
+
+        $averageRating = $employee->ratings->avg('rating') ?? 0;
+
+        $baseScore = ($workloadPenalty * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
+
+        return $baseScore;
+    }
+
+    private function calculateWorkloadPenalty($weeklyScheduleCount)
+    {
+        $penalty = match ($weeklyScheduleCount) {
+            0 => 100,
+            1 => 80,
+            2 => 60,
+            3 => 40,
+            4 => 20,
+            default => 0,
+        };
+
+        return $penalty;
+    }
+
+    public function bulkFulfillmentPage($id)
+{
+    $request = ManPowerRequest::with(['subSection.section', 'shift'])->findOrFail($id);
+    
+    // Get same day requests from same SECTION
+    $sameDayRequests = ManPowerRequest::with(['subSection.section', 'shift'])
+        ->where('date', $request->date)
+        ->where('id', '!=', $request->id)
+        ->whereHas('subSection', function($query) use ($request) {
+            $query->where('section_id', $request->subSection->section_id);
+        })
+        ->get();
+
+    // Get eligible employees
+    $startDate = Carbon::now()->subDays(6)->startOfDay();
+    $endDate = Carbon::now()->endOfDay();
+
+    $scheduledEmployeeIdsOnRequestDate = Schedule::where('date', $request->date)
+        ->where('man_power_request_id', '!=', $request->id)
+        ->pluck('employee_id')
+        ->toArray();
+
+    $currentScheduledIds = $request->schedules->pluck('employee_id')->toArray();
+
+    $eligibleEmployees = Employee::where(function ($query) use ($currentScheduledIds) {
+        $query->where('status', 'available')
+            ->orWhereIn('id', $currentScheduledIds);
+    })
+        ->where('cuti', 'no')
+        ->whereNotIn('id', array_diff($scheduledEmployeeIdsOnRequestDate, $currentScheduledIds))
+        ->with([
+            'subSections.section',
+            'workloads',
+            'blindTests',
+            'ratings'
+        ])
+        ->withCount([
+            'schedules' => function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('date', [$startDate, $endDate]);
+            }
+        ])
+        ->with(['schedules.manPowerRequest.shift'])
+        ->get()
+        ->map(function ($employee) use ($request) {
+            $totalWorkingHours = 0;
+            foreach ($employee->schedules as $schedule) {
+                if ($schedule->manPowerRequest && $schedule->manPowerRequest->shift) {
+                    $totalWorkingHours += $schedule->manPowerRequest->shift->hours;
+                }
+            }
+
+            $weeklyScheduleCount = $employee->schedules_count;
+
+            // Calculate ML score and final score
+            $baseScore = $this->calculateBaseScore($employee, $weeklyScheduleCount);
+            $mlScore = $this->calculateMLPriorityScore($employee, $request);
+            $finalScore = ($mlScore * 0.7) + ($baseScore * 0.3);
+
+            // Format subSections data from the pivot relationship
+            $subSectionsData = $employee->subSections->map(function ($subSection) {
+                return [
+                    'id' => (string) $subSection->id,
+                    'name' => $subSection->name,
+                    'section_id' => (string) $subSection->section_id,
+                    'section' => $subSection->section ? [
+                        'id' => (string) $subSection->section->id,
+                        'name' => $subSection->section->name,
+                    ] : null,
+                ];
+            })->toArray();
+
+            return [
+                'id' => (string) $employee->id,
+                'nik' => $employee->nik,
+                'name' => $employee->name,
+                'type' => $employee->type,
+                'status' => $employee->status,
+                'gender' => $employee->gender,
+                'final_score' => $finalScore,
+                'ml_score' => $mlScore,
+                'subSections' => $subSectionsData,
+                'workload_points' => $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0,
+                'average_rating' => $employee->ratings->avg('rating') ?? 0,
+                // Add work days data for EmployeeModal
+                'work_days_14_days' => $this->getWorkDaysCount($employee, 14),
+                'work_days_30_days' => $this->getWorkDaysCount($employee, 30),
+                'last_5_shifts' => $this->getLastShifts($employee, 5),
+            ];
+        });
+
+    // Sort employees by final_score (ML-enhanced)
+    $allSortedEligibleEmployees = $eligibleEmployees->sortByDesc('final_score')->values()->all();
+
+    return Inertia::render('Fullfill/BulkFulfillment', [
+        'auth' => ['user' => auth()->user()],
+        'sameDayRequests' => $sameDayRequests,
+        'currentRequest' => $request,
+        'allSortedEligibleEmployees' => $allSortedEligibleEmployees,
+    ]);
+}
+
+/**
+ * Auto-assign employees ke satu request
+ */
+private function autoSelectEmployees(ManPowerRequest $manpowerRequest, string $strategy, array $excludeIds = [])
+{
+    $excludeIds = $excludeIds ?? [];
+
+    // Get employees from same sub-section
+    $sameSubSectionEmployees = Employee::whereHas('subSections', function ($query) use ($manpowerRequest) {
+        $query->where('sub_section_id', $manpowerRequest->sub_section_id);
+    })->whereNotIn('id', $excludeIds)->get();
+
+    // Get employees from other sub-sections in the same section
+    $otherSubSectionEmployees = Employee::whereHas('subSections.section', function ($query) use ($manpowerRequest) {
+        $query->where('section_id', $manpowerRequest->subSection->section_id);
+    })->whereNotIn('id', $excludeIds)
+        ->whereDoesntHave('subSections', function ($query) use ($manpowerRequest) {
+            $query->where('sub_section_id', $manpowerRequest->sub_section_id);
+        })->get();
+
+    // Combine and normalize employees WITH ML SCORES
+    $combinedEmployees = collect([
+        ...$sameSubSectionEmployees->map(function ($emp) use ($manpowerRequest) {
+            return $this->normalizeEmployeeWithML($emp, $manpowerRequest, true);
+        }),
+        ...$otherSubSectionEmployees->map(function ($emp) use ($manpowerRequest) {
+            return $this->normalizeEmployeeWithML($emp, $manpowerRequest, false);
+        })
+    ]);
+
+    // Sort employees based on strategy (now using ML-enhanced scores)
+    $sortedEmployees = $this->sortEmployeesByStrategyWithML($combinedEmployees, $manpowerRequest, $strategy);
+
+    // Select employees based on requirements
+    $selected = $this->selectOptimalEmployees($sortedEmployees, $manpowerRequest);
+
+    return $selected;
+}
+
+private function normalizeEmployeeWithML($employee, $manpowerRequest, $isSameSubSection)
 {
     $gender = strtolower(trim($employee->gender ?? 'male'));
     if (!in_array($gender, ['male', 'female'])) {
@@ -604,18 +1034,17 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
         'final_score' => $finalScore,
         'is_same_subsection' => $isSameSubSection,
         'subSections' => $employee->subSections ?? collect(),
-        // Enhanced work days and shift history
         'work_days_14_days' => $workDays14Days,
         'work_days_30_days' => $workDays30Days,
         'last_5_shifts' => $last5Shifts,
-        'shift_priority' => $this->calculateShiftPriority($employee, $manpowerRequest), // NEW
+        'shift_priority' => $this->calculateShiftPriority($employee, $manpowerRequest),
     ];
 }
 
-    /**
-     * Sort employees with ML-enhanced strategy
-     */
-   private function sortEmployeesByStrategyWithML($employees, ManpowerRequest $request, string $strategy)
+/**
+ * Sort employees with ML-enhanced strategy
+ */
+private function sortEmployeesByStrategyWithML($employees, ManpowerRequest $request, string $strategy)
 {
     return $employees->sort(function ($a, $b) use ($request, $strategy) {
         switch ($strategy) {
@@ -629,7 +1058,7 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
             case 'balanced':
                 // Balance workload distribution but consider ML scores
                 if ($a->workload_penalty !== $b->workload_penalty) {
-                    return $b->workload_penalty - $a->workload_penalty; // Higher penalty = lower priority
+                    return $b->workload_penalty - $a->workload_penalty;
                 }
                 break;
                 
@@ -637,7 +1066,7 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
             default:
                 // Use ML-enhanced final score first
                 if ($a->final_score !== $b->final_score) {
-                    return $b->final_score - $a->final_score; // Higher ML score first
+                    return $b->final_score - $a->final_score;
                 }
                 break;
         }
@@ -653,1449 +1082,60 @@ private function calculateMLPriorityScore($employee, $manpowerRequest)
         if ($a->type === 'bulanan' && $b->type === 'harian') return -1;
         if ($a->type === 'harian' && $b->type === 'bulanan') return 1;
 
-        // REMOVED: working_day_weight sorting for harian employees
-        
         return $a->id - $b->id;
     });
 }
 
-    /**
-     * Get gender matching score (lower is better)
-     */
-    private function getGenderMatchScore($employee, ManpowerRequest $request)
-    {
-        $maleNeeded = $request->male_count > 0;
-        $femaleNeeded = $request->female_count > 0;
-
-        if ($maleNeeded && $employee->gender === 'male')
-            return 0;
-        if ($femaleNeeded && $employee->gender === 'female')
-            return 0;
-
-        return 1; // No match
-    }
-
-    /**
-     * Select optimal employees based on request requirements
-     */
-    private function selectOptimalEmployees($sortedEmployees, ManpowerRequest $request)
-    {
-        $selected = collect();
-        $requiredMale = $request->male_count ?? 0;
-        $requiredFemale = $request->female_count ?? 0;
-        $totalRequired = $request->requested_amount;
-
-        // First, select required gender counts
-        if ($requiredMale > 0) {
-            $males = $sortedEmployees->filter(fn($emp) => $emp->gender === 'male')
-                ->take($requiredMale);
-            $selected = $selected->merge($males);
-        }
-
-        if ($requiredFemale > 0) {
-            $females = $sortedEmployees->filter(fn($emp) => $emp->gender === 'female')
-                ->take($requiredFemale);
-            $selected = $selected->merge($females);
-        }
-
-        // Fill remaining slots with any available employees
-        $remaining = $totalRequired - $selected->count();
-        if ($remaining > 0) {
-            $alreadySelectedIds = $selected->pluck('id')->toArray();
-            $additionalEmployees = $sortedEmployees
-                ->filter(fn($emp) => !in_array($emp->id, $alreadySelectedIds))
-                ->take($remaining);
-
-            $selected = $selected->merge($additionalEmployees);
-        }
-
-        return $selected->take($totalRequired);
-    }
-
-    public function bulkStore(Request $request)
+/**
+ * Get gender matching score (lower is better)
+ */
+private function getGenderMatchScore($employee, ManpowerRequest $request)
 {
-    $request->validate([
-        'request_ids' => 'required|array',
-        'request_ids.*' => 'exists:man_power_requests,id',
-        'employee_selections' => 'required|array',
-        'strategy' => 'required|in:optimal,same_section,balanced',
-        'visibility' => 'in:public,private',
-        'status' => 'in:pending,accepted,rejected',
-        'enable_line_assignment' => 'boolean',
-        'line_assignments' => 'array',
-    ]);
-
-    DB::beginTransaction();
-    try {
-        $results = [];
-        $successCount = 0;
-        $failureCount = 0;
-        $employeeSelections = $request->employee_selections;
-        $lineAssignments = $request->line_assignments ?? [];
-        $status = $request->status ?? 'pending';
-        $enableLineAssignment = $request->enable_line_assignment ?? false;
-
-        foreach ($request->request_ids as $id) {
-            Log::info('⚡ Processing request', ['request_id' => $id]);
-
-            $manpowerRequest = ManPowerRequest::with(['subSection', 'schedules'])->findOrFail($id);
-
-            // Skip if already fulfilled
-            if ($manpowerRequest->status === 'fulfilled') {
-                $results[$id] = 'already fulfilled';
-                $failureCount++;
-                Log::warning('REQUEST ALREADY FULFILLED - SKIPPING', ['request_id' => $id]);
-                continue;
-            }
-
-            // Get selected employee IDs for this request
-            $selectedEmployeeIds = $employeeSelections[$id] ?? [];
-            $requestLineAssignments = $lineAssignments[$id] ?? [];
-
-            // Validate employee selection count
-            if (count($selectedEmployeeIds) !== $manpowerRequest->requested_amount) {
-                $results[$id] = 'invalid employee selection count';
-                $failureCount++;
-                Log::error('INVALID EMPLOYEE SELECTION COUNT - SKIPPING', [
-                    'request_id' => $id,
-                    'selected' => count($selectedEmployeeIds),
-                    'expected' => $manpowerRequest->requested_amount
-                ]);
-                continue;
-            }
-
-            // Validate gender requirements
-            $maleCount = 0;
-            $femaleCount = 0;
-
-            foreach ($selectedEmployeeIds as $employeeId) {
-                $employee = Employee::find($employeeId);
-                if (!$employee) {
-                    throw new \Exception("Employee {$employeeId} not found");
-                }
-
-                if ($employee->gender === 'male') {
-                    $maleCount++;
-                } elseif ($employee->gender === 'female') {
-                    $femaleCount++;
-                }
-            }
-
-            if ($manpowerRequest->male_count > 0 && $maleCount < $manpowerRequest->male_count) {
-                $results[$id] = 'insufficient male employees';
-                $failureCount++;
-                Log::error('INSUFFICIENT MALE EMPLOYEES - SKIPPING', [
-                    'request_id' => $id,
-                    'actual' => $maleCount,
-                    'required' => $manpowerRequest->male_count
-                ]);
-                continue;
-            }
-
-            if ($manpowerRequest->female_count > 0 && $femaleCount < $manpowerRequest->female_count) {
-                $results[$id] = 'insufficient female employees';
-                $failureCount++;
-                Log::error('INSUFFICIENT FEMALE EMPLOYEES - SKIPPING', [
-                    'request_id' => $id,
-                    'actual' => $femaleCount,
-                    'required' => $manpowerRequest->female_count
-                ]);
-                continue;
-            }
-
-            // Create schedules with line assignment
-            $createdSchedules = [];
-            foreach ($selectedEmployeeIds as $index => $employeeId) {
-                $data = [
-                    'employee_id' => $employeeId,
-                    'sub_section_id' => $manpowerRequest->sub_section_id,
-                    'man_power_request_id' => $manpowerRequest->id,
-                    'date' => $manpowerRequest->date,
-                    'status' => $status,
-                    'visibility' => $request->visibility ?? 'private',
-                ];
-
-                // Add line assignment if enabled
-                if ($enableLineAssignment && isset($requestLineAssignments[$employeeId])) {
-                    $data['line'] = $requestLineAssignments[$employeeId];
-                } elseif ($manpowerRequest->subSection && strtolower($manpowerRequest->subSection->name) === 'putway') {
-                    $data['line'] = strval((($index % 2) + 1)); // 1,2,1,2...
-                }
-
-                $schedule = Schedule::create($data);
-                $createdSchedules[] = $schedule->id;
-
-                Log::info('✅ Employee assigned', [
-                    'request_id' => $id,
-                    'employee_id' => $employeeId,
-                    'schedule_id' => $schedule->id,
-                    'line' => $data['line'] ?? 'N/A',
-                    'line_assignment_enabled' => $enableLineAssignment
-                ]);
-            }
-
-            // Update request status
-            $manpowerRequest->update([
-                'status' => 'fulfilled',
-                'fulfilled_by' => auth()->id()
-            ]);
-
-            $results[$id] = 'fulfilled - ' . count($selectedEmployeeIds) . ' employees assigned';
-            $successCount++;
-        }
-
-        DB::commit();
-
-        Log::info('=== BULK FULFILLMENT COMPLETED ===', [
-            'total_requests' => count($request->request_ids),
-            'successful' => $successCount,
-            'failed' => $failureCount,
-            'success_rate' => round(($successCount / count($request->request_ids)) * 100, 2) . '%',
-            'line_assignment_enabled' => $enableLineAssignment,
-            'results' => $results,
-            'timestamp' => now()->toDateTimeString()
-        ]);
-
-        return redirect()->route('manpower-requests.index')->with([
-            'success' => 'Bulk fulfill completed: ' . $successCount . ' successful, ' . $failureCount . ' failed',
-            'bulk_results' => $results
-        ]);
-
-    } catch (\Exception $e) {
-        DB::rollBack();
-
-        Log::error('=== BULK FULFILLMENT FAILED ===', [
-            'error_message' => $e->getMessage(),
-            'error_trace' => $e->getTraceAsString(),
-            'request_data' => $request->except(['employee_selections', 'line_assignments']),
-            'timestamp' => now()->toDateTimeString()
-        ]);
-
-        return redirect()->back()->withErrors([
-            'fulfillment_error' => 'Bulk fulfill failed: ' . $e->getMessage()
-        ]);
-    }
-}
-    public function bulkFulfill(Request $request)
-    {
-        $request->validate([
-            'request_ids' => 'required|array',
-            'request_ids.*' => 'exists:man_power_requests,id',
-            'employee_selections' => 'required|array',
-            'strategy' => 'required|in:optimal,same_section,balanced',
-            'visibility' => 'required|in:private,public',
-        ]);
-
-        try {
-            DB::beginTransaction();
-
-            $requestIds = $request->request_ids;
-            $employeeSelections = $request->employee_selections;
-
-            \Log::info('🚀 BulkFulfill triggered', [
-                'request_ids' => $requestIds,
-                'employee_selections' => $employeeSelections,
-            ]);
-
-            foreach ($requestIds as $reqId) {
-                $manpowerRequest = ManPowerRequest::findOrFail($reqId);
-
-                $employeeIds = $employeeSelections[$reqId] ?? [];
-
-                \Log::info('⚡ Processing bulk fulfill', [
-                    'request_id' => $reqId,
-                    'employee_ids' => $employeeIds,
-                ]);
-
-                // hapus schedule lama (kalau overwrite)
-                $manpowerRequest->schedules()->delete();
-
-                foreach ($employeeIds as $empId) {
-                    $manpowerRequest->schedules()->create([
-                        'employee_id' => $empId,
-                        'status' => $request->status ?? 'pending',
-                        'visibility' => $request->visibility,
-                    ]);
-
-                    \Log::info('✅ Employee assigned', [
-                        'request_id' => $reqId,
-                        'employee_id' => $empId,
-                    ]);
-                }
-
-                $manpowerRequest->update([
-                    'status' => 'fulfilled',
-                    'fulfilled_by' => $request->user()->id,
-                ]);
-            }
-
-            DB::commit();
-
-            \Log::info('🎉 BulkFulfill finished successfully');
-
-            return back()->with('success', 'Bulk fulfillment berhasil diproses.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            \Log::error('❌ BulkFulfill error: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString(),
-            ]);
-
-            return back()->withErrors([
-                'fulfillment_error' => 'Terjadi kesalahan saat memproses bulk fulfillment: ' . $e->getMessage(),
-            ]);
-        }
-    }
-
-
-    private function sortEmployeesForBulk($employees, $requests, $strategy)
-    {
-        return $employees->sortByDesc(function ($employee) use ($strategy, $requests) {
-            $score = 0;
-
-            switch ($strategy) {
-                case 'optimal':
-                    // Prioritize employees with higher scores
-                    $score += $employee->workload_points * 0.4;
-                    $score += $employee->blind_test_points * 0.3;
-                    $score += $employee->average_rating * 0.3;
-                    if (!$employee->is_scheduled)
-                        $score += 1000; // Big bonus for unscheduled
-                    break;
-
-                case 'same_section':
-                    // Prioritize employees from the same section as the first request
-                    $mainSectionId = $requests->first()->subSection->section_id;
-                    if ($employee->subSections->contains('section_id', $mainSectionId)) {
-                        $score += 2000;
-                    }
-                    $score += $employee->workload_points;
-                    break;
-
-                case 'balanced':
-                    // Balance workload across employees
-                    $score = 1000 - $employee->workload_points; // Lower workload = higher priority
-                    if (!$employee->is_scheduled)
-                        $score += 500;
-                    break;
-            }
-
-            return $score;
-        })->values()->all();
-    }
-
-
-    public function bulkPreview(Request $request)
-    {
-        $request->validate([
-            'request_ids' => 'required|array',
-            'request_ids.*' => 'exists:man_power_requests,id',
-            'strategy' => 'required|in:optimal,same_section,balanced',
-        ]);
-
-        $results = [];
-
-        foreach ($request->request_ids as $id) {
-            $manpowerRequest = ManPowerRequest::with('subSection.section')->findOrFail($id);
-
-            if ($manpowerRequest->status === 'fulfilled') {
-                $results[$id] = [
-                    'status' => 'already_fulfilled',
-                    'message' => 'Request already fulfilled',
-                    'employees' => []
-                ];
-                continue;
-            }
-
-            // Get eligible employees (same logic as create method)
-            $startDate = Carbon::now()->subDays(6)->startOfDay();
-            $endDate = Carbon::now()->endOfDay();
-
-            $scheduledEmployeeIdsOnRequestDate = Schedule::where('date', $manpowerRequest->date)
-                ->where('man_power_request_id', '!=', $manpowerRequest->id)
-                ->pluck('employee_id')
-                ->toArray();
-
-            $currentScheduledIds = $manpowerRequest->schedules->pluck('employee_id')->toArray();
-
-            $eligibleEmployees = Employee::where(function ($query) use ($currentScheduledIds) {
-                $query->where('status', 'available')
-                    ->orWhereIn('id', $currentScheduledIds);
-            })
-                ->where('cuti', 'no')
-                ->whereNotIn('id', array_diff($scheduledEmployeeIdsOnRequestDate, $currentScheduledIds))
-                ->with([
-                    'subSections' => function ($query) {
-                        $query->with('section');
-                    },
-                    'workloads',
-                    'blindTests',
-                    'ratings'
-                ])
-                ->withCount([
-                    'schedules' => function ($query) use ($startDate, $endDate) {
-                        $query->whereBetween('date', [$startDate, $endDate]);
-                    }
-                ])
-                ->with(['schedules.manPowerRequest.shift'])
-                ->get()
-                ->map(function ($employee) {
-                    // Same calculation logic as in create method
-                    $totalWorkingHours = 0;
-                    foreach ($employee->schedules as $schedule) {
-                        if ($schedule->manPowerRequest && $schedule->manPowerRequest->shift) {
-                            $totalWorkingHours += $schedule->manPowerRequest->shift->hours;
-                        }
-                    }
-
-                    $weeklyScheduleCount = $employee->schedules_count;
-
-                    $rating = match ($weeklyScheduleCount) {
-                        5 => 5,
-                        4 => 4,
-                        3 => 3,
-                        2 => 2,
-                        1 => 1,
-                        default => 0,
-                    };
-
-                    $workingDayWeight = match ($rating) {
-                        5 => 15,
-                        4 => 45,
-                        3 => 75,
-                        2 => 105,
-                        1 => 135,
-                        0 => 165,
-                        default => 0,
-                    };
-
-                    // $workloadPoints = $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0;
-                    // $blindTestResult = $employee->blindTests->sortByDesc('test_date')->first()->result ?? 'Fail';
-                    // $blindTestPoints = $blindTestResult === 'Pass' ? 3 : 0;
-                    // $averageRating = $employee->ratings->avg('rating') ?? 0;
-    
-                    // $totalScore = ($workloadPoints * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
-    
-                    // Use weeklyScheduleCount for workload penalty
-                    $baseScore = $this->calculateBaseScore($employee, $weeklyScheduleCount);
-                    // For bulk preview, you might want to use final score or keep base score
-                    $totalScore = $baseScore; // Or use final score if you want ML here too
-    
-                    $subSectionsData = $employee->subSections->map(function ($subSection) {
-                        return [
-                            'id' => $subSection->id,
-                            'name' => $subSection->name,
-                            'section_id' => $subSection->section_id,
-                            'section' => $subSection->section ? [
-                                'id' => $subSection->section->id,
-                                'name' => $subSection->section->name,
-                            ] : null,
-                        ];
-                    })->toArray();
-
-                    return [
-                        'id' => $employee->id,
-                        'nik' => $employee->nik,
-                        'name' => $employee->name,
-                        'type' => $employee->type,
-                        'status' => $employee->status,
-                        'gender' => $employee->gender,
-                        'working_day_weight' => $workingDayWeight,
-                        'total_score' => $totalScore,
-                        'sub_sections_data' => $subSectionsData,
-                    ];
-                });
-
-            // Split employees into three groups: exact subsection, same section, other
-            $splitEmployeesBySubSection = function ($employees, $request) {
-                $requestSubSectionId = $request->sub_section_id;
-                $requestSectionId = $request->subSection->section_id ?? null;
-
-                $exactSubSection = collect();
-                $sameSection = collect();
-                $other = collect();
-
-                foreach ($employees as $employee) {
-                    $subSections = collect($employee['sub_sections_data']);
-
-                    $hasExactSubSection = $subSections->contains('id', $requestSubSectionId);
-
-                    $hasSameSection = false;
-                    if ($requestSectionId) {
-                        $hasSameSection = $subSections->contains(function ($ss) use ($requestSectionId, $requestSubSectionId) {
-                            return isset($ss['section']['id']) &&
-                                $ss['section']['id'] == $requestSectionId &&
-                                $ss['id'] != $requestSubSectionId;
-                        });
-                    }
-
-                    if ($hasExactSubSection) {
-                        $exactSubSection->push($employee);
-                    } elseif ($hasSameSection) {
-                        $sameSection->push($employee);
-                    } else {
-                        $other->push($employee);
-                    }
-                }
-
-                return [$exactSubSection, $sameSection, $other];
-            };
-
-            $strategy = $request->strategy;
-            $sortEmployees = function ($employees) use ($strategy, $manpowerRequest) {
-                $requestSubSectionId = $manpowerRequest->sub_section_id;
-                $requestSectionId = $manpowerRequest->subSection->section_id ?? null;
-
-                return $employees->sort(function ($a, $b) use ($strategy, $requestSubSectionId, $requestSectionId) {
-                    if ($strategy === 'same_section') {
-                        $aHasExact = collect($a['sub_sections_data'])->contains('id', $requestSubSectionId);
-                        $bHasExact = collect($b['sub_sections_data'])->contains('id', $requestSubSectionId);
-
-                        if ($aHasExact && !$bHasExact)
-                            return -1;
-                        if (!$aHasExact && $bHasExact)
-                            return 1;
-
-                        return $b['total_score'] <=> $a['total_score'];
-                    }
-
-                    if ($strategy === 'balanced') {
-                        return $a['working_day_weight'] <=> $b['working_day_weight'];
-                    }
-
-                    // optimal strategy
-                    $aInSameSection = collect($a['sub_sections_data'])->contains(function ($ss) use ($requestSectionId) {
-                        return isset($ss['section']['id']) && $ss['section']['id'] == $requestSectionId;
-                    });
-                    $bInSameSection = collect($b['sub_sections_data'])->contains(function ($ss) use ($requestSectionId) {
-                        return isset($ss['section']['id']) && $ss['section']['id'] == $requestSectionId;
-                    });
-
-                    if ($aInSameSection && !$bInSameSection)
-                        return -1;
-                    if (!$aInSameSection && $bInSameSection)
-                        return 1;
-
-                    return $b['total_score'] <=> $a['total_score'];
-                });
-            };
-
-            // Split and sort employees
-            [$exactSubSectionEmployees, $sameSectionEmployees, $otherEmployees] =
-                $splitEmployeesBySubSection($eligibleEmployees, $manpowerRequest);
-
-            $sortedExactSubSection = $sortEmployees($exactSubSectionEmployees);
-            $sortedSameSection = $sortEmployees($sameSectionEmployees);
-            $sortedOther = $sortEmployees($otherEmployees);
-
-            // Combine in priority order
-            $sortedEmployees = $sortedExactSubSection
-                ->merge($sortedSameSection)
-                ->merge($sortedOther);
-
-            // Take needed employees
-            $needed = $manpowerRequest->requested_amount;
-            $selected = $sortedEmployees->take($needed);
-
-            $results[$id] = [
-                'status' => 'preview',
-                'request' => $manpowerRequest->only(['id', 'date', 'requested_amount', 'sub_section_id']),
-                'employees' => $selected->values()->all(),
-                'available_count' => $eligibleEmployees->count(),
-                'selected_count' => $selected->count()
-            ];
-        }
-
-        return response()->json([
-            'success' => true,
-            'results' => $results,
-            'strategy' => $request->strategy
-        ]);
-    }
-
-    /**
-     * Auto-assign employees ke satu request
-     */
-    private function autoAssignEmployees(ManPowerRequest $request, string $strategy = 'optimal')
-    {
-        // Ambil employee eligible persis sama kayak di create()
-        $startDate = Carbon::now()->subDays(6)->startOfDay();
-        $endDate = Carbon::now()->endOfDay();
-
-        $scheduledEmployeeIdsOnRequestDate = Schedule::where('date', $request->date)
-            ->where('man_power_request_id', '!=', $request->id)
-            ->pluck('employee_id')
-            ->toArray();
-
-        $currentScheduledIds = $request->schedules->pluck('employee_id')->toArray();
-
-        $eligibleEmployees = Employee::where(function ($query) use ($currentScheduledIds) {
-            $query->where('status', 'available')
-                ->orWhereIn('id', $currentScheduledIds);
-        })
-            ->where('cuti', 'no')
-            ->whereNotIn('id', array_diff($scheduledEmployeeIdsOnRequestDate, $currentScheduledIds))
-            ->with([
-                'subSections.section',
-                'workloads',
-                'blindTests',
-                'ratings'
-            ])
-            ->withCount([
-                'schedules' => function ($query) use ($startDate, $endDate) {
-                    $query->whereBetween('date', [$startDate, $endDate]);
-                }
-            ])
-            ->with(['schedules.manPowerRequest.shift'])
-            ->get()
-            ->map(function ($employee) {
-                // hitung score, workingDayWeight, dsb sama kayak di create()
-                $totalWorkingHours = 0;
-                foreach ($employee->schedules as $schedule) {
-                    if ($schedule->manPowerRequest && $schedule->manPowerRequest->shift) {
-                        $totalWorkingHours += $schedule->manPowerRequest->shift->hours;
-                    }
-                }
-
-                $weeklyScheduleCount = $employee->schedules_count;
-
-                $rating = match ($weeklyScheduleCount) {
-                    5 => 5,
-                    4 => 4,
-                    3 => 3,
-                    2 => 2,
-                    1 => 1,
-                    default => 0,
-                };
-
-                $workingDayWeight = match ($rating) {
-                    5 => 15,
-                    4 => 45,
-                    3 => 75,
-                    2 => 105,
-                    1 => 135,
-                    0 => 165,
-                    default => 0,
-                };
-
-                $baseScore = $this->calculateBaseScore($employee, $weeklyScheduleCount);
-                $mlScore = $this->calculateMLPriorityScore($employee, $request);
-                $totalScore = ($mlScore * 0.7) + ($baseScore * 0.3); // Final ML-enhanced score
-    
-                // Get proper subsection data with section information
-                $subSectionsData = $employee->subSections->map(function ($subSection) {
-                    return [
-                        'id' => $subSection->id,
-                        'name' => $subSection->name,
-                        'section_id' => $subSection->section_id,
-                        'section' => $subSection->section ? [
-                            'id' => $subSection->section->id,
-                            'name' => $subSection->section->name,
-                        ] : null,
-                    ];
-                })->toArray();
-
-                return [
-                    'id' => $employee->id,
-                    'gender' => $employee->gender,
-                    'type' => $employee->type,
-                    'working_day_weight' => $workingDayWeight,
-                    'total_score' => $totalScore,
-                    'sub_sections_data' => $subSectionsData,
-                ];
-            });
-
-        // === Filter employees by subsection/section matching ===
-        $requestSubSectionId = $request->sub_section_id;
-        $requestSectionId = $request->subSection->section_id ?? null;
-
-        // Split employees into same and other sections
-        $splitEmployees = function ($employees, $requestSubSectionId, $requestSectionId) {
-            $same = collect();
-            $other = collect();
-
-            foreach ($employees as $employee) {
-                $subSections = collect($employee['sub_sections_data']);
-
-                $hasExactSubSection = $subSections->contains('id', $requestSubSectionId);
-
-                $hasSameSection = false;
-                if ($requestSectionId) {
-                    $hasSameSection = $subSections->contains(function ($ss) use ($requestSectionId) {
-                        return isset($ss['section']['id']) && $ss['section']['id'] == $requestSectionId;
-                    });
-                }
-
-                if ($hasExactSubSection || $hasSameSection) {
-                    $same->push($employee);
-                } else {
-                    $other->push($employee);
-                }
-            }
-
-            return [$same, $other];
-        };
-
-        // Split employees
-        [$sameSubSectionEmployees, $otherSubSectionEmployees] = $splitEmployees(
-            $eligibleEmployees,
-            $requestSubSectionId,
-            $requestSectionId
-        );
-
-        // === Apply strategy-based sorting ===
-        $sortEmployees = function ($employees) use ($strategy, $requestSubSectionId, $requestSectionId) {
-            return $employees->sort(function ($a, $b) use ($strategy, $requestSubSectionId, $requestSectionId) {
-                if ($strategy === 'same_section') {
-                    // Prioritize employees with exact subsection match
-                    $aHasExact = collect($a['sub_sections_data'])->contains('id', $requestSubSectionId);
-                    $bHasExact = collect($b['sub_sections_data'])->contains('id', $requestSubSectionId);
-
-                    if ($aHasExact && !$bHasExact)
-                        return -1;
-                    if (!$aHasExact && $bHasExact)
-                        return 1;
-
-                    // Then by total score
-                    return $b['total_score'] <=> $a['total_score'];
-                }
-                if ($strategy === 'balanced') {
-                    return $a['working_day_weight'] <=> $b['working_day_weight'];
-                }
-                // default: optimal - prioritize same section first, then by score
-                $aInSameSection = collect($a['sub_sections_data'])->contains(function ($ss) use ($requestSectionId) {
-                    return isset($ss['section']['id']) && $ss['section']['id'] == $requestSectionId;
-                });
-                $bInSameSection = collect($b['sub_sections_data'])->contains(function ($ss) use ($requestSectionId) {
-                    return isset($ss['section']['id']) && $ss['section']['id'] == $requestSectionId;
-                });
-
-                if ($aInSameSection && !$bInSameSection)
-                    return -1;
-                if (!$aInSameSection && $bInSameSection)
-                    return 1;
-
-                return $b['total_score'] <=> $a['total_score'];
-            });
-        };
-
-        // Sort employees based on strategy
-        $sortedSameSubSection = $sortEmployees($sameSubSectionEmployees);
-        $sortedOtherSubSection = $sortEmployees($otherSubSectionEmployees);
-
-        // Combine same subsection first, then others
-        $sortedEmployees = $sortedSameSubSection->merge($sortedOtherSubSection);
-
-        // Ambil sesuai jumlah request
-        $needed = $request->requested_amount;
-        $selected = $sortedEmployees->take($needed);
-
-        // Insert ke schedules
-        foreach ($selected as $emp) {
-            Schedule::create([
-                'employee_id' => $emp['id'],
-                'sub_section_id' => $request->sub_section_id,
-                'man_power_request_id' => $request->id,
-                'date' => $request->date,
-                'status' => 'pending',
-                'visibility' => 'private'
-            ]);
-        }
-
-        return $selected;
-    }
-
-    private function splitEmployeesBySubSection($employees, $request)
-    {
-        $requestSubSectionId = $request->sub_section_id;
-        $requestSectionId = $request->subSection->section_id ?? null;
-
-        $same = collect();
-        $other = collect();
-
-        foreach ($employees as $employee) {
-            $subSections = collect($employee['sub_sections_data']);
-
-            // Check for exact subsection match
-            $hasExactSubSection = $subSections->contains('id', $requestSubSectionId);
-
-            // Check for same section (fallback) - ensure section data exists
-            $hasSameSection = false;
-            if ($requestSectionId) {
-                $hasSameSection = $subSections->contains(function ($ss) use ($requestSectionId) {
-                    return isset($ss['section']['id']) && $ss['section']['id'] == $requestSectionId;
-                });
-            }
-
-            if ($hasExactSubSection || $hasSameSection) {
-                $same->push($employee);
-            } else {
-                $other->push($employee);
-            }
-        }
-
-        return [$same, $other];
-    }
-
-
-public function store(Request $request, $id)
-{
-    $validated = $request->validate([
-        'employee_ids' => 'required|array',
-        'employee_ids.*' => 'exists:employees,id',
-        'fulfilled_by' => 'required|exists:users,id',
-        'visibility' => 'in:public,private',
-        'enable_line_assignment' => 'boolean',
-        'line_assignments' => 'array',
-        'line_assignments.*' => 'string',
-    ]);
-
-    // Add debug logging to see what's actually received
-    Log::info('=== STORE METHOD - DATA RECEIVED ===', [
-        'enable_line_assignment_received' => $request->enable_line_assignment,
-        'line_assignments_received' => $request->line_assignments,
-        'line_assignments_count' => is_array($request->line_assignments) ? count($request->line_assignments) : 0,
-        'all_request_data' => $request->all()
-    ]);
-
-    $req = ManPowerRequest::with(['schedules.employee', 'subSection'])->findOrFail($id);
-
-    try {
-        DB::transaction(function () use ($validated, $req) {
-            $currentSchedules = $req->schedules;
-            $currentEmployeeIds = $currentSchedules->pluck('employee_id')->toArray();
-            $newEmployeeIds = $validated['employee_ids'];
-            
-            // Get line assignments if enabled - FIX: Check if line assignment is actually enabled
-            $enableLineAssignment = $validated['enable_line_assignment'] ?? false;
-            $lineAssignments = $enableLineAssignment ? ($validated['line_assignments'] ?? []) : [];
-
-            Log::info('Line assignment data processed', [
-                'enable_line_assignment' => $enableLineAssignment,
-                'line_assignments_count' => count($lineAssignments),
-                'line_assignments' => $lineAssignments,
-                'new_employee_ids' => $newEmployeeIds
-            ]);
-
-            // Hapus semua schedule lama untuk request ini
-            if ($currentSchedules->count() > 0) {
-                foreach ($currentSchedules as $schedule) {
-                    $employee = $schedule->employee;
-                    // Only update status if not assigned elsewhere
-                    $otherAssignments = Schedule::where('employee_id', $employee->id)
-                        ->where('man_power_request_id', '!=', $req->id)
-                        ->where('date', $req->date)
-                        ->count();
-
-                    if ($otherAssignments === 0) {
-                        $employee->status = 'available';
-                        $employee->save();
-                    }
-                    $schedule->delete();
-                    Log::info("Deleted old schedule for employee {$employee->id}");
-                }
-            }
-
-            // Buat schedule baru untuk semua employee yang dipilih
-            foreach ($newEmployeeIds as $employeeId) {
-                $employee = Employee::where('id', $employeeId)
-                    ->where(function ($query) {
-                        $query->where('status', 'available')
-                            ->orWhere('status', 'assigned');
-                    })
-                    ->where('cuti', 'no')
-                    ->whereDoesntHave('schedules', function ($query) use ($req) {
-                        $query->where('date', $req->date)
-                            ->where('man_power_request_id', '!=', $req->id);
-                    })
-                    ->first();
-
-                if (!$employee) {
-                    throw new \Exception("Karyawan ID {$employeeId} tidak tersedia, sedang cuti, atau sudah dijadwalkan pada tanggal ini.");
-                }
-
-                $data = [
-                    'employee_id' => $employeeId,
-                    'sub_section_id' => $req->sub_section_id,
-                    'man_power_request_id' => $req->id,
-                    'date' => $req->date,
-                    'visibility' => $validated['visibility'] ?? 'private',
-                ];
-
-                // FIX: Only set line if line assignment is enabled AND assignment exists
-                if ($enableLineAssignment && isset($lineAssignments[$employeeId])) {
-                    // Use the assigned line from line assignments
-                    $data['line'] = $lineAssignments[$employeeId];
-                    Log::info("Setting line from assignment", [
-                        'employee_id' => $employeeId,
-                        'line' => $lineAssignments[$employeeId],
-                        'line_type' => gettype($lineAssignments[$employeeId])
-                    ]);
-                } elseif ($enableLineAssignment && strtolower($req->subSection->name) === 'putway') {
-                    // Fallback to default line assignment for putway subsection only if enabled
-                    $data['line'] = '1'; // Default to line 1 for putway
-                    Log::info("Setting default line for putway", [
-                        'employee_id' => $employeeId,
-                        'line' => $data['line']
-                    ]);
-                } else {
-                    // Don't set line field at all if line assignment is disabled
-                    // This will use the database default value or NULL
-                    Log::info("Line assignment disabled - not setting line field", [
-                        'employee_id' => $employeeId
-                    ]);
-                }
-
-                $schedule = Schedule::create($data);
-
-                $employee->status = 'assigned';
-                $employee->save();
-
-                Log::info("Employee {$employeeId} assigned to new schedule {$schedule->id}", [
-                    'line' => $data['line'] ?? 'N/A (not set)',
-                    'line_assignment_enabled' => $enableLineAssignment,
-                    'schedule_data' => $data
-                ]);
-            }
-
-            // Update request status
-            $req->status = 'fulfilled';
-            $req->fulfilled_by = $validated['fulfilled_by'];
-            $req->save();
-
-            Log::info('Manpower request fulfilled', [
-                'request_id' => $req->id,
-                'fulfilled_by' => $validated['fulfilled_by'],
-                'total_employees' => count($newEmployeeIds),
-                'line_assignment_enabled' => $enableLineAssignment,
-                'line_assignments_used' => $enableLineAssignment ? count($lineAssignments) : 0,
-                'date' => $req->date
-            ]);
-        });
-    } catch (\Exception $e) {
-        Log::error('Fulfillment Error: ' . $e->getMessage(), [
-            'exception' => $e,
-            'request_id' => $id,
-            'user_id' => auth()->id(),
-            'line_assignments_received' => $validated['line_assignments'] ?? [],
-            'enable_line_assignment' => $validated['enable_line_assignment'] ?? false
-        ]);
-
-        return back()->withErrors(['fulfillment_error' => $e->getMessage()]);
-    }
-
-    return redirect()
-        ->route('manpower-requests.index')
-        ->with('success', 'Permintaan berhasil dipenuhi');
+    $maleNeeded = $request->male_count > 0;
+    $femaleNeeded = $request->female_count > 0;
+
+    if ($maleNeeded && $employee->gender === 'male')
+        return 0;
+    if ($femaleNeeded && $employee->gender === 'female')
+        return 0;
+
+    return 1; // No match
 }
 
-// In ManPowerRequestFulfillmentController.php - FIXED bulkFulfillmentPage method
-
-public function bulkFulfillmentPage($id)
+/**
+ * Select optimal employees based on request requirements
+ */
+private function selectOptimalEmployees($sortedEmployees, ManpowerRequest $request)
 {
-    $request = ManPowerRequest::with(['subSection.section', 'shift'])->findOrFail($id);
-    
-    // Get same day requests from same SECTION
-    $sameDayRequests = ManPowerRequest::with(['subSection.section', 'shift'])
-        ->where('date', $request->date)
-        ->where('id', '!=', $request->id)
-        ->whereHas('subSection', function($query) use ($request) {
-            $query->where('section_id', $request->subSection->section_id);
-        })
-        ->get();
+    $selected = collect();
+    $requiredMale = $request->male_count ?? 0;
+    $requiredFemale = $request->female_count ?? 0;
+    $totalRequired = $request->requested_amount;
 
-    // Get eligible employees - FIXED: Properly load subSections relationship
-    $startDate = Carbon::now()->subDays(6)->startOfDay();
-    $endDate = Carbon::now()->endOfDay();
+    // First, select required gender counts
+    if ($requiredMale > 0) {
+        $males = $sortedEmployees->filter(fn($emp) => $emp->gender === 'male')
+            ->take($requiredMale);
+        $selected = $selected->merge($males);
+    }
 
-    $scheduledEmployeeIdsOnRequestDate = Schedule::where('date', $request->date)
-        ->where('man_power_request_id', '!=', $request->id)
-        ->pluck('employee_id')
-        ->toArray();
+    if ($requiredFemale > 0) {
+        $females = $sortedEmployees->filter(fn($emp) => $emp->gender === 'female')
+            ->take($requiredFemale);
+        $selected = $selected->merge($females);
+    }
 
-    $currentScheduledIds = $request->schedules->pluck('employee_id')->toArray();
+    // Fill remaining slots with any available employees
+    $remaining = $totalRequired - $selected->count();
+    if ($remaining > 0) {
+        $alreadySelectedIds = $selected->pluck('id')->toArray();
+        $additionalEmployees = $sortedEmployees
+            ->filter(fn($emp) => !in_array($emp->id, $alreadySelectedIds))
+            ->take($remaining);
 
-    $eligibleEmployees = Employee::where(function ($query) use ($currentScheduledIds) {
-        $query->where('status', 'available')
-            ->orWhereIn('id', $currentScheduledIds);
-    })
-        ->where('cuti', 'no')
-        ->whereNotIn('id', array_diff($scheduledEmployeeIdsOnRequestDate, $currentScheduledIds))
-        ->with([
-            // FIX: Properly load the subSections relationship with section
-            'subSections.section', // This will load the pivot relationship
-            'workloads',
-            'blindTests',
-            'ratings'
-        ])
-        ->withCount([
-            'schedules' => function ($query) use ($startDate, $endDate) {
-                $query->whereBetween('date', [$startDate, $endDate]);
-            }
-        ])
-        ->with(['schedules.manPowerRequest.shift'])
-        ->get()
-        ->map(function ($employee) use ($request) {
-            $totalWorkingHours = 0;
-            foreach ($employee->schedules as $schedule) {
-                if ($schedule->manPowerRequest && $schedule->manPowerRequest->shift) {
-                    $totalWorkingHours += $schedule->manPowerRequest->shift->hours;
-                }
-            }
+        $selected = $selected->merge($additionalEmployees);
+    }
 
-            $weeklyScheduleCount = $employee->schedules_count;
-
-            // Calculate ML score and final score
-            $baseScore = $this->calculateBaseScore($employee, $weeklyScheduleCount);
-            $mlScore = $this->calculateMLPriorityScore($employee, $request);
-            $finalScore = ($mlScore * 0.7) + ($baseScore * 0.3);
-
-            // FIX: Properly format subSections data from the pivot relationship
-            $subSectionsData = $employee->subSections->map(function ($subSection) {
-                return [
-                    'id' => (string) $subSection->id,
-                    'name' => $subSection->name,
-                    'section_id' => (string) $subSection->section_id,
-                    'section' => $subSection->section ? [
-                        'id' => (string) $subSection->section->id,
-                        'name' => $subSection->section->name,
-                    ] : null,
-                ];
-            })->toArray();
-
-            // Debug log to verify subSections data
-            Log::debug('Employee subSections data', [
-                'employee_id' => $employee->id,
-                'employee_name' => $employee->name,
-                'subsections_count' => count($subSectionsData),
-                'subsections' => $subSectionsData
-            ]);
-
-            return [
-                'id' => (string) $employee->id,
-                'nik' => $employee->nik,
-                'name' => $employee->name,
-                'type' => $employee->type,
-                'status' => $employee->status,
-                'gender' => $employee->gender,
-                'final_score' => $finalScore,
-                'ml_score' => $mlScore,
-                'subSections' => $subSectionsData, // FIX: Changed from sub_sections_data to subSections
-                'workload_points' => $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0,
-                'average_rating' => $employee->ratings->avg('rating') ?? 0,
-                // Add work days data for EmployeeModal
-                'work_days_14_days' => $this->getWorkDaysCount($employee, 14),
-                'work_days_30_days' => $this->getWorkDaysCount($employee, 30),
-                'last_5_shifts' => $this->getLastShifts($employee, 5),
-            ];
-        });
-
-    // Sort employees by final_score (ML-enhanced)
-    $allSortedEligibleEmployees = $eligibleEmployees->sortByDesc('final_score')->values()->all();
-
-    // Debug log to check final data
-    Log::info('BulkFulfillmentPage Data', [
-        'request_id' => $request->id,
-        'request_sub_section_id' => $request->sub_section_id,
-        'total_employees' => count($allSortedEligibleEmployees),
-        'employees_with_subsections' => collect($allSortedEligibleEmployees)->filter(function($emp) {
-            return !empty($emp['subSections']);
-        })->count(),
-        'sample_employee_subsections' => collect($allSortedEligibleEmployees)->take(3)->map(function($emp) {
-            return [
-                'employee_id' => $emp['id'],
-                'subsections' => $emp['subSections']
-            ];
-        })
-    ]);
-
-    // FIX: Use the correct path with Fulfill/ prefix
-    return Inertia::render('Fullfill/BulkFulfillment', [
-        'auth' => ['user' => auth()->user()],
-        'sameDayRequests' => $sameDayRequests,
-        'currentRequest' => $request,
-        'allSortedEligibleEmployees' => $allSortedEligibleEmployees,
-    ]);
+    return $selected->take($totalRequired);
 }
-
-    /**
-     * Show the form for revising a fulfilled request
-     */
-    public function revise($id)
-    {
-        $request = ManPowerRequest::with([
-            'subSection.section',
-            'shift',
-            'fulfilledBy',
-            'schedules.employee.subSections.section'
-        ])->findOrFail($id);
-
-        // Only allow revision for fulfilled requests
-        if ($request->status !== 'fulfilled') {
-            abort(403, 'Hanya permintaan yang sudah terpenuhi yang dapat direvisi.');
-        }
-
-        $startDate = Carbon::now()->subDays(6)->startOfDay();
-        $endDate = Carbon::now()->endOfDay();
-
-        $scheduledEmployeeIdsOnRequestDate = Schedule::where('date', $request->date)
-            ->where('man_power_request_id', '!=', $request->id)
-            ->pluck('employee_id')
-            ->toArray();
-
-        $currentScheduledIds = $request->schedules->pluck('employee_id')->toArray();
-
-        // Convert IDs to strings for consistent comparison
-        $currentScheduledIds = array_map('strval', $currentScheduledIds);
-        $scheduledEmployeeIdsOnRequestDate = array_map('strval', $scheduledEmployeeIdsOnRequestDate);
-
-        // Get eligible employees
-        $eligibleEmployees = Employee::where(function ($query) use ($currentScheduledIds) {
-            $query->where('status', 'available')
-                ->orWhereIn('id', $currentScheduledIds);
-        })
-            ->where('cuti', 'no')
-            ->whereNotIn('id', array_diff($scheduledEmployeeIdsOnRequestDate, $currentScheduledIds))
-            ->with([
-                'subSections' => function ($query) {
-                    $query->with('section');
-                },
-                'workloads',
-                'blindTests',
-                'ratings'
-            ])
-            ->withCount([
-                'schedules' => function ($query) use ($startDate, $endDate) {
-                    $query->whereBetween('date', [$startDate, $endDate]);
-                }
-            ])
-            ->with(['schedules.manPowerRequest.shift'])
-            ->get()
-            ->map(function ($employee) use ($request) {
-                $totalWorkingHours = 0;
-                foreach ($employee->schedules as $schedule) {
-                    if ($schedule->manPowerRequest && $schedule->manPowerRequest->shift) {
-                        $totalWorkingHours += $schedule->manPowerRequest->shift->hours;
-                    }
-                }
-
-                $weeklyScheduleCount = $employee->schedules_count;
-
-                $rating = match ($weeklyScheduleCount) {
-                    5 => 5,
-                    4 => 4,
-                    3 => 3,
-                    2 => 2,
-                    1 => 1,
-                    default => 0,
-                };
-
-                $workingDayWeight = match ($rating) {
-                    5 => 15,
-                    4 => 45,
-                    3 => 75,
-                    2 => 105,
-                    1 => 135,
-                    0 => 165,
-                    default => 0,
-                };
-
-                // $workloadPoints = $employee->workloads->sortByDesc('week')->first()->workload_point ?? 0;
-    
-                // $blindTestResult = $employee->blindTests->sortByDesc('test_date')->first()->result ?? 'Fail';
-                // $blindTestPoints = $blindTestResult === 'Pass' ? 3 : 0;
-    
-                // $averageRating = $employee->ratings->avg('rating') ?? 0;
-    
-                // $totalScore = ($workloadPoints * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
-    
-               $baseScore = $this->calculateBaseScore($employee, $weeklyScheduleCount);
-$mlScore = $this->calculateMLPriorityScore($employee, $request);
-$totalScore = ($mlScore * 0.7) + ($baseScore * 0.3);
-
-                $subSectionsData = $employee->subSections->map(function ($subSection) {
-                    return [
-                        'id' => (string) $subSection->id,
-                        'name' => $subSection->name,
-                        'section_id' => (string) $subSection->section_id,
-                        'section' => $subSection->section ? [
-                            'id' => (string) $subSection->section->id,
-                            'name' => $subSection->section->name,
-                        ] : null,
-                    ];
-                })->toArray();
-
-
-                return [
-                    'id' => (string) $employee->id,
-                    'nik' => $employee->nik,
-                    'name' => $employee->name,
-                    'type' => $employee->type,
-                    'status' => $employee->status,
-                    'cuti' => $employee->cuti,
-                    'photo' => $employee->photo,
-                    'gender' => $employee->gender,
-                    'created_at' => $employee->created_at,
-                    'updated_at' => $employee->updated_at,
-                    'schedules_count' => $employee->schedules_count,
-                    'calculated_rating' => $rating,
-                    'working_day_weight' => $workingDayWeight,
-                    'total_assigned_hours' => $totalWorkingHours,
-                    'sub_sections_data' => $subSectionsData,
-                    // 'workload_points' => $workloadPoints,
-                    // 'blind_test_points' => $blindTestPoints,
-                    // 'average_rating' => $averageRating,
-                    'ml_score' => $mlScore, // Where applicable
-                    'total_score' => $totalScore,
-                ];
-            });
-
-        // Split employees by subsection
-        $splitEmployeesBySubSection = function ($employees, $request) {
-            $requestSubSectionId = (string) $request->sub_section_id;
-            $requestSectionId = $request->subSection ? (string) $request->subSection->section_id : null;
-
-            $same = collect();
-            $other = collect();
-
-            foreach ($employees as $employee) {
-                $subSections = collect($employee['sub_sections_data']);
-
-                $hasExactSubSection = $subSections->contains('id', $requestSubSectionId);
-
-                $hasSameSection = false;
-                if ($requestSectionId) {
-                    $hasSameSection = $subSections->contains(function ($ss) use ($requestSectionId) {
-                        return isset($ss['section']['id']) && (string) $ss['section']['id'] === $requestSectionId;
-                    });
-                }
-
-                if ($hasExactSubSection || $hasSameSection) {
-                    $same->push($employee);
-                } else {
-                    $other->push($employee);
-                }
-            }
-
-            return [$same, $other];
-        };
-
-        $sortEmployees = function ($employees) {
-            return $employees->sortByDesc('total_score')
-                ->sortByDesc(fn($employee) => $employee['type'] === 'bulanan' ? 1 : 0)
-                ->sortBy('working_day_weight')
-                ->values();
-        };
-
-        [$sameSubSectionEligible, $otherSubSectionEligible] = $splitEmployeesBySubSection($eligibleEmployees, $request);
-
-        $sortedSameSubSectionEmployees = $sortEmployees($sameSubSectionEligible);
-        $sortedOtherSubSectionEmployees = $sortEmployees($otherSubSectionEligible);
-
-        // Convert current scheduled IDs to strings for frontend consistency
-        $currentScheduledIds = array_map('strval', $currentScheduledIds);
-
-        return Inertia::render('Fullfill/Revise', [
-            'request' => $request,
-            'sameSubSectionEmployees' => $sortedSameSubSectionEmployees,
-            'otherSubSectionEmployees' => $sortedOtherSubSectionEmployees,
-            'currentScheduledIds' => $currentScheduledIds,
-            'auth' => ['user' => auth()->user()]
-        ]);
-    }
-
-    /**
-     * Update the revised fulfillment
-     */
-public function updateRevision(Request $request, $id)
-{
-    $validated = $request->validate([
-        'employee_ids' => 'required|array',
-        'employee_ids.*' => 'exists:employees,id',
-        'fulfilled_by' => 'required|exists:users,id',
-        'visibility' => 'in:public,private',
-        'enable_line_assignment' => 'boolean',
-        'line_assignments' => 'array',
-        'line_assignments.*' => 'string',
-    ]);
-
-    $req = ManPowerRequest::with(['schedules.employee', 'subSection'])->findOrFail($id);
-
-    // Only allow revision for fulfilled requests
-    if ($req->status !== 'fulfilled') {
-        return back()->withErrors(['revision_error' => 'Hanya permintaan yang sudah terpenuhi yang dapat direvisi.']);
-    }
-
-    try {
-        DB::transaction(function () use ($validated, $req) {
-            $currentSchedules = $req->schedules;
-            $newEmployeeIds = $validated['employee_ids'];
-
-            // FIX: Only get line assignments if enabled
-            $enableLineAssignment = $validated['enable_line_assignment'] ?? false;
-            $lineAssignments = $enableLineAssignment ? ($validated['line_assignments'] ?? []) : [];
-
-            Log::info('=== REVISION STARTED ===', [
-                'request_id' => $req->id,
-                'enable_line_assignment' => $enableLineAssignment,
-                'line_assignments_received' => $lineAssignments,
-                'line_assignments_count' => count($lineAssignments),
-                'new_employee_ids' => $newEmployeeIds,
-                'new_employee_ids_count' => count($newEmployeeIds)
-            ]);
-
-            // FIXED: Delete all current schedules first
-            if ($currentSchedules->count() > 0) {
-                foreach ($currentSchedules as $schedule) {
-                    $employee = $schedule->employee;
-                    // Only update status if not assigned elsewhere
-                    $otherAssignments = Schedule::where('employee_id', $employee->id)
-                        ->where('man_power_request_id', '!=', $req->id)
-                        ->where('date', $req->date)
-                        ->count();
-
-                    if ($otherAssignments === 0) {
-                        $employee->status = 'available';
-                        $employee->save();
-                    }
-                    $schedule->delete();
-                    Log::info("Deleted old schedule for employee {$employee->id}");
-                }
-            }
-
-            // FIXED: Create new schedules - only set line if enabled
-            foreach ($newEmployeeIds as $employeeId) {
-                $employee = Employee::where('id', $employeeId)
-                    ->where(function ($query) {
-                        $query->where('status', 'available')
-                            ->orWhere('status', 'assigned');
-                    })
-                    ->where('cuti', 'no')
-                    ->whereDoesntHave('schedules', function ($query) use ($req) {
-                        $query->where('date', $req->date)
-                            ->where('man_power_request_id', '!=', $req->id);
-                    })
-                    ->first();
-
-                if (!$employee) {
-                    throw new \Exception("Karyawan ID {$employeeId} tidak tersedia, sedang cuti, atau sudah dijadwalkan pada tanggal ini.");
-                }
-
-                $data = [
-                    'employee_id' => $employeeId,
-                    'sub_section_id' => $req->sub_section_id,
-                    'man_power_request_id' => $req->id,
-                    'date' => $req->date,
-                    'visibility' => $validated['visibility'] ?? 'private',
-                ];
-
-                // FIX: Only set line if line assignment is enabled AND assignment exists
-                if ($enableLineAssignment && isset($lineAssignments[$employeeId])) {
-                    $data['line'] = $lineAssignments[$employeeId];
-                    Log::info("✅ SET LINE FROM ASSIGNMENT", [
-                        'employee_id' => $employeeId,
-                        'line' => $lineAssignments[$employeeId],
-                        'line_from_request' => $lineAssignments[$employeeId]
-                    ]);
-                } elseif ($enableLineAssignment && strtolower($req->subSection->name) === 'putway') {
-                    // Only set default for putway if line assignment is enabled
-                    $data['line'] = '1';
-                    Log::info("⚡ SET DEFAULT LINE 1 FOR PUTWAY", [
-                        'employee_id' => $employeeId,
-                        'reason' => 'putway_subsection_with_line_assignment_enabled'
-                    ]);
-                } else {
-                    // Don't set line field at all if line assignment is disabled
-                    Log::info("⚡ LINE FIELD NOT SET", [
-                        'employee_id' => $employeeId,
-                        'reason' => $enableLineAssignment ? 'no_line_assignment_provided' : 'line_assignment_disabled'
-                    ]);
-                }
-
-                $schedule = Schedule::create($data);
-
-                $employee->status = 'assigned';
-                $employee->save();
-
-                Log::info("✅ Employee assigned", [
-                    'employee_id' => $employeeId,
-                    'schedule_id' => $schedule->id,
-                    'final_line' => $data['line'] ?? 'N/A (not set)'
-                ]);
-            }
-
-            // Update request status
-            $req->fulfilled_by = $validated['fulfilled_by'];
-            $req->save();
-
-            // FIXED: Verify the final assignments
-            $finalSchedules = Schedule::where('man_power_request_id', $req->id)->get();
-            $finalLineDistribution = $finalSchedules->groupBy('line')->map->count();
-
-            Log::info('=== REVISION COMPLETED SUCCESSFULLY ===', [
-                'request_id' => $req->id,
-                'total_employees' => count($newEmployeeIds),
-                'line_assignment_enabled' => $enableLineAssignment,
-                'final_line_distribution' => $finalLineDistribution,
-                'schedules_with_line_set' => $finalSchedules->whereNotNull('line')->count(),
-                'schedules_without_line' => $finalSchedules->whereNull('line')->count()
-            ]);
-        });
-    } catch (\Exception $e) {
-        Log::error('=== REVISION FAILED ===', [
-            'error_message' => $e->getMessage(),
-            'error_trace' => $e->getTraceAsString(),
-            'request_id' => $id,
-            'user_id' => auth()->id(),
-            'line_assignments_received' => $validated['line_assignments'] ?? [],
-            'enable_line_assignment' => $validated['enable_line_assignment'] ?? false
-        ]);
-
-        return back()->withErrors(['revision_error' => $e->getMessage()]);
-    }
-
-    return redirect()
-        ->route('manpower-requests.index')
-        ->with('success', 'Revisi permintaan berhasil disimpan');
-}
-
-    /**
-     * Calculate base score with proper workload penalty based on recent schedules
-     */
-    private function calculateBaseScore($employee, $weeklyScheduleCount)
-    {
-        // Calculate workload penalty based on recent schedules (last 7 days)
-        $workloadPenalty = $this->calculateWorkloadPenalty($weeklyScheduleCount);
-
-        $blindTestResult = $employee->blindTests->sortByDesc('test_date')->first()->result ?? 'Fail';
-        $blindTestPoints = $blindTestResult === 'Pass' ? 3 : 0;
-
-        $averageRating = $employee->ratings->avg('rating') ?? 0;
-
-        // Base score: Higher workload = lower priority
-        $baseScore = ($workloadPenalty * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
-
-        return $baseScore;
-    }
-
-    /**
-     * Calculate workload penalty based on weekly schedule count
-     * More schedules = higher penalty = lower priority
-     */
-    private function calculateWorkloadPenalty($weeklyScheduleCount)
-    {
-        // Inverse relationship: more schedules = lower score (penalty)
-        // Scale: 0 schedules = 100, 5+ schedules = 0
-        $penalty = match ($weeklyScheduleCount) {
-            0 => 100,
-            1 => 80,
-            2 => 60,
-            3 => 40,
-            4 => 20,
-            default => 0, // 5 or more schedules
-        };
-
-        return $penalty;
-    }
-
-
 }
