@@ -25,7 +25,6 @@ export default function Fulfill({
     const [enableLineAssignment, setEnableLineAssignment] = useState(false);
     const [lineAssignments, setLineAssignments] = useState({});
     const [lineAssignmentConfig, setLineAssignmentConfig] = useState({});
-    
 
     const normalizeGender = (gender) => {
         if (!gender) {
@@ -325,53 +324,64 @@ export default function Fulfill({
     const [bulkSelectedEmployees, setBulkSelectedEmployees] = useState({});
     const [activeBulkRequest, setActiveBulkRequest] = useState(null);
     const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
-    
+
     // Check if there are same subsection requests available for bulk mode
     const hasSameSectionRequests = useMemo(() => {
-    const currentSectionId = String(request.subSection?.section_id);
-    if (!currentSectionId) return false;
-    
-    return sameDayRequests.some(req => {
-        const reqSectionId = String(req.subSection?.section_id);
-        return reqSectionId === currentSectionId && 
-               req.status !== 'fulfilled' &&
-               String(req.id) !== String(request.id);
-    });
-}, [sameDayRequests, request]);
+        const currentSectionId = String(request.subSection?.section_id);
+        if (!currentSectionId) return false;
+
+        return sameDayRequests.some((req) => {
+            const reqSectionId = String(req.subSection?.section_id);
+            return (
+                reqSectionId === currentSectionId &&
+                req.status !== "fulfilled" &&
+                String(req.id) !== String(request.id)
+            );
+        });
+    }, [sameDayRequests, request]);
 
     // Initialize bulk selected employees when entering bulk mode
     useEffect(() => {
         if (bulkMode) {
             // Initialize current request's employees
             const currentRequestId = String(request.id);
-            setBulkSelectedEmployees(prev => ({
+            setBulkSelectedEmployees((prev) => ({
                 ...prev,
-                [currentRequestId]: initialSelectedIds
+                [currentRequestId]: initialSelectedIds,
             }));
         }
     }, [bulkMode, request.id, initialSelectedIds]);
 
     // NEW: Initialize line assignments only once on component mount
     useEffect(() => {
-        if (Object.keys(lineAssignments).length === 0 && selectedIds.length > 0) {
-            const currentConfig = lineAssignmentConfig[request.id] || { enabled: false, lineCount: 2 };
+        if (
+            Object.keys(lineAssignments).length === 0 &&
+            selectedIds.length > 0
+        ) {
+            const currentConfig = lineAssignmentConfig[request.id] || {
+                enabled: false,
+                lineCount: 2,
+            };
             const initialLineAssignments = {};
-            
+
             selectedIds.forEach((id, index) => {
-                initialLineAssignments[String(id)] = ((index % currentConfig.lineCount) + 1).toString();
+                initialLineAssignments[String(id)] = (
+                    (index % currentConfig.lineCount) +
+                    1
+                ).toString();
             });
-            
+
             setLineAssignments(initialLineAssignments);
-            
+
             // Also initialize config
             const initialConfig = {
                 enabled: false,
                 lineCount: 2,
-                lineCounts: calculateLineCounts(2, request.requested_amount)
+                lineCounts: calculateLineCounts(2, request.requested_amount),
             };
-            
+
             setLineAssignmentConfig({
-                [request.id]: initialConfig
+                [request.id]: initialConfig,
             });
         }
     }, []); // Empty dependency array - only run once
@@ -380,16 +390,18 @@ export default function Fulfill({
     const calculateLineCounts = useCallback((lineCount, requestedAmount) => {
         const baseCount = Math.floor(requestedAmount / lineCount);
         const remainder = requestedAmount % lineCount;
-        
-        return Array.from({ length: lineCount }, (_, i) => 
+
+        return Array.from({ length: lineCount }, (_, i) =>
             i < remainder ? baseCount + 1 : baseCount
         );
     }, []);
 
     // Check if there are any currently scheduled employees
     const hasScheduledEmployees = useMemo(() => {
-        return selectedIds.some(id => {
-            const emp = allSortedEligibleEmployees.find(e => String(e.id) === id);
+        return selectedIds.some((id) => {
+            const emp = allSortedEligibleEmployees.find(
+                (e) => String(e.id) === id
+            );
             return emp?.isCurrentlyScheduled;
         });
     }, [selectedIds, allSortedEligibleEmployees]);
@@ -397,13 +409,13 @@ export default function Fulfill({
     useEffect(() => {
         const allValidRequestIds = new Set();
 
-        sameDayRequests.forEach(req => {
+        sameDayRequests.forEach((req) => {
             if (req.id && req.id !== request.id) {
                 allValidRequestIds.add(String(req.id));
             }
         });
 
-        const validSelected = selectedBulkRequests.filter(id =>
+        const validSelected = selectedBulkRequests.filter((id) =>
             allValidRequestIds.has(String(id))
         );
 
@@ -413,7 +425,7 @@ export default function Fulfill({
     }, [sameDayRequests, request.id, selectedBulkRequests]);
 
     useEffect(() => {
-        setSelectedIds(initialSelectedIds.map(id => String(id)));
+        setSelectedIds(initialSelectedIds.map((id) => String(id)));
     }, [initialSelectedIds]);
 
     useEffect(() => {
@@ -468,24 +480,24 @@ export default function Fulfill({
     ]);
 
     const handleLineConfigChange = (requestId, type, data) => {
-        if (type === 'line_assignment') {
+        if (type === "line_assignment") {
             const { employeeId, newLine } = data;
-            setLineAssignments(prev => {
+            setLineAssignments((prev) => {
                 const newAssignments = {
                     ...prev,
-                    [employeeId]: newLine
+                    [employeeId]: newLine,
                 };
                 return newAssignments;
             });
-        } else if (type === 'fullConfig') {
-            setLineAssignmentConfig(prev => {
+        } else if (type === "fullConfig") {
+            setLineAssignmentConfig((prev) => {
                 const newConfig = {
                     ...prev,
-                    [requestId]: data
+                    [requestId]: data,
                 };
                 return newConfig;
             });
-            
+
             // Update the enableLineAssignment state
             if (requestId === String(request.id)) {
                 setEnableLineAssignment(data.enabled);
@@ -513,56 +525,59 @@ export default function Fulfill({
             const newSelectedIds = [...selectedIds];
             const newEmployeeId = String(employee.id);
             const oldEmployeeId = newSelectedIds[changingEmployeeIndex];
-            
+
             // Check if the employee is already selected at a different position
-            const existingIndex = newSelectedIds.findIndex(id => String(id) === newEmployeeId);
-            
+            const existingIndex = newSelectedIds.findIndex(
+                (id) => String(id) === newEmployeeId
+            );
+
             if (existingIndex !== -1) {
                 // If employee is already selected elsewhere, swap positions
                 const temp = newSelectedIds[changingEmployeeIndex];
-                newSelectedIds[changingEmployeeIndex] = newSelectedIds[existingIndex];
+                newSelectedIds[changingEmployeeIndex] =
+                    newSelectedIds[existingIndex];
                 newSelectedIds[existingIndex] = temp;
-                
+
                 // Update line assignments if line assignment is enabled
                 if (enableLineAssignment) {
-                    setLineAssignments(prev => {
+                    setLineAssignments((prev) => {
                         const newAssignments = { ...prev };
                         const tempLine = newAssignments[oldEmployeeId];
                         const existingLine = newAssignments[newEmployeeId];
-                        
+
                         // Swap the line assignments
                         newAssignments[newEmployeeId] = tempLine;
                         newAssignments[oldEmployeeId] = existingLine;
-                        
+
                         return newAssignments;
                     });
                 }
             } else {
                 // Simply replace the employee at the specified index
                 newSelectedIds[changingEmployeeIndex] = newEmployeeId;
-                
+
                 // Update line assignments if line assignment is enabled
                 if (enableLineAssignment) {
-                    setLineAssignments(prev => {
+                    setLineAssignments((prev) => {
                         const currentLine = prev[oldEmployeeId];
                         const newAssignments = { ...prev };
-                        
+
                         // Transfer line assignment from old to new employee
                         newAssignments[newEmployeeId] = currentLine;
                         delete newAssignments[oldEmployeeId];
-                        
+
                         return newAssignments;
                     });
                 }
             }
-            
+
             setSelectedIds(newSelectedIds);
             setChangingEmployeeIndex(null);
         } else {
             // Handle direct employee selection
             handleEmployeeSelect(employee.id);
         }
-        
+
         setShowModal(false);
     };
 
@@ -578,7 +593,7 @@ export default function Fulfill({
             if (prev.includes(stringId)) {
                 // Remove employee and their line assignment if enabled
                 if (enableLineAssignment) {
-                    setLineAssignments(prevAssignments => {
+                    setLineAssignments((prevAssignments) => {
                         const newAssignments = { ...prevAssignments };
                         delete newAssignments[stringId];
                         return newAssignments;
@@ -589,23 +604,26 @@ export default function Fulfill({
             if (prev.length >= request.requested_amount) {
                 return prev;
             }
-            
+
             const newSelectedIds = [...prev, stringId];
-            
+
             // Set default line assignment for new employee if enabled
             if (enableLineAssignment) {
-                setLineAssignments(prevAssignments => {
+                setLineAssignments((prevAssignments) => {
                     const currentConfig = lineAssignmentConfig[request.id];
                     const lineCount = currentConfig?.lineCount || 2;
-                    const newLine = ((newSelectedIds.length - 1) % lineCount + 1).toString();
+                    const newLine = (
+                        ((newSelectedIds.length - 1) % lineCount) +
+                        1
+                    ).toString();
                     const newAssignments = {
                         ...prevAssignments,
-                        [stringId]: newLine
+                        [stringId]: newLine,
                     };
                     return newAssignments;
                 });
             }
-            
+
             return newSelectedIds;
         });
     };
@@ -656,7 +674,7 @@ export default function Fulfill({
             const allRequests = [...requestsToFulfill];
             if (requestIds.includes(String(request.id))) {
                 const currentAlreadyIncluded = allRequests.some(
-                    req => String(req.id) === String(request.id)
+                    (req) => String(req.id) === String(request.id)
                 );
                 if (!currentAlreadyIncluded) {
                     allRequests.push(request);
@@ -786,12 +804,12 @@ export default function Fulfill({
             const hasIncompleteAssignments = selectedBulkRequests.some(
                 (requestId) => {
                     const employees = bulkSelectedEmployees[requestId] || [];
-                    const req = sameDayRequests.find(
-                        (r) => String(r.id) === requestId
-                    ) || (String(request.id) === requestId ? request : null);
-                    return (
-                        req && employees.length < req.requested_amount
-                    );
+                    const req =
+                        sameDayRequests.find(
+                            (r) => String(r.id) === requestId
+                        ) ||
+                        (String(request.id) === requestId ? request : null);
+                    return req && employees.length < req.requested_amount;
                 }
             );
 
@@ -886,35 +904,42 @@ export default function Fulfill({
         e.preventDefault();
         setBackendError(null);
 
-        const stringSelectedIds = selectedIds.map(id => String(id));
-        
+        const stringSelectedIds = selectedIds.map((id) => String(id));
+
         const processedLineAssignments = {};
         Object.entries(lineAssignments).forEach(([employeeId, line]) => {
             processedLineAssignments[String(employeeId)] = String(line);
         });
 
         const currentConfig = lineAssignmentConfig[request.id] || {};
-        const isLineAssignmentEnabled = currentConfig.enabled || enableLineAssignment;
+        const isLineAssignmentEnabled =
+            currentConfig.enabled || enableLineAssignment;
 
-        router.post(route("manpower-requests.fulfill.store", request.id), {
-            employee_ids: stringSelectedIds,
-            fulfilled_by: auth.user.id,
-            visibility: data.visibility,
-            enable_line_assignment: isLineAssignmentEnabled,
-            line_assignments: isLineAssignmentEnabled ? processedLineAssignments : {},
-            is_revision: request.status === "fulfilled",
-        }, {
-            preserveScroll: true,
-            onSuccess: () => {
-                router.visit(route("manpower-requests.index"));
+        router.post(
+            route("manpower-requests.fulfill.store", request.id),
+            {
+                employee_ids: stringSelectedIds,
+                fulfilled_by: auth.user.id,
+                visibility: data.visibility,
+                enable_line_assignment: isLineAssignmentEnabled,
+                line_assignments: isLineAssignmentEnabled
+                    ? processedLineAssignments
+                    : {},
+                is_revision: request.status === "fulfilled",
             },
-            onError: (errors) => {
-                console.error('Submission errors:', errors);
-                if (errors.fulfillment_error) {
-                    setBackendError(errors.fulfillment_error);
-                }
-            },
-        });
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    router.visit(route("manpower-requests.index"));
+                },
+                onError: (errors) => {
+                    console.error("Submission errors:", errors);
+                    if (errors.fulfillment_error) {
+                        setBackendError(errors.fulfillment_error);
+                    }
+                },
+            }
+        );
     };
 
     const getEmployeeDetails = useCallback(
@@ -932,16 +957,19 @@ export default function Fulfill({
 
         const assignments = {};
         selectedIds.forEach((id, index) => {
-            assignments[id] = lineAssignments[id] || ((index % 2) + 1).toString();
+            assignments[id] =
+                lineAssignments[id] || ((index % 2) + 1).toString();
         });
         return assignments;
     }, [enableLineAssignment, selectedIds, lineAssignments]);
 
     // NEW: Function to navigate to BulkFulfillment page
     const navigateToBulkFulfillment = () => {
-        router.visit(route('manpower-requests.bulk-fulfillment', {
-            request_id: request.id
-        }));
+        router.visit(
+            route("manpower-requests.bulk-fulfillment", {
+                request_id: request.id,
+            })
+        );
     };
 
     if (
@@ -994,18 +1022,28 @@ export default function Fulfill({
                     </h2>
                     {/* UPDATED: Bulk Fulfillment Button */}
                     {hasSameSectionRequests && (
-    <div className="flex items-center space-x-4">
-        <button
-            onClick={navigateToBulkFulfillment}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md font-medium transition-colors flex items-center space-x-2"
-        >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            <span>Bulk Fulfillment</span>
-        </button>
-    </div>
-)}
+                        <div className="flex items-center space-x-4">
+                            <button
+                                onClick={navigateToBulkFulfillment}
+                                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md font-medium transition-colors flex items-center space-x-2"
+                            >
+                                <svg
+                                    className="w-4 h-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M13 10V3L4 14h7v7l9-11h-7z"
+                                    />
+                                </svg>
+                                <span>Bulk Fulfillment</span>
+                            </button>
+                        </div>
+                    )}
                 </div>
             }
             user={auth.user}
@@ -1069,7 +1107,9 @@ export default function Fulfill({
                                     setShowModal(true);
                                 }}
                                 multiSelectMode={multiSelectMode}
-                                toggleMultiSelectMode={() => setMultiSelectMode(!multiSelectMode)}
+                                toggleMultiSelectMode={() =>
+                                    setMultiSelectMode(!multiSelectMode)
+                                }
                                 enableLineAssignment={enableLineAssignment}
                                 lineAssignments={lineAssignmentsForDisplay}
                             />
@@ -1141,18 +1181,25 @@ export default function Fulfill({
                     setShowModal={setShowModal}
                     request={request}
                     allSortedEligibleEmployees={allSortedEligibleEmployees}
-                    selectedIds={bulkMode && activeBulkRequest ? 
-                        (bulkSelectedEmployees[activeBulkRequest.requestId] || []) : 
-                        selectedIds
+                    selectedIds={
+                        bulkMode && activeBulkRequest
+                            ? bulkSelectedEmployees[
+                                  activeBulkRequest.requestId
+                              ] || []
+                            : selectedIds
                     }
                     selectNewEmployee={handleModalEmployeeSelect}
                     handleMultiSelect={(newSelectedIds) => {
-                        const newIdsStr = newSelectedIds.map((id) => String(id));
+                        const newIdsStr = newSelectedIds.map((id) =>
+                            String(id)
+                        );
                         setSelectedIds(newIdsStr);
                         return true;
                     }}
                     multiSelectMode={multiSelectMode}
-                    toggleMultiSelectMode={() => setMultiSelectMode(!multiSelectMode)}
+                    toggleMultiSelectMode={() =>
+                        setMultiSelectMode(!multiSelectMode)
+                    }
                     isBulkMode={bulkMode}
                     isLoading={isLoadingEmployees}
                     activeBulkRequest={activeBulkRequest}

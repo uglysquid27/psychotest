@@ -30,23 +30,23 @@ export default function BulkFulfillment({
     // Filter requests from same SECTION that are not fulfilled
     const sameSectionRequests = useMemo(() => {
         const currentSectionId = String(currentRequest.sub_section?.section_id);
-        
+
         if (!currentSectionId) {
             return [];
         }
 
-        const sameSectionReqs = sameDayRequests.filter(req => {
+        const sameSectionReqs = sameDayRequests.filter((req) => {
             const reqSectionId = String(req.sub_section?.section_id);
             const isSameSection = reqSectionId === currentSectionId;
-            const isNotFulfilled = req.status !== 'fulfilled';
+            const isNotFulfilled = req.status !== "fulfilled";
             const isNotCurrent = String(req.id) !== String(currentRequest.id);
-            
+
             return isSameSection && isNotFulfilled && isNotCurrent;
         });
 
         // Always include current request if not fulfilled
         const allRequests = [...sameSectionReqs];
-        if (currentRequest.status !== 'fulfilled') {
+        if (currentRequest.status !== "fulfilled") {
             allRequests.unshift(currentRequest);
         }
 
@@ -313,66 +313,78 @@ export default function BulkFulfillment({
     );
 
     // Check if employee matches exact subsection
-    const hasExactSubsectionMatch = useCallback((employee, requestSubSectionId) => {
-        return employee.subSections?.some(ss => 
-            String(ss.id) === String(requestSubSectionId)
-        );
-    }, []);
+    const hasExactSubsectionMatch = useCallback(
+        (employee, requestSubSectionId) => {
+            return employee.subSections?.some(
+                (ss) => String(ss.id) === String(requestSubSectionId)
+            );
+        },
+        []
+    );
 
     // Check if employee matches same section
     const hasSameSectionMatch = useCallback((employee, requestSectionId) => {
-        return employee.subSections?.some(ss => 
-            String(ss.section_id) === String(requestSectionId)
+        return employee.subSections?.some(
+            (ss) => String(ss.section_id) === String(requestSectionId)
         );
     }, []);
 
     // Sort employees with proper priority: exact subsection > same section > ML score
-    const sortEmployeesForRequest = useCallback((employees, request) => {
-        const requestSubSectionId = String(request.sub_section_id);
-        const requestSectionId = String(request.sub_section?.section_id);
+    const sortEmployeesForRequest = useCallback(
+        (employees, request) => {
+            const requestSubSectionId = String(request.sub_section_id);
+            const requestSectionId = String(request.sub_section?.section_id);
 
-        return [...employees].sort((a, b) => {
-            // Priority 1: Exact subsection match
-            const aExactMatch = hasExactSubsectionMatch(a, requestSubSectionId);
-            const bExactMatch = hasExactSubsectionMatch(b, requestSubSectionId);
-            
-            if (aExactMatch && !bExactMatch) return -1;
-            if (!aExactMatch && bExactMatch) return 1;
+            return [...employees].sort((a, b) => {
+                // Priority 1: Exact subsection match
+                const aExactMatch = hasExactSubsectionMatch(
+                    a,
+                    requestSubSectionId
+                );
+                const bExactMatch = hasExactSubsectionMatch(
+                    b,
+                    requestSubSectionId
+                );
 
-            // Priority 2: Same section match
-            const aSameSection = hasSameSectionMatch(a, requestSectionId);
-            const bSameSection = hasSameSectionMatch(b, requestSectionId);
-            
-            if (aSameSection && !bSameSection) return -1;
-            if (!aSameSection && bSameSection) return 1;
+                if (aExactMatch && !bExactMatch) return -1;
+                if (!aExactMatch && bExactMatch) return 1;
 
-            // Priority 3: ML score (final_score)
-            if (a.final_score !== b.final_score) {
-                return b.final_score - a.final_score;
-            }
+                // Priority 2: Same section match
+                const aSameSection = hasSameSectionMatch(a, requestSectionId);
+                const bSameSection = hasSameSectionMatch(b, requestSectionId);
 
-            // Priority 4: Gender matching with request requirements
-            const aGenderMatch = getGenderMatchScore(a, request);
-            const bGenderMatch = getGenderMatchScore(b, request);
-            if (aGenderMatch !== bGenderMatch) {
-                return aGenderMatch - bGenderMatch;
-            }
+                if (aSameSection && !bSameSection) return -1;
+                if (!aSameSection && bSameSection) return 1;
 
-            // Priority 5: Employee type (bulanan first)
-            if (a.type === 'bulanan' && b.type === 'harian') return -1;
-            if (a.type === 'harian' && b.type === 'bulanan') return 1;
+                // Priority 3: ML score (final_score)
+                if (a.final_score !== b.final_score) {
+                    return b.final_score - a.final_score;
+                }
 
-            return a.id - b.id;
-        });
-    }, [hasExactSubsectionMatch, hasSameSectionMatch]);
+                // Priority 4: Gender matching with request requirements
+                const aGenderMatch = getGenderMatchScore(a, request);
+                const bGenderMatch = getGenderMatchScore(b, request);
+                if (aGenderMatch !== bGenderMatch) {
+                    return aGenderMatch - bGenderMatch;
+                }
+
+                // Priority 5: Employee type (bulanan first)
+                if (a.type === "bulanan" && b.type === "harian") return -1;
+                if (a.type === "harian" && b.type === "bulanan") return 1;
+
+                return a.id - b.id;
+            });
+        },
+        [hasExactSubsectionMatch, hasSameSectionMatch]
+    );
 
     // Get gender matching score (lower is better)
     const getGenderMatchScore = useCallback((employee, request) => {
         const maleNeeded = (request.male_count || 0) > 0;
         const femaleNeeded = (request.female_count || 0) > 0;
 
-        if (maleNeeded && employee.gender === 'male') return 0;
-        if (femaleNeeded && employee.gender === 'female') return 0;
+        if (maleNeeded && employee.gender === "male") return 0;
+        if (femaleNeeded && employee.gender === "female") return 0;
         return 1; // No match
     }, []);
 
@@ -405,15 +417,22 @@ export default function BulkFulfillment({
             const totalRequired = request.requested_amount;
 
             // Sort employees for this specific request with proper priority
-            const sortedEmployees = sortEmployeesForRequest(availableEmployees, request);
+            const sortedEmployees = sortEmployeesForRequest(
+                availableEmployees,
+                request
+            );
 
             const selectedForRequest = [];
-            
+
             // Select required males with proper priority
             const maleCandidates = sortedEmployees.filter(
                 (emp) => emp.gender === "male"
             );
-            for (let i = 0; i < requiredMale && maleCandidates.length > 0; i++) {
+            for (
+                let i = 0;
+                i < requiredMale && maleCandidates.length > 0;
+                i++
+            ) {
                 const candidate = maleCandidates[i];
                 selectedForRequest.push(String(candidate.id));
                 usedEmployeeIds.add(String(candidate.id));
@@ -423,7 +442,11 @@ export default function BulkFulfillment({
             const femaleCandidates = sortedEmployees.filter(
                 (emp) => emp.gender === "female"
             );
-            for (let i = 0; i < requiredFemale && femaleCandidates.length > 0; i++) {
+            for (
+                let i = 0;
+                i < requiredFemale && femaleCandidates.length > 0;
+                i++
+            ) {
                 const candidate = femaleCandidates[i];
                 selectedForRequest.push(String(candidate.id));
                 usedEmployeeIds.add(String(candidate.id));
@@ -433,9 +456,11 @@ export default function BulkFulfillment({
             const remainingSlots = totalRequired - selectedForRequest.length;
             if (remainingSlots > 0) {
                 const otherCandidates = sortedEmployees
-                    .filter(emp => !selectedForRequest.includes(String(emp.id)))
+                    .filter(
+                        (emp) => !selectedForRequest.includes(String(emp.id))
+                    )
                     .slice(0, remainingSlots);
-                
+
                 otherCandidates.forEach((candidate) => {
                     selectedForRequest.push(String(candidate.id));
                     usedEmployeeIds.add(String(candidate.id));
@@ -447,7 +472,10 @@ export default function BulkFulfillment({
                 (emp) => !selectedForRequest.includes(String(emp.id))
             );
 
-            newBulkSelectedEmployees[requestId] = selectedForRequest.slice(0, totalRequired);
+            newBulkSelectedEmployees[requestId] = selectedForRequest.slice(
+                0,
+                totalRequired
+            );
         });
 
         setBulkSelectedEmployees(newBulkSelectedEmployees);
@@ -482,23 +510,37 @@ export default function BulkFulfillment({
 
             // Sort employees for this specific request with proper priority
             const sortedEmployees = sortEmployeesForRequest(
-                availableEmployees.filter(emp => !usedEmployeeIds.has(String(emp.id))),
+                availableEmployees.filter(
+                    (emp) => !usedEmployeeIds.has(String(emp.id))
+                ),
                 request
             );
 
             const selectedForRequest = [];
-            
+
             // Select required males
-            const maleCandidates = sortedEmployees.filter(emp => emp.gender === "male");
-            for (let i = 0; i < requiredMale && i < maleCandidates.length; i++) {
+            const maleCandidates = sortedEmployees.filter(
+                (emp) => emp.gender === "male"
+            );
+            for (
+                let i = 0;
+                i < requiredMale && i < maleCandidates.length;
+                i++
+            ) {
                 const candidate = maleCandidates[i];
                 selectedForRequest.push(String(candidate.id));
                 usedEmployeeIds.add(String(candidate.id));
             }
 
             // Select required females
-            const femaleCandidates = sortedEmployees.filter(emp => emp.gender === "female");
-            for (let i = 0; i < requiredFemale && i < femaleCandidates.length; i++) {
+            const femaleCandidates = sortedEmployees.filter(
+                (emp) => emp.gender === "female"
+            );
+            for (
+                let i = 0;
+                i < requiredFemale && i < femaleCandidates.length;
+                i++
+            ) {
                 const candidate = femaleCandidates[i];
                 selectedForRequest.push(String(candidate.id));
                 usedEmployeeIds.add(String(candidate.id));
@@ -508,16 +550,21 @@ export default function BulkFulfillment({
             const remainingSlots = totalRequired - selectedForRequest.length;
             if (remainingSlots > 0) {
                 const otherCandidates = sortedEmployees
-                    .filter(emp => !selectedForRequest.includes(String(emp.id)))
+                    .filter(
+                        (emp) => !selectedForRequest.includes(String(emp.id))
+                    )
                     .slice(0, remainingSlots);
-                
+
                 otherCandidates.forEach((candidate) => {
                     selectedForRequest.push(String(candidate.id));
                     usedEmployeeIds.add(String(candidate.id));
                 });
             }
 
-            newBulkSelectedEmployees[requestId] = selectedForRequest.slice(0, totalRequired);
+            newBulkSelectedEmployees[requestId] = selectedForRequest.slice(
+                0,
+                totalRequired
+            );
         });
 
         setBulkSelectedEmployees(newBulkSelectedEmployees);
@@ -531,10 +578,10 @@ export default function BulkFulfillment({
     // Auto-fill on initial load for selected requests
     useEffect(() => {
         if (selectedRequests.length > 0) {
-            const hasAnySelection = selectedRequests.some(requestId => 
-                bulkSelectedEmployees[requestId]?.length > 0
+            const hasAnySelection = selectedRequests.some(
+                (requestId) => bulkSelectedEmployees[requestId]?.length > 0
             );
-            
+
             if (!hasAnySelection) {
                 handleAutoFillAll();
             }
@@ -771,32 +818,40 @@ export default function BulkFulfillment({
 
     const getSubSectionIdFromRequest = useCallback((request) => {
         if (!request) return null;
-        
-        const subSectionId = 
-            request.sub_section?.id || 
-            request.sub_section_id || 
+
+        const subSectionId =
+            request.sub_section?.id ||
+            request.sub_section_id ||
             request.subSection?.id;
-        
+
         return subSectionId ? String(subSectionId) : null;
     }, []);
 
     const getCurrentModalRequest = useCallback(() => {
         let targetRequest;
-        
+
         if (!activeRequestId) {
             targetRequest = currentRequest;
         } else {
-            targetRequest = sameSectionRequests.find(req => String(req.id) === activeRequestId) || currentRequest;
+            targetRequest =
+                sameSectionRequests.find(
+                    (req) => String(req.id) === activeRequestId
+                ) || currentRequest;
         }
-        
+
         const subSectionId = getSubSectionIdFromRequest(targetRequest);
-        
+
         return {
             ...targetRequest,
             sub_section_id: subSectionId,
-            sub_section: targetRequest.sub_section || { id: subSectionId }
+            sub_section: targetRequest.sub_section || { id: subSectionId },
         };
-    }, [activeRequestId, currentRequest, sameSectionRequests, getSubSectionIdFromRequest]);
+    }, [
+        activeRequestId,
+        currentRequest,
+        sameSectionRequests,
+        getSubSectionIdFromRequest,
+    ]);
 
     // Get selected employees for the active request in modal
     const getSelectedIdsForModal = useCallback(() => {
@@ -1142,10 +1197,12 @@ export default function BulkFulfillment({
                                 </h3>
                                 <p className="text-blue-600 dark:text-blue-400 text-sm sm:text-base">
                                     Penuhi semua request untuk section "
-                                    {currentRequest.sub_section?.section?.name}" secara sekaligus
+                                    {currentRequest.sub_section?.section?.name}"
+                                    secara sekaligus
                                 </p>
                                 <p className="text-blue-500 dark:text-blue-300 text-xs sm:text-sm mt-1">
-                                    Prioritas: Subsection Exact → Section Sama → ML Score
+                                    Prioritas: Subsection Exact → Section Sama →
+                                    ML Score
                                 </p>
                             </div>
                         </div>
@@ -1439,18 +1496,15 @@ export default function BulkFulfillment({
                                 return (
                                     <div
                                         key={requestId}
-                                        className={`p-4 rounded-lg border-2 transition-all cursor-pointer ${
+                                        className={`p-4 rounded-lg border-2 transition-all ${
                                             isSelected
                                                 ? "bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-600"
-                                                : "bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:border-gray-300"
+                                                : "bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600"
                                         } ${
                                             isCurrentRequest
                                                 ? "ring-2 ring-yellow-400"
                                                 : ""
                                         }`}
-                                        onClick={() =>
-                                            toggleRequestSelection(requestId)
-                                        }
                                     >
                                         <div className="flex justify-between items-start">
                                             <div className="flex items-start space-x-3 flex-1">
@@ -1462,12 +1516,14 @@ export default function BulkFulfillment({
                                                             requestId
                                                         )
                                                     }
-                                                    className="mt-1"
+                                                    className="mt-1 cursor-pointer"
+                                                />
+                                                <div
+                                                    className="flex-1 cursor-default"
                                                     onClick={(e) =>
                                                         e.stopPropagation()
                                                     }
-                                                />
-                                                <div className="flex-1">
+                                                >
                                                     <div className="flex flex-wrap items-center gap-2 mb-3">
                                                         <div className="font-medium text-gray-900 dark:text-gray-100">
                                                             {request.shift
@@ -1480,7 +1536,11 @@ export default function BulkFulfillment({
                                                             orang
                                                         </div>
                                                         <span className="bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300 px-2 py-1 rounded-full text-xs">
-                                                            {request.sub_section?.name}
+                                                            {
+                                                                request
+                                                                    .sub_section
+                                                                    ?.name
+                                                            }
                                                         </span>
                                                         {isCurrentRequest && (
                                                             <span className="bg-yellow-100 dark:bg-yellow-800 px-2 py-1 rounded-full text-yellow-800 dark:text-yellow-200 text-xs">
@@ -1545,10 +1605,11 @@ export default function BulkFulfillment({
                                                                     <div
                                                                         className="bg-green-500 h-2 rounded-full transition-all"
                                                                         style={{
-                                                                            width: `${(
-                                                                                assignedEmployees.length /
-                                                                                request.requested_amount
-                                                                            ) * 100}%`,
+                                                                            width: `${
+                                                                                (assignedEmployees.length /
+                                                                                    request.requested_amount) *
+                                                                                100
+                                                                            }%`,
                                                                         }}
                                                                     ></div>
                                                                 </div>
@@ -1569,83 +1630,6 @@ export default function BulkFulfillment({
                                         </div>
 
                                         {/* Line Assignment Configuration */}
-                                        {isSelected && (
-                                            <div className="mt-4 p-3 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-200 dark:border-purple-700">
-                                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                                                    <div>
-                                                        <span className="text-sm font-medium text-purple-800 dark:text-purple-300">
-                                                            Konfigurasi Line
-                                                            Assignment
-                                                        </span>
-                                                        <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-                                                            Pilih jumlah
-                                                            line/group untuk
-                                                            penugasan
-                                                        </p>
-                                                    </div>
-                                                    <div
-                                                        className="flex items-center space-x-3"
-                                                        onClick={(e) =>
-                                                            e.stopPropagation()
-                                                        }
-                                                    >
-                                                        <label className="flex items-center space-x-2">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={
-                                                                    enableLineAssignment
-                                                                }
-                                                                onChange={(e) =>
-                                                                    handleLineConfigChange(
-                                                                        requestId,
-                                                                        e.target
-                                                                            .checked
-                                                                    )
-                                                                }
-                                                                className="rounded text-purple-600 focus:ring-purple-500"
-                                                            />
-                                                            <span className="text-sm text-purple-700 dark:text-purple-300">
-                                                                Aktifkan Line
-                                                                Assignment
-                                                            </span>
-                                                        </label>
-                                                        {enableLineAssignment && (
-                                                            <select
-                                                                value={
-                                                                    lineCount
-                                                                }
-                                                                onChange={(e) =>
-                                                                    handleLineCountChange(
-                                                                        requestId,
-                                                                        e.target
-                                                                            .value
-                                                                    )
-                                                                }
-                                                                className="bg-white dark:bg-gray-700 px-2 py-1 border border-purple-300 dark:border-purple-600 rounded text-sm text-purple-800 dark:text-purple-200"
-                                                            >
-                                                                {[
-                                                                    2, 3, 4, 5,
-                                                                    6,
-                                                                ].map((num) => (
-                                                                    <option
-                                                                        key={
-                                                                            num
-                                                                        }
-                                                                        value={
-                                                                            num
-                                                                        }
-                                                                    >
-                                                                        {num}{" "}
-                                                                        Lines
-                                                                    </option>
-                                                                ))}
-                                                            </select>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
                                         {/* Employee Selection */}
                                         {isSelected && (
                                             <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
@@ -1677,7 +1661,7 @@ export default function BulkFulfillment({
                                                                     requestId
                                                                 );
                                                             }}
-                                                            className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors"
+                                                            className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors cursor-pointer"
                                                         >
                                                             📋 Pilih Multiple
                                                         </button>
@@ -1719,7 +1703,7 @@ export default function BulkFulfillment({
                                                             >
                                                                 <div className="flex justify-between items-center mb-2">
                                                                     <span className="text-gray-500 dark:text-gray-400 text-xs">
-                                                                        #
+                                                                        #{" "}
                                                                         {index +
                                                                             1}
                                                                         {lineAssignment && (
@@ -1766,10 +1750,16 @@ export default function BulkFulfillment({
                                                                                 "-"}
                                                                         </div>
                                                                         <div className="text-gray-400 dark:text-gray-500 text-xs mt-1">
-                                                                            ML Score:{" "}
-                                                                            {((
-                                                                                employee.final_score || 0
-                                                                            ) * 100).toFixed(1)}%
+                                                                            ML
+                                                                            Score:{" "}
+                                                                            {(
+                                                                                (employee.final_score ||
+                                                                                    0) *
+                                                                                100
+                                                                            ).toFixed(
+                                                                                1
+                                                                            )}
+                                                                            %
                                                                         </div>
                                                                     </div>
                                                                 ) : (
@@ -1780,33 +1770,59 @@ export default function BulkFulfillment({
                                                                 )}
 
                                                                 <div className="flex space-x-2">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={(
-                                                                            e
-                                                                        ) => {
-                                                                            e.stopPropagation();
-                                                                            if (
-                                                                                employee
-                                                                            ) {
-                                                                                handleEmployeeSelect(
-                                                                                    requestId,
-                                                                                    employeeId
-                                                                                );
-                                                                            } else {
+                                                                    {employee ? (
+                                                                        <>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={(
+                                                                                    e
+                                                                                ) => {
+                                                                                    e.stopPropagation();
+                                                                                    // Open employee modal to change this employee
+                                                                                    openEmployeeModal(
+                                                                                        requestId,
+                                                                                        index
+                                                                                    );
+                                                                                }}
+                                                                                className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white py-1 rounded text-xs transition-colors cursor-pointer"
+                                                                            >
+                                                                                Ganti
+                                                                            </button>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={(
+                                                                                    e
+                                                                                ) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleEmployeeSelect(
+                                                                                        requestId,
+                                                                                        employeeId
+                                                                                    );
+                                                                                }}
+                                                                                className="flex-1 bg-red-500 hover:bg-red-600 text-white py-1 rounded text-xs transition-colors cursor-pointer"
+                                                                            >
+                                                                                Hapus
+                                                                            </button>
+                                                                        </>
+                                                                    ) : (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(
+                                                                                e
+                                                                            ) => {
+                                                                                e.stopPropagation();
                                                                                 // Open employee selection modal for this specific slot
                                                                                 openEmployeeModal(
                                                                                     requestId,
                                                                                     index
                                                                                 );
-                                                                            }
-                                                                        }}
-                                                                        className="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 py-1 rounded text-gray-700 dark:text-gray-300 text-xs transition-colors"
-                                                                    >
-                                                                        {employee
-                                                                            ? "Hapus"
-                                                                            : "Pilih Karyawan"}
-                                                                    </button>
+                                                                            }}
+                                                                            className="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 py-1 rounded text-gray-700 dark:text-gray-300 text-xs transition-colors cursor-pointer"
+                                                                        >
+                                                                            Pilih
+                                                                            Karyawan
+                                                                        </button>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         );
@@ -1823,6 +1839,7 @@ export default function BulkFulfillment({
                                                 )}
                                             </div>
                                         )}
+
                                     </div>
                                 );
                             })
@@ -1906,8 +1923,9 @@ export default function BulkFulfillment({
                 isBulkMode={true}
                 isLoading={false}
                 activeBulkRequest={activeRequestId}
-                bulkRequests={sameSectionRequests
-                    .filter((req) => selectedRequests.includes(String(req.id)))}
+                bulkRequests={sameSectionRequests.filter((req) =>
+                    selectedRequests.includes(String(req.id))
+                )}
                 bulkSelectedEmployees={bulkSelectedEmployees}
                 onBulkEmployeeSelect={handleEmployeeSelect}
                 lineAssignmentConfig={lineAssignmentConfig}

@@ -240,7 +240,7 @@ export default function Revise({
 
     // FIXED: LINE CONFIG CHANGE HANDLER - Properly update enableLineAssignment
     const handleLineConfigChange = (requestId, type, data) => {
-        console.log('🔄 Line config change:', { requestId, type, data });
+        // console.log('🔄 Line config change:', { requestId, type, data });
         
         if (type === 'line_assignment') {
             const { employeeId, newLine } = data;
@@ -262,7 +262,7 @@ export default function Revise({
             
             // FIXED: Always update enableLineAssignment when config changes
             if (requestId === String(safeRequest.id)) {
-                console.log('🎯 Setting enableLineAssignment to:', data.enabled);
+                // console.log('🎯 Setting enableLineAssignment to:', data.enabled);
                 setEnableLineAssignment(data.enabled);
                 // Also update form data
                 setData('enable_line_assignment', data.enabled);
@@ -274,7 +274,7 @@ export default function Revise({
     useEffect(() => {
         const currentConfig = lineAssignmentConfig[safeRequest.id];
         if (currentConfig) {
-            console.log('🔄 Syncing enableLineAssignment from config:', currentConfig.enabled);
+            // console.log('🔄 Syncing enableLineAssignment from config:', currentConfig.enabled);
             setEnableLineAssignment(currentConfig.enabled);
             setData('enable_line_assignment', currentConfig.enabled);
         }
@@ -424,15 +424,15 @@ export default function Revise({
         const currentConfig = lineAssignmentConfig[safeRequest.id] || {};
         const isLineAssignmentEnabled = currentConfig.enabled || enableLineAssignment;
 
-        console.log('🎯 REVISION SUBMISSION DATA:', {
-            employee_ids: stringSelectedIds,
-            enable_line_assignment: isLineAssignmentEnabled,
-            enableLineAssignment_state: enableLineAssignment,
-            currentConfig_enabled: currentConfig.enabled,
-            line_assignments: processedLineAssignments,
-            line_assignments_count: Object.keys(processedLineAssignments).length,
-            should_submit_line_assignments: isLineAssignmentEnabled
-        });
+        // console.log('🎯 REVISION SUBMISSION DATA:', {
+        //     employee_ids: stringSelectedIds,
+        //     enable_line_assignment: isLineAssignmentEnabled,
+        //     enableLineAssignment_state: enableLineAssignment,
+        //     currentConfig_enabled: currentConfig.enabled,
+        //     line_assignments: processedLineAssignments,
+        //     line_assignments_count: Object.keys(processedLineAssignments).length,
+        //     should_submit_line_assignments: isLineAssignmentEnabled
+        // });
 
         // FIXED: Only send line_assignments if line assignment is enabled
         put(route('manpower-requests.update-revision', safeRequest.id), {
@@ -445,7 +445,7 @@ export default function Revise({
         }, {
             preserveScroll: true,
             onSuccess: () => {
-                console.log('✅ Revision successful');
+                // console.log('✅ Revision successful');
                 router.visit(route("manpower-requests.index"));
             },
             onError: (errors) => {
@@ -561,12 +561,12 @@ export default function Revise({
 
     // Debug line assignment state
     useEffect(() => {
-        console.log('🔍 LINE ASSIGNMENT STATE:', {
-            enableLineAssignment,
-            lineAssignments,
-            lineAssignmentConfig: lineAssignmentConfig[safeRequest.id],
-            selectedIds
-        });
+        // console.log('🔍 LINE ASSIGNMENT STATE:', {
+        //     enableLineAssignment,
+        //     lineAssignments,
+        //     lineAssignmentConfig: lineAssignmentConfig[safeRequest.id],
+        //     selectedIds
+        // });
     }, [enableLineAssignment, lineAssignments, lineAssignmentConfig, safeRequest.id, selectedIds]);
 
     return (

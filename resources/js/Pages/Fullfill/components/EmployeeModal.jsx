@@ -244,12 +244,12 @@ export default function EmployeeModal({
 
     // FIXED: Proper single select handling - pass employee object instead of just ID
     const toggleEmployeeSelection = (employeeId) => {
-        console.log('🎯 toggleEmployeeSelection called', { 
-            employeeId, 
-            multiSelectMode, 
-            isBulkMode, 
-            bulkSelectionMode 
-        });
+        // console.log('🎯 toggleEmployeeSelection called', { 
+        //     employeeId, 
+        //     multiSelectMode, 
+        //     isBulkMode, 
+        //     bulkSelectionMode 
+        // });
         
         if (isBulkMode && bulkSelectionMode) {
             // Bulk selection mode - assign to multiple requests
@@ -260,7 +260,7 @@ export default function EmployeeModal({
         if (!multiSelectMode) {
             // SINGLE SELECT MODE - Just select the employee and close modal
             const selectedEmployee = allSortedEligibleEmployees.find(emp => emp && String(emp.id) === String(employeeId));
-            console.log('🔍 Selected employee for single mode:', selectedEmployee);
+            // console.log('🔍 Selected employee for single mode:', selectedEmployee);
             
             if (selectedEmployee) {
                 // FIX: Pass the employee OBJECT, not just the ID
