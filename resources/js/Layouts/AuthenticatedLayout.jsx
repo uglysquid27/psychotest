@@ -323,6 +323,12 @@ const navigationConfig = (
             active: route().current("lunch-coupons.index"),
             show: isAdmin,
         },
+        {
+            href: route("employee-picking-priorities.index"),
+            label: "Emp priority Setup",
+            active: route().current("employee-picking-priorities.index"),
+            show: isAdmin,
+        },
     ];
 
     const employeeNav = [

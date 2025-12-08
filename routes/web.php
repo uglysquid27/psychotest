@@ -34,6 +34,7 @@ use App\Http\Controllers\CronJobSettingController;
 use App\Http\Controllers\ResignController;
 use App\Http\Controllers\EquipmentController;
 use App\Http\Controllers\HandoverController;
+use App\Http\Controllers\EmployeePickingPriorityController;
 
 // app/Http/Controllers/LicenseVerificationController.php
 /*
@@ -257,7 +258,7 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     Route::get('/manpower-requests/{id}/fulfill', [ManPowerRequestFulfillmentController::class, 'create'])
         ->name('manpower-requests.fulfill');
     Route::get('/manpower-requests/{request_id}/bulk-fulfillment', [ManPowerRequestFulfillmentController::class, 'bulkFulfillmentPage'])
-    ->name('manpower-requests.bulk-fulfillment');
+        ->name('manpower-requests.bulk-fulfillment');
     Route::post('/manpower-requests/bulk-fulfill', [ManPowerRequestFulfillmentController::class, 'bulkStore'])
         ->name('manpower-requests.bulk-fulfill');
     Route::post('/manpower-requests/bulk-preview', [ManPowerRequestFulfillmentController::class, 'bulkPreview'])
@@ -275,13 +276,13 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     Route::post('/manpower-requests/bulk-preview-multi-subsection', [ManPowerRequestController::class, 'bulkPreviewMultiSubsection'])
         ->name('manpower-requests.bulk-preview-multi-subsection');
     Route::get('/employees/available-for-request/{requestId}', [ManPowerRequestController::class, 'getAvailableEmployeesForRequest'])
-    ->name('employees.available-for-request')
-    ->where('requestId', '[0-9]+'); // Ensure it's a numeric ID
-      Route::get('/manpower-requests/{requestId}/available-employees', [ManPowerRequestController::class, 'getAvailableEmployeesForRequest'])
-    ->name('manpower-requests.get-available-employees');
+        ->name('employees.available-for-request')
+        ->where('requestId', '[0-9]+'); // Ensure it's a numeric ID
+    Route::get('/manpower-requests/{requestId}/available-employees', [ManPowerRequestController::class, 'getAvailableEmployeesForRequest'])
+        ->name('manpower-requests.get-available-employees');
     // Make sure this route is added
-Route::get('/manpower-requests/{requestId}/bulk-available-employees', [ManPowerRequestController::class, 'bulkGetAvailableEmployees'])
-    ->name('manpower-requests.bulk-get-available-employees');
+    Route::get('/manpower-requests/{requestId}/bulk-available-employees', [ManPowerRequestController::class, 'bulkGetAvailableEmployees'])
+        ->name('manpower-requests.bulk-get-available-employees');
     Route::get('/manpower-requests/{manpower_request}/revision', [ManPowerRequestController::class, 'edit'])
         ->name('manpower-requests.revision.edit');
     Route::post('/manpower-requests/check-dulicates', [ManPowerRequestController::class, 'checkDuplicates'])
@@ -327,6 +328,21 @@ Route::get('/manpower-requests/{requestId}/bulk-available-employees', [ManPowerR
     Route::get('/schedules/data', [ScheduleController::class, 'getScheduleData'])->name('schedules.data');
     Route::post('/whatsapp/send', [WhatsAppNotificationController::class, 'sendScheduleNotification'])->name('whatsapp.send');
     Route::get('/wa/test', [WhatsAppNotificationController::class, 'testSend']);
+
+
+    Route::resource('employee-picking-priorities', \App\Http\Controllers\EmployeePickingPriorityController::class)
+        ->except(['show', 'edit', 'update']);
+
+    // Add the categories route
+    Route::get('/employee-picking-priorities/categories', [EmployeePickingPriorityController::class, 'categories'])
+        ->name('employee-picking-priorities.categories');
+
+    // Or if you prefer the manual definition:
+    Route::get('/employee-picking-priorities', [EmployeePickingPriorityController::class, 'index'])->name('employee-picking-priorities.index');
+    Route::get('/employee-picking-priorities/create', [EmployeePickingPriorityController::class, 'create'])->name('employee-picking-priorities.create');
+    Route::post('/employee-picking-priorities', [EmployeePickingPriorityController::class, 'store'])->name('employee-picking-priorities.store');
+    Route::delete('/employee-picking-priorities/{id}', [EmployeePickingPriorityController::class, 'destroy'])->name('employee-picking-priorities.destroy');
+    Route::get('/employee-picking-priorities/categories', [EmployeePickingPriorityController::class, 'categories'])->name('employee-picking-priorities.categories');
 
 
 
@@ -442,11 +458,11 @@ Route::get('/manpower-requests/{requestId}/bulk-available-employees', [ManPowerR
 
         // 👉 update handover
         Route::put('/handover/{handover}', [EquipmentController::class, 'handoverUpdate'])->name('handover.update');
-        
+
     });
 
     Route::get('/equipments/export', [EquipmentController::class, 'exportEquipment'])
-    ->name('equipments.export');
+        ->name('equipments.export');
 
     Route::get('/handovers/assign', [HandoverController::class, 'assignPage'])->name('handovers.assign');
     Route::post('/handovers/bulk-assign', [HandoverController::class, 'bulkAssign'])->name('handovers.bulk-assign');
@@ -460,6 +476,6 @@ Route::get('/manpower-requests/{requestId}/bulk-available-employees', [ManPowerR
     Route::get('/handovers/employee/{employee}/handovers', [HandoverController::class, 'getEmployeeHandovers'])->name('handovers.employee.handovers');
     Route::put('/handovers/employee/{employee}/update-handovers', [HandoverController::class, 'updateEmployeeHandovers'])->name('handovers.employee.update');
     Route::get('/handovers/employee-equipment-counts', [HandoverController::class, 'getEmployeeEquipmentCounts'])->name('handovers.employee.equipment-counts');
-  Route::get('/handovers/export', [HandoverController::class, 'exportAssignments'])->name('handovers.export');
+    Route::get('/handovers/export', [HandoverController::class, 'exportAssignments'])->name('handovers.export');
 
 });

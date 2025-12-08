@@ -1,4 +1,3 @@
-// Fulfill.jsx - Updated with BulkFulfillment button
 import { useForm } from "@inertiajs/react";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
@@ -80,6 +79,9 @@ export default function Fulfill({
                 .includes(String(emp.id)),
             ml_score: emp.ml_score || 0,
             final_score: emp.final_score || emp.total_score || 0,
+            priority_score: emp.priority_score || 0, // ADD THIS
+            priority_info: emp.priority_info || [], // ADD THIS
+            has_priority: emp.has_priority || false, // ADD THIS
         }));
     }, [
         sameSubSectionEmployees,
@@ -89,10 +91,22 @@ export default function Fulfill({
 
     const allSortedEligibleEmployees = useMemo(() => {
         const sorted = [...combinedEmployees].sort((a, b) => {
+            // PRIORITY 1: Priority employees first
+            if (a.has_priority !== b.has_priority) {
+                return a.has_priority ? -1 : 1;
+            }
+            
+            // PRIORITY 2: If both have priority, compare priority scores
+            if (a.has_priority && b.has_priority && a.priority_score !== b.priority_score) {
+                return b.priority_score - a.priority_score;
+            }
+
+            // PRIORITY 3: Currently scheduled employees
             if (a.isCurrentlyScheduled !== b.isCurrentlyScheduled) {
                 return a.isCurrentlyScheduled ? -1 : 1;
             }
 
+            // PRIORITY 4: Exact subsection match
             const aIsSame = a.subSections.some(
                 (ss) => String(ss.id) === String(request.sub_section_id)
             );
@@ -102,10 +116,12 @@ export default function Fulfill({
 
             if (aIsSame !== bIsSame) return aIsSame ? -1 : 1;
 
+            // PRIORITY 5: Final score (which already includes priority)
             if (a.final_score !== b.final_score) {
                 return b.final_score - a.final_score;
             }
 
+            // PRIORITY 6: Gender matching
             const aGenderMatch =
                 request.male_count > 0 && a.gender === "male"
                     ? 0
@@ -121,9 +137,11 @@ export default function Fulfill({
             if (aGenderMatch !== bGenderMatch)
                 return aGenderMatch - bGenderMatch;
 
+            // PRIORITY 7: Employee type (bulanan first)
             if (a.type === "bulanan" && b.type === "harian") return -1;
             if (a.type === "harian" && b.type === "bulanan") return 1;
 
+            // PRIORITY 8: For harian employees, working day weight
             if (a.type === "harian" && b.type === "harian") {
                 return b.working_day_weight - a.working_day_weight;
             }
@@ -139,161 +157,164 @@ export default function Fulfill({
         request.female_count,
     ]);
 
+    // UPDATED: Initial selection with priority first
     const initialSelectedIds = useMemo(() => {
+        // Step 1: Get all priority employees that match gender requirements
+        const priorityEmployees = allSortedEligibleEmployees
+            .filter(emp => emp.has_priority)
+            .map(emp => String(emp.id));
+        
+        // Step 2: Get valid currently scheduled IDs
         const validCurrentIds = currentScheduledIds
             .map((id) => String(id))
             .filter((id) =>
                 allSortedEligibleEmployees.some((e) => String(e.id) === id)
             );
 
+        // Step 3: If we have scheduled employees, they take precedence
         if (validCurrentIds.length > 0) {
-            if (validCurrentIds.length < request.requested_amount) {
-                const remainingCount =
-                    request.requested_amount - validCurrentIds.length;
-
-                const remainingSameSubSection = allSortedEligibleEmployees
-                    .filter(
-                        (e) =>
-                            !validCurrentIds.includes(String(e.id)) &&
-                            e.subSections.some(
-                                (ss) =>
-                                    String(ss.id) ===
-                                    String(request.sub_section_id)
-                            )
-                    )
-                    .slice(0, remainingCount)
-                    .map((e) => String(e.id));
-
-                if (remainingSameSubSection.length >= remainingCount) {
-                    return [...validCurrentIds, ...remainingSameSubSection];
+            const selected = [...validCurrentIds];
+            
+            // Fill remaining slots with priority employees first, then others
+            const remainingCount = request.requested_amount - selected.length;
+            if (remainingCount > 0) {
+                // Get priority employees not already selected
+                const availablePriority = priorityEmployees
+                    .filter(id => !selected.includes(id))
+                    .slice(0, remainingCount);
+                
+                selected.push(...availablePriority);
+                
+                // If still need more, get other employees
+                if (selected.length < request.requested_amount) {
+                    const stillNeeded = request.requested_amount - selected.length;
+                    const otherEmployees = allSortedEligibleEmployees
+                        .filter(emp => 
+                            !selected.includes(String(emp.id)) && 
+                            !emp.has_priority
+                        )
+                        .slice(0, stillNeeded)
+                        .map(emp => String(emp.id));
+                    
+                    selected.push(...otherEmployees);
                 }
-
-                const remainingOtherSubSection = allSortedEligibleEmployees
-                    .filter(
-                        (e) =>
-                            !validCurrentIds.includes(String(e.id)) &&
-                            !e.subSections.some(
-                                (ss) =>
-                                    String(ss.id) ===
-                                    String(request.sub_section_id)
-                            )
-                    )
-                    .slice(0, remainingCount - remainingSameSubSection.length)
-                    .map((e) => String(e.id));
-
-                return [
-                    ...validCurrentIds,
-                    ...remainingSameSubSection,
-                    ...remainingOtherSubSection,
-                ];
             }
-            return validCurrentIds.slice(0, request.requested_amount);
+            
+            return selected.slice(0, request.requested_amount);
         }
 
+        // Step 4: No scheduled employees, start with priority
+        const selected = [];
+        
+        // Add priority employees first
+        selected.push(...priorityEmployees.slice(0, request.requested_amount));
+        
+        // If still need more, add other employees
+        if (selected.length < request.requested_amount) {
+            const remainingCount = request.requested_amount - selected.length;
+            const otherEmployees = allSortedEligibleEmployees
+                .filter(emp => !emp.has_priority)
+                .slice(0, remainingCount)
+                .map(emp => String(emp.id));
+            
+            selected.push(...otherEmployees);
+        }
+        
+        // Step 5: Ensure gender requirements are met
         const requiredMale = request.male_count || 0;
         const requiredFemale = request.female_count || 0;
-        const totalRequired = requiredMale + requiredFemale;
-
-        const sameSubMales = allSortedEligibleEmployees.filter(
-            (e) =>
-                e.gender === "male" &&
-                e.subSections.some(
-                    (ss) => String(ss.id) === String(request.sub_section_id)
-                )
-        );
-
-        const sameSubFemales = allSortedEligibleEmployees.filter(
-            (e) =>
-                e.gender === "female" &&
-                e.subSections.some(
-                    (ss) => String(ss.id) === String(request.sub_section_id)
-                )
-        );
-
-        const otherSubMales = allSortedEligibleEmployees.filter(
-            (e) =>
-                e.gender === "male" &&
-                !e.subSections.some(
-                    (ss) => String(ss.id) === String(request.sub_section_id)
-                )
-        );
-
-        const otherSubFemales = allSortedEligibleEmployees.filter(
-            (e) =>
-                e.gender === "female" &&
-                !e.subSections.some(
-                    (ss) => String(ss.id) === String(request.sub_section_id)
-                )
-        );
-
-        const selected = [];
-
-        selected.push(
-            ...sameSubMales.slice(0, requiredMale).map((e) => String(e.id))
-        );
-        selected.push(
-            ...sameSubFemales.slice(0, requiredFemale).map((e) => String(e.id))
-        );
-
-        const currentMaleCount = selected.filter((id) => {
-            const emp = allSortedEligibleEmployees.find(
-                (e) => String(e.id) === id
-            );
-            return emp?.gender === "male";
-        }).length;
-
-        if (currentMaleCount < requiredMale) {
-            const needed = requiredMale - currentMaleCount;
-            selected.push(
-                ...otherSubMales.slice(0, needed).map((e) => String(e.id))
-            );
-        }
-
-        const currentFemaleCount = selected.filter((id) => {
-            const emp = allSortedEligibleEmployees.find(
-                (e) => String(e.id) === id
-            );
-            return emp?.gender === "female";
-        }).length;
-
-        if (currentFemaleCount < requiredFemale) {
-            const needed = requiredFemale - currentFemaleCount;
-            selected.push(
-                ...otherSubFemales.slice(0, needed).map((e) => String(e.id))
-            );
-        }
-
-        if (selected.length < request.requested_amount) {
-            const remainingSameSub = allSortedEligibleEmployees
-                .filter(
-                    (e) =>
-                        !selected.includes(String(e.id)) &&
-                        e.subSections.some(
-                            (ss) =>
-                                String(ss.id) === String(request.sub_section_id)
-                        )
-                )
-                .slice(0, request.requested_amount - selected.length);
-
-            selected.push(...remainingSameSub.map((e) => String(e.id)));
-
-            if (selected.length < request.requested_amount) {
-                const remainingOtherSub = allSortedEligibleEmployees
-                    .filter(
-                        (e) =>
-                            !selected.includes(String(e.id)) &&
-                            !e.subSections.some(
-                                (ss) =>
-                                    String(ss.id) ===
-                                    String(request.sub_section_id)
-                            )
-                    )
-                    .slice(0, request.requested_amount - selected.length);
-
-                selected.push(...remainingOtherSub.map((e) => String(e.id)));
+        
+        // Check current gender counts
+        let currentMale = 0, currentFemale = 0;
+        selected.forEach(id => {
+            const emp = allSortedEligibleEmployees.find(e => String(e.id) === id);
+            if (emp) {
+                if (emp.gender === "male") currentMale++;
+                else if (emp.gender === "female") currentFemale++;
             }
+        });
+        
+        // Adjust if gender requirements not met
+        if (currentMale < requiredMale || currentFemale < requiredFemale) {
+            const newSelected = [];
+            
+            // First, ensure we have required males
+            if (currentMale < requiredMale) {
+                const neededMales = requiredMale - currentMale;
+                const maleCandidates = allSortedEligibleEmployees
+                    .filter(emp => 
+                        emp.gender === "male" && 
+                        !selected.includes(String(emp.id))
+                    )
+                    .sort((a, b) => {
+                        // Priority employees first
+                        if (a.has_priority !== b.has_priority) return a.has_priority ? -1 : 1;
+                        return b.final_score - a.final_score;
+                    })
+                    .slice(0, neededMales)
+                    .map(emp => String(emp.id));
+                
+                // Add these males, replacing some non-male employees if needed
+                const nonMaleSelected = selected.filter(id => {
+                    const emp = allSortedEligibleEmployees.find(e => String(e.id) === id);
+                    return emp && emp.gender !== "male";
+                });
+                
+                // Remove some non-males to make room
+                const toRemove = Math.min(nonMaleSelected.length, maleCandidates.length);
+                const remainingSelected = selected.filter(id => !nonMaleSelected.slice(0, toRemove).includes(id));
+                newSelected.push(...remainingSelected, ...maleCandidates);
+            }
+            
+            // Ensure we have required females
+            if (currentFemale < requiredFemale) {
+                const neededFemales = requiredFemale - currentFemale;
+                const femaleCandidates = allSortedEligibleEmployees
+                    .filter(emp => 
+                        emp.gender === "female" && 
+                        !newSelected.includes(String(emp.id))
+                    )
+                    .sort((a, b) => {
+                        // Priority employees first
+                        if (a.has_priority !== b.has_priority) return a.has_priority ? -1 : 1;
+                        return b.final_score - a.final_score;
+                    })
+                    .slice(0, neededFemales)
+                    .map(emp => String(emp.id));
+                
+                // Add these females
+                const currentList = [...newSelected];
+                const nonFemaleSelected = currentList.filter(id => {
+                    const emp = allSortedEligibleEmployees.find(e => String(e.id) === id);
+                    return emp && emp.gender !== "female";
+                });
+                
+                // Remove some non-females to make room
+                const toRemove = Math.min(nonFemaleSelected.length, femaleCandidates.length);
+                const remainingSelected = currentList.filter(id => !nonFemaleSelected.slice(0, toRemove).includes(id));
+                newSelected.length = 0; // Clear array
+                newSelected.push(...remainingSelected, ...femaleCandidates);
+            }
+            
+            // Fill remaining slots with best candidates
+            if (newSelected.length < request.requested_amount) {
+                const remaining = request.requested_amount - newSelected.length;
+                const remainingCandidates = allSortedEligibleEmployees
+                    .filter(emp => !newSelected.includes(String(emp.id)))
+                    .sort((a, b) => {
+                        // Priority employees first
+                        if (a.has_priority !== b.has_priority) return a.has_priority ? -1 : 1;
+                        return b.final_score - a.final_score;
+                    })
+                    .slice(0, remaining)
+                    .map(emp => String(emp.id));
+                
+                newSelected.push(...remainingCandidates);
+            }
+            
+            return newSelected.slice(0, request.requested_amount);
         }
-
+        
         return selected.slice(0, request.requested_amount);
     }, [
         allSortedEligibleEmployees,
@@ -1098,21 +1119,22 @@ export default function Fulfill({
                         )}
 
                         <form onSubmit={handleSubmit}>
-                            <EmployeeSelection
-                                request={request}
-                                selectedIds={selectedIds}
-                                getEmployeeDetails={getEmployeeDetails}
-                                openChangeModal={(index) => {
-                                    setChangingEmployeeIndex(index);
-                                    setShowModal(true);
-                                }}
-                                multiSelectMode={multiSelectMode}
-                                toggleMultiSelectMode={() =>
-                                    setMultiSelectMode(!multiSelectMode)
-                                }
-                                enableLineAssignment={enableLineAssignment}
-                                lineAssignments={lineAssignmentsForDisplay}
-                            />
+                              <EmployeeSelection
+            request={request}
+            selectedIds={selectedIds}
+            getEmployeeDetails={getEmployeeDetails}
+            openChangeModal={(index) => {
+                setChangingEmployeeIndex(index);
+                setShowModal(true);
+            }}
+            multiSelectMode={multiSelectMode}
+            toggleMultiSelectMode={() =>
+                setMultiSelectMode(!multiSelectMode)
+            }
+            enableLineAssignment={enableLineAssignment}
+            lineAssignments={lineAssignmentsForDisplay}
+            
+        />
 
                             <LineAssignmentConfig
                                 requestId={request.id}

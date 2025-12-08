@@ -592,35 +592,49 @@ const Index = () => {
     const itemsPerPage = 3;
 
     // Load schedule data after component mounts
-    useEffect(() => {
-        const loadScheduleData = async () => {
-            try {
-                const params = new URLSearchParams({
-                    start_date: startDate || '',
-                    end_date: endDate || '',
-                    section: selectedSection || '',
-                    sub_section: selectedSubSection || ''
-                });
-                
-                const response = await fetch(`/schedules/data?${params}`);
-                const data = await response.json();
-                
-                if (data.success) {
-                    setSchedules(data.schedules);
-                    setLastUpdate(data.last_updated);
-                }
-            } catch (error) {
-                console.error('Failed to load schedule data:', error);
-            } finally {
-                setIsDataLoaded(true);
+useEffect(() => {
+    const loadScheduleData = async () => {
+        setIsLoading(true);
+        try {
+            const params = new URLSearchParams({
+                start_date: startDate || '',
+                end_date: endDate || '',
+                section: selectedSection || '',
+                sub_section: selectedSubSection || ''
+            });
+            
+            const response = await fetch(`/schedules/data?${params}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-        };
+            
+            const data = await response.json();
+            
+            console.log('Initial data loaded:', {
+                filter: { startDate, endDate, selectedSection, selectedSubSection },
+                scheduleCount: data.schedules?.length || 0,
+                success: data.success
+            });
+            
+            if (data.success) {
+                setSchedules(data.schedules || []);
+                setLastUpdate(data.last_updated);
+            } else {
+                console.error('API returned error:', data.error);
+            }
+        } catch (error) {
+            console.error('Failed to load schedule data:', error);
+        } finally {
+            setIsDataLoaded(true);
+            setIsLoading(false);
+        }
+    };
 
-        loadScheduleData();
-    }, []); // Empty dependency array - only run once on mount
+    loadScheduleData();
+}, []); // Empty dependency array - only run once on mount
 
-    // Update data when filters change
-    useEffect(() => {
+     useEffect(() => {
         if (!isDataLoaded) return; // Don't run on initial load
 
         const loadFilteredData = async () => {
@@ -649,55 +663,65 @@ const Index = () => {
         };
 
         loadFilteredData();
-    }, [startDate, endDate, selectedSection, selectedSubSection, isDataLoaded]);
+    }, [startDate, endDate, selectedSection, selectedSubSection]);
 
-    // Background polling for updates
-    useEffect(() => {
-        if (!isDataLoaded || isLoading) return; // Don't poll during initial load or manual filtering
+useEffect(() => {
+    if (!isDataLoaded || isLoading) return;
+
+    const pollInterval = 15000; // 15 seconds
     
-        const pollInterval = 15000; // 15 seconds
-        
-        const fetchUpdates = async () => {
-            try {
-                // Use the same filters as current display
-                const params = new URLSearchParams({
-                    last_update: lastUpdate || '',
-                    start_date: startDate || '',
-                    end_date: endDate || '',
-                    section: selectedSection || '',
-                    sub_section: selectedSubSection || ''
-                });
-                
-                const response = await fetch(`/schedules/updates?${params}`, {
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                    }
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    
-                    // Only update if data actually changed
-                    if (!data.unchanged && data.last_updated !== lastUpdate) {
-                        // Replace ALL schedules with the complete updated dataset
-                        setSchedules(data.schedules);
-                        setLastUpdate(data.last_updated);
-                        
-                        console.log('Schedule data updated automatically - complete dataset refreshed');
-                    }
+    const fetchUpdates = async () => {
+        try {
+            const params = new URLSearchParams({
+                last_update: lastUpdate || '',
+                start_date: startDate || '',
+                end_date: endDate || '',
+                section: selectedSection || '',
+                sub_section: selectedSubSection || ''
+            });
+            
+            console.log('Polling with params:', {
+                lastUpdate,
+                startDate,
+                endDate,
+                selectedSection,
+                selectedSubSection
+            });
+            
+            const response = await fetch(`/schedules/updates?${params}`, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
                 }
-            } catch (error) {
-                console.log('Background update failed:', error);
-                // Fail silently - don't show errors to users for background updates
+            });
+            
+            if (!response.ok) {
+                console.error('Polling failed with status:', response.status);
+                return;
             }
-        };
+            
+            const data = await response.json();
+            
+            console.log('Polling response:', {
+                unchanged: data.unchanged,
+                scheduleCount: data.schedules?.length || 0,
+                success: data.success,
+                error: data.error
+            });
+            
+            // Only update if data actually changed
+            if (data.success && !data.unchanged && data.last_updated !== lastUpdate) {
+                setSchedules(data.schedules || []);
+                setLastUpdate(data.last_updated);
+                console.log('Schedule data updated with current filters');
+            }
+        } catch (error) {
+            console.log('Background update failed:', error);
+        }
+    };
 
-        // Start polling
-        const intervalId = setInterval(fetchUpdates, pollInterval);
-        
-        // Cleanup on unmount
-        return () => clearInterval(intervalId);
-    }, [isDataLoaded, isLoading, lastUpdate, startDate, endDate, selectedSection, selectedSubSection]);
+    const intervalId = setInterval(fetchUpdates, pollInterval);
+    return () => clearInterval(intervalId);
+}, [isDataLoaded, isLoading, lastUpdate, startDate, endDate, selectedSection, selectedSubSection]);
 
     // Define role-based section access
     const getAccessibleSections = () => {
@@ -833,18 +857,30 @@ const Index = () => {
     };
 
     const clearFilters = () => {
-        setStartDate('');
-        setEndDate('');
-        setSelectedSection('');
-        setSelectedSubSection('');
-        setIsLoading(true);
-        router.get(route('schedules.index'), {}, { 
-            preserveState: true, 
-            preserveScroll: true,
-            onStart: () => setIsLoading(true),
-            onFinish: () => setIsLoading(false),
-        });
-    };
+    // Reset to default values (1 month back from today)
+    const today = dayjs();
+    const oneMonthAgo = dayjs().subtract(1, 'month');
+    
+    setStartDate(oneMonthAgo.format('YYYY-MM-DD'));
+    setEndDate(today.format('YYYY-MM-DD'));
+    setSelectedSection('');
+    setSelectedSubSection('');
+    
+    setIsLoading(true);
+    
+    // Use router to update URL with default filters
+    router.get(route('schedules.index'), {
+        start_date: oneMonthAgo.format('YYYY-MM-DD'),
+        end_date: today.format('YYYY-MM-DD'),
+        section: '',
+        sub_section: ''
+    }, { 
+        preserveState: true, 
+        preserveScroll: true,
+        onStart: () => setIsLoading(true),
+        onFinish: () => setIsLoading(false),
+    });
+};
 
     const handleToggleVisibility = async (date, sectionId, currentVisibility) => {
         try {
@@ -882,14 +918,22 @@ const Index = () => {
                 <div className="max-w-7xl mx-auto py-6">
 
                     {/* Welcome Header */}
-                    <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 sm:p-8 mb-8 text-gray-900 dark:text-white shadow-2xl border border-gray-100 dark:border-gray-700">
-                        <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold mb-2 tracking-wide text-indigo-900 dark:text-indigo-200">
-                            Agenda Penjadwalan
-                        </h3>
-                        <p className="text-base sm:text-lg md:text-xl font-light opacity-90 text-gray-600 dark:text-gray-300">
-                            Tampilan tabel seluruh jadwal karyawan • Auto-update setiap 15 detik
-                        </p>
-                    </div>
+                  <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 sm:p-8 mb-8 text-gray-900 dark:text-white shadow-2xl border border-gray-100 dark:border-gray-700">
+            <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold mb-2 tracking-wide text-indigo-900 dark:text-indigo-200">
+                Agenda Penjadwalan
+            </h3>
+            <p className="text-base sm:text-lg md:text-xl font-light opacity-90 text-gray-600 dark:text-gray-300">
+                {startDate && endDate ? (
+                    <>
+                        Menampilkan jadwal dari <span className="font-semibold">{dayjs(startDate).format('DD MMM YYYY')}</span> 
+                        {' '}hingga <span className="font-semibold">{dayjs(endDate).format('DD MMM YYYY')}</span>
+                        {' • '}Auto-update setiap 15 detik
+                    </>
+                ) : (
+                    "Tampilan tabel seluruh jadwal karyawan • Auto-update setiap 15 detik"
+                )}
+            </p>
+        </div>
 
                     {/* Filter Section - Only for Admin */}
                     {isAdmin && (
