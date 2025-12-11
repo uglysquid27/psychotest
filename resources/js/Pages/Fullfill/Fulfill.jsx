@@ -1,7 +1,6 @@
 import { useForm } from "@inertiajs/react";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import dayjs from "dayjs";
 import { router } from "@inertiajs/react";
 
 import RequestDetails from "./components/RequestDetails";
@@ -9,7 +8,6 @@ import GenderStats from "./components/GenderStats";
 import EmployeeSelection from "./components/EmployeeSelection";
 import ConfirmationSection from "./components/ComfirmationSection";
 import EmployeeModal from "./components/EmployeeModal";
-import BulkFulfillmentPanel from "./components/BulkFulfillmentPanel";
 import LineAssignmentConfig from "./components/LineAssignmentConfig";
 
 export default function Fulfill({
@@ -24,6 +22,7 @@ export default function Fulfill({
     const [enableLineAssignment, setEnableLineAssignment] = useState(false);
     const [lineAssignments, setLineAssignments] = useState({});
     const [lineAssignmentConfig, setLineAssignmentConfig] = useState({});
+    const [showRatioInfo, setShowRatioInfo] = useState(false); // NEW: Toggle for ratio info
 
     const normalizeGender = (gender) => {
         if (!gender) {
@@ -79,9 +78,9 @@ export default function Fulfill({
                 .includes(String(emp.id)),
             ml_score: emp.ml_score || 0,
             final_score: emp.final_score || emp.total_score || 0,
-            priority_score: emp.priority_score || 0, // ADD THIS
-            priority_info: emp.priority_info || [], // ADD THIS
-            has_priority: emp.has_priority || false, // ADD THIS
+            priority_score: emp.priority_score || 0,
+            priority_info: emp.priority_info || [],
+            has_priority: emp.has_priority || false,
         }));
     }, [
         sameSubSectionEmployees,
@@ -157,172 +156,244 @@ export default function Fulfill({
         request.female_count,
     ]);
 
-    // UPDATED: Initial selection with priority first
-    const initialSelectedIds = useMemo(() => {
-        // Step 1: Get all priority employees that match gender requirements
-        const priorityEmployees = allSortedEligibleEmployees
-            .filter(emp => emp.has_priority)
-            .map(emp => String(emp.id));
+    // FIXED: Correct priority ratio calculation
+    const getPriorityRatio = useCallback((requestedAmount) => {
+        if (requestedAmount <= 2) {
+            return 1; // 1:1 ratio for 1-2 employees
+        } else if (requestedAmount <= 4) {
+            return 0.5; // 1:2 ratio for 3-4 employees
+        } else {
+            return 0.333; // 1:3 ratio for 5+ employees
+        }
+    }, []);
+
+    // FIXED: Correct target priority count calculation
+    const calculateTargetPriorityCount = useCallback((requestedAmount) => {
+        const ratio = getPriorityRatio(requestedAmount);
+        // For 1:3 ratio, multiply by 0.333 (which is 1/3)
+        const target = Math.max(1, Math.floor(requestedAmount * ratio));
         
-        // Step 2: Get valid currently scheduled IDs
+        // Ensure we don't exceed requested amount and for 1:3 ratio, round up if needed
+        if (requestedAmount >= 5) {
+            // For 1:3 ratio: 5-7 = 2, 8-10 = 3, etc.
+            return Math.min(Math.ceil(requestedAmount / 3), requestedAmount);
+        }
+        
+        return Math.min(target, requestedAmount);
+    }, [getPriorityRatio]);
+
+    // Get ratio description for display
+    const getRatioDescription = useCallback((requestedAmount) => {
+        if (requestedAmount <= 2) {
+            return "1:1";
+        } else if (requestedAmount <= 4) {
+            return "1:2";
+        } else {
+            return "1:3";
+        }
+    }, []);
+
+    // Get priority positions (slots where priority employees should be placed)
+    const getPriorityPositions = useCallback((requestedAmount) => {
+        const targetPriorityCount = calculateTargetPriorityCount(requestedAmount);
+        const positions = [];
+        
+        if (targetPriorityCount === 1) {
+            // For 1 priority employee, put them in position 1
+            positions.push(1);
+        } else if (targetPriorityCount === 2) {
+            // For 2 priority employees, distribute evenly (positions 1 and middle)
+            positions.push(1, Math.ceil(requestedAmount / 2));
+        } else {
+            // For 3+ priority employees, distribute evenly
+            const step = Math.floor(requestedAmount / targetPriorityCount);
+            for (let i = 0; i < targetPriorityCount; i++) {
+                positions.push(Math.min((i * step) + 1, requestedAmount));
+            }
+        }
+        
+        return positions.sort((a, b) => a - b);
+    }, [calculateTargetPriorityCount]);
+
+    const initialSelectedIds = useMemo(() => {
+        // Step 1: Get currently scheduled employees first (preserve them)
         const validCurrentIds = currentScheduledIds
             .map((id) => String(id))
             .filter((id) =>
                 allSortedEligibleEmployees.some((e) => String(e.id) === id)
             );
 
-        // Step 3: If we have scheduled employees, they take precedence
+        // Calculate target priority count and positions
+        const targetPriorityCount = calculateTargetPriorityCount(request.requested_amount);
+        const priorityPositions = getPriorityPositions(request.requested_amount);
+
+        // If we have scheduled employees, use them as base
         if (validCurrentIds.length > 0) {
-            const selected = [...validCurrentIds];
+            const selected = new Array(request.requested_amount).fill(null);
             
-            // Fill remaining slots with priority employees first, then others
-            const remainingCount = request.requested_amount - selected.length;
-            if (remainingCount > 0) {
-                // Get priority employees not already selected
-                const availablePriority = priorityEmployees
-                    .filter(id => !selected.includes(id))
-                    .slice(0, remainingCount);
-                
-                selected.push(...availablePriority);
-                
-                // If still need more, get other employees
-                if (selected.length < request.requested_amount) {
-                    const stillNeeded = request.requested_amount - selected.length;
-                    const otherEmployees = allSortedEligibleEmployees
-                        .filter(emp => 
-                            !selected.includes(String(emp.id)) && 
-                            !emp.has_priority
-                        )
-                        .slice(0, stillNeeded)
-                        .map(emp => String(emp.id));
+            // Place currently scheduled employees in their positions
+            validCurrentIds.forEach((id, index) => {
+                if (index < request.requested_amount) {
+                    selected[index] = id;
+                }
+            });
+            
+            // Try to maintain priority ratio with current selections
+            const currentPriorityCount = selected.filter(id => {
+                if (!id) return false;
+                const emp = allSortedEligibleEmployees.find(e => String(e.id) === id);
+                return emp?.has_priority;
+            }).length;
+            
+            // Fill remaining slots
+            for (let i = 0; i < selected.length; i++) {
+                if (!selected[i]) {
+                    // Check if this is a priority position
+                    const isPriorityPosition = priorityPositions.includes(i + 1);
                     
-                    selected.push(...otherEmployees);
+                    // Find appropriate employee
+                    let candidate = null;
+                    
+                    if (isPriorityPosition && currentPriorityCount < targetPriorityCount) {
+                        // Need priority employee for this position
+                        candidate = allSortedEligibleEmployees.find(emp => 
+                            emp.has_priority && 
+                            emp.status === "available" &&
+                            !selected.includes(String(emp.id))
+                        );
+                    }
+                    
+                    if (!candidate) {
+                        // Get any available employee
+                        candidate = allSortedEligibleEmployees.find(emp => 
+                            emp.status === "available" &&
+                            !selected.includes(String(emp.id))
+                        );
+                    }
+                    
+                    if (candidate) {
+                        selected[i] = String(candidate.id);
+                    }
                 }
             }
             
-            return selected.slice(0, request.requested_amount);
+            return selected.filter(id => id !== null);
         }
 
-        // Step 4: No scheduled employees, start with priority
-        const selected = [];
+        // Step 2: No scheduled employees, start with priority ratio positions
+        const selected = new Array(request.requested_amount).fill(null);
+        let priorityFilled = 0;
         
-        // Add priority employees first
-        selected.push(...priorityEmployees.slice(0, request.requested_amount));
+        // First fill priority positions with priority employees
+        priorityPositions.forEach((position, index) => {
+            if (index < targetPriorityCount && selected[position - 1] === null) {
+                const priorityEmp = allSortedEligibleEmployees.find(emp => 
+                    emp.has_priority && 
+                    emp.status === "available" &&
+                    !selected.includes(String(emp.id))
+                );
+                
+                if (priorityEmp) {
+                    selected[position - 1] = String(priorityEmp.id);
+                    priorityFilled++;
+                }
+            }
+        });
         
-        // If still need more, add other employees
-        if (selected.length < request.requested_amount) {
-            const remainingCount = request.requested_amount - selected.length;
-            const otherEmployees = allSortedEligibleEmployees
-                .filter(emp => !emp.has_priority)
-                .slice(0, remainingCount)
-                .map(emp => String(emp.id));
-            
-            selected.push(...otherEmployees);
+        // Fill remaining slots with other employees
+        for (let i = 0; i < selected.length; i++) {
+            if (selected[i] === null) {
+                const candidate = allSortedEligibleEmployees.find(emp => 
+                    emp.status === "available" &&
+                    !selected.includes(String(emp.id))
+                );
+                
+                if (candidate) {
+                    selected[i] = String(candidate.id);
+                }
+            }
         }
         
-        // Step 5: Ensure gender requirements are met
+        // Step 3: Ensure gender requirements are met
         const requiredMale = request.male_count || 0;
         const requiredFemale = request.female_count || 0;
         
-        // Check current gender counts
         let currentMale = 0, currentFemale = 0;
         selected.forEach(id => {
-            const emp = allSortedEligibleEmployees.find(e => String(e.id) === id);
-            if (emp) {
-                if (emp.gender === "male") currentMale++;
-                else if (emp.gender === "female") currentFemale++;
+            if (id) {
+                const emp = allSortedEligibleEmployees.find(e => String(e.id) === id);
+                if (emp) {
+                    if (emp.gender === "male") currentMale++;
+                    else if (emp.gender === "female") currentFemale++;
+                }
             }
         });
         
         // Adjust if gender requirements not met
         if (currentMale < requiredMale || currentFemale < requiredFemale) {
-            const newSelected = [];
+            const newSelected = [...selected];
             
-            // First, ensure we have required males
+            // Create a list of employee IDs with their scores for sorting
+            const availableEmployees = allSortedEligibleEmployees
+                .filter(emp => emp.status === "available")
+                .map(emp => ({
+                    id: String(emp.id),
+                    gender: emp.gender,
+                    has_priority: emp.has_priority,
+                    final_score: emp.final_score
+                }))
+                .sort((a, b) => {
+                    // Priority first
+                    if (a.has_priority !== b.has_priority) return a.has_priority ? -1 : 1;
+                    // Then by score
+                    return b.final_score - a.final_score;
+                });
+            
+            // Track which positions are flexible (not priority positions)
+            const flexiblePositions = selected.map((id, index) => 
+                !priorityPositions.includes(index + 1) ? index : -1
+            ).filter(idx => idx !== -1);
+            
+            // Adjust for male requirement
             if (currentMale < requiredMale) {
                 const neededMales = requiredMale - currentMale;
-                const maleCandidates = allSortedEligibleEmployees
-                    .filter(emp => 
-                        emp.gender === "male" && 
-                        !selected.includes(String(emp.id))
-                    )
-                    .sort((a, b) => {
-                        // Priority employees first
-                        if (a.has_priority !== b.has_priority) return a.has_priority ? -1 : 1;
-                        return b.final_score - a.final_score;
-                    })
-                    .slice(0, neededMales)
-                    .map(emp => String(emp.id));
+                const maleCandidates = availableEmployees
+                    .filter(emp => emp.gender === "male" && !newSelected.includes(emp.id));
                 
-                // Add these males, replacing some non-male employees if needed
-                const nonMaleSelected = selected.filter(id => {
-                    const emp = allSortedEligibleEmployees.find(e => String(e.id) === id);
-                    return emp && emp.gender !== "male";
-                });
-                
-                // Remove some non-males to make room
-                const toRemove = Math.min(nonMaleSelected.length, maleCandidates.length);
-                const remainingSelected = selected.filter(id => !nonMaleSelected.slice(0, toRemove).includes(id));
-                newSelected.push(...remainingSelected, ...maleCandidates);
+                for (let i = 0; i < Math.min(neededMales, maleCandidates.length); i++) {
+                    const pos = flexiblePositions.shift();
+                    if (pos !== undefined) {
+                        newSelected[pos] = maleCandidates[i].id;
+                    }
+                }
             }
             
-            // Ensure we have required females
+            // Adjust for female requirement
             if (currentFemale < requiredFemale) {
                 const neededFemales = requiredFemale - currentFemale;
-                const femaleCandidates = allSortedEligibleEmployees
-                    .filter(emp => 
-                        emp.gender === "female" && 
-                        !newSelected.includes(String(emp.id))
-                    )
-                    .sort((a, b) => {
-                        // Priority employees first
-                        if (a.has_priority !== b.has_priority) return a.has_priority ? -1 : 1;
-                        return b.final_score - a.final_score;
-                    })
-                    .slice(0, neededFemales)
-                    .map(emp => String(emp.id));
+                const femaleCandidates = availableEmployees
+                    .filter(emp => emp.gender === "female" && !newSelected.includes(emp.id));
                 
-                // Add these females
-                const currentList = [...newSelected];
-                const nonFemaleSelected = currentList.filter(id => {
-                    const emp = allSortedEligibleEmployees.find(e => String(e.id) === id);
-                    return emp && emp.gender !== "female";
-                });
-                
-                // Remove some non-females to make room
-                const toRemove = Math.min(nonFemaleSelected.length, femaleCandidates.length);
-                const remainingSelected = currentList.filter(id => !nonFemaleSelected.slice(0, toRemove).includes(id));
-                newSelected.length = 0; // Clear array
-                newSelected.push(...remainingSelected, ...femaleCandidates);
+                for (let i = 0; i < Math.min(neededFemales, femaleCandidates.length); i++) {
+                    const pos = flexiblePositions.shift();
+                    if (pos !== undefined) {
+                        newSelected[pos] = femaleCandidates[i].id;
+                    }
+                }
             }
             
-            // Fill remaining slots with best candidates
-            if (newSelected.length < request.requested_amount) {
-                const remaining = request.requested_amount - newSelected.length;
-                const remainingCandidates = allSortedEligibleEmployees
-                    .filter(emp => !newSelected.includes(String(emp.id)))
-                    .sort((a, b) => {
-                        // Priority employees first
-                        if (a.has_priority !== b.has_priority) return a.has_priority ? -1 : 1;
-                        return b.final_score - a.final_score;
-                    })
-                    .slice(0, remaining)
-                    .map(emp => String(emp.id));
-                
-                newSelected.push(...remainingCandidates);
-            }
-            
-            return newSelected.slice(0, request.requested_amount);
+            return newSelected.filter(id => id !== null);
         }
         
-        return selected.slice(0, request.requested_amount);
+        return selected.filter(id => id !== null);
     }, [
         allSortedEligibleEmployees,
         request.requested_amount,
         request.male_count,
         request.female_count,
-        request.sub_section_id,
         currentScheduledIds,
+        calculateTargetPriorityCount,
+        getPriorityPositions,
     ]);
 
     const { data, setData, post, processing, errors } = useForm({
@@ -364,7 +435,6 @@ export default function Fulfill({
     // Initialize bulk selected employees when entering bulk mode
     useEffect(() => {
         if (bulkMode) {
-            // Initialize current request's employees
             const currentRequestId = String(request.id);
             setBulkSelectedEmployees((prev) => ({
                 ...prev,
@@ -373,7 +443,17 @@ export default function Fulfill({
         }
     }, [bulkMode, request.id, initialSelectedIds]);
 
-    // NEW: Initialize line assignments only once on component mount
+    // FIXED: Helper function to calculate line counts
+    const calculateLineCounts = useCallback((lineCount, requestedAmount) => {
+        const baseCount = Math.floor(requestedAmount / lineCount);
+        const remainder = requestedAmount % lineCount;
+
+        return Array.from({ length: lineCount }, (_, i) =>
+            i < remainder ? baseCount + 1 : baseCount
+        );
+    }, []);
+
+    // Initialize line assignments only once on component mount
     useEffect(() => {
         if (
             Object.keys(lineAssignments).length === 0 &&
@@ -394,7 +474,6 @@ export default function Fulfill({
 
             setLineAssignments(initialLineAssignments);
 
-            // Also initialize config
             const initialConfig = {
                 enabled: false,
                 lineCount: 2,
@@ -405,23 +484,12 @@ export default function Fulfill({
                 [request.id]: initialConfig,
             });
         }
-    }, []); // Empty dependency array - only run once
-
-    // Helper function to calculate line counts
-    const calculateLineCounts = useCallback((lineCount, requestedAmount) => {
-        const baseCount = Math.floor(requestedAmount / lineCount);
-        const remainder = requestedAmount % lineCount;
-
-        return Array.from({ length: lineCount }, (_, i) =>
-            i < remainder ? baseCount + 1 : baseCount
-        );
     }, []);
 
-    // Check if there are any currently scheduled employees
     const hasScheduledEmployees = useMemo(() => {
         return selectedIds.some((id) => {
             const emp = allSortedEligibleEmployees.find(
-                (e) => String(e.id) === id
+                (e) => String(e.id) === String(id)
             );
             return emp?.isCurrentlyScheduled;
         });
@@ -459,7 +527,14 @@ export default function Fulfill({
         }
     }, [message]);
 
+    // Calculate priority positions for display
+    const priorityPositions = useMemo(() => {
+        return getPriorityPositions(request.requested_amount);
+    }, [request.requested_amount, getPriorityPositions]);
+
     const genderStats = useMemo(() => {
+        const targetPriorityCount = calculateTargetPriorityCount(request.requested_amount);
+        
         const stats = {
             total: 0,
             male: 0,
@@ -471,11 +546,15 @@ export default function Fulfill({
             required_male: request.male_count || 0,
             required_female: request.female_count || 0,
             current_scheduled: 0,
+            priority_count: 0,
+            target_priority_count: targetPriorityCount,
+            ratio_description: getRatioDescription(request.requested_amount),
+            priority_positions: priorityPositions,
         };
 
-        selectedIds.forEach((id) => {
+        selectedIds.forEach((id, index) => {
             const emp = allSortedEligibleEmployees.find(
-                (e) => String(e.id) === id
+                (e) => String(e.id) === String(id)
             );
             if (emp) {
                 stats.total++;
@@ -489,6 +568,9 @@ export default function Fulfill({
                     stats.male++;
                     stats[`male_${emp.type}`]++;
                 }
+                if (emp.has_priority) {
+                    stats.priority_count++;
+                }
             }
         });
 
@@ -496,8 +578,12 @@ export default function Fulfill({
     }, [
         selectedIds,
         allSortedEligibleEmployees,
+        request.requested_amount,
         request.male_count,
         request.female_count,
+        calculateTargetPriorityCount,
+        getRatioDescription,
+        priorityPositions,
     ]);
 
     const handleLineConfigChange = (requestId, type, data) => {
@@ -519,7 +605,6 @@ export default function Fulfill({
                 return newConfig;
             });
 
-            // Update the enableLineAssignment state
             if (requestId === String(request.id)) {
                 setEnableLineAssignment(data.enabled);
             }
@@ -534,393 +619,130 @@ export default function Fulfill({
         }
     }, [lineAssignmentConfig, request.id]);
 
-    const handleModalEmployeeSelect = (employee) => {
-        if (activeBulkRequest) {
-            handleBulkEmployeeChange(
-                activeBulkRequest.requestId,
-                activeBulkRequest.index,
-                String(employee.id)
-            );
-            setActiveBulkRequest(null);
-        } else if (changingEmployeeIndex !== null) {
-            const newSelectedIds = [...selectedIds];
-            const newEmployeeId = String(employee.id);
-            const oldEmployeeId = newSelectedIds[changingEmployeeIndex];
+    // Auto-fill function with dynamic priority ratio and positions
+    const handleAutoFill = useCallback(() => {
+        const targetPriorityCount = calculateTargetPriorityCount(request.requested_amount);
+        const priorityPositions = getPriorityPositions(request.requested_amount);
+        
+        const allEmployees = [...allSortedEligibleEmployees].filter(
+            (emp) => emp.status === "available"
+        );
 
-            // Check if the employee is already selected at a different position
-            const existingIndex = newSelectedIds.findIndex(
-                (id) => String(id) === newEmployeeId
-            );
+        const priorityEmployees = allEmployees.filter(emp => emp.has_priority);
+        const nonPriorityEmployees = allEmployees.filter(emp => !emp.has_priority);
 
-            if (existingIndex !== -1) {
-                // If employee is already selected elsewhere, swap positions
-                const temp = newSelectedIds[changingEmployeeIndex];
-                newSelectedIds[changingEmployeeIndex] =
-                    newSelectedIds[existingIndex];
-                newSelectedIds[existingIndex] = temp;
+        const selected = new Array(request.requested_amount).fill(null);
+        let priorityUsed = 0;
 
-                // Update line assignments if line assignment is enabled
-                if (enableLineAssignment) {
-                    setLineAssignments((prev) => {
-                        const newAssignments = { ...prev };
-                        const tempLine = newAssignments[oldEmployeeId];
-                        const existingLine = newAssignments[newEmployeeId];
+        // Function to find best employee for a position
+        const findBestEmployee = (gender = null, requirePriority = false) => {
+            const source = requirePriority ? priorityEmployees : [...priorityEmployees, ...nonPriorityEmployees];
+            
+            return source.find(emp => {
+                if (gender && emp.gender !== gender) return false;
+                return !selected.includes(String(emp.id));
+            });
+        };
 
-                        // Swap the line assignments
-                        newAssignments[newEmployeeId] = tempLine;
-                        newAssignments[oldEmployeeId] = existingLine;
-
-                        return newAssignments;
-                    });
-                }
-            } else {
-                // Simply replace the employee at the specified index
-                newSelectedIds[changingEmployeeIndex] = newEmployeeId;
-
-                // Update line assignments if line assignment is enabled
-                if (enableLineAssignment) {
-                    setLineAssignments((prev) => {
-                        const currentLine = prev[oldEmployeeId];
-                        const newAssignments = { ...prev };
-
-                        // Transfer line assignment from old to new employee
-                        newAssignments[newEmployeeId] = currentLine;
-                        delete newAssignments[oldEmployeeId];
-
-                        return newAssignments;
-                    });
+        // First, fill priority positions with priority employees
+        priorityPositions.forEach((position, index) => {
+            if (index < targetPriorityCount && selected[position - 1] === null) {
+                const employee = findBestEmployee(null, true);
+                if (employee) {
+                    selected[position - 1] = String(employee.id);
+                    priorityUsed++;
+                    
+                    // Remove from available lists
+                    const empIndex = priorityEmployees.findIndex(e => String(e.id) === String(employee.id));
+                    if (empIndex !== -1) priorityEmployees.splice(empIndex, 1);
                 }
             }
+        });
 
-            setSelectedIds(newSelectedIds);
-            setChangingEmployeeIndex(null);
-        } else {
-            // Handle direct employee selection
-            handleEmployeeSelect(employee.id);
+        // Fill gender requirements
+        const requiredMale = request.male_count || 0;
+        const requiredFemale = request.female_count || 0;
+        
+        let currentMale = 0, currentFemale = 0;
+        selected.forEach(id => {
+            if (id) {
+                const emp = allSortedEligibleEmployees.find(e => String(e.id) === id);
+                if (emp) {
+                    if (emp.gender === "male") currentMale++;
+                    else if (emp.gender === "female") currentFemale++;
+                }
+            }
+        });
+
+        // Fill missing males
+        if (currentMale < requiredMale) {
+            const neededMales = requiredMale - currentMale;
+            let filled = 0;
+            
+            for (let i = 0; i < selected.length && filled < neededMales; i++) {
+                if (selected[i] === null) {
+                    const maleEmp = findBestEmployee("male");
+                    if (maleEmp) {
+                        selected[i] = String(maleEmp.id);
+                        filled++;
+                        
+                        // Remove from available lists
+                        const sourceList = maleEmp.has_priority ? priorityEmployees : nonPriorityEmployees;
+                        const empIndex = sourceList.findIndex(e => String(e.id) === String(maleEmp.id));
+                        if (empIndex !== -1) sourceList.splice(empIndex, 1);
+                    }
+                }
+            }
         }
 
-        setShowModal(false);
-    };
-
-    const handleReplaceEmployee = (index) => {
-        setChangingEmployeeIndex(index);
-        setShowModal(true);
-    };
-
-    const handleEmployeeSelect = (employeeId) => {
-        const stringId = String(employeeId);
-
-        setSelectedIds((prev) => {
-            if (prev.includes(stringId)) {
-                // Remove employee and their line assignment if enabled
-                if (enableLineAssignment) {
-                    setLineAssignments((prevAssignments) => {
-                        const newAssignments = { ...prevAssignments };
-                        delete newAssignments[stringId];
-                        return newAssignments;
-                    });
-                }
-                return prev.filter((id) => id !== stringId);
-            }
-            if (prev.length >= request.requested_amount) {
-                return prev;
-            }
-
-            const newSelectedIds = [...prev, stringId];
-
-            // Set default line assignment for new employee if enabled
-            if (enableLineAssignment) {
-                setLineAssignments((prevAssignments) => {
-                    const currentConfig = lineAssignmentConfig[request.id];
-                    const lineCount = currentConfig?.lineCount || 2;
-                    const newLine = (
-                        ((newSelectedIds.length - 1) % lineCount) +
-                        1
-                    ).toString();
-                    const newAssignments = {
-                        ...prevAssignments,
-                        [stringId]: newLine,
-                    };
-                    return newAssignments;
-                });
-            }
-
-            return newSelectedIds;
-        });
-    };
-
-    const openBulkChangeModal = useCallback(
-        (requestId, index) => {
-            const requestIdStr = String(requestId);
-
-            const requestExists =
-                sameDayRequests.some(
-                    (req) => String(req.id) === requestIdStr
-                ) || String(requestIdStr) === String(request.id);
-
-            if (!requestExists) {
-                console.error(
-                    "❌ Cannot open modal: Request not found",
-                    requestIdStr
-                );
-
-                setSelectedBulkRequests((prev) =>
-                    prev.filter((id) => id !== requestIdStr)
-                );
-                setBulkSelectedEmployees((prev) => {
-                    const cleaned = { ...prev };
-                    delete cleaned[requestIdStr];
-                    return cleaned;
-                });
-                alert("Request tidak valid telah dihapus dari seleksi.");
-                return;
-            }
-
-            setActiveBulkRequest({ requestId: requestIdStr, index });
-            setShowModal(true);
-        },
-        [sameDayRequests, request.id]
-    );
-
-    const handleAutoFulfill = useCallback(
-        (strategy, requestIds) => {
-            const newBulkSelections = { ...bulkSelectedEmployees };
-            const requestsToFulfill = sameDayRequests.filter(
-                (req) =>
-                    requestIds.includes(String(req.id)) &&
-                    req.status !== "fulfilled"
-            );
-
-            // Also include current request if it's in the requestIds
-            const allRequests = [...requestsToFulfill];
-            if (requestIds.includes(String(request.id))) {
-                const currentAlreadyIncluded = allRequests.some(
-                    (req) => String(req.id) === String(request.id)
-                );
-                if (!currentAlreadyIncluded) {
-                    allRequests.push(request);
+        // Fill missing females
+        if (currentFemale < requiredFemale) {
+            const neededFemales = requiredFemale - currentFemale;
+            let filled = 0;
+            
+            for (let i = 0; i < selected.length && filled < neededFemales; i++) {
+                if (selected[i] === null) {
+                    const femaleEmp = findBestEmployee("female");
+                    if (femaleEmp) {
+                        selected[i] = String(femaleEmp.id);
+                        filled++;
+                        
+                        // Remove from available lists
+                        const sourceList = femaleEmp.has_priority ? priorityEmployees : nonPriorityEmployees;
+                        const empIndex = sourceList.findIndex(e => String(e.id) === String(femaleEmp.id));
+                        if (empIndex !== -1) sourceList.splice(empIndex, 1);
+                    }
                 }
             }
+        }
 
-            const usedEmployeeIds = new Set();
-
-            let availableEmployees = allSortedEligibleEmployees.filter(
-                (emp) => emp.status === "available"
-            );
-
-            if (strategy === "same_section") {
-                availableEmployees.sort((a, b) => {
-                    const aIsSame = a.subSections.some(
-                        (ss) => String(ss.id) === String(request.sub_section_id)
-                    );
-                    const bIsSame = b.subSections.some(
-                        (ss) => String(ss.id) === String(request.sub_section_id)
-                    );
-                    if (aIsSame !== bIsSame) return aIsSame ? -1 : 1;
-
-                    const aTotalScore =
-                        (a.workload_points || 0) +
-                        (a.blind_test_points || 0) +
-                        (a.average_rating || 0);
-                    const bTotalScore =
-                        (b.workload_points || 0) +
-                        (b.blind_test_points || 0) +
-                        (b.average_rating || 0);
-                    return bTotalScore - aTotalScore;
-                });
-            } else if (strategy === "balanced") {
-                availableEmployees.sort((a, b) => {
-                    const aWorkload =
-                        (a.workload_points || 0) + (a.blind_test_points || 0);
-                    const bWorkload =
-                        (b.workload_points || 0) + (b.blind_test_points || 0);
-                    return aWorkload - bWorkload;
-                });
+        // Fill remaining empty slots
+        for (let i = 0; i < selected.length; i++) {
+            if (selected[i] === null) {
+                const employee = findBestEmployee();
+                if (employee) {
+                    selected[i] = String(employee.id);
+                    
+                    // Remove from available lists
+                    const sourceList = employee.has_priority ? priorityEmployees : nonPriorityEmployees;
+                    const empIndex = sourceList.findIndex(e => String(e.id) === String(employee.id));
+                    if (empIndex !== -1) sourceList.splice(empIndex, 1);
+                }
             }
+        }
 
-            allRequests.forEach((req) => {
-                const requiredMale = req.male_count || 0;
-                const requiredFemale = req.female_count || 0;
-                const totalRequired = req.requested_amount;
+        setSelectedIds(selected.filter(id => id !== null));
+    }, [
+        allSortedEligibleEmployees,
+        request.requested_amount,
+        request.male_count,
+        request.female_count,
+        selectedIds,
+        calculateTargetPriorityCount,
+        getPriorityPositions,
+    ]);
 
-                const maleCandidates = availableEmployees.filter(
-                    (emp) =>
-                        emp.gender === "male" &&
-                        !usedEmployeeIds.has(String(emp.id)) &&
-                        emp.status === "available"
-                );
-
-                const femaleCandidates = availableEmployees.filter(
-                    (emp) =>
-                        emp.gender === "female" &&
-                        !usedEmployeeIds.has(String(emp.id)) &&
-                        emp.status === "available"
-                );
-
-                const selectedForRequest = [];
-
-                for (
-                    let i = 0;
-                    i < requiredMale && maleCandidates.length > 0;
-                    i++
-                ) {
-                    const candidate = maleCandidates.shift();
-                    selectedForRequest.push(String(candidate.id));
-                    usedEmployeeIds.add(String(candidate.id));
-                    availableEmployees = availableEmployees.filter(
-                        (emp) => String(emp.id) !== String(candidate.id)
-                    );
-                }
-
-                for (
-                    let i = 0;
-                    i < requiredFemale && femaleCandidates.length > 0;
-                    i++
-                ) {
-                    const candidate = femaleCandidates.shift();
-                    selectedForRequest.push(String(candidate.id));
-                    usedEmployeeIds.add(String(candidate.id));
-                    availableEmployees = availableEmployees.filter(
-                        (emp) => String(emp.id) !== String(candidate.id)
-                    );
-                }
-
-                const remainingSlots =
-                    totalRequired - selectedForRequest.length;
-                if (remainingSlots > 0) {
-                    const otherCandidates = availableEmployees
-                        .filter(
-                            (emp) =>
-                                !usedEmployeeIds.has(String(emp.id)) &&
-                                emp.status === "available"
-                        )
-                        .slice(0, remainingSlots);
-
-                    otherCandidates.forEach((candidate) => {
-                        selectedForRequest.push(String(candidate.id));
-                        usedEmployeeIds.add(String(candidate.id));
-                        availableEmployees = availableEmployees.filter(
-                            (emp) => String(emp.id) !== String(candidate.id)
-                        );
-                    });
-                }
-
-                newBulkSelections[String(req.id)] = selectedForRequest;
-            });
-
-            setBulkSelectedEmployees(newBulkSelections);
-        },
-        [
-            allSortedEligibleEmployees,
-            bulkSelectedEmployees,
-            sameDayRequests,
-            request,
-        ]
-    );
-
-    const handleBulkSubmit = useCallback(
-        (strategy, visibility) => {
-            setBackendError(null);
-
-            const hasIncompleteAssignments = selectedBulkRequests.some(
-                (requestId) => {
-                    const employees = bulkSelectedEmployees[requestId] || [];
-                    const req =
-                        sameDayRequests.find(
-                            (r) => String(r.id) === requestId
-                        ) ||
-                        (String(request.id) === requestId ? request : null);
-                    return req && employees.length < req.requested_amount;
-                }
-            );
-
-            if (hasIncompleteAssignments) {
-                setBackendError(
-                    "Beberapa request belum terisi penuh. Silakan lengkapi semua assignment terlebih dahulu."
-                );
-                return;
-            }
-
-            const bulkData = {};
-            selectedBulkRequests.forEach((requestId) => {
-                const employees = bulkSelectedEmployees[requestId] || [];
-                if (employees.length > 0) {
-                    bulkData[requestId] = employees;
-                }
-            });
-
-            router.post(
-                route("manpower-requests.bulk-fulfill"),
-                {
-                    request_ids: selectedBulkRequests,
-                    employee_selections: bulkData,
-                    strategy: strategy,
-                    visibility: visibility,
-                    status: "pending",
-                },
-                {
-                    onSuccess: () => {
-                        setBulkSelectedEmployees({});
-                        setSelectedBulkRequests([]);
-                        setBulkMode(false);
-                        router.visit(route("manpower-requests.index"));
-                    },
-                    onError: (errors) => {
-                        console.error("Bulk fulfill error:", errors);
-                        if (errors.fulfillment_error) {
-                            setBackendError(errors.fulfillment_error);
-                        } else if (errors.message) {
-                            setBackendError(errors.message);
-                        } else {
-                            setBackendError(
-                                "Terjadi kesalahan saat memproses bulk fulfillment"
-                            );
-                        }
-                    },
-                }
-            );
-        },
-        [selectedBulkRequests, bulkSelectedEmployees, sameDayRequests, request]
-    );
-
-    const handleBulkEmployeeChange = useCallback(
-        (requestId, index, newEmployeeId) => {
-            setBulkSelectedEmployees((prev) => {
-                const currentEmployees = prev[requestId] || [];
-
-                if (
-                    newEmployeeId !== currentEmployees[index] &&
-                    currentEmployees.includes(newEmployeeId)
-                ) {
-                    alert("Karyawan ini sudah dipilih untuk request ini");
-                    return prev;
-                }
-
-                const newEmployees = [...currentEmployees];
-                newEmployees[index] = newEmployeeId;
-
-                return {
-                    ...prev,
-                    [requestId]: newEmployees,
-                };
-            });
-        },
-        []
-    );
-
-    const getBulkLineAssignment = useCallback(
-        (requestId, employeeId) => {
-            const requestEmployees = bulkSelectedEmployees[requestId] || [];
-            const index = requestEmployees.indexOf(employeeId);
-            return index !== -1 ? ((index % 2) + 1).toString() : "1";
-        },
-        [bulkSelectedEmployees]
-    );
-
-    const handleClearSelection = () => {
-        setSelectedIds([]);
-    };
-
+    // ADDED: handleSubmit function
     const handleSubmit = (e) => {
         e.preventDefault();
         setBackendError(null);
@@ -954,7 +776,6 @@ export default function Fulfill({
                     router.visit(route("manpower-requests.index"));
                 },
                 onError: (errors) => {
-                    console.error("Submission errors:", errors);
                     if (errors.fulfillment_error) {
                         setBackendError(errors.fulfillment_error);
                     }
@@ -962,6 +783,137 @@ export default function Fulfill({
             }
         );
     };
+
+    const handleModalEmployeeSelect = (employee) => {
+        if (activeBulkRequest) {
+            handleBulkEmployeeChange(
+                activeBulkRequest.requestId,
+                activeBulkRequest.index,
+                String(employee.id)
+            );
+            setActiveBulkRequest(null);
+        } else if (changingEmployeeIndex !== null) {
+            const newSelectedIds = [...selectedIds];
+            const newEmployeeId = String(employee.id);
+            const oldEmployeeId = newSelectedIds[changingEmployeeIndex];
+
+            const existingIndex = newSelectedIds.findIndex(
+                (id) => String(id) === newEmployeeId
+            );
+
+            if (existingIndex !== -1) {
+                const temp = newSelectedIds[changingEmployeeIndex];
+                newSelectedIds[changingEmployeeIndex] =
+                    newSelectedIds[existingIndex];
+                newSelectedIds[existingIndex] = temp;
+
+                if (enableLineAssignment) {
+                    setLineAssignments((prev) => {
+                        const newAssignments = { ...prev };
+                        const tempLine = newAssignments[oldEmployeeId];
+                        const existingLine = newAssignments[newEmployeeId];
+
+                        newAssignments[newEmployeeId] = tempLine;
+                        newAssignments[oldEmployeeId] = existingLine;
+
+                        return newAssignments;
+                    });
+                }
+            } else {
+                newSelectedIds[changingEmployeeIndex] = newEmployeeId;
+
+                if (enableLineAssignment) {
+                    setLineAssignments((prev) => {
+                        const currentLine = prev[oldEmployeeId];
+                        const newAssignments = { ...prev };
+
+                        newAssignments[newEmployeeId] = currentLine;
+                        delete newAssignments[oldEmployeeId];
+
+                        return newAssignments;
+                    });
+                }
+            }
+
+            setSelectedIds(newSelectedIds);
+            setChangingEmployeeIndex(null);
+        } else {
+            handleEmployeeSelect(employee.id);
+        }
+
+        setShowModal(false);
+    };
+
+    const handleReplaceEmployee = (index) => {
+        setChangingEmployeeIndex(index);
+        setShowModal(true);
+    };
+
+    const handleEmployeeSelect = (employeeId) => {
+        const stringId = String(employeeId);
+
+        setSelectedIds((prev) => {
+            if (prev.includes(stringId)) {
+                if (enableLineAssignment) {
+                    setLineAssignments((prevAssignments) => {
+                        const newAssignments = { ...prevAssignments };
+                        delete newAssignments[stringId];
+                        return newAssignments;
+                    });
+                }
+                return prev.filter((id) => id !== stringId);
+            }
+            if (prev.length >= request.requested_amount) {
+                return prev;
+            }
+
+            const newSelectedIds = [...prev, stringId];
+
+            if (enableLineAssignment) {
+                setLineAssignments((prevAssignments) => {
+                    const currentConfig = lineAssignmentConfig[request.id];
+                    const lineCount = currentConfig?.lineCount || 2;
+                    const newLine = (
+                        ((newSelectedIds.length - 1) % lineCount) +
+                        1
+                    ).toString();
+                    const newAssignments = {
+                        ...prevAssignments,
+                        [stringId]: newLine,
+                    };
+                    return newAssignments;
+                });
+            }
+
+            return newSelectedIds;
+        });
+    };
+
+    // ADDED: handleBulkEmployeeChange function
+    const handleBulkEmployeeChange = useCallback(
+        (requestId, index, newEmployeeId) => {
+            setBulkSelectedEmployees((prev) => {
+                const currentEmployees = prev[requestId] || [];
+
+                if (
+                    newEmployeeId !== currentEmployees[index] &&
+                    currentEmployees.includes(newEmployeeId)
+                ) {
+                    alert("Karyawan ini sudah dipilih untuk request ini");
+                    return prev;
+                }
+
+                const newEmployees = [...currentEmployees];
+                newEmployees[index] = newEmployeeId;
+
+                return {
+                    ...prev,
+                    [requestId]: newEmployees,
+                };
+            });
+        },
+        []
+    );
 
     const getEmployeeDetails = useCallback(
         (id) => {
@@ -984,7 +936,7 @@ export default function Fulfill({
         return assignments;
     }, [enableLineAssignment, selectedIds, lineAssignments]);
 
-    // NEW: Function to navigate to BulkFulfillment page
+    // Function to navigate to BulkFulfillment page
     const navigateToBulkFulfillment = () => {
         router.visit(
             route("manpower-requests.bulk-fulfillment", {
@@ -1033,6 +985,7 @@ export default function Fulfill({
     }
 
     const totalSameSubSection = sameSubSectionEmployees.length;
+    const ratioDescription = getRatioDescription(request.requested_amount);
 
     return (
         <AuthenticatedLayout
@@ -1041,7 +994,6 @@ export default function Fulfill({
                     <h2 className="font-semibold text-gray-800 dark:text-gray-200 text-xl">
                         Penuhi Request Man Power
                     </h2>
-                    {/* UPDATED: Bulk Fulfillment Button */}
                     {hasSameSectionRequests && (
                         <div className="flex items-center space-x-4">
                             <button
@@ -1089,7 +1041,95 @@ export default function Fulfill({
                     </div>
                 )}
 
-                {/* REMOVED: Old bulk mode panel */}
+                {/* Priority Ratio Information */}
+                <div className="bg-white dark:bg-gray-800 shadow-md mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h3 className="font-bold text-gray-900 dark:text-gray-100 text-lg mb-1">
+                                Priority Ratio System ({ratioDescription})
+                            </h3>
+                            <div className="flex items-center space-x-4">
+                                <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                    <span className="font-medium">Target Priority:</span> {genderStats.target_priority_count} dari {request.requested_amount} karyawan
+                                </p>
+                                <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                    <span className="font-medium">Saat ini:</span> {genderStats.priority_count} priority
+                                    {genderStats.priority_count < genderStats.target_priority_count && (
+                                        <span className="text-yellow-600 ml-1">
+                                            (Kurang {genderStats.target_priority_count - genderStats.priority_count})
+                                        </span>
+                                    )}
+                                </p>
+                                <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                    <span className="font-medium">Priority Positions:</span> {genderStats.priority_positions.map(pos => `#${pos}`).join(', ')}
+                                </p>
+                                <button
+                                    onClick={() => setShowRatioInfo(!showRatioInfo)}
+                                    className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                                    title="Show ratio info"
+                                >
+                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <button
+                            onClick={handleAutoFill}
+                            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-medium transition-colors flex items-center space-x-2"
+                        >
+                            <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                />
+                            </svg>
+                            <span>Auto Fill dengan Ratio</span>
+                        </button>
+                    </div>
+                    
+                    {/* Collapsible Ratio Info Panel */}
+                    {showRatioInfo && (
+                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                            <div className="flex items-center mb-2">
+                                <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                </svg>
+                                <span className="font-semibold text-gray-700 dark:text-gray-300">
+                                    Priority Ratio Information
+                                </span>
+                            </div>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                Positions marked with ★ should ideally be filled with priority employees.
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                <div className="flex items-center p-2 bg-green-50 dark:bg-green-900/20 rounded">
+                                    <span className="w-3 h-3 rounded-full bg-green-500 mr-2"></span>
+                                    <span className="text-xs text-gray-700 dark:text-gray-300">Priority employee in priority position</span>
+                                </div>
+                                <div className="flex items-center p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded">
+                                    <span className="w-3 h-3 rounded-full bg-yellow-500 mr-2"></span>
+                                    <span className="text-xs text-gray-700 dark:text-gray-300">Priority position awaiting priority employee</span>
+                                </div>
+                                <div className="flex items-center p-2 bg-blue-50 dark:bg-blue-900/20 rounded">
+                                    <span className="w-3 h-3 rounded-full bg-blue-500 mr-2"></span>
+                                    <span className="text-xs text-gray-700 dark:text-gray-300">Priority employee in regular position</span>
+                                </div>
+                            </div>
+                            <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                <p><span className="font-medium">Ratio rules:</span> 1-2 employees = 1:1, 3-4 employees = 1:2, 5+ employees = 1:3</p>
+                                <p>Example: For 6 employees (1:3 ratio), 2 priority employees are needed.</p>
+                            </div>
+                        </div>
+                    )}
+                </div>
 
                 {!bulkMode && (
                     <>
@@ -1119,22 +1159,23 @@ export default function Fulfill({
                         )}
 
                         <form onSubmit={handleSubmit}>
-                              <EmployeeSelection
-            request={request}
-            selectedIds={selectedIds}
-            getEmployeeDetails={getEmployeeDetails}
-            openChangeModal={(index) => {
-                setChangingEmployeeIndex(index);
-                setShowModal(true);
-            }}
-            multiSelectMode={multiSelectMode}
-            toggleMultiSelectMode={() =>
-                setMultiSelectMode(!multiSelectMode)
-            }
-            enableLineAssignment={enableLineAssignment}
-            lineAssignments={lineAssignmentsForDisplay}
-            
-        />
+                            <EmployeeSelection
+                                request={request}
+                                selectedIds={selectedIds}
+                                getEmployeeDetails={getEmployeeDetails}
+                                openChangeModal={(index) => {
+                                    setChangingEmployeeIndex(index);
+                                    setShowModal(true);
+                                }}
+                                multiSelectMode={multiSelectMode}
+                                toggleMultiSelectMode={() =>
+                                    setMultiSelectMode(!multiSelectMode)
+                                }
+                                enableLineAssignment={enableLineAssignment}
+                                lineAssignments={lineAssignmentsForDisplay}
+                                showPriorityStars={true}
+                                priorityPositions={priorityPositions}
+                            />
 
                             <LineAssignmentConfig
                                 requestId={request.id}
@@ -1225,6 +1266,7 @@ export default function Fulfill({
                     isBulkMode={bulkMode}
                     isLoading={isLoadingEmployees}
                     activeBulkRequest={activeBulkRequest}
+                    showPriorityStars={true}
                 />
             </div>
         </AuthenticatedLayout>

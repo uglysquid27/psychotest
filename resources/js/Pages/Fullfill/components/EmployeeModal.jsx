@@ -242,75 +242,70 @@ export default function EmployeeModal({
         return photoPath;
     };
 
-    // FIXED: Proper single select handling - pass employee object instead of just ID
-    const toggleEmployeeSelection = (employeeId) => {
-        // console.log('🎯 toggleEmployeeSelection called', { 
-        //     employeeId, 
-        //     multiSelectMode, 
-        //     isBulkMode, 
-        //     bulkSelectionMode 
-        // });
+const toggleEmployeeSelection = (employeeId) => {
+    const employeeIdStr = String(employeeId); // Convert to string
+    
+    if (isBulkMode && bulkSelectionMode) {
+        // Bulk selection mode - assign to multiple requests
+        handleBulkAssignment(employeeIdStr);
+        return;
+    }
+    
+    if (!multiSelectMode) {
+        // SINGLE SELECT MODE - Just select the employee and close modal
+        const selectedEmployee = allSortedEligibleEmployees.find(
+            emp => emp && String(emp.id) === employeeIdStr // String comparison
+        );
         
-        if (isBulkMode && bulkSelectionMode) {
-            // Bulk selection mode - assign to multiple requests
-            handleBulkAssignment(employeeId);
-            return;
+        if (selectedEmployee) {
+            selectNewEmployee(selectedEmployee);
+            setShowModal(false); // Close modal after selection
+        } else {
+            console.error('❌ Employee not found:', employeeIdStr);
         }
-        
-        if (!multiSelectMode) {
-            // SINGLE SELECT MODE - Just select the employee and close modal
-            const selectedEmployee = allSortedEligibleEmployees.find(emp => emp && String(emp.id) === String(employeeId));
-            // console.log('🔍 Selected employee for single mode:', selectedEmployee);
-            
-            if (selectedEmployee) {
-                // FIX: Pass the employee OBJECT, not just the ID
-                selectNewEmployee(selectedEmployee);
-                setShowModal(false); // Close modal after selection
-            } else {
-                console.error('❌ Employee not found:', employeeId);
+        return;
+    }
+
+    // MULTI-SELECT MODE logic - update to use string IDs consistently
+    setTempSelectedIds(prev => {
+        const prevStr = prev.map(id => String(id)); // Convert all to strings
+        const isCurrentlySelected = prevStr.includes(employeeIdStr);
+        const newEmployee = allSortedEligibleEmployees.find(
+            e => e && String(e.id) === employeeIdStr // String comparison
+        );
+
+        if (isCurrentlySelected) {
+            const newIds = prev.filter(id => String(id) !== employeeIdStr);
+            return newIds;
+        } else {
+            if (prev.length >= (request?.requested_amount || 0)) {
+                alert(`Maksimum ${request?.requested_amount || 0} karyawan dapat dipilih`);
+                return prev;
             }
-            return;
+
+            const currentSelection = prevStr.map(id =>
+                allSortedEligibleEmployees.find(e => e && String(e.id) === id)
+            ).filter(Boolean);
+
+            const newSelectionWithEmployee = [...currentSelection, newEmployee];
+            const maleCount = newSelectionWithEmployee.filter(e => e && e.gender === 'male').length;
+            const femaleCount = newSelectionWithEmployee.filter(e => e && e.gender === 'female').length;
+
+            if ((request?.male_count || 0) > 0 && maleCount > (request?.male_count || 0)) {
+                alert(`Maksimum ${request?.male_count || 0} karyawan laki-laki diperbolehkan`);
+                return prev;
+            }
+
+            if ((request?.female_count || 0) > 0 && femaleCount > (request?.female_count || 0)) {
+                alert(`Maksimum ${request?.female_count || 0} karyawan perempuan diperbolehkan`);
+                return prev;
+            }
+
+            const newIds = [...prev, employeeIdStr]; // Use string ID
+            return newIds;
         }
-
-        // MULTI-SELECT MODE logic
-        setTempSelectedIds(prev => {
-            const prevStr = prev.map(id => String(id));
-            const employeeIdStr = String(employeeId);
-            const isCurrentlySelected = prevStr.includes(employeeIdStr);
-            const newEmployee = allSortedEligibleEmployees.find(e => e && String(e.id) === employeeIdStr);
-
-            if (isCurrentlySelected) {
-                const newIds = prev.filter(id => String(id) !== employeeIdStr);
-                return newIds;
-            } else {
-                if (prev.length >= (request?.requested_amount || 0)) {
-                    alert(`Maksimum ${request?.requested_amount || 0} karyawan dapat dipilih`);
-                    return prev;
-                }
-
-                const currentSelection = prevStr.map(id =>
-                    allSortedEligibleEmployees.find(e => e && String(e.id) === id)
-                ).filter(Boolean);
-
-                const newSelectionWithEmployee = [...currentSelection, newEmployee];
-                const maleCount = newSelectionWithEmployee.filter(e => e && e.gender === 'male').length;
-                const femaleCount = newSelectionWithEmployee.filter(e => e && e.gender === 'female').length;
-
-                if ((request?.male_count || 0) > 0 && maleCount > (request?.male_count || 0)) {
-                    alert(`Maksimum ${request?.male_count || 0} karyawan laki-laki diperbolehkan`);
-                    return prev;
-                }
-
-                if ((request?.female_count || 0) > 0 && femaleCount > (request?.female_count || 0)) {
-                    alert(`Maksimum ${request?.female_count || 0} karyawan perempuan diperbolehkan`);
-                    return prev;
-                }
-
-                const newIds = [...prev, employeeId];
-                return newIds;
-            }
-        });
-    };
+    });
+};
 
     // Handle bulk assignment to multiple requests
     const handleBulkAssignment = (employeeId) => {

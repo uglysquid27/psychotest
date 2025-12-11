@@ -27,6 +27,16 @@ export default function BulkFulfillment({
     // New state for full screen mode
     const [isFullScreen, setIsFullScreen] = useState(false);
 
+    // Helper functions that don't depend on other hooks
+    const getEmployeeDetails = useCallback(
+        (employeeId) => {
+            return allSortedEligibleEmployees.find(
+                (emp) => String(emp.id) === String(employeeId)
+            );
+        },
+        [allSortedEligibleEmployees]
+    );
+
     // Filter requests from same SECTION that are not fulfilled
     const sameSectionRequests = useMemo(() => {
         const currentSectionId = String(currentRequest.sub_section?.section_id);
@@ -101,24 +111,26 @@ export default function BulkFulfillment({
         setBulkSelectedEmployees({});
     }, []);
 
-    // Handle employee selection for a specific request
     const handleEmployeeSelect = useCallback(
         (requestId, employeeId) => {
+            const employeeIdStr = String(employeeId); // Convert to string
+            
             setBulkSelectedEmployees((prev) => {
                 const currentEmployees = prev[requestId] || [];
+                const currentEmployeesStr = currentEmployees.map(id => String(id)); // Convert all to strings
 
-                if (currentEmployees.includes(employeeId)) {
+                if (currentEmployeesStr.includes(employeeIdStr)) {
                     // Remove employee if already selected
                     return {
                         ...prev,
                         [requestId]: currentEmployees.filter(
-                            (id) => id !== employeeId
+                            (id) => String(id) !== employeeIdStr // String comparison
                         ),
                     };
                 } else {
                     // Add employee if not already selected and within limit
                     const request = sameSectionRequests.find(
-                        (req) => String(req.id) === requestId
+                        (req) => String(req.id) === requestId // String comparison
                     );
                     if (
                         request &&
@@ -126,7 +138,7 @@ export default function BulkFulfillment({
                     ) {
                         return {
                             ...prev,
-                            [requestId]: [...currentEmployees, employeeId],
+                            [requestId]: [...currentEmployees, employeeIdStr], // Use string ID
                         };
                     }
                 }
@@ -195,6 +207,410 @@ export default function BulkFulfillment({
     const toggleMultiSelectMode = useCallback(() => {
         setMultiSelectMode((prev) => !prev);
     }, []);
+
+    // Check if employee matches exact subsection
+    const hasExactSubsectionMatch = useCallback(
+        (employee, requestSubSectionId) => {
+            return employee.subSections?.some(
+                (ss) => String(ss.id) === String(requestSubSectionId)
+            );
+        },
+        []
+    );
+
+    // Check if employee matches same section
+    const hasSameSectionMatch = useCallback((employee, requestSectionId) => {
+        return employee.subSections?.some(
+            (ss) => String(ss.section_id) === String(requestSectionId)
+        );
+    }, []);
+
+    // Get gender matching score (lower is better)
+    const getGenderMatchScore = useCallback((employee, request) => {
+        const maleNeeded = (request.male_count || 0) > 0;
+        const femaleNeeded = (request.female_count || 0) > 0;
+
+        if (maleNeeded && employee.gender === "male") return 0;
+        if (femaleNeeded && employee.gender === "female") return 0;
+        return 1; // No match
+    }, []);
+
+    // Sort employees with proper priority: exact subsection > same section > ML score
+    const sortEmployeesForRequest = useCallback(
+        (employees, request) => {
+            const requestSubSectionId = String(request.sub_section_id);
+            const requestSectionId = String(request.sub_section?.section_id);
+
+            return [...employees].sort((a, b) => {
+                // Priority 1: Priority employees first
+                if (a.has_priority !== b.has_priority) {
+                    return a.has_priority ? -1 : 1;
+                }
+                
+                // Priority 2: If both have priority, compare priority scores
+                if (a.has_priority && b.has_priority && a.priority_score !== b.priority_score) {
+                    return b.priority_score - a.priority_score;
+                }
+
+                // Priority 3: Exact subsection match
+                const aExactMatch = hasExactSubsectionMatch(
+                    a,
+                    requestSubSectionId
+                );
+                const bExactMatch = hasExactSubsectionMatch(
+                    b,
+                    requestSubSectionId
+                );
+
+                if (aExactMatch && !bExactMatch) return -1;
+                if (!aExactMatch && bExactMatch) return 1;
+
+                // Priority 4: Same section match
+                const aSameSection = hasSameSectionMatch(a, requestSectionId);
+                const bSameSection = hasSameSectionMatch(b, requestSectionId);
+
+                if (aSameSection && !bSameSection) return -1;
+                if (!aSameSection && bSameSection) return 1;
+
+                // Priority 5: ML score (final_score)
+                if (a.final_score !== b.final_score) {
+                    return b.final_score - a.final_score;
+                }
+
+                // Priority 6: Gender matching with request requirements
+                const aGenderMatch = getGenderMatchScore(a, request);
+                const bGenderMatch = getGenderMatchScore(b, request);
+                if (aGenderMatch !== bGenderMatch) {
+                    return aGenderMatch - bGenderMatch;
+                }
+
+                // Priority 7: Employee type (bulanan first)
+                if (a.type === "bulanan" && b.type === "harian") return -1;
+                if (a.type === "harian" && b.type === "bulanan") return 1;
+
+                return String(a.id).localeCompare(String(b.id));
+            });
+        },
+        [hasExactSubsectionMatch, hasSameSectionMatch, getGenderMatchScore]
+    );
+
+    // Auto-fill employees based on strategy with proper subsection priority
+    const handleAutoFill = useCallback(() => {
+        if (selectedRequests.length === 0) return;
+
+        const newBulkSelectedEmployees = { ...bulkSelectedEmployees };
+        const usedEmployeeIds = new Set();
+
+        // Get all currently used employees
+        Object.values(newBulkSelectedEmployees).forEach((employees) => {
+            employees.forEach((empId) => usedEmployeeIds.add(empId));
+        });
+
+        let availableEmployees = allSortedEligibleEmployees.filter(
+            (emp) =>
+                !usedEmployeeIds.has(String(emp.id)) &&
+                emp.status === "available"
+        );
+
+        selectedRequests.forEach((requestId) => {
+            const request = sameSectionRequests.find(
+                (req) => String(req.id) === requestId
+            );
+            if (!request) return;
+
+            const requiredMale = request.male_count || 0;
+            const requiredFemale = request.female_count || 0;
+            const totalRequired = request.requested_amount;
+
+            // Sort employees for this specific request with proper priority
+            const sortedEmployees = sortEmployeesForRequest(
+                availableEmployees,
+                request
+            );
+
+            const selectedForRequest = [];
+
+            // Select required males with proper priority
+            const maleCandidates = sortedEmployees.filter(
+                (emp) => emp.gender === "male"
+            );
+            for (
+                let i = 0;
+                i < requiredMale && maleCandidates.length > 0;
+                i++
+            ) {
+                const candidate = maleCandidates[i];
+                selectedForRequest.push(String(candidate.id));
+                usedEmployeeIds.add(String(candidate.id));
+            }
+
+            // Select required females with proper priority
+            const femaleCandidates = sortedEmployees.filter(
+                (emp) => emp.gender === "female"
+            );
+            for (
+                let i = 0;
+                i < requiredFemale && femaleCandidates.length > 0;
+                i++
+            ) {
+                const candidate = femaleCandidates[i];
+                selectedForRequest.push(String(candidate.id));
+                usedEmployeeIds.add(String(candidate.id));
+            }
+
+            // Fill remaining slots with proper priority
+            const remainingSlots = totalRequired - selectedForRequest.length;
+            if (remainingSlots > 0) {
+                const otherCandidates = sortedEmployees
+                    .filter(
+                        (emp) => !selectedForRequest.includes(String(emp.id))
+                    )
+                    .slice(0, remainingSlots);
+
+                otherCandidates.forEach((candidate) => {
+                    selectedForRequest.push(String(candidate.id));
+                    usedEmployeeIds.add(String(candidate.id));
+                });
+            }
+
+            // Update available employees by removing used ones
+            availableEmployees = availableEmployees.filter(
+                (emp) => !selectedForRequest.includes(String(emp.id))
+            );
+
+            newBulkSelectedEmployees[requestId] = selectedForRequest.slice(
+                0,
+                totalRequired
+            );
+        });
+
+        setBulkSelectedEmployees(newBulkSelectedEmployees);
+    }, [
+        selectedRequests,
+        bulkSelectedEmployees,
+        allSortedEligibleEmployees,
+        sameSectionRequests,
+        sortEmployeesForRequest,
+    ]);
+
+    // Auto-fill all requests with strict 1:3 priority ratio
+const handleAutoFillAll = useCallback(() => {
+    if (selectedRequests.length === 0) return;
+
+    const newBulkSelectedEmployees = {};
+    const usedEmployeeIds = new Set();
+
+    // Separate priority and non-priority employees
+    const allEmployees = [...allSortedEligibleEmployees].filter(
+        (emp) => emp.status === "available"
+    );
+
+    const priorityEmployees = allEmployees.filter(emp => emp.has_priority);
+    const nonPriorityEmployees = allEmployees.filter(emp => !emp.has_priority);
+
+    console.log(`Available: ${allEmployees.length} total, ${priorityEmployees.length} priority, ${nonPriorityEmployees.length} non-priority`);
+
+    // Create queues
+    const priorityQueue = [...priorityEmployees];
+    const nonPriorityQueue = [...nonPriorityEmployees];
+
+    // Target ratio: 1 priority for every 3 non-priority (25% priority, 75% non-priority)
+    const TARGET_PRIORITY_RATIO = 0.25; // 1:3 ratio
+
+    selectedRequests.forEach((requestId) => {
+        const request = sameSectionRequests.find(
+            (req) => String(req.id) === requestId
+        );
+        if (!request) return;
+
+        const requiredMale = request.male_count || 0;
+        const requiredFemale = request.female_count || 0;
+        const totalRequired = request.requested_amount;
+
+        const selectedForRequest = [];
+        
+        // Helper functions
+        const getNextEmployee = (gender, isPriority = false) => {
+            const source = isPriority ? priorityQueue : nonPriorityQueue;
+            for (let i = 0; i < source.length; i++) {
+                const emp = source[i];
+                if (!usedEmployeeIds.has(String(emp.id)) && emp.gender === gender) {
+                    source.splice(i, 1);
+                    return emp;
+                }
+            }
+            return null;
+        };
+
+        const getNextAnyEmployee = (isPriority = false) => {
+            const source = isPriority ? priorityQueue : nonPriorityQueue;
+            for (let i = 0; i < source.length; i++) {
+                const emp = source[i];
+                if (!usedEmployeeIds.has(String(emp.id))) {
+                    source.splice(i, 1);
+                    return emp;
+                }
+            }
+            return null;
+        };
+
+        // Calculate target priority count for 1:3 ratio
+        const targetPriorityCount = Math.floor(totalRequired * TARGET_PRIORITY_RATIO);
+        const maxPriorityCount = Math.min(targetPriorityCount, priorityQueue.length);
+        const priorityCountForRequest = Math.max(0, maxPriorityCount);
+
+        console.log(`Request ${requestId}: Target ${targetPriorityCount} priority out of ${totalRequired} total`);
+
+        // Phase 1: Fill with priority employees (up to target ratio)
+        let priorityUsed = 0;
+        for (let i = 0; i < priorityCountForRequest && selectedForRequest.length < totalRequired; i++) {
+            let employee = null;
+            
+            // Check gender requirements first
+            const currentMaleCount = selectedForRequest.filter(id => {
+                const emp = getEmployeeDetails(id);
+                return emp && emp.gender === 'male';
+            }).length;
+            
+            const currentFemaleCount = selectedForRequest.filter(id => {
+                const emp = getEmployeeDetails(id);
+                return emp && emp.gender === 'female';
+            }).length;
+
+            if (requiredMale > currentMaleCount) {
+                employee = getNextEmployee('male', true);
+            }
+            
+            if (!employee && requiredFemale > currentFemaleCount) {
+                employee = getNextEmployee('female', true);
+            }
+            
+            if (!employee) {
+                employee = getNextAnyEmployee(true);
+            }
+            
+            if (employee) {
+                selectedForRequest.push(String(employee.id));
+                usedEmployeeIds.add(String(employee.id));
+                priorityUsed++;
+            }
+        }
+
+        // Phase 2: Fill gender requirements with non-priority
+        // Males
+        for (let i = 0; i < requiredMale; i++) {
+            const currentMaleCount = selectedForRequest.filter(id => {
+                const emp = getEmployeeDetails(id);
+                return emp && emp.gender === 'male';
+            }).length;
+            
+            if (currentMaleCount >= requiredMale) break;
+            
+            let employee = getNextEmployee('male', false);
+            if (!employee && priorityQueue.length > 0) {
+                employee = getNextEmployee('male', true);
+            }
+            
+            if (employee && selectedForRequest.length < totalRequired) {
+                selectedForRequest.push(String(employee.id));
+                usedEmployeeIds.add(String(employee.id));
+                if (employee.has_priority) priorityUsed++;
+            }
+        }
+
+        // Females
+        for (let i = 0; i < requiredFemale; i++) {
+            const currentFemaleCount = selectedForRequest.filter(id => {
+                const emp = getEmployeeDetails(id);
+                return emp && emp.gender === 'female';
+            }).length;
+            
+            if (currentFemaleCount >= requiredFemale) break;
+            
+            let employee = getNextEmployee('female', false);
+            if (!employee && priorityQueue.length > 0) {
+                employee = getNextEmployee('female', true);
+            }
+            
+            if (employee && selectedForRequest.length < totalRequired) {
+                selectedForRequest.push(String(employee.id));
+                usedEmployeeIds.add(String(employee.id));
+                if (employee.has_priority) priorityUsed++;
+            }
+        }
+
+        // Phase 3: Fill remaining slots maintaining approximate 1:3 ratio
+        while (selectedForRequest.length < totalRequired) {
+            // Calculate current ratio
+            const currentRatio = priorityUsed / selectedForRequest.length || 0;
+            
+            let usePriority = false;
+            
+            if (currentRatio < TARGET_PRIORITY_RATIO && priorityQueue.length > 0) {
+                // Below target ratio, use priority
+                usePriority = true;
+            } else if (nonPriorityQueue.length > 0) {
+                // At or above target ratio, use non-priority
+                usePriority = false;
+            } else if (priorityQueue.length > 0) {
+                // Only priority left
+                usePriority = true;
+            } else {
+                // No employees left
+                break;
+            }
+            
+            const employee = usePriority ? getNextAnyEmployee(true) : getNextAnyEmployee(false);
+            
+            if (employee) {
+                selectedForRequest.push(String(employee.id));
+                usedEmployeeIds.add(String(employee.id));
+                if (usePriority) priorityUsed++;
+            } else {
+                break;
+            }
+        }
+
+        // Final sorting
+        const sortedSelected = selectedForRequest
+            .map(id => getEmployeeDetails(id))
+            .filter(emp => emp)
+            .sort((a, b) => {
+                if (a.has_priority !== b.has_priority) return a.has_priority ? -1 : 1;
+                return b.final_score - a.final_score;
+            })
+            .map(emp => String(emp.id));
+
+        newBulkSelectedEmployees[requestId] = sortedSelected.slice(0, totalRequired);
+        
+        // Debug logging
+        const finalPriorityCount = sortedSelected.filter(id => {
+            const emp = getEmployeeDetails(id);
+            return emp && emp.has_priority;
+        }).length;
+        console.log(`Request ${requestId} final: ${sortedSelected.length} total, ${finalPriorityCount} priority (${(finalPriorityCount/sortedSelected.length*100).toFixed(1)}%)`);
+    });
+
+    setBulkSelectedEmployees(newBulkSelectedEmployees);
+}, [
+    selectedRequests,
+    allSortedEligibleEmployees,
+    sameSectionRequests,
+    getEmployeeDetails,
+]);
+
+    // Auto-fill on initial load for selected requests
+    useEffect(() => {
+        if (selectedRequests.length > 0) {
+            const hasAnySelection = selectedRequests.some(
+                (requestId) => bulkSelectedEmployees[requestId]?.length > 0
+            );
+
+            if (!hasAnySelection) {
+                handleAutoFillAll();
+            }
+        }
+    }, [selectedRequests]);
 
     // Move individual employee to different line
     const moveEmployeeToLine = useCallback(
@@ -312,282 +728,6 @@ export default function BulkFulfillment({
         [sameSectionRequests, bulkSelectedEmployees]
     );
 
-    // Check if employee matches exact subsection
-    const hasExactSubsectionMatch = useCallback(
-        (employee, requestSubSectionId) => {
-            return employee.subSections?.some(
-                (ss) => String(ss.id) === String(requestSubSectionId)
-            );
-        },
-        []
-    );
-
-    // Check if employee matches same section
-    const hasSameSectionMatch = useCallback((employee, requestSectionId) => {
-        return employee.subSections?.some(
-            (ss) => String(ss.section_id) === String(requestSectionId)
-        );
-    }, []);
-
-    // Sort employees with proper priority: exact subsection > same section > ML score
-    const sortEmployeesForRequest = useCallback(
-        (employees, request) => {
-            const requestSubSectionId = String(request.sub_section_id);
-            const requestSectionId = String(request.sub_section?.section_id);
-
-            return [...employees].sort((a, b) => {
-                // Priority 1: Exact subsection match
-                const aExactMatch = hasExactSubsectionMatch(
-                    a,
-                    requestSubSectionId
-                );
-                const bExactMatch = hasExactSubsectionMatch(
-                    b,
-                    requestSubSectionId
-                );
-
-                if (aExactMatch && !bExactMatch) return -1;
-                if (!aExactMatch && bExactMatch) return 1;
-
-                // Priority 2: Same section match
-                const aSameSection = hasSameSectionMatch(a, requestSectionId);
-                const bSameSection = hasSameSectionMatch(b, requestSectionId);
-
-                if (aSameSection && !bSameSection) return -1;
-                if (!aSameSection && bSameSection) return 1;
-
-                // Priority 3: ML score (final_score)
-                if (a.final_score !== b.final_score) {
-                    return b.final_score - a.final_score;
-                }
-
-                // Priority 4: Gender matching with request requirements
-                const aGenderMatch = getGenderMatchScore(a, request);
-                const bGenderMatch = getGenderMatchScore(b, request);
-                if (aGenderMatch !== bGenderMatch) {
-                    return aGenderMatch - bGenderMatch;
-                }
-
-                // Priority 5: Employee type (bulanan first)
-                if (a.type === "bulanan" && b.type === "harian") return -1;
-                if (a.type === "harian" && b.type === "bulanan") return 1;
-
-                return a.id - b.id;
-            });
-        },
-        [hasExactSubsectionMatch, hasSameSectionMatch]
-    );
-
-    // Get gender matching score (lower is better)
-    const getGenderMatchScore = useCallback((employee, request) => {
-        const maleNeeded = (request.male_count || 0) > 0;
-        const femaleNeeded = (request.female_count || 0) > 0;
-
-        if (maleNeeded && employee.gender === "male") return 0;
-        if (femaleNeeded && employee.gender === "female") return 0;
-        return 1; // No match
-    }, []);
-
-    // Auto-fill employees based on strategy with proper subsection priority
-    const handleAutoFill = useCallback(() => {
-        if (selectedRequests.length === 0) return;
-
-        const newBulkSelectedEmployees = { ...bulkSelectedEmployees };
-        const usedEmployeeIds = new Set();
-
-        // Get all currently used employees
-        Object.values(newBulkSelectedEmployees).forEach((employees) => {
-            employees.forEach((empId) => usedEmployeeIds.add(empId));
-        });
-
-        let availableEmployees = allSortedEligibleEmployees.filter(
-            (emp) =>
-                !usedEmployeeIds.has(String(emp.id)) &&
-                emp.status === "available"
-        );
-
-        selectedRequests.forEach((requestId) => {
-            const request = sameSectionRequests.find(
-                (req) => String(req.id) === requestId
-            );
-            if (!request) return;
-
-            const requiredMale = request.male_count || 0;
-            const requiredFemale = request.female_count || 0;
-            const totalRequired = request.requested_amount;
-
-            // Sort employees for this specific request with proper priority
-            const sortedEmployees = sortEmployeesForRequest(
-                availableEmployees,
-                request
-            );
-
-            const selectedForRequest = [];
-
-            // Select required males with proper priority
-            const maleCandidates = sortedEmployees.filter(
-                (emp) => emp.gender === "male"
-            );
-            for (
-                let i = 0;
-                i < requiredMale && maleCandidates.length > 0;
-                i++
-            ) {
-                const candidate = maleCandidates[i];
-                selectedForRequest.push(String(candidate.id));
-                usedEmployeeIds.add(String(candidate.id));
-            }
-
-            // Select required females with proper priority
-            const femaleCandidates = sortedEmployees.filter(
-                (emp) => emp.gender === "female"
-            );
-            for (
-                let i = 0;
-                i < requiredFemale && femaleCandidates.length > 0;
-                i++
-            ) {
-                const candidate = femaleCandidates[i];
-                selectedForRequest.push(String(candidate.id));
-                usedEmployeeIds.add(String(candidate.id));
-            }
-
-            // Fill remaining slots with proper priority
-            const remainingSlots = totalRequired - selectedForRequest.length;
-            if (remainingSlots > 0) {
-                const otherCandidates = sortedEmployees
-                    .filter(
-                        (emp) => !selectedForRequest.includes(String(emp.id))
-                    )
-                    .slice(0, remainingSlots);
-
-                otherCandidates.forEach((candidate) => {
-                    selectedForRequest.push(String(candidate.id));
-                    usedEmployeeIds.add(String(candidate.id));
-                });
-            }
-
-            // Update available employees by removing used ones
-            availableEmployees = availableEmployees.filter(
-                (emp) => !selectedForRequest.includes(String(emp.id))
-            );
-
-            newBulkSelectedEmployees[requestId] = selectedForRequest.slice(
-                0,
-                totalRequired
-            );
-        });
-
-        setBulkSelectedEmployees(newBulkSelectedEmployees);
-    }, [
-        selectedRequests,
-        bulkSelectedEmployees,
-        allSortedEligibleEmployees,
-        sameSectionRequests,
-        sortEmployeesForRequest,
-    ]);
-
-    // Auto-fill all requests on page load with proper subsection priority
-    const handleAutoFillAll = useCallback(() => {
-        if (selectedRequests.length === 0) return;
-
-        const newBulkSelectedEmployees = {};
-        const usedEmployeeIds = new Set();
-
-        let availableEmployees = [...allSortedEligibleEmployees].filter(
-            (emp) => emp.status === "available"
-        );
-
-        selectedRequests.forEach((requestId) => {
-            const request = sameSectionRequests.find(
-                (req) => String(req.id) === requestId
-            );
-            if (!request) return;
-
-            const requiredMale = request.male_count || 0;
-            const requiredFemale = request.female_count || 0;
-            const totalRequired = request.requested_amount;
-
-            // Sort employees for this specific request with proper priority
-            const sortedEmployees = sortEmployeesForRequest(
-                availableEmployees.filter(
-                    (emp) => !usedEmployeeIds.has(String(emp.id))
-                ),
-                request
-            );
-
-            const selectedForRequest = [];
-
-            // Select required males
-            const maleCandidates = sortedEmployees.filter(
-                (emp) => emp.gender === "male"
-            );
-            for (
-                let i = 0;
-                i < requiredMale && i < maleCandidates.length;
-                i++
-            ) {
-                const candidate = maleCandidates[i];
-                selectedForRequest.push(String(candidate.id));
-                usedEmployeeIds.add(String(candidate.id));
-            }
-
-            // Select required females
-            const femaleCandidates = sortedEmployees.filter(
-                (emp) => emp.gender === "female"
-            );
-            for (
-                let i = 0;
-                i < requiredFemale && i < femaleCandidates.length;
-                i++
-            ) {
-                const candidate = femaleCandidates[i];
-                selectedForRequest.push(String(candidate.id));
-                usedEmployeeIds.add(String(candidate.id));
-            }
-
-            // Fill remaining slots
-            const remainingSlots = totalRequired - selectedForRequest.length;
-            if (remainingSlots > 0) {
-                const otherCandidates = sortedEmployees
-                    .filter(
-                        (emp) => !selectedForRequest.includes(String(emp.id))
-                    )
-                    .slice(0, remainingSlots);
-
-                otherCandidates.forEach((candidate) => {
-                    selectedForRequest.push(String(candidate.id));
-                    usedEmployeeIds.add(String(candidate.id));
-                });
-            }
-
-            newBulkSelectedEmployees[requestId] = selectedForRequest.slice(
-                0,
-                totalRequired
-            );
-        });
-
-        setBulkSelectedEmployees(newBulkSelectedEmployees);
-    }, [
-        selectedRequests,
-        allSortedEligibleEmployees,
-        sameSectionRequests,
-        sortEmployeesForRequest,
-    ]);
-
-    // Auto-fill on initial load for selected requests
-    useEffect(() => {
-        if (selectedRequests.length > 0) {
-            const hasAnySelection = selectedRequests.some(
-                (requestId) => bulkSelectedEmployees[requestId]?.length > 0
-            );
-
-            if (!hasAnySelection) {
-                handleAutoFillAll();
-            }
-        }
-    }, [selectedRequests]);
-
     // Handle line assignment configuration
     const handleLineConfigChange = useCallback(
         (requestId, enabled) => {
@@ -695,16 +835,6 @@ export default function BulkFulfillment({
     const isPutwayRequest = useCallback((request) => {
         return request?.sub_section?.name?.toLowerCase() === "putway";
     }, []);
-
-    // Get employee details
-    const getEmployeeDetails = useCallback(
-        (employeeId) => {
-            return allSortedEligibleEmployees.find(
-                (emp) => String(emp.id) === String(employeeId)
-            );
-        },
-        [allSortedEligibleEmployees]
-    );
 
     // Calculate assignment statistics
     const assignmentStats = useMemo(() => {
@@ -985,6 +1115,9 @@ export default function BulkFulfillment({
                                                                 ? "P"
                                                                 : "L"}
                                                             )
+                                                            {emp.has_priority && (
+                                                                <span className="ml-1 text-yellow-600">⭐</span>
+                                                            )}
                                                         </div>
                                                         <div className="flex space-x-1 ml-2">
                                                             {lineCount > 1 &&
@@ -1158,11 +1291,12 @@ export default function BulkFulfillment({
         <AuthenticatedLayout
             header={
                 <div className="flex justify-between items-center">
-                    <h2 className="font-semibold text-gray-800 dark:text-gray-200 text-xl">
+                    {/* Fixed: Changed from h2 to div to fix HTML validation */}
+                    <div className="font-semibold text-gray-800 dark:text-gray-200 text-xl">
                         Bulk Fulfillment -{" "}
                         {currentRequest.sub_section?.section?.name ||
                             "Same Section"}
-                    </h2>
+                    </div>
                 </div>
             }
             user={auth.user}
@@ -1201,8 +1335,7 @@ export default function BulkFulfillment({
                                     secara sekaligus
                                 </p>
                                 <p className="text-blue-500 dark:text-blue-300 text-xs sm:text-sm mt-1">
-                                    Prioritas: Subsection Exact → Section Sama →
-                                    ML Score
+                                    Prioritas: Priority Employees → Subsection Exact → Section Sama → ML Score
                                 </p>
                             </div>
                         </div>
@@ -1344,7 +1477,7 @@ export default function BulkFulfillment({
                                         className="bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md w-full text-gray-900 dark:text-gray-100 text-sm"
                                     >
                                         <option value="optimal">
-                                            Optimal (Subsection → ML Score)
+                                            Optimal (Priority → Subsection → ML Score)
                                         </option>
                                         <option value="same_section">
                                             Prioritas Section Sama
@@ -1414,7 +1547,7 @@ export default function BulkFulfillment({
                                                 : "bg-blue-600 hover:bg-blue-700 text-white"
                                         }`}
                                     >
-                                        Auto Fill All (Reset)
+                                        Auto Fill All (Distribute Priority)
                                     </button>
                                     <button
                                         onClick={handleClearAll}
@@ -1536,11 +1669,7 @@ export default function BulkFulfillment({
                                                             orang
                                                         </div>
                                                         <span className="bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300 px-2 py-1 rounded-full text-xs">
-                                                            {
-                                                                request
-                                                                    .sub_section
-                                                                    ?.name
-                                                            }
+                                                            {request.sub_section?.name}
                                                         </span>
                                                         {isCurrentRequest && (
                                                             <span className="bg-yellow-100 dark:bg-yellow-800 px-2 py-1 rounded-full text-yellow-800 dark:text-yellow-200 text-xs">
@@ -1566,29 +1695,21 @@ export default function BulkFulfillment({
                                                                 </strong>
                                                             </div>
                                                             <div className="flex flex-wrap gap-2">
-                                                                {request.male_count >
-                                                                    0 && (
+                                                                {request.male_count > 0 && (
                                                                     <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 px-2 py-1 rounded text-xs">
                                                                         Laki:{" "}
-                                                                        {
-                                                                            request.male_count
-                                                                        }
+                                                                        {request.male_count}
                                                                     </span>
                                                                 )}
-                                                                {request.female_count >
-                                                                    0 && (
+                                                                {request.female_count > 0 && (
                                                                     <span className="bg-pink-100 dark:bg-pink-900/40 text-pink-800 dark:text-pink-300 px-2 py-1 rounded text-xs">
                                                                         Perempuan:{" "}
-                                                                        {
-                                                                            request.female_count
-                                                                        }
+                                                                        {request.female_count}
                                                                     </span>
                                                                 )}
                                                                 <span className="bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300 px-2 py-1 rounded text-xs">
                                                                     Total:{" "}
-                                                                    {
-                                                                        request.requested_amount
-                                                                    }
+                                                                    {request.requested_amount}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -1605,22 +1726,14 @@ export default function BulkFulfillment({
                                                                     <div
                                                                         className="bg-green-500 h-2 rounded-full transition-all"
                                                                         style={{
-                                                                            width: `${
-                                                                                (assignedEmployees.length /
-                                                                                    request.requested_amount) *
-                                                                                100
-                                                                            }%`,
+                                                                            width: `${(assignedEmployees.length / request.requested_amount) * 100}%`,
                                                                         }}
                                                                     ></div>
                                                                 </div>
                                                                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
-                                                                    {
-                                                                        assignedEmployees.length
-                                                                    }
+                                                                    {assignedEmployees.length}
                                                                     /
-                                                                    {
-                                                                        request.requested_amount
-                                                                    }
+                                                                    {request.requested_amount}
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -1629,7 +1742,6 @@ export default function BulkFulfillment({
                                             </div>
                                         </div>
 
-                                        {/* Line Assignment Configuration */}
                                         {/* Employee Selection */}
                                         {isSelected && (
                                             <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
@@ -1646,13 +1758,9 @@ export default function BulkFulfillment({
                                                                     : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"
                                                             }`}
                                                         >
-                                                            {
-                                                                assignedEmployees.length
-                                                            }{" "}
+                                                            {assignedEmployees.length}{" "}
                                                             /{" "}
-                                                            {
-                                                                request.requested_amount
-                                                            }
+                                                            {request.requested_amount}
                                                         </span>
                                                         <button
                                                             onClick={(e) => {
@@ -1704,14 +1812,11 @@ export default function BulkFulfillment({
                                                                 <div className="flex justify-between items-center mb-2">
                                                                     <span className="text-gray-500 dark:text-gray-400 text-xs">
                                                                         #{" "}
-                                                                        {index +
-                                                                            1}
+                                                                        {index + 1}
                                                                         {lineAssignment && (
                                                                             <span className="ml-1 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 px-1 rounded text-xs">
                                                                                 Line{" "}
-                                                                                {
-                                                                                    lineAssignment
-                                                                                }
+                                                                                {lineAssignment}
                                                                             </span>
                                                                         )}
                                                                     </span>
@@ -1735,14 +1840,13 @@ export default function BulkFulfillment({
                                                                 {employee ? (
                                                                     <div className="mb-2">
                                                                         <div className="font-medium text-gray-900 dark:text-gray-100 text-sm truncate">
-                                                                            {
-                                                                                employee.name
-                                                                            }
+                                                                            {employee.name}
+                                                                            {employee.has_priority && (
+                                                                                <span className="ml-1 text-yellow-600">⭐</span>
+                                                                            )}
                                                                         </div>
                                                                         <div className="text-gray-500 dark:text-gray-400 text-xs truncate">
-                                                                            {
-                                                                                employee.type
-                                                                            }{" "}
+                                                                            {employee.type}{" "}
                                                                             -{" "}
                                                                             {employee
                                                                                 .subSections?.[0]
@@ -1752,13 +1856,7 @@ export default function BulkFulfillment({
                                                                         <div className="text-gray-400 dark:text-gray-500 text-xs mt-1">
                                                                             ML
                                                                             Score:{" "}
-                                                                            {(
-                                                                                (employee.final_score ||
-                                                                                    0) *
-                                                                                100
-                                                                            ).toFixed(
-                                                                                1
-                                                                            )}
+                                                                            {((employee.final_score || 0) * 100).toFixed(1)}
                                                                             %
                                                                         </div>
                                                                     </div>
@@ -1839,7 +1937,6 @@ export default function BulkFulfillment({
                                                 )}
                                             </div>
                                         )}
-
                                     </div>
                                 );
                             })
