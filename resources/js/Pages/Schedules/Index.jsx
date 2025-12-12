@@ -194,7 +194,8 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
                 allTimeGroups[timeKey].employees.push({
                     id: schedule.id,
                     employee: schedule.employee,
-                    sub_section: schedule.sub_section?.name || 'N/A',
+                    // FIX: Get sub_section from man_power_request.sub_section
+                    sub_section: schedule.man_power_request?.sub_section?.name || 'N/A',
                     line: schedule.line,
                     status: schedule.status,
                     rejection_reason: schedule.rejection_reason
@@ -272,7 +273,8 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
                 allTimeGroups[timeKey].employees.push({
                     id: schedule.id,
                     employee: schedule.employee,
-                    sub_section: schedule.sub_section?.name || 'N/A',
+                    // FIX: Get sub_section from man_power_request.sub_section
+                    sub_section: schedule.man_power_request?.sub_section?.name || 'N/A',
                     line: schedule.line,
                     status: schedule.status,
                     rejection_reason: schedule.rejection_reason
@@ -461,8 +463,10 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
                                         </thead>
                                         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                                             {(() => {
+                                                // Group by sub-section from man_power_request
                                                 const subSectionGroups = shiftData.schedules.reduce((acc, schedule) => {
-                                                    const subSection = schedule.sub_section?.name || 'N/A';
+                                                    // FIX: Get sub_section from man_power_request.sub_section
+                                                    const subSection = schedule.man_power_request?.sub_section?.name || 'N/A';
                                                     if (!acc[subSection]) {
                                                         acc[subSection] = 0;
                                                     }
@@ -552,11 +556,11 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
                                                         {emp.employee?.nik || 'N/A'}
                                                     </td>
                                                     <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
-    {emp.sub_section || 'N/A'}
-</td>
-<td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
-    {emp.sub_section === 'Shrink' && emp.line ? `Shrink ${emp.line}` : emp.line || '-'}
-</td>
+                                                        {emp.sub_section || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
+                                                        {emp.sub_section === 'Shrink' && emp.line ? `Shrink ${emp.line}` : emp.line || '-'}
+                                                    </td>
                                                     <td className="px-4 py-2 text-sm">
                                                         {getStatusBadge(emp.status, emp.rejection_reason)}
                                                     </td>
@@ -575,14 +579,15 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
 };
 
 const Index = () => {
-    const { filters, sections, subSections, auth } = usePage().props;
+    const { filters, sections, subSections, auth, defaults } = usePage().props;
     const user = auth?.user;
     
     const [schedules, setSchedules] = useState([]);
     const [isDataLoaded, setIsDataLoaded] = useState(false);
     const [lastUpdate, setLastUpdate] = useState(null);
-    const [startDate, setStartDate] = useState(filters.start_date || '');
-    const [endDate, setEndDate] = useState(filters.end_date || '');
+    // Set initial state based on filters or defaults
+    const [startDate, setStartDate] = useState(filters.start_date || defaults?.start_date || '');
+    const [endDate, setEndDate] = useState(filters.end_date || defaults?.end_date || '');
     const [selectedSection, setSelectedSection] = useState(filters.section || '');
     const [selectedSubSection, setSelectedSubSection] = useState(filters.sub_section || '');
     const [currentPage, setCurrentPage] = useState(1);
@@ -779,12 +784,14 @@ useEffect(() => {
             );
         }
 
-        // Apply date filter for display only
+        // Apply date filter for display only - FIXED: Simple date comparison
         if (startDate && endDate) {
             filteredSchedules = filteredSchedules.filter(schedule => {
-                const scheduleDate = dayjs(schedule.date);
-                return scheduleDate.isAfter(dayjs(startDate).subtract(1, 'day')) && 
-                       scheduleDate.isBefore(dayjs(endDate).add(1, 'day'));
+                const scheduleDate = dayjs(schedule.date).format('YYYY-MM-DD');
+                const filterStart = dayjs(startDate).format('YYYY-MM-DD');
+                const filterEnd = dayjs(endDate).format('YYYY-MM-DD');
+                
+                return scheduleDate >= filterStart && scheduleDate <= filterEnd;
             });
         }
 
@@ -823,21 +830,15 @@ useEffect(() => {
     }, [schedules, selectedSection, selectedSubSection, startDate, endDate, accessibleSections, isDataLoaded]);
 
     const sortedDates = useMemo(() =>
-        Object.keys(filteredAndGroupedSchedules).sort((a, b) =>
-            dayjs(b).valueOf() - dayjs(a).valueOf()
-        ), [filteredAndGroupedSchedules]);
+    Object.keys(filteredAndGroupedSchedules).sort((a, b) =>
+        dayjs(b).valueOf() - dayjs(a).valueOf()
+    ), [filteredAndGroupedSchedules]);
 
     const totalPages = Math.ceil(sortedDates.length / itemsPerPage);
     const paginatedDates = sortedDates.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
     const applyFilters = async () => {
-        if (startDate && endDate) {
-            const daysDiff = dayjs(endDate).diff(dayjs(startDate), 'day');
-            if (daysDiff > 30) {
-                alert('Maksimal 30 hari');
-                return;
-            }
-        }
+        // No 30-day limit - users can select any date range
         setIsLoading(true);
         try {
             await router.get(route('schedules.index'), {
@@ -857,12 +858,12 @@ useEffect(() => {
     };
 
     const clearFilters = () => {
-    // Reset to default values (1 month back from today)
-    const today = dayjs();
-    const oneMonthAgo = dayjs().subtract(1, 'month');
+    // Reset to default values: today-1month to today+2days
+    const defaultStartDate = defaults?.start_date || dayjs().subtract(1, 'month').format('YYYY-MM-DD');
+    const defaultEndDate = defaults?.end_date || dayjs().add(2, 'days').format('YYYY-MM-DD');
     
-    setStartDate(oneMonthAgo.format('YYYY-MM-DD'));
-    setEndDate(today.format('YYYY-MM-DD'));
+    setStartDate(defaultStartDate);
+    setEndDate(defaultEndDate);
     setSelectedSection('');
     setSelectedSubSection('');
     
@@ -870,8 +871,8 @@ useEffect(() => {
     
     // Use router to update URL with default filters
     router.get(route('schedules.index'), {
-        start_date: oneMonthAgo.format('YYYY-MM-DD'),
-        end_date: today.format('YYYY-MM-DD'),
+        start_date: defaultStartDate,
+        end_date: defaultEndDate,
         section: '',
         sub_section: ''
     }, { 

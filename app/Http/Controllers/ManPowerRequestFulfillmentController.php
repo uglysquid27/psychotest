@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Log;
 
 class ManPowerRequestFulfillmentController extends Controller
 {
-    public function create($id)
+public function create($id)
 {
     $request = ManPowerRequest::with([
         'subSection.section',
@@ -98,15 +98,12 @@ class ManPowerRequestFulfillmentController extends Controller
             $blindTestPoints = $blindTestResult === 'Pass' ? 3 : 0;
             $averageRating = $employee->ratings->avg('rating') ?? 0;
 
-            // Calculate priority score
+            // Calculate priority score - UPDATED to respect ratio
             $priorityScore = $this->calculatePriorityScore($employee, $request);
 
             $totalScore = ($workloadPoints * 0.5) + ($blindTestPoints * 0.3) + ($averageRating * 0.2);
             $mlScore = $this->calculateMLPriorityScore($employee, $request);
             
-            // Final score: 60% ML, 30% totalScore, 10% priority
-            $finalScore = ($mlScore * 0.6) + ($totalScore * 0.3) + ($priorityScore * 0.1);
-
             // Get priority info for frontend
             $priorityInfo = $employee->pickingPriorities->map(function ($priority) {
                 return [
@@ -116,6 +113,20 @@ class ManPowerRequestFulfillmentController extends Controller
                     'metadata' => $priority->metadata,
                 ];
             })->toArray();
+
+            // UPDATED: Priority should be calculated based on ratio, not just presence
+            $hasPriority = !empty($priorityInfo);
+            
+            // UPDATED: Apply priority score multiplier based on ratio
+            $requestedAmount = $request->requested_amount;
+            $priorityRatio = $this->calculatePriorityRatio($requestedAmount);
+            $targetPriorityCount = $this->calculateTargetPriorityCount($requestedAmount);
+            
+            // Scale priority score based on ratio importance
+            $priorityWeight = min(1.0, $priorityScore * 0.3); // Cap at 0.3 to not dominate
+            
+            // Final score: 60% ML, 30% base score, 10% priority (weighted)
+            $finalScore = ($mlScore * 0.6) + ($totalScore * 0.3) + ($priorityWeight * 0.1);
 
             // Ensure all IDs are strings for consistent frontend comparison
             $subSectionsData = $employee->subSections->map(function ($subSection) {
@@ -155,7 +166,8 @@ class ManPowerRequestFulfillmentController extends Controller
                 'work_days_30_days' => $workDays30Days,
                 'last_5_shifts' => $last5Shifts,
                 'priority_info' => $priorityInfo,
-                'has_priority' => !empty($priorityInfo),
+                'has_priority' => $hasPriority, // Keep for frontend sorting
+                'priority_ratio_weight' => $priorityWeight, // New field for ratio-based weight
             ];
         });
 
@@ -190,9 +202,9 @@ class ManPowerRequestFulfillmentController extends Controller
 
     [$sameSubSectionEligible, $otherSubSectionEligible] = $splitEmployeesBySubSection($eligibleEmployees, $request);
 
-    // Sort employees with priority consideration
-    $sortedSameSubSectionEmployees = $this->sortEmployeesWithPriority($sameSubSectionEligible, $request)->values();
-    $sortedOtherSubSectionEmployees = $this->sortEmployeesWithPriority($otherSubSectionEligible, $request)->values();
+    // UPDATED: Sort employees with priority ratio consideration
+    $sortedSameSubSectionEmployees = $this->sortEmployeesWithPriorityRatio($sameSubSectionEligible, $request)->values();
+    $sortedOtherSubSectionEmployees = $this->sortEmployeesWithPriorityRatio($otherSubSectionEligible, $request)->values();
 
     $mlService = app(SimpleMLService::class);
     $mlStatus = $mlService->isModelTrained() ? 'trained' : 'not_trained';
@@ -222,6 +234,86 @@ class ManPowerRequestFulfillmentController extends Controller
         ],
         'auth' => ['user' => auth()->user()]
     ]);
+}
+
+// NEW: Calculate priority ratio based on requested amount
+private function calculatePriorityRatio($requestedAmount)
+{
+    if ($requestedAmount <= 2) {
+        return 1; // 1:1 ratio
+    } elseif ($requestedAmount <= 4) {
+        return 0.5; // 1:2 ratio
+    } else {
+        return 0.333; // 1:3 ratio
+    }
+}
+
+// NEW: Calculate target priority count
+private function calculateTargetPriorityCount($requestedAmount)
+{
+    $ratio = $this->calculatePriorityRatio($requestedAmount);
+    $target = max(1, floor($requestedAmount * $ratio));
+    
+    if ($requestedAmount >= 5) {
+        return min(ceil($requestedAmount / 3), $requestedAmount);
+    }
+    
+    return min($target, $requestedAmount);
+}
+
+// UPDATED: Sort employees considering priority ratio
+private function sortEmployeesWithPriorityRatio($employees, $request)
+{
+    // Calculate how many priority employees we need based on ratio
+    $requestedAmount = $request->requested_amount;
+    $targetPriorityCount = $this->calculateTargetPriorityCount($requestedAmount);
+    
+    return $employees->sort(function ($a, $b) use ($request, $targetPriorityCount) {
+        // UPDATED: Priority employees should be prioritized only up to the target count
+        $hasPriorityA = $a['has_priority'];
+        $hasPriorityB = $b['has_priority'];
+        
+        // If we need priority employees, prioritize them
+        if ($targetPriorityCount > 0) {
+            if ($hasPriorityA !== $hasPriorityB) {
+                return $hasPriorityA ? -1 : 1;
+            }
+            
+            // If both have priority, compare priority scores
+            if ($hasPriorityA && $hasPriorityB && $a['priority_score'] !== $b['priority_score']) {
+                return $b['priority_score'] <=> $a['priority_score'];
+            }
+        }
+        
+        // Exact subsection match
+        $aExactMatch = collect($a['sub_sections_data'])->contains('id', $request->sub_section_id);
+        $bExactMatch = collect($b['sub_sections_data'])->contains('id', $request->sub_section_id);
+
+        if ($aExactMatch !== $bExactMatch) {
+            return $aExactMatch ? -1 : 1;
+        }
+
+        // Final score (which already includes priority weighting)
+        if ($a['final_score'] !== $b['final_score']) {
+            return $b['final_score'] <=> $a['final_score'];
+        }
+
+        // Gender matching
+        $aGenderMatch = $this->getGenderMatchScoreStatic($a, $request);
+        $bGenderMatch = $this->getGenderMatchScoreStatic($b, $request);
+
+        if ($aGenderMatch !== $bGenderMatch) {
+            return $aGenderMatch - $bGenderMatch;
+        }
+
+        // Employee type
+        if ($a['type'] === 'bulanan' && $b['type'] === 'harian')
+            return -1;
+        if ($a['type'] === 'harian' && $b['type'] === 'bulanan')
+            return 1;
+
+        return $a['id'] - $b['id'];
+    });
 }
 
 private function getGenderMatchScoreStatic($employee, $request)

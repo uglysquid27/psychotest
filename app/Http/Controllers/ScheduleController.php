@@ -18,10 +18,10 @@ use Illuminate\Support\Facades\Http;
 
 class ScheduleController extends Controller
 {
-     public function index(Request $request): Response
+public function index(Request $request): Response
 {
-    // Set default date range: 1 month back from today
-    $defaultEndDate = Carbon::today();
+    // ALWAYS use today-based date range
+    $defaultEndDate = Carbon::today()->addDays(2);
     $defaultStartDate = Carbon::today()->subMonth();
     
     // Use request values if provided, otherwise use defaults
@@ -33,7 +33,7 @@ class ScheduleController extends Controller
     $subSections = SubSection::with('section')->get();
 
     return Inertia::render('Schedules/Index', [
-        'schedules' => [], // Start with empty array for instant page load
+        'schedules' => [],
         'sections' => $sections,
         'subSections' => $subSections,
         'filters' => [
@@ -41,6 +41,10 @@ class ScheduleController extends Controller
             'end_date' => $endDate,
             'section' => $request->input('section'),
             'sub_section' => $request->input('sub_section'),
+        ],
+        'defaults' => [
+            'start_date' => $defaultStartDate->format('Y-m-d'),
+            'end_date' => $defaultEndDate->format('Y-m-d')
         ]
     ]);
 }
@@ -48,45 +52,54 @@ class ScheduleController extends Controller
 public function getScheduleData(Request $request)
 {
     try {
-        $query = Schedule::with([
-            'employee',
-            'manPowerRequest.shift',
-            'manPowerRequest.subSection.section'
+        // Fetch ManPowerRequest data instead of Schedule data
+        $query = ManPowerRequest::with([
+            'shift',
+            'subSection.section',
+            'schedules.employee' // Include schedules if they exist
         ]);
 
+        // ALWAYS use today-based date range if no dates provided
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
+        
+        if ((!$startDate || $startDate === 'null') && (!$endDate || $endDate === 'null')) {
+            // Always use today-1month to today+2days
+            $defaultEndDate = Carbon::today()->addDays(2);
+            $defaultStartDate = Carbon::today()->subMonth();
+            
+            $startDate = $defaultStartDate->format('Y-m-d');
+            $endDate = $defaultEndDate->format('Y-m-d');
+        }
+
         $sectionId = $request->input('section');
         $subSectionId = $request->input('sub_section');
 
-        // Apply date filters - PERBAIKAN: Tentukan tabel dengan jelas
+        // Apply date filters on ManPowerRequest date
         if ($startDate && $endDate && $startDate !== 'null' && $endDate !== 'null') {
             $start = Carbon::parse($startDate)->startOfDay();
             $end = Carbon::parse($endDate)->endOfDay();
             
             if ($start->isValid() && $end->isValid()) {
-                // Tentukan tabel schedules.date dengan jelas
-                $query->whereBetween('schedules.date', [$start, $end]);
+                $query->whereBetween('date', [$start, $end]);
             }
         }
 
         // Apply section filter
         if ($sectionId && $sectionId !== 'null') {
-            $query->whereHas('manPowerRequest.subSection', function ($q) use ($sectionId) {
+            $query->whereHas('subSection', function ($q) use ($sectionId) {
                 $q->where('section_id', $sectionId);
             });
         }
 
         // Apply sub-section filter
         if ($subSectionId && $subSectionId !== 'null') {
-            $query->whereHas('manPowerRequest', function ($q) use ($subSectionId) {
-                $q->where('sub_section_id', $subSectionId);
-            });
+            $query->where('sub_section_id', $subSectionId);
         }
 
-        // ORDER BY shift: pagi -> siang -> malam
-        $query->leftJoin('man_power_requests', 'schedules.man_power_request_id', '=', 'man_power_requests.id')
-              ->leftJoin('shifts', 'man_power_requests.shift_id', '=', 'shifts.id')
+        // ORDER BY: date DESC first (newest first), then shift order
+        $query->leftJoin('shifts', 'man_power_requests.shift_id', '=', 'shifts.id')
+              ->orderBy('man_power_requests.date', 'desc') // Newest dates first
               ->orderByRaw("
                   CASE 
                       WHEN shifts.name LIKE '%pagi%' THEN 1
@@ -96,13 +109,75 @@ public function getScheduleData(Request $request)
                   END
               ")
               ->orderBy('shifts.name')
-              ->orderBy('schedules.date') // PERBAIKAN: Tentukan tabel dengan jelas
-              ->select('schedules.*');
+              ->select('man_power_requests.*');
 
-        $schedules = $query->get();
+        $manPowerRequests = $query->get();
+
+        // Transform the data to match the expected format
+        $transformedData = [];
+        
+        foreach ($manPowerRequests as $request) {
+            // For each schedule assigned to this request
+            foreach ($request->schedules as $schedule) {
+                $transformedData[] = [
+                    'id' => $schedule->id,
+                    'employee_id' => $schedule->employee_id,
+                    'man_power_request_id' => $schedule->man_power_request_id,
+                    'date' => $schedule->date,
+                    'status' => $schedule->status,
+                    'visibility' => $schedule->visibility,
+                    'line' => $schedule->line,
+                    'rejection_reason' => $schedule->rejection_reason,
+                    'created_at' => $schedule->created_at,
+                    'updated_at' => $schedule->updated_at,
+                    'employee' => $schedule->employee,
+                    'man_power_request' => [
+                        'id' => $request->id,
+                        'date' => $request->date,
+                        'start_time' => $request->start_time,
+                        'end_time' => $request->end_time,
+                        'requested_amount' => $request->requested_amount,
+                        'status' => $request->status,
+                        'sub_section_id' => $request->sub_section_id,
+                        'shift_id' => $request->shift_id,
+                        'shift' => $request->shift,
+                        'sub_section' => $request->subSection,
+                    ]
+                ];
+            }
+            
+            // If no schedules exist for this request, create a placeholder
+            if ($request->schedules->isEmpty()) {
+                $transformedData[] = [
+                    'id' => null, // No schedule ID yet
+                    'employee_id' => null,
+                    'man_power_request_id' => $request->id,
+                    'date' => $request->date,
+                    'status' => 'pending', // Default status for unscheduled
+                    'visibility' => 'private',
+                    'line' => null,
+                    'rejection_reason' => null,
+                    'created_at' => null,
+                    'updated_at' => null,
+                    'employee' => null, // No employee assigned yet
+                    'man_power_request' => [
+                        'id' => $request->id,
+                        'date' => $request->date,
+                        'start_time' => $request->start_time,
+                        'end_time' => $request->end_time,
+                        'requested_amount' => $request->requested_amount,
+                        'status' => $request->status,
+                        'sub_section_id' => $request->sub_section_id,
+                        'shift_id' => $request->shift_id,
+                        'shift' => $request->shift,
+                        'sub_section' => $request->subSection,
+                    ]
+                ];
+            }
+        }
 
         return response()->json([
-            'schedules' => $schedules,
+            'schedules' => $transformedData,
             'last_updated' => now()->toISOString(),
             'success' => true,
             'filters_applied' => [
@@ -123,6 +198,167 @@ public function getScheduleData(Request $request)
             'last_updated' => now()->toISOString(),
             'success' => false,
             'error' => 'Failed to load schedule data',
+            'debug' => $e->getMessage()
+        ], 500);
+    }
+}
+
+public function getUpdatedSchedules(Request $request)
+{
+    try {
+        // Fetch ManPowerRequest data instead of Schedule data
+        $query = ManPowerRequest::with([
+            'shift',
+            'subSection.section',
+            'schedules.employee'
+        ]);
+
+        // ALWAYS use today-based date range if no dates provided
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+        
+        if ((!$startDate || $startDate === 'null') && (!$endDate || $endDate === 'null')) {
+            // Always use today-1month to today+2days
+            $defaultEndDate = Carbon::today()->addDays(2);
+            $defaultStartDate = Carbon::today()->subMonth();
+            
+            $startDate = $defaultStartDate->format('Y-m-d');
+            $endDate = $defaultEndDate->format('Y-m-d');
+        }
+
+        $sectionId = $request->input('section');
+        $subSectionId = $request->input('sub_section');
+        $lastUpdate = $request->input('last_update');
+
+        // Apply date filters on ManPowerRequest date
+        if ($startDate && $endDate && $startDate !== 'null' && $endDate !== 'null') {
+            $query->whereBetween('date', [
+                Carbon::parse($startDate)->startOfDay(),
+                Carbon::parse($endDate)->endOfDay()
+            ]);
+        }
+
+        // Apply section filter
+        if ($sectionId && $sectionId !== 'null') {
+            $query->whereHas('subSection', function ($q) use ($sectionId) {
+                $q->where('section_id', $sectionId);
+            });
+        }
+
+        // Apply sub-section filter
+        if ($subSectionId && $subSectionId !== 'null') {
+            $query->where('sub_section_id', $subSectionId);
+        }
+
+        // ORDER BY: date DESC first (newest first), then shift order
+        $query->leftJoin('shifts', 'man_power_requests.shift_id', '=', 'shifts.id')
+              ->orderBy('man_power_requests.date', 'desc') // Newest dates first
+              ->orderByRaw("
+                  CASE 
+                      WHEN shifts.name LIKE '%pagi%' THEN 1
+                      WHEN shifts.name LIKE '%siang%' THEN 2
+                      WHEN shifts.name LIKE '%malam%' THEN 3
+                      ELSE 4
+                  END
+              ")
+              ->orderBy('shifts.name')
+              ->select('man_power_requests.*');
+
+        $manPowerRequests = $query->get();
+
+        // Transform the data to match the expected format
+        $transformedData = [];
+        
+        foreach ($manPowerRequests as $request) {
+            // For each schedule assigned to this request
+            foreach ($request->schedules as $schedule) {
+                $transformedData[] = [
+                    'id' => $schedule->id,
+                    'employee_id' => $schedule->employee_id,
+                    'man_power_request_id' => $schedule->man_power_request_id,
+                    'date' => $schedule->date,
+                    'status' => $schedule->status,
+                    'visibility' => $schedule->visibility,
+                    'line' => $schedule->line,
+                    'rejection_reason' => $schedule->rejection_reason,
+                    'created_at' => $schedule->created_at,
+                    'updated_at' => $schedule->updated_at,
+                    'employee' => $schedule->employee,
+                    'man_power_request' => [
+                        'id' => $request->id,
+                        'date' => $request->date,
+                        'start_time' => $request->start_time,
+                        'end_time' => $request->end_time,
+                        'requested_amount' => $request->requested_amount,
+                        'status' => $request->status,
+                        'sub_section_id' => $request->sub_section_id,
+                        'shift_id' => $request->shift_id,
+                        'shift' => $request->shift,
+                        'sub_section' => $request->subSection,
+                    ]
+                ];
+            }
+            
+            // If no schedules exist for this request, create a placeholder
+            if ($request->schedules->isEmpty()) {
+                $transformedData[] = [
+                    'id' => null,
+                    'employee_id' => null,
+                    'man_power_request_id' => $request->id,
+                    'date' => $request->date,
+                    'status' => 'pending',
+                    'visibility' => 'private',
+                    'line' => null,
+                    'rejection_reason' => null,
+                    'created_at' => null,
+                    'updated_at' => null,
+                    'employee' => null,
+                    'man_power_request' => [
+                        'id' => $request->id,
+                        'date' => $request->date,
+                        'start_time' => $request->start_time,
+                        'end_time' => $request->end_time,
+                        'requested_amount' => $request->requested_amount,
+                        'status' => $request->status,
+                        'sub_section_id' => $request->sub_section_id,
+                        'shift_id' => $request->shift_id,
+                        'shift' => $request->shift,
+                        'sub_section' => $request->subSection,
+                    ]
+                ];
+            }
+        }
+
+        // Check if data has changed since last update
+        $latestUpdate = $manPowerRequests->max('updated_at') ?? now();
+        
+        if ($lastUpdate && $lastUpdate !== 'null' && $latestUpdate <= Carbon::parse($lastUpdate)) {
+            return response()->json([
+                'schedules' => [],
+                'last_updated' => $lastUpdate,
+                'unchanged' => true,
+                'success' => true
+            ]);
+        }
+
+        return response()->json([
+            'schedules' => $transformedData,
+            'last_updated' => $latestUpdate->toISOString(),
+            'unchanged' => false,
+            'success' => true
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Failed to load updated schedules: ' . $e->getMessage());
+        Log::error('Request parameters: ' . json_encode($request->all()));
+        Log::error('Stack trace: ' . $e->getTraceAsString());
+        
+        return response()->json([
+            'schedules' => [],
+            'last_updated' => now()->toISOString(),
+            'unchanged' => false,
+            'success' => false,
+            'error' => 'Failed to load updated schedule data',
             'debug' => $e->getMessage()
         ], 500);
     }
@@ -501,96 +737,4 @@ public function getScheduleData(Request $request)
             return back()->withErrors(['visibility_error' => 'Gagal mengubah visibility.']);
         }
     }
-
-public function getUpdatedSchedules(Request $request)
-{
-    try {
-        $query = Schedule::with([
-            'employee',
-            'manPowerRequest.shift',
-            'manPowerRequest.subSection.section'
-        ]);
-
-        $startDate = $request->input('start_date');
-        $endDate = $request->input('end_date');
-        $sectionId = $request->input('section');
-        $subSectionId = $request->input('sub_section');
-        $lastUpdate = $request->input('last_update');
-
-        // Apply date filters - PERBAIKAN: Tentukan tabel dengan jelas
-        if ($startDate && $endDate && $startDate !== 'null' && $endDate !== 'null') {
-            $query->whereBetween('schedules.date', [
-                Carbon::parse($startDate)->startOfDay(),
-                Carbon::parse($endDate)->endOfDay()
-            ]);
-        }
-
-        // Apply section filter
-        if ($sectionId && $sectionId !== 'null') {
-            $query->whereHas('manPowerRequest.subSection', function ($q) use ($sectionId) {
-                $q->where('section_id', $sectionId);
-            });
-        }
-
-        // Apply sub-section filter
-        if ($subSectionId && $subSectionId !== 'null') {
-            $query->whereHas('manPowerRequest', function ($q) use ($subSectionId) {
-                $q->where('sub_section_id', $subSectionId);
-            });
-        }
-
-        // ORDER BY shift - PERBAIKAN: Tentukan tabel dengan jelas
-        $query->leftJoin('man_power_requests', 'schedules.man_power_request_id', '=', 'man_power_requests.id')
-              ->leftJoin('shifts', 'man_power_requests.shift_id', '=', 'shifts.id')
-              ->orderByRaw("
-                  CASE 
-                      WHEN shifts.name LIKE '%pagi%' THEN 1
-                      WHEN shifts.name LIKE '%siang%' THEN 2
-                      WHEN shifts.name LIKE '%malam%' THEN 3
-                      ELSE 4
-                  END
-              ")
-              ->orderBy('shifts.name')
-              ->orderBy('schedules.date') // PERBAIKAN: Tentukan tabel dengan jelas
-              ->select('schedules.*');
-
-        // Get ALL schedules with current filters
-        $schedules = $query->get();
-
-        // Check if data has changed since last update
-        $latestUpdate = $schedules->max('updated_at') ?? now();
-        
-        if ($lastUpdate && $lastUpdate !== 'null' && $latestUpdate <= Carbon::parse($lastUpdate)) {
-            return response()->json([
-                'schedules' => [],
-                'last_updated' => $lastUpdate,
-                'unchanged' => true,
-                'success' => true
-            ]);
-        }
-
-        return response()->json([
-            'schedules' => $schedules,
-            'last_updated' => $latestUpdate->toISOString(),
-            'unchanged' => false,
-            'success' => true
-        ]);
-
-    } catch (\Exception $e) {
-        Log::error('Failed to load updated schedules: ' . $e->getMessage());
-        Log::error('Request parameters: ' . json_encode($request->all()));
-        Log::error('Stack trace: ' . $e->getTraceAsString());
-        
-        return response()->json([
-            'schedules' => [],
-            'last_updated' => now()->toISOString(),
-            'unchanged' => false,
-            'success' => false,
-            'error' => 'Failed to load updated schedule data',
-            'debug' => $e->getMessage()
-        ], 500);
-    }
-}
-
-
 }
