@@ -42,15 +42,15 @@ const ContentLoadingSkeleton = () => {
     <div className="min-h-screen dark:bg-gray-900 p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto py-6">
         {/* Welcome Header Skeleton */}
-        <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 sm:p-8 mb-8 shadow-2xl border border-gray-100 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-3xl p-4 sm:p-6 lg:p-8 mb-6 sm:mb-8 shadow-2xl border border-gray-100 dark:border-gray-700">
           <div className="h-8 bg-gray-300 dark:bg-gray-600 rounded w-3/4 mb-2 animate-pulse"></div>
           <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/2 animate-pulse"></div>
         </div>
 
         {/* Filter Section Skeleton */}
-        <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 sm:p-8 mb-8 shadow-2xl border border-gray-100 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-3xl p-4 sm:p-6 lg:p-8 mb-6 sm:mb-8 shadow-2xl border border-gray-100 dark:border-gray-700">
           <div className="h-6 bg-gray-300 dark:bg-gray-600 rounded w-1/4 mb-4 animate-pulse"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {[...Array(5)].map((_, index) => (
               <div key={index}>
                 <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-2 animate-pulse"></div>
@@ -65,25 +65,25 @@ const ContentLoadingSkeleton = () => {
           {[...Array(3)].map((_, index) => (
             <div key={index}>
               {/* Date Header Skeleton */}
-              <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl p-6 mb-6">
-                <div className="h-8 bg-gray-300 dark:bg-gray-600 rounded w-1/3 mx-auto animate-pulse"></div>
+              <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl p-4 sm:p-6 mb-4 sm:mb-6">
+                <div className="h-8 bg-gray-300 dark:bg-gray-600 rounded w-1/2 sm:w-1/3 mx-auto animate-pulse"></div>
               </div>
 
               {/* Section Skeleton */}
-              <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-2xl border border-gray-100 dark:border-gray-700 mb-6">
-                <div className="flex justify-between items-start mb-6">
+              <div className="bg-white dark:bg-gray-800 rounded-3xl p-4 sm:p-6 shadow-2xl border border-gray-100 dark:border-gray-700 mb-4 sm:mb-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4 sm:mb-6">
                   <div className="space-y-2">
-                    <div className="h-6 bg-gray-300 dark:bg-gray-600 rounded w-48 animate-pulse"></div>
-                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-64 animate-pulse"></div>
+                    <div className="h-6 bg-gray-300 dark:bg-gray-600 rounded w-32 sm:w-48 animate-pulse"></div>
+                    <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-48 sm:w-64 animate-pulse"></div>
                   </div>
-                  <div className="flex gap-4">
-                    <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-32 animate-pulse"></div>
-                    <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-40 animate-pulse"></div>
+                  <div className="flex flex-wrap gap-2 sm:gap-4">
+                    <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-28 sm:w-32 animate-pulse"></div>
+                    <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded w-32 sm:w-40 animate-pulse"></div>
                   </div>
                 </div>
 
                 {/* Shifts Grid Skeleton */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {[...Array(3)].map((_, shiftIndex) => (
                     <div key={shiftIndex} className="border border-gray-200 dark:border-gray-600 rounded-xl p-4 bg-gray-50 dark:bg-gray-700">
                       <div className="mb-3 space-y-2">
@@ -144,7 +144,7 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
                     <div className="flex flex-col">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500 text-white shadow-md">Ditolak</span>
                         {rejectionReason && (
-                            <span className="text-xs text-red-500 italic mt-1">"{rejectionReason}"</span>
+                            <span className="text-xs text-red-500 italic mt-1 line-clamp-1">"{rejectionReason}"</span>
                         )}
                     </div>
                 );
@@ -156,7 +156,6 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
     };
 
     const fetchSameDayEmployees = async () => {
-        // Close other expanded sections first
         if (isAnyExpanded && onExpand) {
             onExpand();
         }
@@ -171,145 +170,134 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
         setExpandedSection(true);
         
         try {
-        // Combine all shifts data for this section
-        const allTimeGroups = {};
-        
-        Object.values(shifts).forEach(shiftData => {
-            shiftData.schedules.forEach(schedule => {
-                const startTime = schedule.man_power_request?.start_time || 'N/A';
-                const endTime = schedule.man_power_request?.end_time || 'N/A';
-                const shiftName = schedule.man_power_request?.shift?.name || 'N/A';
-                const timeKey = `${shiftName}-${startTime}-${endTime}`;
-                
-                if (!allTimeGroups[timeKey]) {
-                    allTimeGroups[timeKey] = {
-                        shift_name: shiftName,
-                        start_time: startTime,
-                        end_time: endTime,
-                        employees: [],
-                        shift_order: getShiftOrder(shiftName) // Add order for sorting
-                    };
-                }
-                
-                allTimeGroups[timeKey].employees.push({
-                    id: schedule.id,
-                    employee: schedule.employee,
-                    // FIX: Get sub_section from man_power_request.sub_section
-                    sub_section: schedule.man_power_request?.sub_section?.name || 'N/A',
-                    line: schedule.line,
-                    status: schedule.status,
-                    rejection_reason: schedule.rejection_reason
+            const allTimeGroups = {};
+            
+            Object.values(shifts).forEach(shiftData => {
+                shiftData.schedules.forEach(schedule => {
+                    const startTime = schedule.man_power_request?.start_time || 'N/A';
+                    const endTime = schedule.man_power_request?.end_time || 'N/A';
+                    const shiftName = schedule.man_power_request?.shift?.name || 'N/A';
+                    const timeKey = `${shiftName}-${startTime}-${endTime}`;
+                    
+                    if (!allTimeGroups[timeKey]) {
+                        allTimeGroups[timeKey] = {
+                            shift_name: shiftName,
+                            start_time: startTime,
+                            end_time: endTime,
+                            employees: [],
+                            shift_order: getShiftOrder(shiftName)
+                        };
+                    }
+                    
+                    allTimeGroups[timeKey].employees.push({
+                        id: schedule.id,
+                        employee: schedule.employee,
+                        sub_section: schedule.man_power_request?.sub_section?.name || 'N/A',
+                        line: schedule.line,
+                        status: schedule.status,
+                        rejection_reason: schedule.rejection_reason
+                    });
                 });
             });
-        });
 
-        // Sort time groups by shift order (pagi -> siang -> malam)
-        const sortedTimeGroups = Object.entries(allTimeGroups)
-            .sort(([,a], [,b]) => {
-                // First sort by shift order
-                if (a.shift_order !== b.shift_order) {
-                    return a.shift_order - b.shift_order;
-                }
-                
-                // Then by shift name
-                const shiftCompare = a.shift_name.localeCompare(b.shift_name);
-                if (shiftCompare !== 0) return shiftCompare;
-                
-                // Then by start time
-                if (a.start_time === 'N/A') return 1;
-                if (b.start_time === 'N/A') return -1;
-                return a.start_time.localeCompare(b.start_time);
-            })
-            .reduce((acc, [key, value]) => {
-                acc[key] = value;
-                return acc;
-            }, {});
+            const sortedTimeGroups = Object.entries(allTimeGroups)
+                .sort(([,a], [,b]) => {
+                    if (a.shift_order !== b.shift_order) {
+                        return a.shift_order - b.shift_order;
+                    }
+                    
+                    const shiftCompare = a.shift_name.localeCompare(b.shift_name);
+                    if (shiftCompare !== 0) return shiftCompare;
+                    
+                    if (a.start_time === 'N/A') return 1;
+                    if (b.start_time === 'N/A') return -1;
+                    return a.start_time.localeCompare(b.start_time);
+                })
+                .reduce((acc, [key, value]) => {
+                    acc[key] = value;
+                    return acc;
+                }, {});
 
-        const mockCoworkersData = {
-            section_name: title,
-            timeGroups: sortedTimeGroups,
-            last_updated: Date.now()
-        };
-        
-        setCoworkersData(mockCoworkersData);
-    } catch (error) {
-        console.error('Failed to fetch coworkers:', error);
-    } finally {
-        setLoadingCoworkers(false);
-    }
+            const mockCoworkersData = {
+                section_name: title,
+                timeGroups: sortedTimeGroups,
+                last_updated: Date.now()
+            };
+            
+            setCoworkersData(mockCoworkersData);
+        } catch (error) {
+            // Error handling remains but console.log removed
+        } finally {
+            setLoadingCoworkers(false);
+        }
     };
 
-    // Helper to get shift order
     const getShiftOrder = (shiftName) => {
-    const lowerShiftName = shiftName.toLowerCase();
-    if (lowerShiftName.includes('pagi')) return 1;
-    if (lowerShiftName.includes('siang')) return 2;
-    if (lowerShiftName.includes('malam')) return 3;
-    return 4; 
-};
+        const lowerShiftName = shiftName.toLowerCase();
+        if (lowerShiftName.includes('pagi')) return 1;
+        if (lowerShiftName.includes('siang')) return 2;
+        if (lowerShiftName.includes('malam')) return 3;
+        return 4; 
+    };
 
-   useEffect(() => {
-    if (expandedSection && coworkersData) {
-        // Re-fetch the same day employees with updated data
-        const allTimeGroups = {};
-        
-        Object.values(shifts).forEach(shiftData => {
-            shiftData.schedules.forEach(schedule => {
-                const startTime = schedule.man_power_request?.start_time || 'N/A';
-                const endTime = schedule.man_power_request?.end_time || 'N/A';
-                const shiftName = schedule.man_power_request?.shift?.name || 'N/A';
-                const timeKey = `${shiftName}-${startTime}-${endTime}`;
-                
-                if (!allTimeGroups[timeKey]) {
-                    allTimeGroups[timeKey] = {
-                        shift_name: shiftName,
-                        start_time: startTime,
-                        end_time: endTime,
-                        employees: [],
-                        shift_order: getShiftOrder(shiftName)
-                    };
-                }
-                
-                allTimeGroups[timeKey].employees.push({
-                    id: schedule.id,
-                    employee: schedule.employee,
-                    // FIX: Get sub_section from man_power_request.sub_section
-                    sub_section: schedule.man_power_request?.sub_section?.name || 'N/A',
-                    line: schedule.line,
-                    status: schedule.status,
-                    rejection_reason: schedule.rejection_reason
+    useEffect(() => {
+        if (expandedSection && coworkersData) {
+            const allTimeGroups = {};
+            
+            Object.values(shifts).forEach(shiftData => {
+                shiftData.schedules.forEach(schedule => {
+                    const startTime = schedule.man_power_request?.start_time || 'N/A';
+                    const endTime = schedule.man_power_request?.end_time || 'N/A';
+                    const shiftName = schedule.man_power_request?.shift?.name || 'N/A';
+                    const timeKey = `${shiftName}-${startTime}-${endTime}`;
+                    
+                    if (!allTimeGroups[timeKey]) {
+                        allTimeGroups[timeKey] = {
+                            shift_name: shiftName,
+                            start_time: startTime,
+                            end_time: endTime,
+                            employees: [],
+                            shift_order: getShiftOrder(shiftName)
+                        };
+                    }
+                    
+                    allTimeGroups[timeKey].employees.push({
+                        id: schedule.id,
+                        employee: schedule.employee,
+                        sub_section: schedule.man_power_request?.sub_section?.name || 'N/A',
+                        line: schedule.line,
+                        status: schedule.status,
+                        rejection_reason: schedule.rejection_reason
+                    });
                 });
             });
-        });
 
-        // Sort by shift order (pagi -> siang -> malam)
-        const sortedTimeGroups = Object.entries(allTimeGroups)
-            .sort(([,a], [,b]) => {
-                if (a.shift_order !== b.shift_order) {
-                    return a.shift_order - b.shift_order;
-                }
-                
-                const shiftCompare = a.shift_name.localeCompare(b.shift_name);
-                if (shiftCompare !== 0) return shiftCompare;
-                
-                if (a.start_time === 'N/A') return 1;
-                if (b.start_time === 'N/A') return -1;
-                return a.start_time.localeCompare(b.start_time);
-            })
-            .reduce((acc, [key, value]) => {
-                acc[key] = value;
-                return acc;
-            }, {});
+            const sortedTimeGroups = Object.entries(allTimeGroups)
+                .sort(([,a], [,b]) => {
+                    if (a.shift_order !== b.shift_order) {
+                        return a.shift_order - b.shift_order;
+                    }
+                    
+                    const shiftCompare = a.shift_name.localeCompare(b.shift_name);
+                    if (shiftCompare !== 0) return shiftCompare;
+                    
+                    if (a.start_time === 'N/A') return 1;
+                    if (b.start_time === 'N/A') return -1;
+                    return a.start_time.localeCompare(b.start_time);
+                })
+                .reduce((acc, [key, value]) => {
+                    acc[key] = value;
+                    return acc;
+                }, {});
 
-        setCoworkersData({
-            section_name: title,
-            timeGroups: sortedTimeGroups,
-            last_updated: Date.now()
-        });
-    }
-}, [shifts, lastUpdate, expandedSection]);
+            setCoworkersData({
+                section_name: title,
+                timeGroups: sortedTimeGroups,
+                last_updated: Date.now()
+            });
+        }
+    }, [shifts, lastUpdate, expandedSection]);
 
-    // Calculate summary for each shift
     const getShiftSummary = (shiftData) => {
         const totalEmployees = shiftData.schedules.length;
         const acceptedCount = shiftData.schedules.filter(s => s.status === 'accepted').length;
@@ -324,7 +312,6 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
         };
     };
 
-    // Calculate total for entire section
     const getSectionSummary = () => {
         let totalEmployees = 0;
         let acceptedCount = 0;
@@ -350,45 +337,40 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
     const shiftEntries = Object.entries(shifts);
     const shiftCount = shiftEntries.length;
 
-    // Dynamic grid classes based on shift count
     const getGridClasses = () => {
         switch (shiftCount) {
             case 1:
                 return 'grid-cols-1';
             case 2:
-                return 'grid-cols-1 md:grid-cols-2';
+                return 'grid-cols-1 sm:grid-cols-2';
             case 3:
-                return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3';
+                return 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3';
             case 4:
-                return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4';
+                return 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4';
             default:
-                return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3';
+                return 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3';
         }
     };
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-2xl border border-gray-100 dark:border-gray-700 mb-6">
-            <div className="flex justify-between items-start mb-6">
-                <div>
-                    <h2 className="text-xl font-bold text-gray-800 dark:text-white">{title}</h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        Total Section: {sectionSummary.totalEmployees} orang • 
-                        Diterima: {sectionSummary.acceptedCount} • 
-                        Ditolak: {sectionSummary.rejectedCount} • 
-                        Menunggu: {sectionSummary.pendingCount}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xl sm:shadow-2xl border border-gray-100 dark:border-gray-700 mb-4 sm:mb-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4 sm:mb-6">
+                <div className="w-full">
+                    <h2 className="text-lg sm:text-xl font-bold text-gray-800 dark:text-white line-clamp-1">{title}</h2>
+                    <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1 line-clamp-2">
+                        Total: {sectionSummary.totalEmployees} • Diterima: {sectionSummary.acceptedCount} • Ditolak: {sectionSummary.rejectedCount} • Menunggu: {sectionSummary.pendingCount}
                     </p>
                 </div>
                 
-                <div className="flex items-center gap-4">
-                    {/* Same Day Button */}
+                <div className="flex flex-wrap items-center gap-2 sm:gap-4 w-full sm:w-auto">
                     <button
                         onClick={fetchSameDayEmployees}
                         disabled={loadingCoworkers}
-                        className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-md transition-colors"
+                        className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium shadow-md transition-colors w-full sm:w-auto"
                     >
                         {loadingCoworkers ? (
-                            <span className="flex items-center gap-1">
-                                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                            <span className="flex items-center justify-center gap-1">
+                                <svg className="animate-spin h-3 w-3 sm:h-4 sm:w-4" viewBox="0 0 24 24">
                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
@@ -399,17 +381,16 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
                         )}
                     </button>
 
-                    {/* Visibility Toggle - Admin Only */}
                     {user?.role === 'admin' && (
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-600 dark:text-gray-400">
-                                Visibility: <strong className="text-gray-900 dark:text-white">{currentVisibility}</strong>
+                        <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded-lg w-full sm:w-auto justify-between sm:justify-start">
+                            <span className="text-xs text-gray-600 dark:text-gray-400">
+                                Vis: <strong className="text-gray-900 dark:text-white">{currentVisibility}</strong>
                             </span>
                             <button
                                 onClick={onToggleVisibility}
-                                className="bg-indigo-600 hover:indigo-700 text-white px-3 py-1 rounded-lg text-sm font-medium shadow-md transition-colors"
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded text-xs font-medium shadow transition-colors"
                             >
-                                {currentVisibility === 'public' ? 'Set Private' : 'Set Public'}
+                                {currentVisibility === 'public' ? 'Private' : 'Public'}
                             </button>
                         </div>
                     )}
@@ -421,51 +402,47 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
                     Tidak ada penjadwalan di bagian ini.
                 </p>
             ) : (
-                <div className={`grid ${getGridClasses()} gap-4`}>
+                <div className={`grid ${getGridClasses()} gap-3 sm:gap-4`}>
                     {shiftEntries.map(([shiftName, shiftData]) => {
                         const summary = getShiftSummary(shiftData);
 
                         return (
-                            <div key={shiftName} className="border border-gray-200 dark:border-gray-600 rounded-xl p-4 bg-gray-50 dark:bg-gray-700">
-                                {/* Shift Header */}
+                            <div key={shiftName} className="border border-gray-200 dark:border-gray-600 rounded-xl p-3 sm:p-4 bg-gray-50 dark:bg-gray-700">
                                 <div className="mb-3">
-                                    <h3 className="text-md font-semibold text-blue-700 dark:text-blue-400 text-center">
+                                    <h3 className="text-sm sm:text-md font-semibold text-blue-700 dark:text-blue-400 text-center line-clamp-1">
                                         {shiftName}
                                     </h3>
-                                    <p className="text-sm text-gray-600 dark:text-gray-400 text-center mt-1">
+                                    <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 text-center mt-1">
                                         {summary.totalEmployees} orang
                                     </p>
-                                    <div className="flex justify-center gap-2 mt-2">
-                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500 text-white">
+                                    <div className="flex justify-center gap-1 sm:gap-2 mt-2">
+                                        <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500 text-white">
                                             {summary.acceptedCount}
                                         </span>
-                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500 text-white">
+                                        <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500 text-white">
                                             {summary.rejectedCount}
                                         </span>
-                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-500 text-white">
+                                        <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-500 text-white">
                                             {summary.pendingCount}
                                         </span>
                                     </div>
                                 </div>
 
-                                {/* Shift Summary Table */}
                                 <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800">
                                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-gray-800 dark:text-white">
                                         <thead className="bg-gray-100 dark:bg-gray-700">
                                             <tr>
-                                                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                                                <th scope="col" className="px-2 sm:px-3 py-1.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
                                                     Sub Bagian
                                                 </th>
-                                                <th scope="col" className="px-2 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                                                <th scope="col" className="px-2 py-1.5 text-center text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
                                                     Total
                                                 </th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                                             {(() => {
-                                                // Group by sub-section from man_power_request
                                                 const subSectionGroups = shiftData.schedules.reduce((acc, schedule) => {
-                                                    // FIX: Get sub_section from man_power_request.sub_section
                                                     const subSection = schedule.man_power_request?.sub_section?.name || 'N/A';
                                                     if (!acc[subSection]) {
                                                         acc[subSection] = 0;
@@ -478,10 +455,10 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
                                                     .sort(([a], [b]) => a.localeCompare(b))
                                                     .map(([subSection, total]) => (
                                                         <tr key={subSection} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150">
-                                                            <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                                            <td className="px-2 sm:px-3 py-1.5 whitespace-nowrap text-xs sm:text-sm font-medium text-gray-900 dark:text-white truncate max-w-[100px] sm:max-w-none">
                                                                 {subSection}
                                                             </td>
-                                                            <td className="px-2 py-2 whitespace-nowrap text-sm text-center font-semibold text-gray-900 dark:text-white">
+                                                            <td className="px-2 py-1.5 whitespace-nowrap text-xs sm:text-sm text-center font-semibold text-gray-900 dark:text-white">
                                                                 {total}
                                                             </td>
                                                         </tr>
@@ -496,18 +473,16 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
                 </div>
             )}
 
-            {/* Expanded Coworkers View - All Shifts Combined */}
             {expandedSection && coworkersData && (
-                <div className="mt-6 rounded-xl border border-blue-200 dark:border-blue-700 overflow-hidden">
-                    {/* Sticky Header */}
-                    <div className="sticky top-0 bg-blue-600 dark:bg-blue-700 p-4 z-10 shadow-md">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <h4 className="text-lg font-semibold text-white">
+                <div className="mt-4 sm:mt-6 rounded-xl border border-blue-200 dark:border-blue-700 overflow-hidden">
+                    <div className="sticky top-0 bg-blue-600 dark:bg-blue-700 p-3 sm:p-4 z-10 shadow-md">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                            <div className="w-full">
+                                <h4 className="text-base sm:text-lg font-semibold text-white line-clamp-2 sm:line-clamp-1">
                                     Karyawan - {title} - Total: {sectionSummary.totalEmployees} orang
                                 </h4>
-                                <p className="text-blue-200 text-sm mt-1">
-                                    Auto-update terakhir: {dayjs(coworkersData.last_updated).format('HH:mm:ss')}
+                                <p className="text-blue-200 text-xs sm:text-sm mt-1">
+                                    Update: {dayjs(coworkersData.last_updated).format('HH:mm:ss')}
                                 </p>
                             </div>
                             <button
@@ -515,53 +490,50 @@ const ScheduleTableSection = ({ title, shifts, date, sectionId, currentVisibilit
                                     setExpandedSection(false);
                                     setCoworkersData(null);
                                 }}
-                                className="bg-white hover:bg-gray-100 text-blue-600 px-4 py-2 rounded-lg text-sm font-medium shadow-md transition-colors"
+                                className="bg-white hover:bg-gray-100 text-blue-600 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium shadow-md transition-colors w-full sm:w-auto mt-2 sm:mt-0"
                             >
                                 Tutup
                             </button>
                         </div>
                     </div>
                     
-                    {/* Content with padding */}
-                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 max-h-96 overflow-y-auto">
-                        {/* Time Groups (by shift and time) */}
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-3 sm:p-4 max-h-80 sm:max-h-96 overflow-y-auto">
                         {Object.entries(coworkersData.timeGroups).map(([timeKey, timeData]) => (
-                            <div key={timeKey} className="mb-6 last:mb-0">
-                                <h5 className="font-semibold text-blue-700 dark:text-blue-300 mb-3 text-sm border-b border-blue-200 dark:border-blue-700 pb-2">
+                            <div key={timeKey} className="mb-4 sm:mb-6 last:mb-0">
+                                <h5 className="font-semibold text-blue-700 dark:text-blue-300 mb-2 sm:mb-3 text-xs sm:text-sm border-b border-blue-200 dark:border-blue-700 pb-1.5 sm:pb-2 line-clamp-2">
                                     {timeData.shift_name} - {formatTime(timeData.start_time)} - {formatTime(timeData.end_time)} 
                                     <span className="text-blue-600 dark:text-blue-400 ml-2">
                                         ({timeData.employees.length} orang)
                                     </span>
                                 </h5>
                                 
-                                {/* All employees in one table for this time group */}
-                                <div className="overflow-x-auto">
+                                <div className="overflow-x-auto -mx-1 sm:mx-0">
                                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                                         <thead className="bg-gray-100 dark:bg-gray-700">
                                             <tr>
-                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300">Nama</th>
-                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300">NIK</th>
-                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300">Sub Bagian</th>
-                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300">Line</th>
-                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300">Status</th>
+                                                <th className="px-2 sm:px-4 py-1.5 sm:py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300">Nama</th>
+                                                <th className="px-2 sm:px-4 py-1.5 sm:py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300">NIK</th>
+                                                <th className="px-2 sm:px-4 py-1.5 sm:py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300">Sub</th>
+                                                <th className="px-2 sm:px-4 py-1.5 sm:py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300">Line</th>
+                                                <th className="px-2 sm:px-4 py-1.5 sm:py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-300">Status</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
                                             {timeData.employees.map((emp, index) => (
                                                 <tr key={emp.id || index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                                                    <td className="px-4 py-2 text-sm text-gray-900 dark:text-white">
+                                                    <td className="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-900 dark:text-white truncate max-w-[80px] sm:max-w-none">
                                                         {emp.employee?.name || 'N/A'}
                                                     </td>
-                                                    <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
+                                                    <td className="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-600 dark:text-gray-300 truncate">
                                                         {emp.employee?.nik || 'N/A'}
                                                     </td>
-                                                    <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
+                                                    <td className="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-600 dark:text-gray-300 truncate max-w-[60px] sm:max-w-none">
                                                         {emp.sub_section || 'N/A'}
                                                     </td>
-                                                    <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300">
-                                                        {emp.sub_section === 'Shrink' && emp.line ? `Shrink ${emp.line}` : emp.line || '-'}
+                                                    <td className="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-600 dark:text-gray-300">
+                                                        {emp.sub_section === 'Shrink' && emp.line ? `S${emp.line}` : emp.line || '-'}
                                                     </td>
-                                                    <td className="px-4 py-2 text-sm">
+                                                    <td className="px-2 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm">
                                                         {getStatusBadge(emp.status, emp.rejection_reason)}
                                                     </td>
                                                 </tr>
@@ -585,7 +557,6 @@ const Index = () => {
     const [schedules, setSchedules] = useState([]);
     const [isDataLoaded, setIsDataLoaded] = useState(false);
     const [lastUpdate, setLastUpdate] = useState(null);
-    // Set initial state based on filters or defaults
     const [startDate, setStartDate] = useState(filters.start_date || defaults?.start_date || '');
     const [endDate, setEndDate] = useState(filters.end_date || defaults?.end_date || '');
     const [selectedSection, setSelectedSection] = useState(filters.section || '');
@@ -596,51 +567,42 @@ const Index = () => {
 
     const itemsPerPage = 3;
 
-    // Load schedule data after component mounts
-useEffect(() => {
-    const loadScheduleData = async () => {
-        setIsLoading(true);
-        try {
-            const params = new URLSearchParams({
-                start_date: startDate || '',
-                end_date: endDate || '',
-                section: selectedSection || '',
-                sub_section: selectedSubSection || ''
-            });
-            
-            const response = await fetch(`/schedules/data?${params}`);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+    useEffect(() => {
+        const loadScheduleData = async () => {
+            setIsLoading(true);
+            try {
+                const params = new URLSearchParams({
+                    start_date: startDate || '',
+                    end_date: endDate || '',
+                    section: selectedSection || '',
+                    sub_section: selectedSubSection || ''
+                });
+                
+                const response = await fetch(`/schedules/data?${params}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    setSchedules(data.schedules || []);
+                    setLastUpdate(data.last_updated);
+                }
+            } catch (error) {
+                // Error handling remains but console.log removed
+            } finally {
+                setIsDataLoaded(true);
+                setIsLoading(false);
             }
-            
-            const data = await response.json();
-            
-            console.log('Initial data loaded:', {
-                filter: { startDate, endDate, selectedSection, selectedSubSection },
-                scheduleCount: data.schedules?.length || 0,
-                success: data.success
-            });
-            
-            if (data.success) {
-                setSchedules(data.schedules || []);
-                setLastUpdate(data.last_updated);
-            } else {
-                console.error('API returned error:', data.error);
-            }
-        } catch (error) {
-            console.error('Failed to load schedule data:', error);
-        } finally {
-            setIsDataLoaded(true);
-            setIsLoading(false);
-        }
-    };
+        };
 
-    loadScheduleData();
-}, []); // Empty dependency array - only run once on mount
+        loadScheduleData();
+    }, []);
 
-     useEffect(() => {
-        if (!isDataLoaded) return; // Don't run on initial load
+    useEffect(() => {
+        if (!isDataLoaded) return;
 
         const loadFilteredData = async () => {
             setIsLoading(true);
@@ -658,10 +620,10 @@ useEffect(() => {
                 if (data.success) {
                     setSchedules(data.schedules);
                     setLastUpdate(data.last_updated);
-                    setCurrentPage(1); // Reset to first page
+                    setCurrentPage(1);
                 }
             } catch (error) {
-                console.error('Failed to load filtered schedule data:', error);
+                // Error handling remains but console.log removed
             } finally {
                 setIsLoading(false);
             }
@@ -670,76 +632,53 @@ useEffect(() => {
         loadFilteredData();
     }, [startDate, endDate, selectedSection, selectedSubSection]);
 
-useEffect(() => {
-    if (!isDataLoaded || isLoading) return;
+    useEffect(() => {
+        if (!isDataLoaded || isLoading) return;
 
-    const pollInterval = 15000; // 15 seconds
-    
-    const fetchUpdates = async () => {
-        try {
-            const params = new URLSearchParams({
-                last_update: lastUpdate || '',
-                start_date: startDate || '',
-                end_date: endDate || '',
-                section: selectedSection || '',
-                sub_section: selectedSubSection || ''
-            });
-            
-            console.log('Polling with params:', {
-                lastUpdate,
-                startDate,
-                endDate,
-                selectedSection,
-                selectedSubSection
-            });
-            
-            const response = await fetch(`/schedules/updates?${params}`, {
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
+        const pollInterval = 15000;
+        
+        const fetchUpdates = async () => {
+            try {
+                const params = new URLSearchParams({
+                    last_update: lastUpdate || '',
+                    start_date: startDate || '',
+                    end_date: endDate || '',
+                    section: selectedSection || '',
+                    sub_section: selectedSubSection || ''
+                });
+                
+                const response = await fetch(`/schedules/updates?${params}`, {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                    }
+                });
+                
+                if (!response.ok) return;
+                
+                const data = await response.json();
+                
+                if (data.success && !data.unchanged && data.last_updated !== lastUpdate) {
+                    setSchedules(data.schedules || []);
+                    setLastUpdate(data.last_updated);
                 }
-            });
-            
-            if (!response.ok) {
-                console.error('Polling failed with status:', response.status);
-                return;
+            } catch (error) {
+                // Background update failed silently
             }
-            
-            const data = await response.json();
-            
-            console.log('Polling response:', {
-                unchanged: data.unchanged,
-                scheduleCount: data.schedules?.length || 0,
-                success: data.success,
-                error: data.error
-            });
-            
-            // Only update if data actually changed
-            if (data.success && !data.unchanged && data.last_updated !== lastUpdate) {
-                setSchedules(data.schedules || []);
-                setLastUpdate(data.last_updated);
-                console.log('Schedule data updated with current filters');
-            }
-        } catch (error) {
-            console.log('Background update failed:', error);
-        }
-    };
+        };
 
-    const intervalId = setInterval(fetchUpdates, pollInterval);
-    return () => clearInterval(intervalId);
-}, [isDataLoaded, isLoading, lastUpdate, startDate, endDate, selectedSection, selectedSubSection]);
+        const intervalId = setInterval(fetchUpdates, pollInterval);
+        return () => clearInterval(intervalId);
+    }, [isDataLoaded, isLoading, lastUpdate, startDate, endDate, selectedSection, selectedSubSection]);
 
-    // Define role-based section access
     const getAccessibleSections = () => {
         if (!user) return [];
 
         const userRole = user.role;
         
-        // Admin can access all sections
         if (userRole === 'admin') {
             return sections;
         }
 
-        // Define role-based section access
         const roleAccess = {
             'logistic': ['Finished goods', 'Delivery', 'Loader', 'Operator Forklift', 'Inspeksi', 'Produksi'],
             'rm/pm': ['RM/PM'],
@@ -764,27 +703,23 @@ useEffect(() => {
         return subSections.filter(sub => sub.section_id == selectedSection);
     }, [selectedSection, subSections]);
 
-    // Apply filters only for display - but polling always gets ALL data
     const filteredAndGroupedSchedules = useMemo(() => {
         if (!isDataLoaded) return {};
 
         let filteredSchedules = [...schedules];
 
-        // Apply section filter for display only
         if (selectedSection) {
             filteredSchedules = filteredSchedules.filter(schedule => 
                 schedule.man_power_request?.sub_section?.section_id == selectedSection
             );
         }
 
-        // Apply sub-section filter for display only
         if (selectedSubSection) {
             filteredSchedules = filteredSchedules.filter(schedule => 
                 schedule.man_power_request?.sub_section_id == selectedSubSection
             );
         }
 
-        // Apply date filter for display only - FIXED: Simple date comparison
         if (startDate && endDate) {
             filteredSchedules = filteredSchedules.filter(schedule => {
                 const scheduleDate = dayjs(schedule.date).format('YYYY-MM-DD');
@@ -795,7 +730,6 @@ useEffect(() => {
             });
         }
 
-        // Group the filtered schedules for display
         return filteredSchedules.reduce((acc, schedule) => {
             const dateKey = dayjs(schedule.date).format('YYYY-MM-DD');
             const displayDate = dayjs(schedule.date).format('dddd, DD MMMM YYYY');
@@ -804,7 +738,6 @@ useEffect(() => {
             const shiftName = schedule.man_power_request.shift.name;
             const visibility = schedule.visibility;
 
-            // Filter schedules based on accessible sections
             const isSectionAccessible = accessibleSections.some(section => section.name === sectionName);
             if (!isSectionAccessible) return acc;
 
@@ -838,7 +771,6 @@ useEffect(() => {
     const paginatedDates = sortedDates.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
     const applyFilters = async () => {
-        // No 30-day limit - users can select any date range
         setIsLoading(true);
         try {
             await router.get(route('schedules.index'), {
@@ -858,30 +790,28 @@ useEffect(() => {
     };
 
     const clearFilters = () => {
-    // Reset to default values: today-1month to today+2days
-    const defaultStartDate = defaults?.start_date || dayjs().subtract(1, 'month').format('YYYY-MM-DD');
-    const defaultEndDate = defaults?.end_date || dayjs().add(2, 'days').format('YYYY-MM-DD');
-    
-    setStartDate(defaultStartDate);
-    setEndDate(defaultEndDate);
-    setSelectedSection('');
-    setSelectedSubSection('');
-    
-    setIsLoading(true);
-    
-    // Use router to update URL with default filters
-    router.get(route('schedules.index'), {
-        start_date: defaultStartDate,
-        end_date: defaultEndDate,
-        section: '',
-        sub_section: ''
-    }, { 
-        preserveState: true, 
-        preserveScroll: true,
-        onStart: () => setIsLoading(true),
-        onFinish: () => setIsLoading(false),
-    });
-};
+        const defaultStartDate = defaults?.start_date || dayjs().subtract(1, 'month').format('YYYY-MM-DD');
+        const defaultEndDate = defaults?.end_date || dayjs().add(2, 'days').format('YYYY-MM-DD');
+        
+        setStartDate(defaultStartDate);
+        setEndDate(defaultEndDate);
+        setSelectedSection('');
+        setSelectedSubSection('');
+        
+        setIsLoading(true);
+        
+        router.get(route('schedules.index'), {
+            start_date: defaultStartDate,
+            end_date: defaultEndDate,
+            section: '',
+            sub_section: ''
+        }, { 
+            preserveState: true, 
+            preserveScroll: true,
+            onStart: () => setIsLoading(true),
+            onFinish: () => setIsLoading(false),
+        });
+    };
 
     const handleToggleVisibility = async (date, sectionId, currentVisibility) => {
         try {
@@ -899,12 +829,10 @@ useEffect(() => {
                 }
             );
         } catch (error) {
-            console.error("Error toggling visibility:", error);
             alert("Gagal mengubah visibility");
         }
     };
 
-    // Show loading skeleton while data is loading
     if (!isDataLoaded) {
         return (
             <AuthenticatedLayout header={<h2 className="text-xl font-semibold text-gray-800 dark:text-white">Agenda Penjadwalan</h2>}>
@@ -915,56 +843,54 @@ useEffect(() => {
 
     return (
         <AuthenticatedLayout header={<h2 className="text-xl font-semibold text-gray-800 dark:text-white">Agenda Penjadwalan</h2>}>
-            <div className="min-h-screen dark:bg-gray-900 p-4 sm:p-6 lg:p-8">
-                <div className="max-w-7xl mx-auto py-6">
+            <div className="min-h-screen dark:bg-gray-900 p-3 sm:p-4 lg:p-6 xl:p-8">
+                <div className="max-w-7xl mx-auto py-4 sm:py-6">
 
-                    {/* Welcome Header */}
-                  <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 sm:p-8 mb-8 text-gray-900 dark:text-white shadow-2xl border border-gray-100 dark:border-gray-700">
-            <h3 className="text-2xl sm:text-3xl md:text-4xl font-extrabold mb-2 tracking-wide text-indigo-900 dark:text-indigo-200">
-                Agenda Penjadwalan
-            </h3>
-            <p className="text-base sm:text-lg md:text-xl font-light opacity-90 text-gray-600 dark:text-gray-300">
-                {startDate && endDate ? (
-                    <>
-                        Menampilkan jadwal dari <span className="font-semibold">{dayjs(startDate).format('DD MMM YYYY')}</span> 
-                        {' '}hingga <span className="font-semibold">{dayjs(endDate).format('DD MMM YYYY')}</span>
-                        {' • '}Auto-update setiap 15 detik
-                    </>
-                ) : (
-                    "Tampilan tabel seluruh jadwal karyawan • Auto-update setiap 15 detik"
-                )}
-            </p>
-        </div>
+                    <div className="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8 text-gray-900 dark:text-white shadow-xl sm:shadow-2xl border border-gray-100 dark:border-gray-700">
+                        <h3 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-extrabold mb-1 sm:mb-2 tracking-wide text-indigo-900 dark:text-indigo-200">
+                            Agenda Penjadwalan
+                        </h3>
+                        <p className="text-sm sm:text-base lg:text-lg xl:text-xl font-light opacity-90 text-gray-600 dark:text-gray-300 line-clamp-2 sm:line-clamp-1">
+                            {startDate && endDate ? (
+                                <>
+                                    Menampilkan jadwal dari <span className="font-semibold">{dayjs(startDate).format('DD MMM YYYY')}</span> 
+                                    {' '}hingga <span className="font-semibold">{dayjs(endDate).format('DD MMM YYYY')}</span>
+                                    {' • '}Auto-update setiap 15 detik
+                                </>
+                            ) : (
+                                "Tampilan tabel seluruh jadwal karyawan • Auto-update setiap 15 detik"
+                            )}
+                        </p>
+                    </div>
 
-                    {/* Filter Section - Only for Admin */}
                     {isAdmin && (
-                        <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 sm:p-8 mb-8 shadow-2xl border border-gray-100 dark:border-gray-700">
-                            <h4 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Filter Data</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-3xl p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8 shadow-xl sm:shadow-2xl border border-gray-100 dark:border-gray-700">
+                            <h4 className="text-base sm:text-lg font-semibold text-gray-800 dark:text-white mb-3 sm:mb-4">Filter Data</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
                                 <div>
-                                    <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Dari Tanggal:</label>
+                                    <label htmlFor="startDate" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">Dari Tanggal:</label>
                                     <input
                                         type="date"
                                         id="startDate"
                                         value={startDate}
                                         onChange={(e) => setStartDate(e.target.value)}
-                                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        className="mt-1 block w-full rounded-md border border-gray-300 px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm"
                                     />
                                 </div>
 
                                 <div>
-                                    <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sampai Tanggal:</label>
+                                    <label htmlFor="endDate" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">Sampai Tanggal:</label>
                                     <input
                                         type="date"
                                         id="endDate"
                                         value={endDate}
                                         onChange={(e) => setEndDate(e.target.value)}
-                                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        className="mt-1 block w-full rounded-md border border-gray-300 px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm"
                                     />
                                 </div>
 
                                 <div>
-                                    <label htmlFor="section" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Section:</label>
+                                    <label htmlFor="section" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">Section:</label>
                                     <select
                                         id="section"
                                         value={selectedSection}
@@ -972,7 +898,7 @@ useEffect(() => {
                                             setSelectedSection(e.target.value);
                                             setSelectedSubSection('');
                                         }}
-                                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        className="mt-1 block w-full rounded-md border border-gray-300 px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm"
                                     >
                                         <option value="">Semua Section</option>
                                         {accessibleSections.map(section => (
@@ -982,12 +908,12 @@ useEffect(() => {
                                 </div>
 
                                 <div>
-                                    <label htmlFor="subSection" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Sub Section:</label>
+                                    <label htmlFor="subSection" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">Sub Section:</label>
                                     <select
                                         id="subSection"
                                         value={selectedSubSection}
                                         onChange={(e) => setSelectedSubSection(e.target.value)}
-                                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                        className="mt-1 block w-full rounded-md border border-gray-300 px-2 sm:px-3 py-1.5 sm:py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm"
                                     >
                                         <option value="">Semua Sub Section</option>
                                         {filteredSubSections.map(subSection => (
@@ -996,18 +922,18 @@ useEffect(() => {
                                     </select>
                                 </div>
 
-                                <div className="flex items-end gap-2">
+                                <div className="flex flex-col sm:flex-row items-end gap-2">
                                     <button
                                         onClick={applyFilters}
                                         disabled={isLoading}
-                                        className="flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 disabled:opacity-50 dark:bg-indigo-700 dark:hover:bg-indigo-600 w-full justify-center transition-colors"
+                                        className="flex items-center justify-center gap-2 rounded-md bg-indigo-600 px-3 sm:px-4 py-1.5 sm:py-2 text-white hover:bg-indigo-700 disabled:opacity-50 dark:bg-indigo-700 dark:hover:bg-indigo-600 w-full sm:w-auto transition-colors text-sm"
                                     >
                                         {isLoading ? 'Loading...' : 'Terapkan'}
                                     </button>
                                     <button
                                         onClick={clearFilters}
                                         disabled={isLoading}
-                                        className="flex items-center gap-2 rounded-md bg-gray-500 px-4 py-2 text-white hover:bg-gray-600 disabled:opacity-50 dark:bg-gray-600 dark:hover:bg-gray-500 w-full justify-center transition-colors"
+                                        className="flex items-center justify-center gap-2 rounded-md bg-gray-500 px-3 sm:px-4 py-1.5 sm:py-2 text-white hover:bg-gray-600 disabled:opacity-50 dark:bg-gray-600 dark:hover:bg-gray-500 w-full sm:w-auto transition-colors text-sm"
                                     >
                                         Reset
                                     </button>
@@ -1016,7 +942,6 @@ useEffect(() => {
                         </div>
                     )}
 
-                    {/* Content with loading states */}
                     <AnimatePresence mode="wait">
                         {isLoading ? (
                             <motion.div
@@ -1025,10 +950,10 @@ useEffect(() => {
                                 animate={{ opacity: 1 }}
                                 exit={{ opacity: 0 }}
                                 transition={{ duration: 0.3 }}
-                                className="text-center py-12"
+                                className="text-center py-8 sm:py-12"
                             >
-                                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-                                <p className="mt-4 text-gray-600 dark:text-gray-400">Memuat data...</p>
+                                <div className="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-indigo-600 mx-auto"></div>
+                                <p className="mt-3 sm:mt-4 text-sm sm:text-base text-gray-600 dark:text-gray-400">Memuat data...</p>
                             </motion.div>
                         ) : (
                             <motion.div
@@ -1042,9 +967,9 @@ useEffect(() => {
                                     <motion.div 
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
-                                        className="text-center py-12"
+                                        className="text-center py-8 sm:py-12"
                                     >
-                                        <p className="text-gray-500 dark:text-gray-400 text-lg">
+                                        <p className="text-gray-500 dark:text-gray-400 text-base sm:text-lg">
                                             Tidak ada jadwal ditemukan untuk filter yang dipilih.
                                         </p>
                                     </motion.div>
@@ -1060,70 +985,79 @@ useEffect(() => {
                                                 animate={{ opacity: 1, y: 0 }}
                                                 transition={{ duration: 0.5, delay: index * 0.1 }}
                                             >
-                                                {/* Date Header */}
-                                                <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl p-6 mb-6">
-                                                    <h2 className="text-2xl font-bold text-gray-800 dark:text-white text-center">
+                                                <div className="bg-gray-100 dark:bg-gray-700 rounded-xl sm:rounded-2xl p-4 sm:p-6 mb-4 sm:mb-6">
+                                                    <h2 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-800 dark:text-white text-center line-clamp-2">
                                                         {dateData.displayDate}
                                                     </h2>
                                                 </div>
 
-                                                {/* Sections */}
-                                               {Object.entries(sectionsForDate).map(([sectionName, sectionData]) => (
-    <ScheduleTableSection
-        key={`${dateKey}-${sectionName}`}
-        title={sectionName}
-        shifts={sectionData.shifts}
-        date={dateKey}
-        sectionId={sectionData.sectionId}
-        currentVisibility={sectionData.visibility}
-        user={user}
-        onToggleVisibility={() => 
-            handleToggleVisibility(dateKey, sectionData.sectionId, sectionData.visibility)
-        }
-        isAnyExpanded={expandedSectionId !== null}
-        onExpand={() => {
-            // Close all other expanded sections
-            setExpandedSectionId(sectionData.sectionId);
-        }}
-        lastUpdate={lastUpdate}
-    />
-))}
+                                                {Object.entries(sectionsForDate).map(([sectionName, sectionData]) => (
+                                                    <ScheduleTableSection
+                                                        key={`${dateKey}-${sectionName}`}
+                                                        title={sectionName}
+                                                        shifts={sectionData.shifts}
+                                                        date={dateKey}
+                                                        sectionId={sectionData.sectionId}
+                                                        currentVisibility={sectionData.visibility}
+                                                        user={user}
+                                                        onToggleVisibility={() => 
+                                                            handleToggleVisibility(dateKey, sectionData.sectionId, sectionData.visibility)
+                                                        }
+                                                        isAnyExpanded={expandedSectionId !== null}
+                                                        onExpand={() => {
+                                                            setExpandedSectionId(sectionData.sectionId);
+                                                        }}
+                                                        lastUpdate={lastUpdate}
+                                                    />
+                                                ))}
                                             </motion.div>
                                         );
                                     })
                                 )}
 
-                                {/* Pagination */}
                                 {totalPages > 1 && (
-                                    <div className="flex justify-between items-center mt-8 px-4">
-                                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6 sm:mt-8 px-2 sm:px-4">
+                                        <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
                                             Halaman {currentPage} dari {totalPages}
                                         </div>
-                                        <div className="flex space-x-2">
+                                        <div className="flex flex-wrap justify-center gap-1 sm:gap-2">
                                             <button
                                                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                                                 disabled={currentPage === 1}
-                                                className="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 disabled:opacity-50"
+                                                className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 disabled:opacity-50 text-xs sm:text-sm"
                                             >
-                                                Previous
+                                                Prev
                                             </button>
-                                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                                                <button
-                                                    key={page}
-                                                    onClick={() => setCurrentPage(page)}
-                                                    className={`px-4 py-2 rounded-md ${
-                                                        currentPage === page
-                                                            ? 'bg-indigo-600 text-white'
-                                                            : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                                                    }`}
-                                                >
-                                                    {page}
-                                                </button>
-                                            ))}
+                                            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                                let pageNum;
+                                                if (totalPages <= 5) {
+                                                    pageNum = i + 1;
+                                                } else if (currentPage <= 3) {
+                                                    pageNum = i + 1;
+                                                } else if (currentPage >= totalPages - 2) {
+                                                    pageNum = totalPages - 4 + i;
+                                                } else {
+                                                    pageNum = currentPage - 2 + i;
+                                                }
+                                                
+                                                return (
+                                                    <button
+                                                        key={pageNum}
+                                                        onClick={() => setCurrentPage(pageNum)}
+                                                        className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm ${
+                                                            currentPage === pageNum
+                                                                ? 'bg-indigo-600 text-white'
+                                                                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                                        }`}
+                                                    >
+                                                        {pageNum}
+                                                    </button>
+                                                );
+                                            })}
                                             <button
                                                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                                                 disabled={currentPage === totalPages}
-                                                className="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 disabled:opacity-50"
+                                                className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 disabled:opacity-50 text-xs sm:text-sm"
                                             >
                                                 Next
                                             </button>
