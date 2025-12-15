@@ -1,4 +1,3 @@
-// components/EmployeeModal.jsx - SIMPLIFIED VERSION
 import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import IncompleteSelectionModal from "./IncompleteSelectionModal";

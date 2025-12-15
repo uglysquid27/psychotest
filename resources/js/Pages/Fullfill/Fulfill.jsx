@@ -22,17 +22,11 @@ export default function Fulfill({
     const [enableLineAssignment, setEnableLineAssignment] = useState(false);
     const [lineAssignments, setLineAssignments] = useState({});
     const [lineAssignmentConfig, setLineAssignmentConfig] = useState({});
-    const [showRatioInfo, setShowRatioInfo] = useState(false); // NEW: Toggle for ratio info
-
-    // Helper function to check if request is from Inspeksi section
-    // Update the isInspeksiSection function in Fulfill.jsx:
-
-    // Helper function to check if request is from Inspeksi section
+    const [showRatioInfo, setShowRatioInfo] = useState(false); 
     const isInspeksiSection = useCallback((req) => {
         console.log("=== isInspeksiSection DEBUG ===");
         console.log("Full request object:", req);
 
-        // Try different property names
         const subSection = req?.subSection || req?.sub_section;
         console.log("subSection (camelCase):", req?.subSection);
         console.log("sub_section (snake_case):", req?.sub_section);
@@ -43,7 +37,6 @@ export default function Fulfill({
             return false;
         }
 
-        // Try different property names for section
         const section = subSection?.section || subSection?.section_data;
         console.log("section (camelCase):", subSection?.section);
         console.log("section_data:", subSection?.section_data);
@@ -78,7 +71,6 @@ export default function Fulfill({
         return result;
     }, [request, isInspeksiSection]);
 
-    // Add this useEffect to see all available properties:
     useEffect(() => {
         console.log("=== COMPLETE REQUEST STRUCTURE ===");
         console.log("All properties on request object:");
@@ -86,7 +78,6 @@ export default function Fulfill({
             console.log(`  ${key}:`, request[key]);
         });
 
-        // Check for nested relationships
         console.log("Checking for subSection variants:");
         const possibleSubSectionNames = [
             "subSection",
@@ -105,7 +96,6 @@ export default function Fulfill({
                     Object.keys(request[name])
                 );
 
-                // Check for section within subSection
                 const possibleSectionNames = [
                     "section",
                     "section_data",
@@ -196,13 +186,11 @@ export default function Fulfill({
 
     const allSortedEligibleEmployees = useMemo(() => {
         const sorted = [...combinedEmployees].sort((a, b) => {
-            // PRIORITY 1: Priority employees first (only for Inspeksi section)
             if (isInspeksiRequest) {
                 if (a.has_priority !== b.has_priority) {
                     return a.has_priority ? -1 : 1;
                 }
 
-                // PRIORITY 2: If both have priority, compare priority scores
                 if (
                     a.has_priority &&
                     b.has_priority &&
@@ -212,12 +200,10 @@ export default function Fulfill({
                 }
             }
 
-            // PRIORITY 3: Currently scheduled employees
             if (a.isCurrentlyScheduled !== b.isCurrentlyScheduled) {
                 return a.isCurrentlyScheduled ? -1 : 1;
             }
 
-            // PRIORITY 4: Exact subsection match
             const aIsSame = a.subSections.some(
                 (ss) => String(ss.id) === String(request.sub_section_id)
             );
@@ -227,12 +213,10 @@ export default function Fulfill({
 
             if (aIsSame !== bIsSame) return aIsSame ? -1 : 1;
 
-            // PRIORITY 5: Final score (which already includes priority)
             if (a.final_score !== b.final_score) {
                 return b.final_score - a.final_score;
             }
 
-            // PRIORITY 6: Gender matching
             const aGenderMatch =
                 request.male_count > 0 && a.gender === "male"
                     ? 0
@@ -248,11 +232,9 @@ export default function Fulfill({
             if (aGenderMatch !== bGenderMatch)
                 return aGenderMatch - bGenderMatch;
 
-            // PRIORITY 7: Employee type (bulanan first)
             if (a.type === "bulanan" && b.type === "harian") return -1;
             if (a.type === "harian" && b.type === "bulanan") return 1;
 
-            // PRIORITY 8: For harian employees, working day weight
             if (a.type === "harian" && b.type === "harian") {
                 return b.working_day_weight - a.working_day_weight;
             }
@@ -269,7 +251,6 @@ export default function Fulfill({
         isInspeksiRequest,
     ]);
 
-    // FIXED: Correct priority ratio calculation
     const getPriorityRatio = useCallback((requestedAmount) => {
         if (requestedAmount <= 2) {
             return 1; // 1:1 ratio for 1-2 employees
