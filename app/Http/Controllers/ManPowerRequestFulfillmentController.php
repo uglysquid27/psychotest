@@ -261,27 +261,35 @@ private function calculateTargetPriorityCount($requestedAmount)
     return min($target, $requestedAmount);
 }
 
-// UPDATED: Sort employees considering priority ratio
 private function sortEmployeesWithPriorityRatio($employees, $request)
 {
-    // Calculate how many priority employees we need based on ratio
-    $requestedAmount = $request->requested_amount;
-    $targetPriorityCount = $this->calculateTargetPriorityCount($requestedAmount);
+    // HANYA TERAPKAN SISTEM PRIORITAS JIKA SECTION INSPEKSI
+    $isInspeksi = $this->isInspeksiSection($request);
     
-    return $employees->sort(function ($a, $b) use ($request, $targetPriorityCount) {
-        // UPDATED: Priority employees should be prioritized only up to the target count
-        $hasPriorityA = $a['has_priority'];
-        $hasPriorityB = $b['has_priority'];
-        
-        // If we need priority employees, prioritize them
-        if ($targetPriorityCount > 0) {
-            if ($hasPriorityA !== $hasPriorityB) {
-                return $hasPriorityA ? -1 : 1;
-            }
+    $targetPriorityCount = 0;
+    if ($isInspeksi) {
+        // Calculate how many priority employees we need based on ratio
+        $requestedAmount = $request->requested_amount;
+        $targetPriorityCount = $this->calculateTargetPriorityCount($requestedAmount);
+    }
+    
+    return $employees->sort(function ($a, $b) use ($request, $isInspeksi, $targetPriorityCount) {
+        // JIKA SECTION INSPEKSI: Terapkan sistem prioritas
+        if ($isInspeksi) {
+            // UPDATED: Priority employees should be prioritized only up to the target count
+            $hasPriorityA = $a['has_priority'];
+            $hasPriorityB = $b['has_priority'];
             
-            // If both have priority, compare priority scores
-            if ($hasPriorityA && $hasPriorityB && $a['priority_score'] !== $b['priority_score']) {
-                return $b['priority_score'] <=> $a['priority_score'];
+            // If we need priority employees, prioritize them
+            if ($targetPriorityCount > 0) {
+                if ($hasPriorityA !== $hasPriorityB) {
+                    return $hasPriorityA ? -1 : 1;
+                }
+                
+                // If both have priority, compare priority scores
+                if ($hasPriorityA && $hasPriorityB && $a['priority_score'] !== $b['priority_score']) {
+                    return $b['priority_score'] <=> $a['priority_score'];
+                }
             }
         }
         
@@ -379,31 +387,50 @@ private function getGenderMatchScoreStatic($employee, $request)
         return min($workHours / 80, 1.0);
     }
 
-    private function calculatePriorityScore($employee, $manpowerRequest)
-    {
-        $priorityScore = 0.0;
-
-        // Check if employee has priority for this subsection
-        $priorities = EmployeePickingPriority::where('employee_id', $employee->id)
-            ->where(function ($query) use ($manpowerRequest) {
-                $query->whereJsonContains('metadata->sub_section_ids', (string) $manpowerRequest->sub_section_id)
-                    ->orWhereNull('metadata->sub_section_ids')
-                    ->orWhere('metadata->sub_section_ids', '[]');
-            })
-            ->get();
-
-        if ($priorities->isEmpty()) {
-            return 0.0;
-        }
-
-        // Sum up all applicable priority multipliers
-        foreach ($priorities as $priority) {
-            $priorityScore += $priority->weight_multiplier;
-        }
-
-        // Normalize score (cap at 3.0 for scaling)
-        return min(3.0, $priorityScore) * 0.05; // Scale to 0-0.15 range
+   private function isInspeksiSection($request)
+{
+    if (!$request->subSection) {
+        return false;
     }
+    
+    if (!$request->subSection->section) {
+        return false;
+    }
+    
+    $sectionName = strtolower(trim($request->subSection->section->name));
+    return $sectionName === 'inspeksi';
+}
+
+    private function calculatePriorityScore($employee, $manpowerRequest)
+{
+    // HITUNG PRIORITAS HANYA JIKA REQUEST DARI SECTION INSPEKSI
+    if (!$this->isInspeksiSection($manpowerRequest)) {
+        return 0.0;
+    }
+    
+    $priorityScore = 0.0;
+
+    // Check if employee has priority for this subsection
+    $priorities = EmployeePickingPriority::where('employee_id', $employee->id)
+        ->where(function ($query) use ($manpowerRequest) {
+            $query->whereJsonContains('metadata->sub_section_ids', (string) $manpowerRequest->sub_section_id)
+                ->orWhereNull('metadata->sub_section_ids')
+                ->orWhere('metadata->sub_section_ids', '[]');
+        })
+        ->get();
+
+    if ($priorities->isEmpty()) {
+        return 0.0;
+    }
+
+    // Sum up all applicable priority multipliers
+    foreach ($priorities as $priority) {
+        $priorityScore += $priority->weight_multiplier;
+    }
+
+    // Normalize score (cap at 3.0 for scaling)
+    return min(3.0, $priorityScore) * 0.05; // Scale to 0-0.15 range
+}
 
     private function sortEmployeesWithPriority($employees, $request)
     {
@@ -535,33 +562,33 @@ private function getGenderMatchScoreStatic($employee, $request)
     }
 
     private function calculateMLPriorityScore($employee, $manpowerRequest)
-    {
-        try {
-            $mlService = app(SimpleMLService::class);
+{
+    try {
+        $mlService = app(SimpleMLService::class);
 
-            if (!$mlService->isModelTrained()) {
-                return $this->calculateFallbackMLScore($employee, $manpowerRequest);
-            }
-
-            $features = [
-                'work_days_count' => $this->getWorkDaysCount($employee, 30),
-                'rating_value' => $this->getAverageRating($employee),
-                'test_score' => $this->getTestScore($employee),
-                'gender' => $employee->gender === 'male' ? 1 : 0,
-                'employee_type' => $employee->type === 'bulanan' ? 1 : 0,
-                'same_subsection' => $this->isSameSubsection($employee, $manpowerRequest) ? 1 : 0,
-                'same_section' => $this->isSameSection($employee, $manpowerRequest) ? 1 : 0,
-                'current_workload' => $this->getCurrentWorkload14Days($employee),
-                'shift_priority' => $this->calculateShiftPriority($employee, $manpowerRequest),
-            ];
-
-            $predictions = $mlService->predict([$features]);
-            return $predictions[0] ?? 0.5;
-
-        } catch (\Exception $e) {
+        if (!$mlService->isModelTrained()) {
             return $this->calculateFallbackMLScore($employee, $manpowerRequest);
         }
+
+        $features = [
+            'work_days_count' => $this->getWorkDaysCount($employee, 30),
+            'rating_value' => $this->getAverageRating($employee),
+            'test_score' => $this->getTestScore($employee),
+            'gender' => $employee->gender === 'male' ? 1 : 0,
+            'employee_type' => $employee->type === 'bulanan' ? 1 : 0,
+            'same_subsection' => $this->isSameSubsection($employee, $manpowerRequest) ? 1 : 0,
+            'same_section' => $this->isSameSection($employee, $manpowerRequest) ? 1 : 0,
+            'current_workload' => $this->getCurrentWorkload14Days($employee),
+            'shift_priority' => $this->calculateShiftPriority($employee, $manpowerRequest),
+        ];
+
+        $predictions = $mlService->predict([$features]);
+        return $predictions[0] ?? 0.5;
+
+    } catch (\Exception $e) {
+        return $this->calculateFallbackMLScore($employee, $manpowerRequest);
     }
+}
 
     private function getAverageRating($employee)
     {

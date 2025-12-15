@@ -8,7 +8,7 @@ export default function EmployeeSelection({
     openChangeModal,
     multiSelectMode,
     toggleMultiSelectMode,
-    isPutwaySubsection,
+    isInspeksiRequest = false, // ADD THIS PROP
     lineAssignments,
     priorityPositions = []
 }) {
@@ -25,9 +25,9 @@ export default function EmployeeSelection({
         return emp.type === 'harian' && emp.work_days_30_days >= 21;
     };
 
-    // Check if position is a priority position
+    // Check if position is a priority position (only for Inspeksi)
     const isPriorityPosition = (position) => {
-        return priorityPositions.includes(position);
+        return isInspeksiRequest && priorityPositions.includes(position);
     };
 
     // Get position badge color based on priority status
@@ -38,8 +38,8 @@ export default function EmployeeSelection({
             }
             return 'bg-yellow-600 dark:bg-yellow-500'; // Priority position without priority employee
         }
-        if (emp && emp.has_priority) {
-            return 'bg-blue-600 dark:bg-blue-500'; // Priority employee in non-priority position
+        if (emp && emp.has_priority && isInspeksiRequest) {
+            return 'bg-blue-600 dark:bg-blue-500'; // Priority employee in non-priority position (Inspeksi only)
         }
         return 'bg-gray-400 dark:bg-gray-600'; // Normal position
     };
@@ -47,9 +47,25 @@ export default function EmployeeSelection({
     // Get position badge text
     const getPositionBadgeText = (position, emp) => {
         if (isPriorityPosition(position)) {
-            return '★'; // Star for priority positions
+            return '★'; // Star for priority positions (Inspeksi only)
         }
         return position;
+    };
+
+    // Get position badge tooltip
+    const getPositionBadgeTooltip = (position, emp) => {
+        if (!isInspeksiRequest) return `Position ${position}`;
+        
+        if (isPriorityPosition(position)) {
+            if (emp && emp.has_priority) {
+                return `Priority Position ${position} - Filled with priority employee`;
+            }
+            return `Priority Position ${position} - Needs priority employee`;
+        }
+        if (emp && emp.has_priority) {
+            return `Position ${position} - Priority employee`;
+        }
+        return `Position ${position}`;
     };
 
     // Handle info button click
@@ -91,6 +107,32 @@ export default function EmployeeSelection({
         }
     };
 
+    // Calculate priority ratio description (only for Inspeksi)
+    const getRatioDescription = (requestedAmount) => {
+        if (!isInspeksiRequest) return "N/A";
+        if (requestedAmount <= 2) return "1:1";
+        if (requestedAmount <= 4) return "1:2";
+        return "1:3";
+    };
+
+    // Calculate target priority count (only for Inspeksi)
+    const calculateTargetPriorityCount = (requestedAmount) => {
+        if (!isInspeksiRequest) return 0;
+        if (requestedAmount <= 2) return 1;
+        if (requestedAmount <= 4) return Math.max(1, Math.floor(requestedAmount * 0.5));
+        return Math.min(Math.ceil(requestedAmount / 3), requestedAmount);
+    };
+
+    // Get current priority count
+    const currentPriorityCount = selectedIds.reduce((count, id) => {
+        const emp = getEmployeeDetails(id);
+        return count + (emp?.has_priority ? 1 : 0);
+    }, 0);
+
+    // Calculate target priority count for this request
+    const targetPriorityCount = calculateTargetPriorityCount(request.requested_amount);
+    const ratioDescription = getRatioDescription(request.requested_amount);
+
     return (
         <div className="bg-white dark:bg-gray-800 shadow-md mb-4 p-4 sm:p-6 rounded-lg">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
@@ -99,25 +141,43 @@ export default function EmployeeSelection({
                         <h3 className="font-bold text-gray-900 dark:text-gray-100 text-lg sm:text-xl">
                             Karyawan yang Dipilih
                         </h3>
-                        <button
-                            type="button"
-                            onClick={handleInfoClick}
-                            className="ml-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 focus:outline-none"
-                            title="Show priority position info"
-                        >
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                            </svg>
-                        </button>
+                        {isInspeksiRequest && priorityPositions.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={handleInfoClick}
+                                className="ml-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 focus:outline-none"
+                                title="Show priority position info"
+                            >
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                </svg>
+                            </button>
+                        )}
                     </div>
                     <p className="text-gray-600 dark:text-gray-400 text-sm sm:text-base">
                         {selectedIds.length} dari {request.requested_amount} karyawan terpilih
-                        {priorityPositions.length > 0 && (
+                        {isInspeksiRequest && priorityPositions.length > 0 && (
                             <span className="ml-2 text-xs text-yellow-600 dark:text-yellow-400">
                                 (★ = Priority Position)
                             </span>
                         )}
                     </p>
+                    {isInspeksiRequest && (
+                        <div className="mt-1 flex items-center space-x-3 text-xs">
+                            <span className="text-gray-500 dark:text-gray-400">
+                                Ratio: <span className="font-medium">{ratioDescription}</span>
+                            </span>
+                            <span className="text-gray-500 dark:text-gray-400">
+                                Target Priority: <span className="font-medium">{targetPriorityCount}</span>
+                            </span>
+                            <span className={`${currentPriorityCount < targetPriorityCount ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'}`}>
+                                Current: <span className="font-medium">{currentPriorityCount}</span>
+                                {currentPriorityCount < targetPriorityCount && (
+                                    <span className="ml-1">(Need {targetPriorityCount - currentPriorityCount} more)</span>
+                                )}
+                            </span>
+                        </div>
+                    )}
                 </div>
                 
                 <div className="flex flex-wrap gap-2">
@@ -139,8 +199,8 @@ export default function EmployeeSelection({
                 </div>
             </div>
 
-            {/* Priority Info Panel (Collapsible) */}
-            {showPriorityInfo && (
+            {/* Priority Info Panel (Collapsible) - Only for Inspeksi */}
+            {showPriorityInfo && isInspeksiRequest && (
                 <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
@@ -150,10 +210,10 @@ export default function EmployeeSelection({
                     <div className="flex justify-between items-start">
                         <div>
                             <h4 className="font-semibold text-blue-800 dark:text-blue-300 text-sm mb-2">
-                                Priority Position Guide
+                                Priority Position Guide (Inspeksi Section Only)
                             </h4>
                             <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
-                                Positions marked with ★ should ideally be filled with priority employees according to the {priorityPositions.length > 1 ? '1:3' : '1:2'} ratio.
+                                Positions marked with ★ should ideally be filled with priority employees according to the {ratioDescription} ratio.
                             </p>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                                 <div className="flex items-center p-2 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-700">
@@ -184,6 +244,16 @@ export default function EmployeeSelection({
                                     </div>
                                 </div>
                             </div>
+                            <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                                <p><span className="font-medium">Priority Positions:</span> {priorityPositions.map(p => `#${p}`).join(', ')}</p>
+                                <p><span className="font-medium">Target:</span> {targetPriorityCount} priority employees needed out of {request.requested_amount} total</p>
+                                <p><span className="font-medium">Current:</span> {currentPriorityCount} priority employees selected</p>
+                                {currentPriorityCount < targetPriorityCount && (
+                                    <p className="text-yellow-600 dark:text-yellow-400 font-medium mt-1">
+                                        ⚠️ Need {targetPriorityCount - currentPriorityCount} more priority employee(s)
+                                    </p>
+                                )}
+                            </div>
                         </div>
                         <button
                             type="button"
@@ -213,6 +283,7 @@ export default function EmployeeSelection({
                     const isPriorityPos = isPriorityPosition(position);
                     const positionBadgeColor = getPositionBadgeColor(position, emp);
                     const positionBadgeText = getPositionBadgeText(position, emp);
+                    const positionBadgeTooltip = getPositionBadgeTooltip(position, emp);
 
                     return (
                         <motion.div
@@ -233,15 +304,15 @@ export default function EmployeeSelection({
                             } ${isPriorityPos ? 'ring-1 ring-yellow-400 dark:ring-yellow-500' : ''}`}
                         >
                             {/* Position Badge with Priority Indicator */}
-                            <div className="absolute -top-2 -left-2 z-20">
+                            <div className="absolute -top-2 -left-2 z-20" title={positionBadgeTooltip}>
                                 <div className={`w-6 h-6 rounded-full ${positionBadgeColor} flex items-center justify-center text-white text-xs font-bold`}>
                                     {positionBadgeText}
                                 </div>
                             </div>
 
-                            {/* Priority Employee Badge */}
-                            {emp.has_priority && !isPriorityPos && (
-                                <div className="absolute -top-2 -right-2 z-20">
+                            {/* Priority Employee Badge (Inspeksi only) */}
+                            {emp.has_priority && isInspeksiRequest && !isPriorityPos && (
+                                <div className="absolute -top-2 -right-2 z-20" title="Priority Employee">
                                     <div className="w-6 h-6 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
                                         P
                                     </div>
@@ -287,13 +358,13 @@ export default function EmployeeSelection({
                                 <div className="flex justify-between items-start mb-2">
                                     <h4 className="font-semibold text-gray-900 dark:text-gray-100 text-sm sm:text-base truncate">
                                         {emp.name}
-                                        {emp.has_priority && (
+                                        {emp.has_priority && isInspeksiRequest && (
                                             <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">(Priority)</span>
                                         )}
                                     </h4>
                                     <div className="flex items-center gap-2">
-                                        {/* Priority Score Badge */}
-                                        {emp.has_priority && (
+                                        {/* Priority Score Badge (Inspeksi only) */}
+                                        {emp.has_priority && isInspeksiRequest && (
                                             <span className="text-xs px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 font-bold">
                                                 Score: {emp.priority_score?.toFixed(2) || '0.00'}
                                             </span>
@@ -322,7 +393,7 @@ export default function EmployeeSelection({
                                 </div>
                                 
                                 {/* ML Scores Section */}
-                                {/* <div className="mt-2 grid grid-cols-3 gap-1 text-xs border-t pt-2 border-gray-200 dark:border-gray-600">
+                                <div className="mt-2 grid grid-cols-3 gap-1 text-xs border-t pt-2 border-gray-200 dark:border-gray-600">
                                     <div>
                                         <span className="font-medium">Base:</span>
                                         <br />
@@ -338,7 +409,7 @@ export default function EmployeeSelection({
                                         <br />
                                         {emp.final_score?.toFixed(2) || '0.00'}
                                     </div>
-                                </div> */}
+                                </div>
                                 
                                 {/* Additional Info */}
                                 <div className="mt-2 grid grid-cols-2 gap-1 text-xs">
@@ -364,8 +435,8 @@ export default function EmployeeSelection({
                                 </div>
                             </div>
 
-                            {/* Position Status Info */}
-                            {isPriorityPos && !emp.has_priority && (
+                            {/* Position Status Info (Inspeksi only) */}
+                            {isInspeksiRequest && isPriorityPos && !emp.has_priority && (
                                 <div className="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded text-xs text-yellow-700 dark:text-yellow-300">
                                     <div className="flex items-center">
                                         <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
@@ -403,6 +474,9 @@ export default function EmployeeSelection({
                     const isPriorityPos = isPriorityPosition(emptySlotPosition);
                     const positionBadgeColor = isPriorityPos ? 'bg-yellow-600 dark:bg-yellow-500' : 'bg-gray-400 dark:bg-gray-600';
                     const positionBadgeText = isPriorityPos ? '★' : emptySlotPosition;
+                    const positionBadgeTooltip = isPriorityPos 
+                        ? `Priority Position ${emptySlotPosition} - Needs priority employee` 
+                        : `Position ${emptySlotPosition}`;
 
                     return (
                         <motion.div
@@ -415,7 +489,7 @@ export default function EmployeeSelection({
                             }`}
                         >
                             {/* Empty Slot Position Badge */}
-                            <div className="absolute -top-2 -left-2 z-20">
+                            <div className="absolute -top-2 -left-2 z-20" title={positionBadgeTooltip}>
                                 <div className={`w-6 h-6 rounded-full ${positionBadgeColor} flex items-center justify-center text-white text-xs font-bold`}>
                                     {positionBadgeText}
                                 </div>
@@ -436,9 +510,9 @@ export default function EmployeeSelection({
                             <p className="text-gray-400 dark:text-gray-500 text-xs mt-1">
                                 Klik ubah pilihan untuk menambahkan
                             </p>
-                            {isPriorityPos && (
+                            {isPriorityPos && isInspeksiRequest && (
                                 <p className="text-yellow-600 dark:text-yellow-400 text-xs mt-1 font-medium">
-                                    ★ Prioritas: Pilih karyawan priority untuk posisi ini
+                                    ★ Priority position - select priority employee if available
                                 </p>
                             )}
                         </motion.div>
@@ -460,6 +534,35 @@ export default function EmployeeSelection({
                         </svg>
                         <p className="text-yellow-700 dark:text-yellow-300 text-sm">
                             Beberapa karyawan yang dipilih sudah ditugaskan di request lain. Mereka mungkin tidak tersedia.
+                        </p>
+                    </div>
+                </motion.div>
+            )}
+
+            {/* Priority Status Summary (Inspeksi only) */}
+            {isInspeksiRequest && targetPriorityCount > 0 && (
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`mt-4 p-3 rounded-lg border ${
+                        currentPriorityCount >= targetPriorityCount
+                            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700'
+                            : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700'
+                    }`}
+                >
+                    <div className="flex items-center">
+                        <div className={`w-3 h-3 rounded-full mr-2 ${
+                            currentPriorityCount >= targetPriorityCount ? 'bg-green-500' : 'bg-yellow-500'
+                        }`}></div>
+                        <p className={`text-sm ${
+                            currentPriorityCount >= targetPriorityCount
+                                ? 'text-green-700 dark:text-green-300'
+                                : 'text-yellow-700 dark:text-yellow-300'
+                        }`}>
+                            <span className="font-medium">Priority Status:</span> {currentPriorityCount} of {targetPriorityCount} target priority employees selected ({ratioDescription} ratio)
+                            {currentPriorityCount < targetPriorityCount && (
+                                <span className="ml-1 font-medium">⚠️ Need {targetPriorityCount - currentPriorityCount} more</span>
+                            )}
                         </p>
                     </div>
                 </motion.div>

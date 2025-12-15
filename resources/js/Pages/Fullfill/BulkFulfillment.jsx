@@ -27,6 +27,19 @@ export default function BulkFulfillment({
     // New state for full screen mode
     const [isFullScreen, setIsFullScreen] = useState(false);
 
+    // Helper function to check if request is from Inspeksi section
+    const isInspeksiSection = useCallback((req) => {
+        if (!req?.sub_section) return false;
+        if (!req?.sub_section?.section) return false;
+        const sectionName = (req.sub_section.section.name || '').toLowerCase().trim();
+        return sectionName === 'inspeksi';
+    }, []);
+
+    // Check if current request is from Inspeksi section
+    const isCurrentRequestInspeksi = useMemo(() => {
+        return isInspeksiSection(currentRequest);
+    }, [currentRequest, isInspeksiSection]);
+
     // Helper functions that don't depend on other hooks
     const getEmployeeDetails = useCallback(
         (employeeId) => {
@@ -235,21 +248,62 @@ export default function BulkFulfillment({
         return 1; // No match
     }, []);
 
-    // Sort employees with proper priority: exact subsection > same section > ML score
+    // Calculate priority ratio
+    const calculatePriorityRatio = useCallback((requestedAmount) => {
+        if (requestedAmount <= 2) return 1; // 1:1
+        else if (requestedAmount <= 4) return 0.5; // 1:2
+        else return 0.333; // 1:3
+    }, []);
+
+    // Calculate target priority count
+    const calculateTargetPriorityCount = useCallback((requestedAmount) => {
+        const ratio = calculatePriorityRatio(requestedAmount);
+        const target = Math.max(1, Math.floor(requestedAmount * ratio));
+        
+        if (requestedAmount >= 5) {
+            return Math.min(Math.ceil(requestedAmount / 3), requestedAmount);
+        }
+        
+        return Math.min(target, requestedAmount);
+    }, [calculatePriorityRatio]);
+
+    // Get priority positions
+    const getPriorityPositions = useCallback((requestedAmount) => {
+        const targetPriorityCount = calculateTargetPriorityCount(requestedAmount);
+        const positions = [];
+
+        if (targetPriorityCount === 1) {
+            positions.push(1);
+        } else if (targetPriorityCount === 2) {
+            positions.push(1, Math.ceil(requestedAmount / 2));
+        } else {
+            const step = Math.floor(requestedAmount / targetPriorityCount);
+            for (let i = 0; i < targetPriorityCount; i++) {
+                positions.push(Math.min(i * step + 1, requestedAmount));
+            }
+        }
+
+        return positions.sort((a, b) => a - b);
+    }, [calculateTargetPriorityCount]);
+
+    // Sort employees with proper priority: only apply priority for Inspeksi section
     const sortEmployeesForRequest = useCallback(
         (employees, request) => {
             const requestSubSectionId = String(request.sub_section_id);
             const requestSectionId = String(request.sub_section?.section_id);
+            const isInspeksi = isInspeksiSection(request);
 
             return [...employees].sort((a, b) => {
-                // Priority 1: Priority employees first
-                if (a.has_priority !== b.has_priority) {
-                    return a.has_priority ? -1 : 1;
-                }
-                
-                // Priority 2: If both have priority, compare priority scores
-                if (a.has_priority && b.has_priority && a.priority_score !== b.priority_score) {
-                    return b.priority_score - a.priority_score;
+                // Priority 1: Priority employees first (only for Inspeksi)
+                if (isInspeksi) {
+                    if (a.has_priority !== b.has_priority) {
+                        return a.has_priority ? -1 : 1;
+                    }
+                    
+                    // Priority 2: If both have priority, compare priority scores
+                    if (a.has_priority && b.has_priority && a.priority_score !== b.priority_score) {
+                        return b.priority_score - a.priority_score;
+                    }
                 }
 
                 // Priority 3: Exact subsection match
@@ -291,132 +345,30 @@ export default function BulkFulfillment({
                 return String(a.id).localeCompare(String(b.id));
             });
         },
-        [hasExactSubsectionMatch, hasSameSectionMatch, getGenderMatchScore]
+        [hasExactSubsectionMatch, hasSameSectionMatch, getGenderMatchScore, isInspeksiSection]
     );
 
-    // Auto-fill employees based on strategy with proper subsection priority
-    const handleAutoFill = useCallback(() => {
-        if (selectedRequests.length === 0) return;
-
-        const newBulkSelectedEmployees = { ...bulkSelectedEmployees };
-        const usedEmployeeIds = new Set();
-
-        // Get all currently used employees
-        Object.values(newBulkSelectedEmployees).forEach((employees) => {
-            employees.forEach((empId) => usedEmployeeIds.add(empId));
-        });
-
-        let availableEmployees = allSortedEligibleEmployees.filter(
-            (emp) =>
-                !usedEmployeeIds.has(String(emp.id)) &&
-                emp.status === "available"
-        );
-
-        selectedRequests.forEach((requestId) => {
-            const request = sameSectionRequests.find(
-                (req) => String(req.id) === requestId
-            );
-            if (!request) return;
-
-            const requiredMale = request.male_count || 0;
-            const requiredFemale = request.female_count || 0;
-            const totalRequired = request.requested_amount;
-
-            // Sort employees for this specific request with proper priority
-            const sortedEmployees = sortEmployeesForRequest(
-                availableEmployees,
-                request
-            );
-
-            const selectedForRequest = [];
-
-            // Select required males with proper priority
-            const maleCandidates = sortedEmployees.filter(
-                (emp) => emp.gender === "male"
-            );
-            for (
-                let i = 0;
-                i < requiredMale && maleCandidates.length > 0;
-                i++
-            ) {
-                const candidate = maleCandidates[i];
-                selectedForRequest.push(String(candidate.id));
-                usedEmployeeIds.add(String(candidate.id));
-            }
-
-            // Select required females with proper priority
-            const femaleCandidates = sortedEmployees.filter(
-                (emp) => emp.gender === "female"
-            );
-            for (
-                let i = 0;
-                i < requiredFemale && femaleCandidates.length > 0;
-                i++
-            ) {
-                const candidate = femaleCandidates[i];
-                selectedForRequest.push(String(candidate.id));
-                usedEmployeeIds.add(String(candidate.id));
-            }
-
-            // Fill remaining slots with proper priority
-            const remainingSlots = totalRequired - selectedForRequest.length;
-            if (remainingSlots > 0) {
-                const otherCandidates = sortedEmployees
-                    .filter(
-                        (emp) => !selectedForRequest.includes(String(emp.id))
-                    )
-                    .slice(0, remainingSlots);
-
-                otherCandidates.forEach((candidate) => {
-                    selectedForRequest.push(String(candidate.id));
-                    usedEmployeeIds.add(String(candidate.id));
-                });
-            }
-
-            // Update available employees by removing used ones
-            availableEmployees = availableEmployees.filter(
-                (emp) => !selectedForRequest.includes(String(emp.id))
-            );
-
-            newBulkSelectedEmployees[requestId] = selectedForRequest.slice(
-                0,
-                totalRequired
-            );
-        });
-
-        setBulkSelectedEmployees(newBulkSelectedEmployees);
-    }, [
-        selectedRequests,
-        bulkSelectedEmployees,
-        allSortedEligibleEmployees,
-        sameSectionRequests,
-        sortEmployeesForRequest,
-    ]);
-
-    // Auto-fill all requests with strict 1:3 priority ratio
-const handleAutoFillAll = useCallback(() => {
+ // Fixed Auto-fill for selected requests with proper priority handling
+const handleAutoFill = useCallback(() => {
     if (selectedRequests.length === 0) return;
 
-    const newBulkSelectedEmployees = {};
+    const newBulkSelectedEmployees = { ...bulkSelectedEmployees };
     const usedEmployeeIds = new Set();
 
-    // Separate priority and non-priority employees
-    const allEmployees = [...allSortedEligibleEmployees].filter(
-        (emp) => emp.status === "available"
+    // Get all currently used employees
+    Object.values(newBulkSelectedEmployees).forEach((employees) => {
+        employees.forEach((empId) => usedEmployeeIds.add(empId));
+    });
+
+    let availableEmployees = allSortedEligibleEmployees.filter(
+        (emp) =>
+            !usedEmployeeIds.has(String(emp.id)) &&
+            emp.status === "available"
     );
 
-    const priorityEmployees = allEmployees.filter(emp => emp.has_priority);
-    const nonPriorityEmployees = allEmployees.filter(emp => !emp.has_priority);
+    console.log(`Auto Fill Selected: ${availableEmployees.length} available employees`);
 
-    console.log(`Available: ${allEmployees.length} total, ${priorityEmployees.length} priority, ${nonPriorityEmployees.length} non-priority`);
-
-    // Create queues
-    const priorityQueue = [...priorityEmployees];
-    const nonPriorityQueue = [...nonPriorityEmployees];
-
-    // Target ratio: 1 priority for every 3 non-priority (25% priority, 75% non-priority)
-    const TARGET_PRIORITY_RATIO = 0.25; // 1:3 ratio
-
+    // Process each selected request
     selectedRequests.forEach((requestId) => {
         const request = sameSectionRequests.find(
             (req) => String(req.id) === requestId
@@ -426,170 +378,377 @@ const handleAutoFillAll = useCallback(() => {
         const requiredMale = request.male_count || 0;
         const requiredFemale = request.female_count || 0;
         const totalRequired = request.requested_amount;
+        const isInspeksi = isInspeksiSection(request);
+
+        // Calculate target priority count (only for Inspeksi)
+        const targetPriorityCount = isInspeksi ? 
+            calculateTargetPriorityCount(totalRequired) : 0;
+
+        console.log(`Request ${requestId}: ${totalRequired} total, ${targetPriorityCount} target priority (Inspeksi: ${isInspeksi})`);
+
+        // Sort employees for this specific request
+        const sortedEmployees = sortEmployeesForRequest(
+            availableEmployees,
+            request
+        );
 
         const selectedForRequest = [];
         
-        // Helper functions
-        const getNextEmployee = (gender, isPriority = false) => {
-            const source = isPriority ? priorityQueue : nonPriorityQueue;
-            for (let i = 0; i < source.length; i++) {
-                const emp = source[i];
-                if (!usedEmployeeIds.has(String(emp.id)) && emp.gender === gender) {
-                    source.splice(i, 1);
-                    return emp;
-                }
-            }
-            return null;
-        };
+        // Separate priority and non-priority employees
+        const priorityEmployees = sortedEmployees.filter(emp => emp.has_priority);
+        const nonPriorityEmployees = sortedEmployees.filter(emp => !emp.has_priority);
 
-        const getNextAnyEmployee = (isPriority = false) => {
-            const source = isPriority ? priorityQueue : nonPriorityQueue;
-            for (let i = 0; i < source.length; i++) {
-                const emp = source[i];
-                if (!usedEmployeeIds.has(String(emp.id))) {
-                    source.splice(i, 1);
-                    return emp;
-                }
-            }
-            return null;
-        };
+        console.log(`  Available: ${priorityEmployees.length} priority, ${nonPriorityEmployees.length} non-priority`);
 
-        // Calculate target priority count for 1:3 ratio
-        const targetPriorityCount = Math.floor(totalRequired * TARGET_PRIORITY_RATIO);
-        const maxPriorityCount = Math.min(targetPriorityCount, priorityQueue.length);
-        const priorityCountForRequest = Math.max(0, maxPriorityCount);
-
-        console.log(`Request ${requestId}: Target ${targetPriorityCount} priority out of ${totalRequired} total`);
-
-        // Phase 1: Fill with priority employees (up to target ratio)
+        // Phase 1: Fill priority slots for Inspeksi section
         let priorityUsed = 0;
-        for (let i = 0; i < priorityCountForRequest && selectedForRequest.length < totalRequired; i++) {
-            let employee = null;
-            
-            // Check gender requirements first
-            const currentMaleCount = selectedForRequest.filter(id => {
-                const emp = getEmployeeDetails(id);
-                return emp && emp.gender === 'male';
-            }).length;
-            
-            const currentFemaleCount = selectedForRequest.filter(id => {
-                const emp = getEmployeeDetails(id);
-                return emp && emp.gender === 'female';
-            }).length;
-
-            if (requiredMale > currentMaleCount) {
-                employee = getNextEmployee('male', true);
-            }
-            
-            if (!employee && requiredFemale > currentFemaleCount) {
-                employee = getNextEmployee('female', true);
-            }
-            
-            if (!employee) {
-                employee = getNextAnyEmployee(true);
-            }
-            
-            if (employee) {
-                selectedForRequest.push(String(employee.id));
-                usedEmployeeIds.add(String(employee.id));
-                priorityUsed++;
+        if (isInspeksi && targetPriorityCount > 0) {
+            for (let i = 0; i < targetPriorityCount && selectedForRequest.length < totalRequired; i++) {
+                let priorityEmp = priorityEmployees.find(emp => 
+                    !selectedForRequest.includes(String(emp.id))
+                );
+                
+                if (priorityEmp) {
+                    selectedForRequest.push(String(priorityEmp.id));
+                    usedEmployeeIds.add(String(priorityEmp.id));
+                    priorityUsed++;
+                    console.log(`  - Added priority employee #${priorityUsed}: ${priorityEmp.name}`);
+                } else {
+                    console.log(`  - No more priority employees available (need ${targetPriorityCount - priorityUsed} more)`);
+                    break;
+                }
             }
         }
 
-        // Phase 2: Fill gender requirements with non-priority
-        // Males
-        for (let i = 0; i < requiredMale; i++) {
-            const currentMaleCount = selectedForRequest.filter(id => {
-                const emp = getEmployeeDetails(id);
-                return emp && emp.gender === 'male';
-            }).length;
+        // Phase 2: Fill gender requirements with any available employees
+        // Fill required males
+        let maleCount = 0;
+        while (maleCount < requiredMale && selectedForRequest.length < totalRequired) {
+            // Try to find male employee
+            let maleEmp = sortedEmployees.find(emp => 
+                emp.gender === 'male' && 
+                !selectedForRequest.includes(String(emp.id)) &&
+                !usedEmployeeIds.has(String(emp.id))
+            );
             
-            if (currentMaleCount >= requiredMale) break;
-            
-            let employee = getNextEmployee('male', false);
-            if (!employee && priorityQueue.length > 0) {
-                employee = getNextEmployee('male', true);
-            }
-            
-            if (employee && selectedForRequest.length < totalRequired) {
-                selectedForRequest.push(String(employee.id));
-                usedEmployeeIds.add(String(employee.id));
-                if (employee.has_priority) priorityUsed++;
-            }
-        }
-
-        // Females
-        for (let i = 0; i < requiredFemale; i++) {
-            const currentFemaleCount = selectedForRequest.filter(id => {
-                const emp = getEmployeeDetails(id);
-                return emp && emp.gender === 'female';
-            }).length;
-            
-            if (currentFemaleCount >= requiredFemale) break;
-            
-            let employee = getNextEmployee('female', false);
-            if (!employee && priorityQueue.length > 0) {
-                employee = getNextEmployee('female', true);
-            }
-            
-            if (employee && selectedForRequest.length < totalRequired) {
-                selectedForRequest.push(String(employee.id));
-                usedEmployeeIds.add(String(employee.id));
-                if (employee.has_priority) priorityUsed++;
+            if (maleEmp) {
+                selectedForRequest.push(String(maleEmp.id));
+                usedEmployeeIds.add(String(maleEmp.id));
+                maleCount++;
+                if (maleEmp.has_priority) priorityUsed++;
+                console.log(`  - Added male employee: ${maleEmp.name} ${maleEmp.has_priority ? '(priority)' : ''}`);
+            } else {
+                console.log(`  - No more male employees available`);
+                break;
             }
         }
 
-        // Phase 3: Fill remaining slots maintaining approximate 1:3 ratio
+        // Fill required females
+        let femaleCount = 0;
+        while (femaleCount < requiredFemale && selectedForRequest.length < totalRequired) {
+            // Try to find female employee
+            let femaleEmp = sortedEmployees.find(emp => 
+                emp.gender === 'female' && 
+                !selectedForRequest.includes(String(emp.id)) &&
+                !usedEmployeeIds.has(String(emp.id))
+            );
+            
+            if (femaleEmp) {
+                selectedForRequest.push(String(femaleEmp.id));
+                usedEmployeeIds.add(String(femaleEmp.id));
+                femaleCount++;
+                if (femaleEmp.has_priority) priorityUsed++;
+                console.log(`  - Added female employee: ${femaleEmp.name} ${femaleEmp.has_priority ? '(priority)' : ''}`);
+            } else {
+                console.log(`  - No more female employees available`);
+                break;
+            }
+        }
+
+        // Phase 3: Fill remaining slots with any available employees
         while (selectedForRequest.length < totalRequired) {
-            // Calculate current ratio
-            const currentRatio = priorityUsed / selectedForRequest.length || 0;
+            // Find next available employee (prefer non-priority to maintain ratio)
+            let nextEmp = null;
             
-            let usePriority = false;
-            
-            if (currentRatio < TARGET_PRIORITY_RATIO && priorityQueue.length > 0) {
-                // Below target ratio, use priority
-                usePriority = true;
-            } else if (nonPriorityQueue.length > 0) {
-                // At or above target ratio, use non-priority
-                usePriority = false;
-            } else if (priorityQueue.length > 0) {
-                // Only priority left
-                usePriority = true;
-            } else {
-                // No employees left
-                break;
+            // First try non-priority to maintain ratio
+            if (isInspeksi && priorityUsed >= targetPriorityCount) {
+                nextEmp = sortedEmployees.find(emp => 
+                    !emp.has_priority &&
+                    !selectedForRequest.includes(String(emp.id)) &&
+                    !usedEmployeeIds.has(String(emp.id))
+                );
             }
             
-            const employee = usePriority ? getNextAnyEmployee(true) : getNextAnyEmployee(false);
+            // If no non-priority or need more priority, take any available
+            if (!nextEmp) {
+                nextEmp = sortedEmployees.find(emp => 
+                    !selectedForRequest.includes(String(emp.id)) &&
+                    !usedEmployeeIds.has(String(emp.id))
+                );
+            }
             
-            if (employee) {
-                selectedForRequest.push(String(employee.id));
-                usedEmployeeIds.add(String(employee.id));
-                if (usePriority) priorityUsed++;
+            if (nextEmp) {
+                selectedForRequest.push(String(nextEmp.id));
+                usedEmployeeIds.add(String(nextEmp.id));
+                if (nextEmp.has_priority) priorityUsed++;
+                console.log(`  - Added employee: ${nextEmp.name} ${nextEmp.has_priority ? '(priority)' : ''}`);
             } else {
+                console.log(`  - No more employees available`);
                 break;
             }
         }
 
-        // Final sorting
-        const sortedSelected = selectedForRequest
-            .map(id => getEmployeeDetails(id))
-            .filter(emp => emp)
-            .sort((a, b) => {
-                if (a.has_priority !== b.has_priority) return a.has_priority ? -1 : 1;
-                return b.final_score - a.final_score;
-            })
-            .map(emp => String(emp.id));
+        // Update available employees
+        availableEmployees = availableEmployees.filter(
+            (emp) => !selectedForRequest.includes(String(emp.id))
+        );
 
-        newBulkSelectedEmployees[requestId] = sortedSelected.slice(0, totalRequired);
+        newBulkSelectedEmployees[requestId] = selectedForRequest.slice(0, totalRequired);
         
-        // Debug logging
-        const finalPriorityCount = sortedSelected.filter(id => {
+        // Final check
+        const finalPriorityCount = selectedForRequest.filter(id => {
             const emp = getEmployeeDetails(id);
-            return emp && emp.has_priority;
+            return emp?.has_priority;
         }).length;
-        console.log(`Request ${requestId} final: ${sortedSelected.length} total, ${finalPriorityCount} priority (${(finalPriorityCount/sortedSelected.length*100).toFixed(1)}%)`);
+        
+        console.log(`Request ${requestId} final: ${selectedForRequest.length}/${totalRequired} filled, ${finalPriorityCount} priority (target: ${targetPriorityCount})`);
     });
+
+    setBulkSelectedEmployees(newBulkSelectedEmployees);
+}, [
+    selectedRequests,
+    bulkSelectedEmployees,
+    allSortedEligibleEmployees,
+    sameSectionRequests,
+    sortEmployeesForRequest,
+    getEmployeeDetails,
+    isInspeksiSection,
+    calculateTargetPriorityCount,
+]);
+
+// Fixed Auto-fill all requests with simpler, more reliable logic
+const handleAutoFillAll = useCallback(() => {
+    if (selectedRequests.length === 0) return;
+
+    const newBulkSelectedEmployees = {};
+    const usedEmployeeIds = new Set();
+
+    // Get all available employees
+    const allAvailableEmployees = [...allSortedEligibleEmployees].filter(
+        (emp) => emp.status === "available"
+    );
+
+    console.log(`Auto Fill All: ${allAvailableEmployees.length} available employees`);
+
+    // Sort selected requests: Inspeksi first, then others
+    const sortedSelectedRequests = [...selectedRequests].sort((a, b) => {
+        const reqA = sameSectionRequests.find(req => String(req.id) === a);
+        const reqB = sameSectionRequests.find(req => String(req.id) === b);
+        
+        // Current request first
+        if (String(a) === String(currentRequest.id)) return -1;
+        if (String(b) === String(currentRequest.id)) return 1;
+        
+        // Inspeksi requests before non-Inspeksi
+        const isInspeksiA = reqA ? isInspeksiSection(reqA) : false;
+        const isInspeksiB = reqB ? isInspeksiSection(reqB) : false;
+        
+        if (isInspeksiA && !isInspeksiB) return -1;
+        if (!isInspeksiA && isInspeksiB) return 1;
+        
+        // Larger requests first (more likely to need priority employees)
+        return (reqB?.requested_amount || 0) - (reqA?.requested_amount || 0);
+    });
+
+    sortedSelectedRequests.forEach((requestId) => {
+        const request = sameSectionRequests.find(
+            (req) => String(req.id) === requestId
+        );
+        if (!request) return;
+
+        const requiredMale = request.male_count || 0;
+        const requiredFemale = request.female_count || 0;
+        const totalRequired = request.requested_amount;
+        const isInspeksi = isInspeksiSection(request);
+
+        // Calculate target priority count (only for Inspeksi)
+        const targetPriorityCount = isInspeksi ? 
+            calculateTargetPriorityCount(totalRequired) : 0;
+
+        // Get employees that haven't been used yet
+        const availableEmployees = allAvailableEmployees.filter(
+            (emp) => !usedEmployeeIds.has(String(emp.id))
+        );
+
+        // Sort available employees for this request
+        const sortedEmployees = sortEmployeesForRequest(availableEmployees, request);
+
+        const selectedForRequest = [];
+        
+        // Counters
+        let priorityUsed = 0;
+        let maleCount = 0;
+        let femaleCount = 0;
+
+        console.log(`Processing Request ${requestId}: ${totalRequired} total, ${targetPriorityCount} target priority (Inspeksi: ${isInspeksi})`);
+
+        // PHASE 1: Fill priority slots for Inspeksi section
+        if (isInspeksi && targetPriorityCount > 0) {
+            console.log(`  Phase 1: Filling ${targetPriorityCount} priority slots`);
+            
+            // Get priority employees from sorted list
+            const availablePriority = sortedEmployees.filter(emp => emp.has_priority);
+            console.log(`  Available priority employees: ${availablePriority.length}`);
+            
+            // Take up to targetPriorityCount priority employees
+            for (let i = 0; i < Math.min(targetPriorityCount, availablePriority.length) && selectedForRequest.length < totalRequired; i++) {
+                const priorityEmp = availablePriority[i];
+                selectedForRequest.push(String(priorityEmp.id));
+                usedEmployeeIds.add(String(priorityEmp.id));
+                priorityUsed++;
+                
+                // Update gender counts
+                if (priorityEmp.gender === 'male') maleCount++;
+                else if (priorityEmp.gender === 'female') femaleCount++;
+                
+                console.log(`  - Added priority ${i+1}: ${priorityEmp.name} (${priorityEmp.gender})`);
+            }
+        }
+
+        // PHASE 2: Fill gender requirements
+        console.log(`  Phase 2: Filling gender requirements (M: ${requiredMale}, F: ${requiredFemale})`);
+        
+        // Fill missing males
+        while (maleCount < requiredMale && selectedForRequest.length < totalRequired) {
+            // Find next male employee (any priority status)
+            const maleEmp = sortedEmployees.find(emp => 
+                emp.gender === 'male' && 
+                !usedEmployeeIds.has(String(emp.id))
+            );
+            
+            if (maleEmp) {
+                selectedForRequest.push(String(maleEmp.id));
+                usedEmployeeIds.add(String(maleEmp.id));
+                maleCount++;
+                if (maleEmp.has_priority) priorityUsed++;
+                console.log(`  - Added male: ${maleEmp.name} ${maleEmp.has_priority ? '(priority)' : ''}`);
+            } else {
+                console.log(`  - No more male employees available`);
+                break;
+            }
+        }
+
+        // Fill missing females
+        while (femaleCount < requiredFemale && selectedForRequest.length < totalRequired) {
+            // Find next female employee (any priority status)
+            const femaleEmp = sortedEmployees.find(emp => 
+                emp.gender === 'female' && 
+                !usedEmployeeIds.has(String(emp.id))
+            );
+            
+            if (femaleEmp) {
+                selectedForRequest.push(String(femaleEmp.id));
+                usedEmployeeIds.add(String(femaleEmp.id));
+                femaleCount++;
+                if (femaleEmp.has_priority) priorityUsed++;
+                console.log(`  - Added female: ${femaleEmp.name} ${femaleEmp.has_priority ? '(priority)' : ''}`);
+            } else {
+                console.log(`  - No more female employees available`);
+                break;
+            }
+        }
+
+        // PHASE 3: Fill remaining slots
+        const remainingSlots = totalRequired - selectedForRequest.length;
+        if (remainingSlots > 0) {
+            console.log(`  Phase 3: Filling ${remainingSlots} remaining slots`);
+            
+            for (let i = 0; i < remainingSlots; i++) {
+                // Prefer non-priority employees for Inspeksi if we've met priority target
+                let nextEmp = null;
+                
+                if (isInspeksi && priorityUsed >= targetPriorityCount) {
+                    // Try non-priority first to maintain ratio
+                    nextEmp = sortedEmployees.find(emp => 
+                        !emp.has_priority &&
+                        !usedEmployeeIds.has(String(emp.id))
+                    );
+                }
+                
+                // If not found or not Inspeksi, take any available
+                if (!nextEmp) {
+                    nextEmp = sortedEmployees.find(emp => 
+                        !usedEmployeeIds.has(String(emp.id))
+                    );
+                }
+                
+                if (nextEmp) {
+                    selectedForRequest.push(String(nextEmp.id));
+                    usedEmployeeIds.add(String(nextEmp.id));
+                    if (nextEmp.has_priority) priorityUsed++;
+                    console.log(`  - Added slot ${i+1}: ${nextEmp.name} ${nextEmp.has_priority ? '(priority)' : ''}`);
+                } else {
+                    console.log(`  - No more employees available for slot ${i+1}`);
+                    break;
+                }
+            }
+        }
+
+        // Store the result
+        newBulkSelectedEmployees[requestId] = selectedForRequest.slice(0, totalRequired);
+        
+        // Final statistics
+        const filledCount = selectedForRequest.length;
+        const finalPriorityCount = selectedForRequest.filter(id => {
+            const emp = getEmployeeDetails(id);
+            return emp?.has_priority;
+        }).length;
+        
+        console.log(`Request ${requestId} COMPLETE: ${filledCount}/${totalRequired} filled`);
+        console.log(`  Priority: ${finalPriorityCount} (target: ${targetPriorityCount})`);
+        console.log(`  Gender: ${maleCount} male, ${femaleCount} female`);
+        
+        if (filledCount < totalRequired) {
+            console.warn(`  WARNING: ${totalRequired - filledCount} slots unfilled!`);
+        }
+        
+        if (isInspeksi && Math.abs(finalPriorityCount - targetPriorityCount) > 1) {
+            console.warn(`  WARNING: Priority count ${finalPriorityCount} is far from target ${targetPriorityCount}`);
+        }
+    });
+
+    // Final summary
+    console.log('='.repeat(50));
+    console.log('AUTO FILL ALL COMPLETE - SUMMARY');
+    console.log('='.repeat(50));
+    
+    let totalRequested = 0;
+    let totalFilled = 0;
+    let totalPriorityUsed = 0;
+    
+    sortedSelectedRequests.forEach(requestId => {
+        const request = sameSectionRequests.find(req => String(req.id) === requestId);
+        if (!request) return;
+        
+        const filled = newBulkSelectedEmployees[requestId]?.length || 0;
+        const priorityCount = newBulkSelectedEmployees[requestId]?.filter(id => {
+            const emp = getEmployeeDetails(id);
+            return emp?.has_priority;
+        }).length || 0;
+        
+        totalRequested += request.requested_amount;
+        totalFilled += filled;
+        totalPriorityUsed += priorityCount;
+        
+        console.log(`Request ${requestId}: ${filled}/${request.requested_amount} filled, ${priorityCount} priority`);
+    });
+    
+    console.log(`TOTAL: ${totalFilled}/${totalRequested} filled, ${totalPriorityUsed} priority employees used`);
+    console.log('='.repeat(50));
+
+    if (totalFilled < totalRequested) {
+        alert(`Warning: Only ${totalFilled} of ${totalRequested} slots could be filled. There may not be enough available employees.`);
+    }
 
     setBulkSelectedEmployees(newBulkSelectedEmployees);
 }, [
@@ -597,6 +756,10 @@ const handleAutoFillAll = useCallback(() => {
     allSortedEligibleEmployees,
     sameSectionRequests,
     getEmployeeDetails,
+    sortEmployeesForRequest,
+    isInspeksiSection,
+    calculateTargetPriorityCount,
+    currentRequest.id,
 ]);
 
     // Auto-fill on initial load for selected requests
@@ -842,6 +1005,8 @@ const handleAutoFillAll = useCallback(() => {
             totalSelected: 0,
             totalAssigned: 0,
             fullyAssignedRequests: 0,
+            inspeksiRequests: 0,
+            nonInspeksiRequests: 0,
         };
 
         selectedRequests.forEach((requestId) => {
@@ -858,11 +1023,17 @@ const handleAutoFillAll = useCallback(() => {
                 if (assignedCount === request.requested_amount) {
                     stats.fullyAssignedRequests++;
                 }
+
+                if (isInspeksiSection(request)) {
+                    stats.inspeksiRequests++;
+                } else {
+                    stats.nonInspeksiRequests++;
+                }
             }
         });
 
         return stats;
-    }, [selectedRequests, bulkSelectedEmployees, sameSectionRequests]);
+    }, [selectedRequests, bulkSelectedEmployees, sameSectionRequests, isInspeksiSection]);
 
     // Check if all selected requests are fully assigned
     const allRequestsFullyAssigned = useMemo(() => {
@@ -1335,8 +1506,17 @@ const handleAutoFillAll = useCallback(() => {
                                     secara sekaligus
                                 </p>
                                 <p className="text-blue-500 dark:text-blue-300 text-xs sm:text-sm mt-1">
-                                    Prioritas: Priority Employees → Subsection Exact → Section Sama → ML Score
+                                    {isCurrentRequestInspeksi ? (
+                                        "Prioritas: Priority Employees → Subsection Exact → Section Sama → ML Score"
+                                    ) : (
+                                        "Prioritas: Subsection Exact → Section Sama → ML Score"
+                                    )}
                                 </p>
+                                {isCurrentRequestInspeksi && (
+                                    <p className="text-yellow-600 dark:text-yellow-400 text-xs sm:text-sm mt-1">
+                                        * Priority ratio system aktif untuk section Inspeksi (1:3 ratio)
+                                    </p>
+                                )}
                             </div>
                         </div>
                         <button
@@ -1416,6 +1596,22 @@ const handleAutoFillAll = useCallback(() => {
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="text-gray-600 dark:text-gray-400">
+                                        Inspeksi Requests:
+                                    </span>
+                                    <span className="font-medium text-yellow-600 dark:text-yellow-400">
+                                        {assignmentStats.inspeksiRequests}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">
+                                        Non-Inspeksi Requests:
+                                    </span>
+                                    <span className="font-medium text-blue-600 dark:text-blue-400">
+                                        {assignmentStats.nonInspeksiRequests}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-600 dark:text-gray-400">
                                         Karyawan Terisi:
                                     </span>
                                     <span className="font-medium text-gray-900 dark:text-gray-100">
@@ -1477,7 +1673,7 @@ const handleAutoFillAll = useCallback(() => {
                                         className="bg-white dark:bg-gray-700 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md w-full text-gray-900 dark:text-gray-100 text-sm"
                                     >
                                         <option value="optimal">
-                                            Optimal (Priority → Subsection → ML Score)
+                                            Optimal ({isCurrentRequestInspeksi ? "Priority → " : ""}Subsection → ML Score)
                                         </option>
                                         <option value="same_section">
                                             Prioritas Section Sama
@@ -1486,6 +1682,11 @@ const handleAutoFillAll = useCallback(() => {
                                             Beban Kerja Merata
                                         </option>
                                     </select>
+                                    {isCurrentRequestInspeksi && (
+                                        <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                                            * Priority ratio (1:3) akan diterapkan untuk Inspeksi requests
+                                        </p>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block mb-2 font-medium text-gray-700 dark:text-gray-300 text-sm">
@@ -1547,7 +1748,9 @@ const handleAutoFillAll = useCallback(() => {
                                                 : "bg-blue-600 hover:bg-blue-700 text-white"
                                         }`}
                                     >
-                                        Auto Fill All (Distribute Priority)
+                                        {isCurrentRequestInspeksi 
+                                            ? "Auto Fill All (Priority Ratio)"
+                                            : "Auto Fill All"}
                                     </button>
                                     <button
                                         onClick={handleClearAll}
@@ -1617,6 +1820,7 @@ const handleAutoFillAll = useCallback(() => {
                                     selectedRequests.includes(requestId);
                                 const isCurrentRequest =
                                     requestId === String(currentRequest.id);
+                                const isInspeksi = isInspeksiSection(request);
                                 const assignedEmployees =
                                     bulkSelectedEmployees[requestId] || [];
                                 const config =
@@ -1674,6 +1878,11 @@ const handleAutoFillAll = useCallback(() => {
                                                         {isCurrentRequest && (
                                                             <span className="bg-yellow-100 dark:bg-yellow-800 px-2 py-1 rounded-full text-yellow-800 dark:text-yellow-200 text-xs">
                                                                 Current Request
+                                                            </span>
+                                                        )}
+                                                        {isInspeksi && (
+                                                            <span className="bg-yellow-100 dark:bg-yellow-800 px-2 py-1 rounded-full text-yellow-800 dark:text-yellow-200 text-xs">
+                                                                Inspeksi (Priority)
                                                             </span>
                                                         )}
                                                         {(isPutway ||
@@ -1736,6 +1945,14 @@ const handleAutoFillAll = useCallback(() => {
                                                                     {request.requested_amount}
                                                                 </span>
                                                             </div>
+                                                            {isInspeksi && (
+                                                                <div className="mt-2 text-xs text-yellow-600 dark:text-yellow-400">
+                                                                    Priority employees: {assignedEmployees.filter(id => {
+                                                                        const emp = getEmployeeDetails(id);
+                                                                        return emp?.has_priority;
+                                                                    }).length}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1822,12 +2039,10 @@ const handleAutoFillAll = useCallback(() => {
                                                                     </span>
                                                                     {employee && (
                                                                         <span
-                                                                            className={`text-xs px-1 rounded ${
-                                                                                employee.gender ===
-                                                                                "female"
+                                                                            className={`text-xs px-1 rounded ${employee.gender === "female"
                                                                                     ? "bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300"
                                                                                     : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-                                                                            }`}
+                                                                                }`}
                                                                         >
                                                                             {employee.gender ===
                                                                             "female"
@@ -1856,8 +2071,7 @@ const handleAutoFillAll = useCallback(() => {
                                                                         <div className="text-gray-400 dark:text-gray-500 text-xs mt-1">
                                                                             ML
                                                                             Score:{" "}
-                                                                            {((employee.final_score || 0) * 100).toFixed(1)}
-                                                                            %
+                                                                            {((employee.final_score || 0) * 100).toFixed(1)}%
                                                                         </div>
                                                                     </div>
                                                                 ) : (
@@ -1957,9 +2171,14 @@ const handleAutoFillAll = useCallback(() => {
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                     <div className="text-gray-600 dark:text-gray-400 text-sm">
-                        {selectedRequests.length} request terpilih •
+                        {selectedRequests.length} request terpilih • 
                         {assignmentStats.totalAssigned} dari{" "}
-                        {assignmentStats.totalSelected} karyawan terisi
+                        {assignmentStats.totalSelected} karyawan terisi •
+                        {assignmentStats.inspeksiRequests > 0 && (
+                            <span className="text-yellow-600 ml-2">
+                                {assignmentStats.inspeksiRequests} Inspeksi
+                            </span>
+                        )}
                     </div>
                     <button
                         onClick={handleBulkSubmit}
@@ -2027,6 +2246,7 @@ const handleAutoFillAll = useCallback(() => {
                 onBulkEmployeeSelect={handleEmployeeSelect}
                 lineAssignmentConfig={lineAssignmentConfig}
                 getLineAssignment={getLineAssignment}
+                showPriorityStars={isInspeksiSection(getCurrentModalRequest())}
             />
         </AuthenticatedLayout>
     );

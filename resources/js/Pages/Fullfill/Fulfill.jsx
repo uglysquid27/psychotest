@@ -24,6 +24,112 @@ export default function Fulfill({
     const [lineAssignmentConfig, setLineAssignmentConfig] = useState({});
     const [showRatioInfo, setShowRatioInfo] = useState(false); // NEW: Toggle for ratio info
 
+    // Helper function to check if request is from Inspeksi section
+    // Update the isInspeksiSection function in Fulfill.jsx:
+
+    // Helper function to check if request is from Inspeksi section
+    const isInspeksiSection = useCallback((req) => {
+        console.log("=== isInspeksiSection DEBUG ===");
+        console.log("Full request object:", req);
+
+        // Try different property names
+        const subSection = req?.subSection || req?.sub_section;
+        console.log("subSection (camelCase):", req?.subSection);
+        console.log("sub_section (snake_case):", req?.sub_section);
+        console.log("Using subSection value:", subSection);
+
+        if (!subSection) {
+            console.log("No subSection found in any format, returning false");
+            return false;
+        }
+
+        // Try different property names for section
+        const section = subSection?.section || subSection?.section_data;
+        console.log("section (camelCase):", subSection?.section);
+        console.log("section_data:", subSection?.section_data);
+        console.log("Using section value:", section);
+
+        if (!section) {
+            console.log("No section found in subSection, returning false");
+            return false;
+        }
+
+        const rawSectionName = section.name || "";
+        const trimmedSectionName = rawSectionName.trim();
+        const lowerSectionName = trimmedSectionName.toLowerCase();
+
+        console.log("Section name analysis:");
+        console.log("  - Raw:", `"${rawSectionName}"`);
+        console.log("  - Trimmed:", `"${trimmedSectionName}"`);
+        console.log("  - Lowercase:", `"${lowerSectionName}"`);
+        console.log('  - Is "inspeksi"?', lowerSectionName === "inspeksi");
+
+        console.log("=== END DEBUG ===");
+
+        return lowerSectionName === "inspeksi";
+    }, []);
+
+    const isInspeksiRequest = useMemo(() => {
+        console.log("=== isInspeksiRequest DEBUG ===");
+        console.log("Calling isInspeksiSection with request:", request);
+        const result = isInspeksiSection(request);
+        console.log("isInspeksiRequest result:", result);
+        console.log("=== END DEBUG ===");
+        return result;
+    }, [request, isInspeksiSection]);
+
+    // Add this useEffect to see all available properties:
+    useEffect(() => {
+        console.log("=== COMPLETE REQUEST STRUCTURE ===");
+        console.log("All properties on request object:");
+        Object.keys(request).forEach((key) => {
+            console.log(`  ${key}:`, request[key]);
+        });
+
+        // Check for nested relationships
+        console.log("Checking for subSection variants:");
+        const possibleSubSectionNames = [
+            "subSection",
+            "sub_section",
+            "subSectionData",
+            "sub_section_data",
+            "subsection",
+            "sub_section_relation",
+        ];
+
+        possibleSubSectionNames.forEach((name) => {
+            if (request[name]) {
+                console.log(`Found ${name}:`, request[name]);
+                console.log(
+                    `Properties on ${name}:`,
+                    Object.keys(request[name])
+                );
+
+                // Check for section within subSection
+                const possibleSectionNames = [
+                    "section",
+                    "section_data",
+                    "sectionData",
+                    "section_relation",
+                ];
+                possibleSectionNames.forEach((sectionName) => {
+                    if (request[name][sectionName]) {
+                        console.log(
+                            `Found ${sectionName} in ${name}:`,
+                            request[name][sectionName]
+                        );
+                        console.log(
+                            `Properties on ${sectionName}:`,
+                            Object.keys(request[name][sectionName])
+                        );
+                    }
+                });
+            }
+        });
+
+        console.log("=== END STRUCTURE DEBUG ===");
+    }, [request]);
+
     const normalizeGender = (gender) => {
         if (!gender) {
             return "male";
@@ -90,18 +196,20 @@ export default function Fulfill({
 
     const allSortedEligibleEmployees = useMemo(() => {
         const sorted = [...combinedEmployees].sort((a, b) => {
-            // PRIORITY 1: Priority employees first
-            if (a.has_priority !== b.has_priority) {
-                return a.has_priority ? -1 : 1;
-            }
+            // PRIORITY 1: Priority employees first (only for Inspeksi section)
+            if (isInspeksiRequest) {
+                if (a.has_priority !== b.has_priority) {
+                    return a.has_priority ? -1 : 1;
+                }
 
-            // PRIORITY 2: If both have priority, compare priority scores
-            if (
-                a.has_priority &&
-                b.has_priority &&
-                a.priority_score !== b.priority_score
-            ) {
-                return b.priority_score - a.priority_score;
+                // PRIORITY 2: If both have priority, compare priority scores
+                if (
+                    a.has_priority &&
+                    b.has_priority &&
+                    a.priority_score !== b.priority_score
+                ) {
+                    return b.priority_score - a.priority_score;
+                }
             }
 
             // PRIORITY 3: Currently scheduled employees
@@ -158,6 +266,7 @@ export default function Fulfill({
         request.sub_section_id,
         request.male_count,
         request.female_count,
+        isInspeksiRequest,
     ]);
 
     // FIXED: Correct priority ratio calculation
@@ -237,13 +346,13 @@ export default function Fulfill({
                 allSortedEligibleEmployees.some((e) => String(e.id) === id)
             );
 
-        // Calculate target priority count and positions
-        const targetPriorityCount = calculateTargetPriorityCount(
-            request.requested_amount
-        );
-        const priorityPositions = getPriorityPositions(
-            request.requested_amount
-        );
+        // Calculate target priority count and positions (only for Inspeksi)
+        const targetPriorityCount = isInspeksiRequest
+            ? calculateTargetPriorityCount(request.requested_amount)
+            : 0;
+        const priorityPositions = isInspeksiRequest
+            ? getPriorityPositions(request.requested_amount)
+            : [];
 
         // If we have scheduled employees, use them as base
         if (validCurrentIds.length > 0) {
@@ -256,16 +365,18 @@ export default function Fulfill({
                 }
             });
 
-            // Count current priority employees
-            const currentPriorityCount = selected.filter((id) => {
-                if (!id) return false;
-                const emp = allSortedEligibleEmployees.find(
-                    (e) => String(e.id) === id
-                );
-                return emp?.has_priority;
-            }).length;
+            // Count current priority employees (only for Inspeksi)
+            const currentPriorityCount = isInspeksiRequest
+                ? selected.filter((id) => {
+                      if (!id) return false;
+                      const emp = allSortedEligibleEmployees.find(
+                          (e) => String(e.id) === id
+                      );
+                      return emp?.has_priority;
+                  }).length
+                : 0;
 
-            // Calculate remaining priority slots
+            // Calculate remaining priority slots (only for Inspeksi)
             const remainingPrioritySlots = Math.max(
                 0,
                 targetPriorityCount - currentPriorityCount
@@ -275,9 +386,8 @@ export default function Fulfill({
             for (let i = 0; i < selected.length; i++) {
                 if (!selected[i]) {
                     // Check if this is a priority position that still needs priority
-                    const isPriorityPosition = priorityPositions.includes(
-                        i + 1
-                    );
+                    const isPriorityPosition =
+                        isInspeksiRequest && priorityPositions.includes(i + 1);
                     const needsPriority =
                         isPriorityPosition && remainingPrioritySlots > 0;
 
@@ -285,7 +395,7 @@ export default function Fulfill({
                     let candidate = null;
 
                     if (needsPriority) {
-                        // Need priority employee
+                        // Need priority employee (only for Inspeksi)
                         candidate = allSortedEligibleEmployees.find(
                             (emp) =>
                                 emp.has_priority &&
@@ -303,11 +413,9 @@ export default function Fulfill({
 
                     if (candidate) {
                         selected[i] = String(candidate.id);
-                        if (candidate.has_priority) {
+                        if (candidate.has_priority && needsPriority) {
                             // Decrease remaining priority slots if we just added a priority employee
-                            if (needsPriority) {
-                                remainingPrioritySlots--;
-                            }
+                            remainingPrioritySlots--;
                         }
                     }
                 }
@@ -316,59 +424,69 @@ export default function Fulfill({
             return selected.filter((id) => id !== null);
         }
 
-        // Step 2: No scheduled employees, implement proper ratio
+        // Step 2: No scheduled employees, implement proper ratio (only for Inspeksi)
         const selected = new Array(request.requested_amount).fill(null);
         let remainingPrioritySlots = targetPriorityCount;
 
-        // First, fill priority positions with priority employees (up to target)
-        for (
-            let i = 0;
-            i < priorityPositions.length && remainingPrioritySlots > 0;
-            i++
-        ) {
-            const position = priorityPositions[i];
-            if (selected[position - 1] === null) {
-                const priorityEmp = allSortedEligibleEmployees.find(
-                    (emp) =>
-                        emp.has_priority &&
-                        emp.status === "available" &&
-                        !selected.includes(String(emp.id))
-                );
+        if (isInspeksiRequest) {
+            // First, fill priority positions with priority employees (up to target)
+            for (
+                let i = 0;
+                i < priorityPositions.length && remainingPrioritySlots > 0;
+                i++
+            ) {
+                const position = priorityPositions[i];
+                if (selected[position - 1] === null) {
+                    const priorityEmp = allSortedEligibleEmployees.find(
+                        (emp) =>
+                            emp.has_priority &&
+                            emp.status === "available" &&
+                            !selected.includes(String(emp.id))
+                    );
 
-                if (priorityEmp) {
-                    selected[position - 1] = String(priorityEmp.id);
-                    remainingPrioritySlots--;
+                    if (priorityEmp) {
+                        selected[position - 1] = String(priorityEmp.id);
+                        remainingPrioritySlots--;
+                    }
                 }
             }
         }
 
-        // Then fill remaining slots with any available employees
         for (let i = 0; i < selected.length; i++) {
             if (selected[i] === null) {
                 // Check if this is a priority position that still needs priority
-                const isPriorityPosition = priorityPositions.includes(i + 1);
+                const isPriorityPosition =
+                    isInspeksiRequest && priorityPositions.includes(i + 1);
                 const needsPriority =
                     isPriorityPosition && remainingPrioritySlots > 0;
 
                 let candidate = null;
 
                 if (needsPriority) {
-                    // Try to get priority employee
+                    // Try to get priority employee for priority position
                     candidate = allSortedEligibleEmployees.find(
                         (emp) =>
                             emp.has_priority &&
                             emp.status === "available" &&
                             !selected.includes(String(emp.id))
                     );
-                }
-
-                // If no priority candidate found or doesn't need priority, get any available
-                if (!candidate) {
+                } else if (!isPriorityPosition) {
+                    // For non-priority positions, try to get non-priority employees first
                     candidate = allSortedEligibleEmployees.find(
                         (emp) =>
+                            !emp.has_priority &&
                             emp.status === "available" &&
                             !selected.includes(String(emp.id))
                     );
+
+                    // If no non-priority available, get any available
+                    if (!candidate) {
+                        candidate = allSortedEligibleEmployees.find(
+                            (emp) =>
+                                emp.status === "available" &&
+                                !selected.includes(String(emp.id))
+                        );
+                    }
                 }
 
                 if (candidate) {
@@ -412,7 +530,8 @@ export default function Fulfill({
                     final_score: emp.final_score,
                     isPriorityPosition:
                         selected.indexOf(String(emp.id)) !== -1
-                            ? priorityPositions.includes(
+                            ? isInspeksiRequest &&
+                              priorityPositions.includes(
                                   selected.indexOf(String(emp.id)) + 1
                               )
                             : false,
@@ -432,8 +551,8 @@ export default function Fulfill({
                     )
                         return 1;
 
-                    // Then by priority
-                    if (a.has_priority !== b.has_priority)
+                    // Then by priority (only for Inspeksi)
+                    if (isInspeksiRequest && a.has_priority !== b.has_priority)
                         return a.has_priority ? -1 : 1;
 
                     // Then by score
@@ -448,7 +567,9 @@ export default function Fulfill({
                     const emp = allSortedEligibleEmployees.find(
                         (e) => String(e.id) === id
                     );
-                    const isPriorityPos = priorityPositions.includes(index + 1);
+                    const isPriorityPos =
+                        isInspeksiRequest &&
+                        priorityPositions.includes(index + 1);
 
                     // Can change if: not a priority position OR is priority position but employee is not priority
                     if (
@@ -513,6 +634,7 @@ export default function Fulfill({
         currentScheduledIds,
         calculateTargetPriorityCount,
         getPriorityPositions,
+        isInspeksiRequest,
     ]);
 
     const { data, setData, post, processing, errors } = useForm({
@@ -646,15 +768,17 @@ export default function Fulfill({
         }
     }, [message]);
 
-    // Calculate priority positions for display
+    // Calculate priority positions for display (only for Inspeksi)
     const priorityPositions = useMemo(() => {
-        return getPriorityPositions(request.requested_amount);
-    }, [request.requested_amount, getPriorityPositions]);
+        return isInspeksiRequest
+            ? getPriorityPositions(request.requested_amount)
+            : [];
+    }, [request.requested_amount, getPriorityPositions, isInspeksiRequest]);
 
     const genderStats = useMemo(() => {
-        const targetPriorityCount = calculateTargetPriorityCount(
-            request.requested_amount
-        );
+        const targetPriorityCount = isInspeksiRequest
+            ? calculateTargetPriorityCount(request.requested_amount)
+            : 0;
 
         const stats = {
             total: 0,
@@ -669,8 +793,11 @@ export default function Fulfill({
             current_scheduled: 0,
             priority_count: 0,
             target_priority_count: targetPriorityCount,
-            ratio_description: getRatioDescription(request.requested_amount),
+            ratio_description: isInspeksiRequest
+                ? getRatioDescription(request.requested_amount)
+                : "N/A",
             priority_positions: priorityPositions,
+            is_inspeksi: isInspeksiRequest,
         };
 
         selectedIds.forEach((id, index) => {
@@ -705,6 +832,7 @@ export default function Fulfill({
         calculateTargetPriorityCount,
         getRatioDescription,
         priorityPositions,
+        isInspeksiRequest,
     ]);
 
     const handleLineConfigChange = (requestId, type, data) => {
@@ -741,7 +869,65 @@ export default function Fulfill({
     }, [lineAssignmentConfig, request.id]);
 
     // Auto-fill function with dynamic priority ratio and positions
+    // Update the handleAutoFill function in Fulfill.jsx:
+
+    // Auto-fill function with dynamic priority ratio and positions
     const handleAutoFill = useCallback(() => {
+        if (!isInspeksiRequest) {
+            // Simple auto-fill for non-Inspeksi sections
+            const allEmployees = [...allSortedEligibleEmployees].filter(
+                (emp) => emp.status === "available"
+            );
+
+            const selected = new Array(request.requested_amount).fill(null);
+            const requiredMale = request.male_count || 0;
+            const requiredFemale = request.female_count || 0;
+
+            let maleCount = 0;
+            let femaleCount = 0;
+
+            // Fill gender requirements first
+            for (
+                let i = 0;
+                i < allEmployees.length &&
+                (maleCount < requiredMale || femaleCount < requiredFemale);
+                i++
+            ) {
+                const emp = allEmployees[i];
+                if (
+                    maleCount < requiredMale &&
+                    emp.gender === "male" &&
+                    !selected.includes(String(emp.id))
+                ) {
+                    selected[maleCount + femaleCount] = String(emp.id);
+                    maleCount++;
+                } else if (
+                    femaleCount < requiredFemale &&
+                    emp.gender === "female" &&
+                    !selected.includes(String(emp.id))
+                ) {
+                    selected[maleCount + femaleCount] = String(emp.id);
+                    femaleCount++;
+                }
+            }
+
+            // Fill remaining slots
+            for (let i = 0; i < selected.length; i++) {
+                if (!selected[i]) {
+                    const emp = allEmployees.find(
+                        (e) => !selected.includes(String(e.id))
+                    );
+                    if (emp) {
+                        selected[i] = String(emp.id);
+                    }
+                }
+            }
+
+            setSelectedIds(selected.filter((id) => id !== null));
+            return;
+        }
+
+        // For Inspeksi section: Implement strict priority ratio logic
         const targetPriorityCount = calculateTargetPriorityCount(
             request.requested_amount
         );
@@ -753,6 +939,7 @@ export default function Fulfill({
             (emp) => emp.status === "available"
         );
 
+        // Separate priority and non-priority employees
         const priorityEmployees = allEmployees.filter(
             (emp) => emp.has_priority
         );
@@ -761,76 +948,176 @@ export default function Fulfill({
         );
 
         const selected = new Array(request.requested_amount).fill(null);
-        let remainingPrioritySlots = targetPriorityCount;
 
-        // Function to find best employee for a position
-        const findBestEmployee = (gender = null, requirePriority = false) => {
-            const source = requirePriority
-                ? priorityEmployees
-                : [...priorityEmployees, ...nonPriorityEmployees];
-
-            return source.find((emp) => {
-                if (gender && emp.gender !== gender) return false;
-                return !selected.includes(String(emp.id));
-            });
-        };
-
-        // First, fill priority positions with priority employees (up to target)
-        for (
-            let i = 0;
-            i < priorityPositions.length && remainingPrioritySlots > 0;
-            i++
-        ) {
+        // Step 1: First, fill priority positions with priority employees ONLY
+        // (Non-priority employees should NOT be placed in priority positions during auto-fill)
+        for (let i = 0; i < priorityPositions.length; i++) {
             const position = priorityPositions[i];
-            const employee = findBestEmployee(null, true);
-            if (employee) {
-                selected[position - 1] = String(employee.id);
-                remainingPrioritySlots--;
+            // Try to find a priority employee for this position
+            const priorityEmp = priorityEmployees.find(
+                (emp) => !selected.includes(String(emp.id))
+            );
 
-                // Remove from available lists
+            if (priorityEmp) {
+                selected[position - 1] = String(priorityEmp.id);
+                // Remove from available list
                 const empIndex = priorityEmployees.findIndex(
-                    (e) => String(e.id) === String(employee.id)
+                    (e) => String(e.id) === String(priorityEmp.id)
                 );
                 if (empIndex !== -1) priorityEmployees.splice(empIndex, 1);
             }
+            // If no priority employee available, leave the priority position empty
+            // (Don't fill with non-priority during auto-fill)
         }
 
-        // Fill remaining slots (including unfilled priority positions)
+        // Step 2: Fill remaining slots (non-priority positions) with any available employees
         for (let i = 0; i < selected.length; i++) {
             if (selected[i] === null) {
-                const isPriorityPosition = priorityPositions.includes(i + 1);
-                const needsPriority =
-                    isPriorityPosition && remainingPrioritySlots > 0;
+                const isPriorityPos = priorityPositions.includes(i + 1);
 
-                let employee = null;
+                // If this is a priority position that wasn't filled, skip it
+                // (We already tried to fill priority positions in step 1)
+                if (isPriorityPos) continue;
 
-                if (needsPriority) {
-                    employee = findBestEmployee(null, true);
-                }
+                // Try to fill with non-priority employee first
+                let employee = nonPriorityEmployees.find(
+                    (emp) => !selected.includes(String(emp.id))
+                );
 
+                // If no non-priority available, try priority employee
                 if (!employee) {
-                    employee = findBestEmployee();
+                    employee = priorityEmployees.find(
+                        (emp) => !selected.includes(String(emp.id))
+                    );
                 }
 
                 if (employee) {
                     selected[i] = String(employee.id);
-                    if (employee.has_priority && needsPriority) {
-                        remainingPrioritySlots--;
-                    }
 
-                    // Remove from available lists
-                    const sourceList = employee.has_priority
-                        ? priorityEmployees
-                        : nonPriorityEmployees;
-                    const empIndex = sourceList.findIndex(
-                        (e) => String(e.id) === String(employee.id)
-                    );
-                    if (empIndex !== -1) sourceList.splice(empIndex, 1);
+                    // Remove from appropriate list
+                    if (employee.has_priority) {
+                        const empIndex = priorityEmployees.findIndex(
+                            (e) => String(e.id) === String(employee.id)
+                        );
+                        if (empIndex !== -1)
+                            priorityEmployees.splice(empIndex, 1);
+                    } else {
+                        const empIndex = nonPriorityEmployees.findIndex(
+                            (e) => String(e.id) === String(employee.id)
+                        );
+                        if (empIndex !== -1)
+                            nonPriorityEmployees.splice(empIndex, 1);
+                    }
                 }
             }
         }
 
-        // Fill gender requirements (may need to adjust some selections)
+        // Step 3: Check if we have empty priority positions
+        // If we do, try to move priority employees from non-priority positions to priority positions
+        const emptyPriorityPositions = priorityPositions.filter(
+            (pos) => !selected[pos - 1]
+        );
+        const filledNonPriorityPositions = [];
+
+        // Find positions that have priority employees but are not priority positions
+        for (let i = 0; i < selected.length; i++) {
+            if (selected[i] && !priorityPositions.includes(i + 1)) {
+                const empId = selected[i];
+                const emp = allSortedEligibleEmployees.find(
+                    (e) => String(e.id) === empId
+                );
+                if (emp && emp.has_priority) {
+                    filledNonPriorityPositions.push({ position: i, empId });
+                }
+            }
+        }
+
+        // Move priority employees from non-priority to priority positions if possible
+        for (
+            let i = 0;
+            i <
+            Math.min(
+                emptyPriorityPositions.length,
+                filledNonPriorityPositions.length
+            );
+            i++
+        ) {
+            const priorityPos = emptyPriorityPositions[i];
+            const nonPriorityPos = filledNonPriorityPositions[i];
+
+            // Swap positions
+            selected[priorityPos - 1] = nonPriorityPos.empId;
+            selected[nonPriorityPos.position] = null;
+        }
+
+        // Step 4: Fill any remaining empty slots (including swapped non-priority positions)
+        for (let i = 0; i < selected.length; i++) {
+            if (selected[i] === null) {
+                const isPriorityPos = priorityPositions.includes(i + 1);
+
+                // For priority positions, still try to get priority employees first
+                if (isPriorityPos) {
+                    let employee = priorityEmployees.find(
+                        (emp) => !selected.includes(String(emp.id))
+                    );
+
+                    if (!employee) {
+                        employee = nonPriorityEmployees.find(
+                            (emp) => !selected.includes(String(emp.id))
+                        );
+                    }
+
+                    if (employee) {
+                        selected[i] = String(employee.id);
+                        // Remove from list
+                        if (employee.has_priority) {
+                            const empIndex = priorityEmployees.findIndex(
+                                (e) => String(e.id) === String(employee.id)
+                            );
+                            if (empIndex !== -1)
+                                priorityEmployees.splice(empIndex, 1);
+                        } else {
+                            const empIndex = nonPriorityEmployees.findIndex(
+                                (e) => String(e.id) === String(employee.id)
+                            );
+                            if (empIndex !== -1)
+                                nonPriorityEmployees.splice(empIndex, 1);
+                        }
+                    }
+                } else {
+                    // For non-priority positions, prefer non-priority employees
+                    let employee = nonPriorityEmployees.find(
+                        (emp) => !selected.includes(String(emp.id))
+                    );
+
+                    if (!employee) {
+                        employee = priorityEmployees.find(
+                            (emp) => !selected.includes(String(emp.id))
+                        );
+                    }
+
+                    if (employee) {
+                        selected[i] = String(employee.id);
+                        // Remove from list
+                        if (employee.has_priority) {
+                            const empIndex = priorityEmployees.findIndex(
+                                (e) => String(e.id) === String(employee.id)
+                            );
+                            if (empIndex !== -1)
+                                priorityEmployees.splice(empIndex, 1);
+                        } else {
+                            const empIndex = nonPriorityEmployees.findIndex(
+                                (e) => String(e.id) === String(employee.id)
+                            );
+                            if (empIndex !== -1)
+                                nonPriorityEmployees.splice(empIndex, 1);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Step 5: Ensure gender requirements are met
         const requiredMale = request.male_count || 0;
         const requiredFemale = request.female_count || 0;
 
@@ -848,14 +1135,46 @@ export default function Fulfill({
             }
         });
 
-        // Adjust for gender mismatch if needed
-        // (This is a simplified version - you may want to implement a more sophisticated gender adjustment)
+        // Adjust if gender requirements not met
         if (currentMale < requiredMale || currentFemale < requiredFemale) {
-            // Try to swap non-priority or non-critical priority positions
-            // For simplicity, we'll just refill positions that can be changed
+            // Create a list of employees to potentially swap
+            const availableEmployees = allSortedEligibleEmployees
+                .filter((emp) => emp.status === "available")
+                .map((emp) => ({
+                    id: String(emp.id),
+                    gender: emp.gender,
+                    has_priority: emp.has_priority,
+                    final_score: emp.final_score,
+                    isCurrentlyScheduled: emp.isCurrentlyScheduled,
+                }))
+                .sort((a, b) => {
+                    // Priority employees in priority positions first (preserve them)
+                    const aPos = selected.indexOf(a.id);
+                    const bPos = selected.indexOf(b.id);
+                    const aIsPriorityPos =
+                        aPos !== -1 && priorityPositions.includes(aPos + 1);
+                    const bIsPriorityPos =
+                        bPos !== -1 && priorityPositions.includes(bPos + 1);
+
+                    if (aIsPriorityPos && a.has_priority && !bIsPriorityPos)
+                        return -1;
+                    if (bIsPriorityPos && b.has_priority && !aIsPriorityPos)
+                        return 1;
+
+                    // Then by priority (only for Inspeksi)
+                    if (isInspeksiRequest && a.has_priority !== b.has_priority)
+                        return a.has_priority ? -1 : 1;
+
+                    // Then by score
+                    return b.final_score - a.final_score;
+                });
+
+            // Track positions that can be changed
+            // Priority positions with priority employees should NOT be changed
             const changeablePositions = selected
                 .map((id, index) => {
-                    if (!id) return index;
+                    if (!id) return index; // Empty position
+
                     const emp = allSortedEligibleEmployees.find(
                         (e) => String(e.id) === id
                     );
@@ -872,8 +1191,54 @@ export default function Fulfill({
                 })
                 .filter((idx) => idx !== -1);
 
-            // Simple adjustment: just swap positions with needed gender
-            // You might want to implement a more sophisticated algorithm here
+            // Adjust for male requirement
+            if (currentMale < requiredMale) {
+                const neededMales = requiredMale - currentMale;
+                const maleCandidates = availableEmployees.filter(
+                    (emp) => emp.gender === "male" && !selected.includes(emp.id)
+                );
+
+                for (
+                    let i = 0;
+                    i <
+                    Math.min(
+                        neededMales,
+                        maleCandidates.length,
+                        changeablePositions.length
+                    );
+                    i++
+                ) {
+                    const pos = changeablePositions[i];
+                    if (pos !== undefined) {
+                        selected[pos] = maleCandidates[i].id;
+                    }
+                }
+            }
+
+            // Adjust for female requirement
+            if (currentFemale < requiredFemale) {
+                const neededFemales = requiredFemale - currentFemale;
+                const femaleCandidates = availableEmployees.filter(
+                    (emp) =>
+                        emp.gender === "female" && !selected.includes(emp.id)
+                );
+
+                for (
+                    let i = 0;
+                    i <
+                    Math.min(
+                        neededFemales,
+                        femaleCandidates.length,
+                        changeablePositions.length
+                    );
+                    i++
+                ) {
+                    const pos = changeablePositions[i];
+                    if (pos !== undefined) {
+                        selected[pos] = femaleCandidates[i].id;
+                    }
+                }
+            }
         }
 
         setSelectedIds(selected.filter((id) => id !== null));
@@ -885,6 +1250,7 @@ export default function Fulfill({
         selectedIds,
         calculateTargetPriorityCount,
         getPriorityPositions,
+        isInspeksiRequest,
     ]);
 
     // ADDED: handleSubmit function
@@ -1186,146 +1552,190 @@ export default function Fulfill({
                     </div>
                 )}
 
-                {/* Priority Ratio Information */}
-                <div className="bg-white dark:bg-gray-800 shadow-md mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <h3 className="font-bold text-gray-900 dark:text-gray-100 text-lg mb-1">
-                                Priority Ratio System ({ratioDescription})
-                            </h3>
-                            <div className="flex items-center space-x-4">
-                                <p className="text-gray-600 dark:text-gray-400 text-sm">
-                                    <span className="font-medium">
-                                        Target Priority:
-                                    </span>{" "}
-                                    {genderStats.target_priority_count} dari{" "}
-                                    {request.requested_amount} karyawan
-                                </p>
-                                <p className="text-gray-600 dark:text-gray-400 text-sm">
-                                    <span className="font-medium">
-                                        Saat ini:
-                                    </span>{" "}
-                                    {genderStats.priority_count} priority
-                                    {genderStats.priority_count <
-                                        genderStats.target_priority_count && (
-                                        <span className="text-yellow-600 ml-1">
-                                            (Kurang{" "}
-                                            {genderStats.target_priority_count -
-                                                genderStats.priority_count}
-                                            )
-                                        </span>
-                                    )}
-                                </p>
-                                <p className="text-gray-600 dark:text-gray-400 text-sm">
-                                    <span className="font-medium">
-                                        Priority Positions:
-                                    </span>{" "}
-                                    {genderStats.priority_positions
-                                        .map((pos) => `#${pos}`)
-                                        .join(", ")}
-                                </p>
-                                <button
-                                    onClick={() =>
-                                        setShowRatioInfo(!showRatioInfo)
-                                    }
-                                    className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-                                    title="Show ratio info"
+                {/* Priority Ratio Information - Only for Inspeksi Section */}
+                {isInspeksiRequest && (
+                    <div className="bg-white dark:bg-gray-800 shadow-md mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <h3 className="font-bold text-gray-900 dark:text-gray-100 text-lg mb-1">
+                                    Priority Ratio System ({ratioDescription})
+                                </h3>
+                                <div className="flex items-center space-x-4">
+                                    <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                        <span className="font-medium">
+                                            Target Priority:
+                                        </span>{" "}
+                                        {genderStats.target_priority_count} dari{" "}
+                                        {request.requested_amount} karyawan
+                                    </p>
+                                    <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                        <span className="font-medium">
+                                            Saat ini:
+                                        </span>{" "}
+                                        {genderStats.priority_count} priority
+                                        {genderStats.priority_count <
+                                            genderStats.target_priority_count && (
+                                            <span className="text-yellow-600 ml-1">
+                                                (Kurang{" "}
+                                                {genderStats.target_priority_count -
+                                                    genderStats.priority_count}
+                                                )
+                                            </span>
+                                        )}
+                                    </p>
+                                    <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                        <span className="font-medium">
+                                            Priority Positions:
+                                        </span>{" "}
+                                        {genderStats.priority_positions
+                                            .map((pos) => `#${pos}`)
+                                            .join(", ")}
+                                    </p>
+                                    <button
+                                        onClick={() =>
+                                            setShowRatioInfo(!showRatioInfo)
+                                        }
+                                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                                        title="Show ratio info"
+                                    >
+                                        <svg
+                                            className="w-4 h-4"
+                                            fill="currentColor"
+                                            viewBox="0 0 20 20"
+                                        >
+                                            <path
+                                                fillRule="evenodd"
+                                                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z"
+                                                clipRule="evenodd"
+                                            />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleAutoFill}
+                                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-medium transition-colors flex items-center space-x-2"
+                            >
+                                <svg
+                                    className="w-4 h-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
                                 >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                    />
+                                </svg>
+                                <span>Auto Fill dengan Ratio</span>
+                            </button>
+                        </div>
+
+                        {/* Collapsible Ratio Info Panel */}
+                        {showRatioInfo && (
+                            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                                <div className="flex items-center mb-2">
                                     <svg
-                                        className="w-4 h-4"
+                                        className="w-5 h-5 text-blue-600 dark:text-blue-400 mr-2"
                                         fill="currentColor"
                                         viewBox="0 0 20 20"
                                     >
                                         <path
                                             fillRule="evenodd"
-                                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z"
+                                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
                                             clipRule="evenodd"
                                         />
                                     </svg>
-                                </button>
+                                    <span className="font-semibold text-gray-700 dark:text-gray-300">
+                                        Priority Ratio System (Hanya untuk
+                                        Section Inspeksi)
+                                    </span>
+                                </div>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                                    Positions marked with ★ should ideally be
+                                    filled with priority employees.
+                                </p>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                    <div className="flex items-center p-2 bg-green-50 dark:bg-green-900/20 rounded">
+                                        <span className="w-3 h-3 rounded-full bg-green-500 mr-2"></span>
+                                        <span className="text-xs text-gray-700 dark:text-gray-300">
+                                            Priority employee in priority
+                                            position
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded">
+                                        <span className="w-3 h-3 rounded-full bg-yellow-500 mr-2"></span>
+                                        <span className="text-xs text-gray-700 dark:text-gray-300">
+                                            Priority position awaiting priority
+                                            employee
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center p-2 bg-blue-50 dark:bg-blue-900/20 rounded">
+                                        <span className="w-3 h-3 rounded-full bg-blue-500 mr-2"></span>
+                                        <span className="text-xs text-gray-700 dark:text-gray-300">
+                                            Priority employee in regular
+                                            position
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                    <p>
+                                        <span className="font-medium">
+                                            Ratio rules:
+                                        </span>{" "}
+                                        1-2 employees = 1:1, 3-4 employees =
+                                        1:2, 5+ employees = 1:3
+                                    </p>
+                                    <p>
+                                        Example: For 6 employees (1:3 ratio), 2
+                                        priority employees are needed.
+                                    </p>
+                                    <p className="mt-1 font-medium text-blue-600 dark:text-blue-400">
+                                        * Sistem priority hanya berlaku untuk
+                                        section Inspeksi
+                                    </p>
+                                </div>
                             </div>
-                        </div>
-                        <button
-                            onClick={handleAutoFill}
-                            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-medium transition-colors flex items-center space-x-2"
-                        >
-                            <svg
-                                className="w-4 h-4"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                                />
-                            </svg>
-                            <span>Auto Fill dengan Ratio</span>
-                        </button>
+                        )}
                     </div>
+                )}
 
-                    {/* Collapsible Ratio Info Panel */}
-                    {showRatioInfo && (
-                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                            <div className="flex items-center mb-2">
+                {!isInspeksiRequest && (
+                    <div className="bg-white dark:bg-gray-800 shadow-md mb-6 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <h3 className="font-bold text-gray-900 dark:text-gray-100 text-lg mb-1">
+                                    Auto Fill System
+                                </h3>
+                                <p className="text-gray-600 dark:text-gray-400 text-sm">
+                                    Prioritas: Subsection Exact → ML Score →
+                                    Gender Matching
+                                </p>
+                            </div>
+                            <button
+                                onClick={handleAutoFill}
+                                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md font-medium transition-colors flex items-center space-x-2"
+                            >
                                 <svg
-                                    className="w-5 h-5 text-blue-600 dark:text-blue-400 mr-2"
-                                    fill="currentColor"
-                                    viewBox="0 0 20 20"
+                                    className="w-4 h-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
                                 >
                                     <path
-                                        fillRule="evenodd"
-                                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                                        clipRule="evenodd"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
                                     />
                                 </svg>
-                                <span className="font-semibold text-gray-700 dark:text-gray-300">
-                                    Priority Ratio Information
-                                </span>
-                            </div>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                                Positions marked with ★ should ideally be filled
-                                with priority employees.
-                            </p>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                                <div className="flex items-center p-2 bg-green-50 dark:bg-green-900/20 rounded">
-                                    <span className="w-3 h-3 rounded-full bg-green-500 mr-2"></span>
-                                    <span className="text-xs text-gray-700 dark:text-gray-300">
-                                        Priority employee in priority position
-                                    </span>
-                                </div>
-                                <div className="flex items-center p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded">
-                                    <span className="w-3 h-3 rounded-full bg-yellow-500 mr-2"></span>
-                                    <span className="text-xs text-gray-700 dark:text-gray-300">
-                                        Priority position awaiting priority
-                                        employee
-                                    </span>
-                                </div>
-                                <div className="flex items-center p-2 bg-blue-50 dark:bg-blue-900/20 rounded">
-                                    <span className="w-3 h-3 rounded-full bg-blue-500 mr-2"></span>
-                                    <span className="text-xs text-gray-700 dark:text-gray-300">
-                                        Priority employee in regular position
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                                <p>
-                                    <span className="font-medium">
-                                        Ratio rules:
-                                    </span>{" "}
-                                    1-2 employees = 1:1, 3-4 employees = 1:2, 5+
-                                    employees = 1:3
-                                </p>
-                                <p>
-                                    Example: For 6 employees (1:3 ratio), 2
-                                    priority employees are needed.
-                                </p>
-                            </div>
+                                <span>Auto Fill</span>
+                            </button>
                         </div>
-                    )}
-                </div>
+                    </div>
+                )}
 
                 {!bulkMode && (
                     <>
@@ -1369,8 +1779,9 @@ export default function Fulfill({
                                 }
                                 enableLineAssignment={enableLineAssignment}
                                 lineAssignments={lineAssignmentsForDisplay}
-                                showPriorityStars={true}
+                                showPriorityStars={isInspeksiRequest}
                                 priorityPositions={priorityPositions}
+                                isInspeksiRequest={isInspeksiRequest} // ADD THIS PROP
                             />
 
                             <LineAssignmentConfig
@@ -1462,7 +1873,8 @@ export default function Fulfill({
                     isBulkMode={bulkMode}
                     isLoading={isLoadingEmployees}
                     activeBulkRequest={activeBulkRequest}
-                    showPriorityStars={true}
+                    isInspeksiRequest={isInspeksiRequest} // ADD THIS
+                    priorityPositions={priorityPositions} // ADD THIS
                 />
             </div>
         </AuthenticatedLayout>
