@@ -21,45 +21,55 @@ use App\Models\Schedule;
 class ManPowerRequestController extends Controller
 {
     public function index(Request $request): Response
-    {
-        $query = Section::with([
-            'subSections',
-            'subSections.manPowerRequests' => function ($query) {
-                $query->orderBy('date', 'desc')
-                    ->orderBy('created_at', 'desc');
-            },
-            'subSections.manPowerRequests.shift'
-        ]);
+{
+    // Always fetch last 30 days
+    $endDate = Carbon::now()->endOfDay();
+    $startDate = Carbon::now()->subDays(30)->startOfDay();
 
-        if ($request->has('section_id') && $request->section_id) {
-            $query->where('id', $request->section_id);
-        }
+    $query = Section::with([
+        'subSections',
+        'subSections.manPowerRequests' => function ($query) use ($startDate, $endDate) {
+            $query->whereBetween('date', [$startDate, $endDate])
+                ->orderBy('date', 'desc')
+                ->orderBy('created_at', 'desc');
+        },
+        'subSections.manPowerRequests.shift'
+    ]);
 
-        $sections = $query->get();
-
-        $perPage = 10;
-        $currentPage = $request->get('page', 1);
-        $offset = ($currentPage - 1) * $perPage;
-        $paginatedSections = $sections->slice($offset, $perPage);
-
-        $sectionsPaginator = new \Illuminate\Pagination\LengthAwarePaginator(
-            $paginatedSections,
-            $sections->count(),
-            $perPage,
-            $currentPage,
-            ['path' => $request->url(), 'query' => $request->query()]
-        );
-
-        $allSections = Section::all();
-
-        return Inertia::render('ManpowerRequests/Index', [
-            'sections' => $sectionsPaginator,
-            'filterSections' => $allSections,
-            'filters' => [
-                'section_id' => $request->section_id,
-            ],
-        ]);
+    if ($request->has('section_id') && $request->section_id) {
+        $query->where('id', $request->section_id);
     }
+
+    $sections = $query->get();
+
+    $perPage = 10;
+    $currentPage = $request->get('page', 1);
+    $offset = ($currentPage - 1) * $perPage;
+    $paginatedSections = $sections->slice($offset, $perPage);
+
+    $sectionsPaginator = new \Illuminate\Pagination\LengthAwarePaginator(
+        $paginatedSections,
+        $sections->count(),
+        $perPage,
+        $currentPage,
+        ['path' => $request->url(), 'query' => $request->query()]
+    );
+
+    $allSections = Section::all();
+
+    return Inertia::render('ManpowerRequests/Index', [
+        'sections' => $sectionsPaginator,
+        'filterSections' => $allSections,
+        'filters' => [
+            'section_id' => $request->section_id,
+        ],
+        // Pass date range info to frontend
+        'date_range' => [
+            'start' => $startDate->format('Y-m-d'),
+            'end' => $endDate->format('Y-m-d')
+        ]
+    ]);
+}
 
     public function getSectionRequests($sectionId)
     {

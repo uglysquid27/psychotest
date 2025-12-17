@@ -1501,11 +1501,11 @@ const handleAutoFillAll = useCallback(() => {
                                     Bulk Fulfillment
                                 </h3>
                                 <p className="text-blue-600 dark:text-blue-400 text-sm sm:text-base">
-                                    Penuhi semua request untuk section "
+                                    Penuhi semua request untuk bagian "
                                     {currentRequest.sub_section?.section?.name}"
                                     secara sekaligus
                                 </p>
-                                <p className="text-blue-500 dark:text-blue-300 text-xs sm:text-sm mt-1">
+                                {/* <p className="text-blue-500 dark:text-blue-300 text-xs sm:text-sm mt-1">
                                     {isCurrentRequestInspeksi ? (
                                         "Prioritas: Priority Employees → Subsection Exact → Section Sama → ML Score"
                                     ) : (
@@ -1516,7 +1516,7 @@ const handleAutoFillAll = useCallback(() => {
                                     <p className="text-yellow-600 dark:text-yellow-400 text-xs sm:text-sm mt-1">
                                         * Priority ratio system aktif untuk section Inspeksi (1:3 ratio)
                                     </p>
-                                )}
+                                )} */}
                             </div>
                         </div>
                         <button
@@ -1596,22 +1596,6 @@ const handleAutoFillAll = useCallback(() => {
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="text-gray-600 dark:text-gray-400">
-                                        Inspeksi Requests:
-                                    </span>
-                                    <span className="font-medium text-yellow-600 dark:text-yellow-400">
-                                        {assignmentStats.inspeksiRequests}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600 dark:text-gray-400">
-                                        Non-Inspeksi Requests:
-                                    </span>
-                                    <span className="font-medium text-blue-600 dark:text-blue-400">
-                                        {assignmentStats.nonInspeksiRequests}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600 dark:text-gray-400">
                                         Karyawan Terisi:
                                     </span>
                                     <span className="font-medium text-gray-900 dark:text-gray-100">
@@ -1661,7 +1645,7 @@ const handleAutoFillAll = useCallback(() => {
                                 ⚙️ Pengaturan
                             </h4>
                             <div className="space-y-4">
-                                <div>
+                                {/* <div>
                                     <label className="block mb-2 font-medium text-gray-700 dark:text-gray-300 text-sm">
                                         Strategi Auto-fill:
                                     </label>
@@ -1687,7 +1671,7 @@ const handleAutoFillAll = useCallback(() => {
                                             * Priority ratio (1:3) akan diterapkan untuk Inspeksi requests
                                         </p>
                                     )}
-                                </div>
+                                </div> */}
                                 <div>
                                     <label className="block mb-2 font-medium text-gray-700 dark:text-gray-300 text-sm">
                                         Visibility:
@@ -2068,11 +2052,11 @@ const handleAutoFillAll = useCallback(() => {
                                                                                 ?.name ||
                                                                                 "-"}
                                                                         </div>
-                                                                        <div className="text-gray-400 dark:text-gray-500 text-xs mt-1">
+                                                                        {/* <div className="text-gray-400 dark:text-gray-500 text-xs mt-1">
                                                                             ML
                                                                             Score:{" "}
                                                                             {((employee.final_score || 0) * 100).toFixed(1)}%
-                                                                        </div>
+                                                                        </div> */}
                                                                     </div>
                                                                 ) : (
                                                                     <div className="text-gray-500 dark:text-gray-400 text-xs italic mb-2">
