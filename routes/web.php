@@ -155,6 +155,8 @@ Route::middleware(['auth:employee', 'prevent.back'])
 
         Route::get('/employee/famday/data', [EmployeeDashboardController::class, 'getFamdayData'])
             ->name('famday.data');
+        Route::get('/schedule/{schedule}/change-request-status', [EmployeeDashboardController::class, 'checkChangeRequestStatus'])
+        ->name('employee.schedule.change-request-status');
 
         // Other routes
         Route::resource('permits', PermitController::class);

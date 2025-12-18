@@ -13,15 +13,14 @@ dayjs.extend(isToday);
 dayjs.extend(isTomorrow);
 dayjs.extend(isYesterday);
 
-
 export default function EmployeeDashboard() {
     const { auth, mySchedules, incompleteProfile } = usePage().props;
 
     // Modal state
-    const [showRejectModal, setShowRejectModal] = useState(false);
+    const [showRequestModal, setShowRequestModal] = useState(false);
     const [currentScheduleId, setCurrentScheduleId] = useState(null);
-    const [rejectionReasonInput, setRejectionReasonInput] = useState('');
-    const [rejectMode, setRejectMode] = useState('reject'); // "reject" | "cancel"
+    const [requestReasonInput, setRequestReasonInput] = useState('');
+    const [requestMode, setRequestMode] = useState('accept'); // "accept" | "reject"
 
     // Coworkers state
     const [coworkersData, setCoworkersData] = useState(null);
@@ -32,14 +31,14 @@ export default function EmployeeDashboard() {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
 
-    // Famday Popup state
-    // const [showFamdayPopup, setShowFamdayPopup] = useState(false);
-    //  const [hasFamdayAccount, setHasFamdayAccount] = useState(false);
+    // Change request state
+    const [pendingRequests, setPendingRequests] = useState({});
+    const [loadingRequests, setLoadingRequests] = useState({});
 
     // Date filter state - 1 week range ending with tomorrow's date
     const [dateRange, setDateRange] = useState({
         start: dayjs().subtract(6, 'day').format('YYYY-MM-DD'),
-        end: dayjs().add(1, 'day').format('YYYY-MM-DD') // Changed to include tomorrow
+        end: dayjs().add(1, 'day').format('YYYY-MM-DD')
     });
 
     // Filter schedules by date range
@@ -61,18 +60,28 @@ export default function EmployeeDashboard() {
         setCurrentPage(1);
     }, [dateRange]);
 
+    // Check request status for all schedules
+    useEffect(() => {
+        if (mySchedules) {
+            mySchedules.forEach(schedule => {
+                if (!isPastDate(schedule.date)) {
+                    checkRequestStatus(schedule.id);
+                }
+            });
+        }
+    }, [mySchedules]);
 
-    const openRejectModal = (scheduleId, mode = 'reject') => {
+    const openRequestModal = (scheduleId, mode = 'accept') => {
         setCurrentScheduleId(scheduleId);
-        setRejectionReasonInput('');
-        setRejectMode(mode);
-        setShowRejectModal(true);
+        setRequestReasonInput('');
+        setRequestMode(mode);
+        setShowRequestModal(true);
     };
 
-    const closeRejectModal = () => {
-        setShowRejectModal(false);
+    const closeRequestModal = () => {
+        setShowRequestModal(false);
         setCurrentScheduleId(null);
-        setRejectionReasonInput('');
+        setRequestReasonInput('');
     };
 
     // Check if date is in the past
@@ -88,13 +97,40 @@ export default function EmployeeDashboard() {
         return date.isSame(dayjs(), 'day') || date.isAfter(dayjs(), 'day');
     };
 
-    const respond = (scheduleId, status, reason = '') => {
+    // Function to check change request status
+    const checkRequestStatus = async (scheduleId) => {
+        if (loadingRequests[scheduleId]) return;
+        
+        setLoadingRequests(prev => ({ ...prev, [scheduleId]: true }));
+        
+        try {
+            const response = await fetch(route('employee.schedule.change-request-status', scheduleId));
+            const data = await response.json();
+            
+            setPendingRequests(prev => ({
+                ...prev,
+                [scheduleId]: data.has_pending_request ? data.pending_request : null
+            }));
+        } catch (error) {
+            console.error('Failed to check request status:', error);
+        } finally {
+            setLoadingRequests(prev => ({ ...prev, [scheduleId]: false }));
+        }
+    };
+
+    const submitRequest = async (scheduleId, status, reason = '') => {
         // Find the schedule
         const schedule = mySchedules.find(s => s.id === scheduleId);
 
         // Check if schedule is in the past
         if (schedule && isPastDate(schedule.date)) {
             alert('Tidak dapat merespon jadwal yang sudah lewat.');
+            return;
+        }
+
+        // Check if there's already a pending request
+        if (pendingRequests[scheduleId]) {
+            alert('Anda sudah memiliki permintaan perubahan yang menunggu persetujuan.');
             return;
         }
 
@@ -112,11 +148,25 @@ export default function EmployeeDashboard() {
             {
                 preserveScroll: true,
                 onSuccess: () => {
-                    closeRejectModal();
-                    router.reload({ preserveScroll: true });
+                    closeRequestModal();
+                    // Immediately update UI to show pending
+                    setPendingRequests(prev => ({
+                        ...prev,
+                        [scheduleId]: {
+                            schedule_id: scheduleId,
+                            requested_status: status,
+                            reason: reason
+                        }
+                    }));
+                    
+                    alert('Permintaan perubahan status telah diajukan. Status berubah menjadi Menunggu Persetujuan.');
+                    // Refresh the page to show updated schedule status
+                    setTimeout(() => {
+                        router.reload({ preserveScroll: true });
+                    }, 1000);
                 },
                 onError: () => {
-                    alert('Gagal merespon jadwal. Silakan coba lagi.');
+                    alert('Gagal mengajukan permintaan perubahan. Silakan coba lagi.');
                 },
             }
         );
@@ -195,6 +245,151 @@ export default function EmployeeDashboard() {
         }
     };
 
+    const getStatusDisplay = (schedule) => {
+        if (isPastDate(schedule.date)) {
+            return (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-500 text-white shadow-md">
+                    Selesai
+                </span>
+            );
+        }
+
+        // If there's a pending request, show ONLY the pending status
+        if (pendingRequests[schedule.id]) {
+            const request = pendingRequests[schedule.id];
+            const isAcceptRequest = request?.requested_status === 'accepted';
+            
+            return (
+                <div className="flex flex-col items-center gap-1">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-500 text-white shadow-md">
+                        ⏳ Menunggu Persetujuan
+                    </span>
+                    <span className="text-xs text-yellow-600 dark:text-yellow-400 italic">
+                        Permintaan: {isAcceptRequest ? 'Diterima' : 'Ditolak'}
+                    </span>
+                </div>
+            );
+        }
+
+        // If schedule status is pending (but no pending request in state yet - still loading)
+        if (schedule.status === 'pending') {
+            return (
+                <div className="flex flex-col items-center gap-1">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-500 text-white shadow-md">
+                        ⏳ Menunggu Persetujuan
+                    </span>
+                    <span className="text-xs text-yellow-600 dark:text-yellow-400 italic">
+                        Sedang memuat...
+                    </span>
+                </div>
+            );
+        }
+
+        // If schedule is already accepted - show status and change button
+        if (schedule.status === 'accepted') {
+            return (
+                <div className="flex flex-col items-center gap-1 sm:gap-2">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500 text-white shadow-md">
+                        ✔ Diterima
+                    </span>
+                    <button
+                        onClick={() => openRequestModal(schedule.id, 'reject')}
+                        className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-lg text-xs font-medium shadow-md"
+                    >
+                        Ajukan Perubahan ke Ditolak
+                    </button>
+                </div>
+            );
+        }
+
+        // If schedule is already rejected - show status and change button
+        if (schedule.status === 'rejected') {
+            return (
+                <div className="flex flex-col items-center gap-1 sm:gap-2">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500 text-white shadow-md">
+                        ✘ Ditolak
+                    </span>
+                    <button
+                        onClick={() => openRequestModal(schedule.id, 'accept')}
+                        className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded-lg text-xs font-medium shadow-md"
+                    >
+                        Ajukan Perubahan ke Diterima
+                    </button>
+                </div>
+            );
+        }
+
+        // Default - no status yet (initial state)
+        return (
+            <div className="flex flex-col gap-1 sm:gap-2">
+                <button
+                    onClick={() => openRequestModal(schedule.id, 'accept')}
+                    className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded-lg text-xs font-medium shadow-md"
+                >
+                    Ajukan Diterima
+                </button>
+                <button
+                    onClick={() => openRequestModal(schedule.id, 'reject')}
+                    className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-lg text-xs font-medium shadow-md"
+                >
+                    Ajukan Ditolak
+                </button>
+            </div>
+        );
+    };
+
+    const getReasonDisplay = (schedule) => {
+        // If there's a pending request, show the request reason
+        if (pendingRequests[schedule.id]) {
+            const request = pendingRequests[schedule.id];
+            return (
+                <p className="text-xs text-yellow-600 dark:text-yellow-400 italic">
+                    "{request?.reason || 'Menunggu persetujuan...'}"
+                </p>
+            );
+        }
+        
+        // If schedule status is pending (but request not loaded yet)
+        if (schedule.status === 'pending') {
+            return (
+                <p className="text-xs text-yellow-600 dark:text-yellow-400 italic">
+                    "Menunggu persetujuan..."
+                </p>
+            );
+        }
+        
+        // Original reason display
+        if (schedule.status === 'rejected') {
+            return (
+                <p className="text-xs text-red-500 italic">
+                    "{schedule.rejection_reason || 'Tidak ada alasan'}"
+                </p>
+            );
+        }
+        
+        if (schedule.status === 'accepted') {
+            return (
+                <span className="inline-block text-xs text-gray-500 italic">Tidak ada alasan</span>
+            );
+        }
+        
+        return (
+            <span className="inline-block text-xs text-gray-500 italic">Menunggu Respon</span>
+        );
+    };
+
+    const getRequestTypeText = (schedule) => {
+        if (pendingRequests[schedule.id]) {
+            const request = pendingRequests[schedule.id];
+            if (request.requested_status === 'accepted') {
+                return 'Diterima';
+            } else if (request.requested_status === 'rejected') {
+                return 'Ditolak';
+            }
+        }
+        return '';
+    };
+
     const employeeName = auth?.user?.name || 'Pegawai';
     const employeeNik = auth?.user?.nik || 'N/A';
 
@@ -222,19 +417,17 @@ export default function EmployeeDashboard() {
                             NIK Anda: <span className="font-semibold tracking-wider">{employeeNik}</span>
                         </p>
                         
-                        {/* Famday Event Button */}
-                        {/* <div className="mt-4">
- {hasFamdayAccount && (
-                            <div className="mt-4">
-                                <button
-                                    onClick={() => setShowFamdayPopup(true)}
-                                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-md transition-colors"
-                                >
-                                    Lihat Info Event Famday
-                                </button>
-                            </div>
-                        )}
-</div> */}
+                        {/* Notification about approval system */}
+                        <div className="mt-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-xl p-3">
+                            <p className="text-sm text-blue-800 dark:text-blue-300 flex items-center gap-2">
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                </svg>
+                                <span>
+                                    Setelah mengajukan perubahan status, jadwal akan berstatus <span className="font-semibold">"Menunggu Persetujuan"</span> hingga disetujui.
+                                </span>
+                            </p>
+                        </div>
                     </div>
 
                     {/* Jika belum isi data diri */}
@@ -291,7 +484,7 @@ export default function EmployeeDashboard() {
                                         <button
                                             onClick={() => setDateRange({
                                                 start: dayjs().subtract(6, 'day').format('YYYY-MM-DD'),
-                                                end: dayjs().add(1, 'day').format('YYYY-MM-DD') // Updated to include tomorrow
+                                                end: dayjs().add(1, 'day').format('YYYY-MM-DD')
                                             })}
                                             className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-2 py-1 rounded"
                                         >
@@ -355,54 +548,13 @@ export default function EmployeeDashboard() {
                                                                     {schedule.sub_section?.section?.name || 'N/A'}
                                                                 </td>
                                                                 <td className="px-3 py-2 sm:px-4 sm:py-3 text-xs sm:text-sm">
-                                                                    {isPastDate(schedule.date) ? (
-                                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-500 text-white shadow-md">
-                                                                            Selesai
-                                                                        </span>
-                                                                    ) : schedule.status === 'accepted' ? (
-                                                                        <div className="flex flex-col gap-1 sm:gap-2">
-                                                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-green-500 text-white shadow-md">
-                                                                                ✔ Diterima
-                                                                            </span>
-                                                                            <button
-                                                                                onClick={() => openRejectModal(schedule.id, 'cancel')}
-                                                                                className="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded-lg text-xs font-medium shadow-md"
-                                                                            >
-                                                                                Batal
-                                                                            </button>
-                                                                        </div>
-                                                                    ) : schedule.status === 'rejected' ? (
-                                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500 text-white shadow-md">
-                                                                            ✘ Ditolak
-                                                                        </span>
-                                                                    ) : (
-                                                                        <div className="flex flex-col gap-1 sm:gap-2">
-                                                                            <button
-                                                                                onClick={() => respond(schedule.id, 'accepted')}
-                                                                                className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded-lg text-xs font-medium shadow-md"
-                                                                            >
-                                                                                Terima
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={() => openRejectModal(schedule.id, 'reject')}
-                                                                                className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-lg text-xs font-medium shadow-md"
-                                                                            >
-                                                                                Tolak
-                                                                            </button>
-                                                                        </div>
-                                                                    )}
+                                                                    {getStatusDisplay(schedule)}
                                                                 </td>
                                                                 <td className="hidden lg:table-cell px-3 py-2 sm:px-4 sm:py-3 text-xs sm:text-sm">
-                                                                    {schedule.status === 'rejected' ? (
-                                                                        <p className="text-xs text-red-500 italic">"{schedule.rejection_reason || 'Tidak ada alasan'}"</p>
-                                                                    ) : schedule.status === 'accepted' ? (
-                                                                        <span className="inline-block text-xs text-gray-500 italic">Tidak ada alasan</span>
-                                                                    ) : (
-                                                                        <span className="inline-block text-xs text-gray-500 italic">Menunggu Respon</span>
-                                                                    )}
+                                                                    {getReasonDisplay(schedule)}
                                                                 </td>
                                                                 <td className="px-3 py-2 sm:px-4 sm:py-3">
-                                                                    {shouldShowSameDayButton(schedule.date) && (
+                                                                    {shouldShowSameDayButton(schedule.date) && !pendingRequests[schedule.id] && (
                                                                         <button
                                                                             onClick={() => fetchSameDayEmployees(schedule.id)}
                                                                             disabled={loadingCoworkers}
@@ -487,10 +639,12 @@ export default function EmployeeDashboard() {
             <div className="mt-2">
                 <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${emp.status === 'accepted' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
                     emp.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
-                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                    emp.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                        'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
                     }`}>
                     {emp.status === 'accepted' ? 'Diterima' :
-                        emp.status === 'rejected' ? 'Ijin' : 'Menunggu'}
+                     emp.status === 'rejected' ? 'Ijin' :
+                     emp.status === 'pending' ? 'Menunggu Persetujuan' : 'Menunggu'}
                 </span>
             </div>
         </div>
@@ -561,32 +715,47 @@ export default function EmployeeDashboard() {
                                 )}
                             </div>
 
-                            {/* Reject/Cancel Modal */}
-                            {showRejectModal && (
+                            {/* Request Modal */}
+                            {showRequestModal && (
                                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
                                     <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 sm:p-8 w-full max-w-md mx-auto shadow-2xl border border-gray-200 dark:border-gray-700">
                                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-                                            {rejectMode === 'cancel' ? 'Batalkan Penjadwalan' : 'Tolak Penjadwalan'}
+                                            {requestMode === 'accept' ? 'Ajukan Penerimaan Jadwal' : 'Ajukan Penolakan Jadwal'}
                                         </h3>
+                                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                                            Status akan berubah menjadi <span className="font-semibold text-yellow-600">"Menunggu Persetujuan"</span> hingga disetujui.
+                                        </p>
+                                        {requestMode === 'reject' && (
+                                            <p className="text-xs text-red-500 mb-2">
+                                                * Alasan wajib diisi untuk penolakan
+                                            </p>
+                                        )}
                                         <textarea
                                             rows="4"
-                                            className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-sm"
-                                            placeholder={`Tuliskan alasan ${rejectMode === 'cancel' ? 'pembatalan' : 'penolakan'}...`}
-                                            value={rejectionReasonInput}
-                                            onChange={(e) => setRejectionReasonInput(e.target.value)}
+                                            className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-sm mb-3"
+                                            placeholder={requestMode === 'accept' 
+                                                ? 'Tuliskan alasan penerimaan (opsional)...' 
+                                                : 'Tuliskan alasan penolakan (wajib)...'}
+                                            value={requestReasonInput}
+                                            onChange={(e) => setRequestReasonInput(e.target.value)}
+                                            required={requestMode === 'reject'}
                                         ></textarea>
                                         <div className="flex justify-end gap-2 mt-4">
                                             <button
-                                                onClick={closeRejectModal}
-                                                className="px-3 py-1.5 border rounded-xl text-sm bg-gray-100 dark:bg-gray-700"
+                                                onClick={closeRequestModal}
+                                                className="px-3 py-1.5 border rounded-xl text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                                             >
                                                 Batal
                                             </button>
                                             <button
-                                                onClick={() => respond(currentScheduleId, 'rejected', rejectionReasonInput)}
-                                                className="px-3 py-1.5 rounded-xl text-sm text-white bg-red-600 hover:bg-red-700"
+                                                onClick={() => {
+                                                    const status = requestMode === 'accept' ? 'accepted' : 'rejected';
+                                                    submitRequest(currentScheduleId, status, requestReasonInput);
+                                                }}
+                                                disabled={requestMode === 'reject' && !requestReasonInput.trim()}
+                                                className="px-3 py-1.5 rounded-xl text-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
-                                                Kirim
+                                                Ajukan Permintaan
                                             </button>
                                         </div>
                                     </div>
@@ -597,13 +766,6 @@ export default function EmployeeDashboard() {
                 </div>
             </div>
 
-            {/* Famday Popup */}
-            {/* {hasFamdayAccount && showFamdayPopup && (
-                <FamdayPopup 
-                    employeeNik={employeeNik} 
-                    onClose={() => setShowFamdayPopup(false)} 
-                />
-            )} */}
         </AuthenticatedLayout>
     );
 }
