@@ -381,6 +381,8 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     Route::get('/admin/permits', [AdminPermitController::class, 'index'])->name('admin.permits.index');
     Route::post('/admin/permits/{permit}/respond', [AdminPermitController::class, 'respond'])
         ->name('admin.permits.respond');
+    Route::post('/admin/schedule-changes/{scheduleChange}/respond', [AdminPermitController::class, 'respondScheduleChange'])
+    ->name('admin.permits.schedule-change.respond');
 
     Route::prefix('kraepelin')->name('kraepelin.')->group(function () {
         Route::get('/', [KraepelinController::class, 'index'])->name('index');

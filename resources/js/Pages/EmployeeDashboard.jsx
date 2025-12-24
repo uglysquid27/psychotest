@@ -97,6 +97,16 @@ export default function EmployeeDashboard() {
         return date.isSame(dayjs(), 'day') || date.isAfter(dayjs(), 'day');
     };
 
+    // Helper function to determine if schedule has no status (new schedule)
+    // Also check if it's "pending" but has no pending request
+    const isFirstResponse = (schedule) => {
+        // If schedule has "pending" status but no pending request, treat it as first response
+        if (schedule.status === 'pending' && !pendingRequests[schedule.id]) {
+            return true;
+        }
+        return !schedule.status || schedule.status === '' || schedule.status === null;
+    };
+
     // Function to check change request status
     const checkRequestStatus = async (scheduleId) => {
         if (loadingRequests[scheduleId]) return;
@@ -118,58 +128,106 @@ export default function EmployeeDashboard() {
         }
     };
 
+    // Handle submit request based on schedule status
     const submitRequest = async (scheduleId, status, reason = '') => {
         // Find the schedule
         const schedule = mySchedules.find(s => s.id === scheduleId);
+        
+        if (!schedule) {
+            alert('Schedule not found!');
+            return;
+        }
 
         // Check if schedule is in the past
-        if (schedule && isPastDate(schedule.date)) {
+        if (isPastDate(schedule.date)) {
             alert('Tidak dapat merespon jadwal yang sudah lewat.');
             return;
         }
 
-        // Check if there's already a pending request
-        if (pendingRequests[scheduleId]) {
-            alert('Anda sudah memiliki permintaan perubahan yang menunggu persetujuan.');
-            return;
-        }
-
-        if (status === 'rejected' && (!reason || reason.trim() === '')) {
-            alert('Alasan tidak boleh kosong!');
-            return;
-        }
-
-        router.post(
-            route('employee.schedule.respond', scheduleId),
-            {
-                status: status,
-                rejection_reason: reason,
-            },
-            {
-                preserveScroll: true,
-                onSuccess: () => {
-                    closeRequestModal();
-                    // Immediately update UI to show pending
-                    setPendingRequests(prev => ({
-                        ...prev,
-                        [scheduleId]: {
-                            schedule_id: scheduleId,
-                            requested_status: status,
-                            reason: reason
-                        }
-                    }));
-                    
-                    alert('Permintaan perubahan status telah diajukan. Status berubah menjadi Menunggu Persetujuan.');
-                    // Refresh the page to show updated schedule status
-                    setTimeout(() => {
-                        router.reload({ preserveScroll: true });
-                    }, 1000);
-                },
-                onError: () => {
-                    alert('Gagal mengajukan permintaan perubahan. Silakan coba lagi.');
-                },
+        // Check if this is first response (including pending status without pending request)
+        if (isFirstResponse(schedule)) {
+            if (status === 'rejected' && (!reason || reason.trim() === '')) {
+                alert('Alasan tidak boleh kosong untuk penolakan!');
+                return;
             }
-        );
+
+            router.post(
+                route('employee.schedule.respond', scheduleId),
+                {
+                    status: status,
+                    rejection_reason: reason,
+                },
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        closeRequestModal();
+                        // NO ALERT FOR FIRST RESPONSE - just close modal and refresh
+                        // Refresh the page to show updated schedule status
+                        setTimeout(() => {
+                            router.reload({ preserveScroll: true });
+                        }, 100);
+                    },
+                    onError: (errors) => {
+                        if (errors.message) {
+                            alert(errors.message);
+                        } else {
+                            alert('Gagal mengajukan permintaan perubahan. Silakan coba lagi.');
+                        }
+                    },
+                }
+            );
+        } else {
+            // For non-first response (changing existing accepted/rejected status), needs approval
+            
+            // Check for pending requests
+            if (pendingRequests[scheduleId]) {
+                alert('Anda sudah memiliki permintaan perubahan yang menunggu persetujuan.');
+                return;
+            }
+
+            if (!reason || reason.trim() === '') {
+                alert('Alasan harus diisi untuk mengajukan perubahan!');
+                return;
+            }
+
+            router.post(
+                route('employee.schedule.respond', scheduleId),
+                {
+                    status: status,
+                    rejection_reason: reason,
+                },
+                {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        closeRequestModal();
+                        
+                        // Show pending status
+                        setPendingRequests(prev => ({
+                            ...prev,
+                            [scheduleId]: {
+                                schedule_id: scheduleId,
+                                requested_status: status,
+                                reason: reason
+                            }
+                        }));
+                        
+                        alert('Permintaan perubahan status telah diajukan. Status berubah menjadi Menunggu Persetujuan.');
+                        
+                        // Refresh the page to show updated schedule status
+                        setTimeout(() => {
+                            router.reload({ preserveScroll: true });
+                        }, 100);
+                    },
+                    onError: (errors) => {
+                        if (errors.message) {
+                            alert(errors.message);
+                        } else {
+                            alert('Gagal mengajukan permintaan perubahan. Silakan coba lagi.');
+                        }
+                    },
+                }
+            );
+        }
     };
 
     const fetchSameDayEmployees = async (scheduleId) => {
@@ -245,6 +303,7 @@ export default function EmployeeDashboard() {
         }
     };
 
+    // Main function to get status display
     const getStatusDisplay = (schedule) => {
         if (isPastDate(schedule.date)) {
             return (
@@ -254,7 +313,7 @@ export default function EmployeeDashboard() {
             );
         }
 
-        // If there's a pending request, show ONLY the pending status
+        // If there's a pending request in the state, show ONLY the pending status
         if (pendingRequests[schedule.id]) {
             const request = pendingRequests[schedule.id];
             const isAcceptRequest = request?.requested_status === 'accepted';
@@ -271,16 +330,54 @@ export default function EmployeeDashboard() {
             );
         }
 
-        // If schedule status is pending (but no pending request in state yet - still loading)
-        if (schedule.status === 'pending') {
+        // If loading request status, show loading
+        if (loadingRequests[schedule.id]) {
             return (
                 <div className="flex flex-col items-center gap-1">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-500 text-white shadow-md">
-                        ⏳ Menunggu Persetujuan
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-400 text-white shadow-md">
+                        Memuat...
                     </span>
-                    <span className="text-xs text-yellow-600 dark:text-yellow-400 italic">
-                        Sedang memuat...
-                    </span>
+                </div>
+            );
+        }
+
+        // CRITICAL FIX: If schedule has "pending" status but NO pending request
+        // This should be treated as first response and show accept/reject buttons
+        if (schedule.status === 'pending' && !pendingRequests[schedule.id]) {
+            return (
+                <div className="flex flex-col gap-1 sm:gap-2">
+                    <button
+                        onClick={() => openRequestModal(schedule.id, 'accept')}
+                        className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded-lg text-xs font-medium shadow-md"
+                    >
+                        Terima
+                    </button>
+                    <button
+                        onClick={() => openRequestModal(schedule.id, 'reject')}
+                        className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-lg text-xs font-medium shadow-md"
+                    >
+                        Tolak
+                    </button>
+                </div>
+            );
+        }
+
+        // If schedule has no status yet (brand new schedule) - show first response buttons
+        if (!schedule.status || schedule.status === '' || schedule.status === null) {
+            return (
+                <div className="flex flex-col gap-1 sm:gap-2">
+                    <button
+                        onClick={() => openRequestModal(schedule.id, 'accept')}
+                        className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded-lg text-xs font-medium shadow-md"
+                    >
+                        Terima
+                    </button>
+                    <button
+                        onClick={() => openRequestModal(schedule.id, 'reject')}
+                        className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-lg text-xs font-medium shadow-md"
+                    >
+                        Tolak
+                    </button>
                 </div>
             );
         }
@@ -319,22 +416,22 @@ export default function EmployeeDashboard() {
             );
         }
 
-        // Default - no status yet (initial state)
+        // If schedule status is pending AND has a pending request (should already be handled above)
+        if (schedule.status === 'pending') {
+            return (
+                <div className="flex flex-col items-center gap-1">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-500 text-white shadow-md">
+                        ⏳ Menunggu Persetujuan
+                    </span>
+                </div>
+            );
+        }
+
+        // Default fallback
         return (
-            <div className="flex flex-col gap-1 sm:gap-2">
-                <button
-                    onClick={() => openRequestModal(schedule.id, 'accept')}
-                    className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded-lg text-xs font-medium shadow-md"
-                >
-                    Ajukan Diterima
-                </button>
-                <button
-                    onClick={() => openRequestModal(schedule.id, 'reject')}
-                    className="bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-lg text-xs font-medium shadow-md"
-                >
-                    Ajukan Ditolak
-                </button>
-            </div>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-400 text-white shadow-md">
+                Tidak Diketahui
+            </span>
         );
     };
 
@@ -349,16 +446,14 @@ export default function EmployeeDashboard() {
             );
         }
         
-        // If schedule status is pending (but request not loaded yet)
-        if (schedule.status === 'pending') {
+        // If loading request status
+        if (loadingRequests[schedule.id]) {
             return (
-                <p className="text-xs text-yellow-600 dark:text-yellow-400 italic">
-                    "Menunggu persetujuan..."
-                </p>
+                <span className="inline-block text-xs text-gray-500 italic">Memuat...</span>
             );
         }
         
-        // Original reason display
+        // Show reason for rejected schedules
         if (schedule.status === 'rejected') {
             return (
                 <p className="text-xs text-red-500 italic">
@@ -367,6 +462,15 @@ export default function EmployeeDashboard() {
             );
         }
         
+        // For brand new schedule (no status yet) or pending without request
+        if (!schedule.status || schedule.status === '' || schedule.status === null || 
+            (schedule.status === 'pending' && !pendingRequests[schedule.id])) {
+            return (
+                <span className="inline-block text-xs text-gray-500 italic">Belum direspon</span>
+            );
+        }
+        
+        // No reason for accepted schedules
         if (schedule.status === 'accepted') {
             return (
                 <span className="inline-block text-xs text-gray-500 italic">Tidak ada alasan</span>
@@ -374,20 +478,33 @@ export default function EmployeeDashboard() {
         }
         
         return (
-            <span className="inline-block text-xs text-gray-500 italic">Menunggu Respon</span>
+            <span className="inline-block text-xs text-gray-500 italic">-</span>
         );
     };
 
-    const getRequestTypeText = (schedule) => {
-        if (pendingRequests[schedule.id]) {
-            const request = pendingRequests[schedule.id];
-            if (request.requested_status === 'accepted') {
-                return 'Diterima';
-            } else if (request.requested_status === 'rejected') {
-                return 'Ditolak';
-            }
+    // Function to check if current modal is for first response
+    const isModalForFirstResponse = () => {
+        const schedule = mySchedules.find(s => s.id === currentScheduleId);
+        if (!schedule) return false;
+        
+        // Check if schedule has "pending" status but no pending request
+        if (schedule.status === 'pending' && !pendingRequests[schedule.id]) {
+            return true;
         }
-        return '';
+        
+        return !schedule.status || schedule.status === '' || schedule.status === null;
+    };
+
+    // Function to get button text in modal
+    const getModalButtonText = () => {
+        const schedule = mySchedules.find(s => s.id === currentScheduleId);
+        if (!schedule) return '';
+        
+        if (isModalForFirstResponse()) {
+            return requestMode === 'accept' ? 'Terima' : 'Tolak';
+        } else {
+            return 'Ajukan Perubahan';
+        }
     };
 
     const employeeName = auth?.user?.name || 'Pegawai';
@@ -424,7 +541,8 @@ export default function EmployeeDashboard() {
                                     <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
                                 </svg>
                                 <span>
-                                    Setelah mengajukan perubahan status, jadwal akan berstatus <span className="font-semibold">"Menunggu Persetujuan"</span> hingga disetujui.
+                                    <span className="font-semibold">Respon pertama</span> (terima/tolak) akan langsung memperbarui status jadwal. <br />
+                                    <span className="font-semibold">Perubahan status</span> selanjutnya membutuhkan persetujuan supervisor.
                                 </span>
                             </p>
                         </div>
@@ -554,7 +672,10 @@ export default function EmployeeDashboard() {
                                                                     {getReasonDisplay(schedule)}
                                                                 </td>
                                                                 <td className="px-3 py-2 sm:px-4 sm:py-3">
-                                                                    {shouldShowSameDayButton(schedule.date) && !pendingRequests[schedule.id] && (
+                                                                    {/* Show Same Day button for schedules that are not pending and don't have pending requests */}
+                                                                    {shouldShowSameDayButton(schedule.date) && 
+                                                                     !pendingRequests[schedule.id] && 
+                                                                     schedule.status !== 'pending' && (
                                                                         <button
                                                                             onClick={() => fetchSameDayEmployees(schedule.id)}
                                                                             disabled={loadingCoworkers}
@@ -604,52 +725,52 @@ export default function EmployeeDashboard() {
                                                                                                 </div>
                                                                                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                                                                                    {timeData.employees.map((emp, index) => {
-    const isCurrentUser =
-        String(emp.employee?.id) === String(auth.user.id) ||
-        Number(emp.employee?.id) === Number(auth.user.id);
+                                                                                                        const isCurrentUser =
+                                                                                                            String(emp.employee?.id) === String(auth.user.id) ||
+                                                                                                            Number(emp.employee?.id) === Number(auth.user.id);
 
-    const shouldShowLine = emp.sub_section === 'Putway' && emp.line;
-    const shouldShowShrink = emp.sub_section === 'Shrink' && emp.line;
+                                                                                                        const shouldShowLine = emp.sub_section === 'Putway' && emp.line;
+                                                                                                        const shouldShowShrink = emp.sub_section === 'Shrink' && emp.line;
 
-    return (
-        <div
-            key={emp.id || index}
-            className={`rounded-lg p-3 text-xs ${isCurrentUser
-                ? 'bg-blue-100 dark:bg-blue-900/40 border-2 border-blue-500 dark:border-blue-400'
-                : 'bg-gray-50 dark:bg-gray-700'
-                }`}
-        >
-            <div className="font-medium text-gray-800 dark:text-gray-200 flex items-center">
-                {emp.employee?.name || 'N/A'}
-                {isCurrentUser && (
-                    <span className="ml-2 bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">
-                        Anda
-                    </span>
-                )}
-            </div>
-            <div className="text-gray-600 dark:text-gray-400 mt-1">
-                NIK: {emp.employee?.nik || 'N/A'}
-            </div>
-            <div className="text-gray-600 dark:text-gray-400">
-                Sub Bagian: {emp.sub_section || 'N/A'} 
-                {shouldShowLine ? ` Line ${emp.line}` : ''}
-                {shouldShowShrink ? `  ${emp.line}` : ''}
-            </div>
+                                                                                                        return (
+                                                                                                            <div
+                                                                                                                key={emp.id || index}
+                                                                                                                className={`rounded-lg p-3 text-xs ${isCurrentUser
+                                                                                                                    ? 'bg-blue-100 dark:bg-blue-900/40 border-2 border-blue-500 dark:border-blue-400'
+                                                                                                                    : 'bg-gray-50 dark:bg-gray-700'
+                                                                                                                    }`}
+                                                                                                            >
+                                                                                                                <div className="font-medium text-gray-800 dark:text-gray-200 flex items-center">
+                                                                                                                    {emp.employee?.name || 'N/A'}
+                                                                                                                    {isCurrentUser && (
+                                                                                                                        <span className="ml-2 bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full">
+                                                                                                                            Anda
+                                                                                                                        </span>
+                                                                                                                    )}
+                                                                                                                </div>
+                                                                                                                <div className="text-gray-600 dark:text-gray-400 mt-1">
+                                                                                                                    NIK: {emp.employee?.nik || 'N/A'}
+                                                                                                                </div>
+                                                                                                                <div className="text-gray-600 dark:text-gray-400">
+                                                                                                                    Sub Bagian: {emp.sub_section || 'N/A'} 
+                                                                                                                    {shouldShowLine ? ` Line ${emp.line}` : ''}
+                                                                                                                    {shouldShowShrink ? `  ${emp.line}` : ''}
+                                                                                                                </div>
 
-            <div className="mt-2">
-                <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${emp.status === 'accepted' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                    emp.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
-                    emp.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                        'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
-                    }`}>
-                    {emp.status === 'accepted' ? 'Diterima' :
-                     emp.status === 'rejected' ? 'Ijin' :
-                     emp.status === 'pending' ? 'Menunggu Persetujuan' : 'Menunggu'}
-                </span>
-            </div>
-        </div>
-    );
-})}
+                                                                                                                <div className="mt-2">
+                                                                                                                    <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${emp.status === 'accepted' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                                                                                                                        emp.status === 'rejected' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                                                                                                                        emp.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                                                                                                            'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
+                                                                                                                        }`}>
+                                                                                                                        {emp.status === 'accepted' ? 'Diterima' :
+                                                                                                                        emp.status === 'rejected' ? 'Ijin' :
+                                                                                                                        emp.status === 'pending' ? 'Menunggu Persetujuan' : 'Menunggu'}
+                                                                                                                    </span>
+                                                                                                                </div>
+                                                                                                            </div>
+                                                                                                        );
+                                                                                                    })}
                                                                                                 </div>
                                                                                             </div>
                                                                                         );
@@ -720,26 +841,48 @@ export default function EmployeeDashboard() {
                                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
                                     <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 sm:p-8 w-full max-w-md mx-auto shadow-2xl border border-gray-200 dark:border-gray-700">
                                         <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-                                            {requestMode === 'accept' ? 'Ajukan Penerimaan Jadwal' : 'Ajukan Penolakan Jadwal'}
+                                            {isModalForFirstResponse() ? 
+                                                (requestMode === 'accept' ? 'Terima Jadwal' : 'Tolak Jadwal') :
+                                                (requestMode === 'accept' ? 'Ajukan Perubahan ke Diterima' : 'Ajukan Perubahan ke Ditolak')
+                                            }
                                         </h3>
-                                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                                            Status akan berubah menjadi <span className="font-semibold text-yellow-600">"Menunggu Persetujuan"</span> hingga disetujui.
-                                        </p>
-                                        {requestMode === 'reject' && (
-                                            <p className="text-xs text-red-500 mb-2">
-                                                * Alasan wajib diisi untuk penolakan
+                                        
+                                        {/* Show different descriptions based on whether it's first response or change request */}
+                                        {isModalForFirstResponse() ? (
+                                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                                                Status jadwal akan langsung diperbarui tanpa memerlukan persetujuan.
+                                            </p>
+                                        ) : (
+                                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                                                Permintaan perubahan status memerlukan persetujuan supervisor.
                                             </p>
                                         )}
-                                        <textarea
-                                            rows="4"
-                                            className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-sm mb-3"
-                                            placeholder={requestMode === 'accept' 
-                                                ? 'Tuliskan alasan penerimaan (opsional)...' 
-                                                : 'Tuliskan alasan penolakan (wajib)...'}
-                                            value={requestReasonInput}
-                                            onChange={(e) => setRequestReasonInput(e.target.value)}
-                                            required={requestMode === 'reject'}
-                                        ></textarea>
+                                        
+                                        {/* Show reason requirement */}
+                                        {requestMode === 'reject' || !isModalForFirstResponse() ? (
+                                            <p className="text-xs text-red-500 mb-2">
+                                                * Alasan wajib diisi
+                                            </p>
+                                        ) : null}
+                                        
+                                        {/* Show textarea for reject or change requests */}
+                                        {requestMode === 'reject' || !isModalForFirstResponse() ? (
+                                            <textarea
+                                                rows="4"
+                                                className="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-xl text-sm mb-3"
+                                                placeholder={
+                                                    isModalForFirstResponse() && requestMode === 'reject' 
+                                                        ? 'Tuliskan alasan penolakan...' 
+                                                        : !isModalForFirstResponse() && requestMode === 'accept'
+                                                        ? 'Tuliskan alasan perubahan ke Diterima...'
+                                                        : 'Tuliskan alasan...'
+                                                }
+                                                value={requestReasonInput}
+                                                onChange={(e) => setRequestReasonInput(e.target.value)}
+                                                required
+                                            ></textarea>
+                                        ) : null}
+                                        
                                         <div className="flex justify-end gap-2 mt-4">
                                             <button
                                                 onClick={closeRequestModal}
@@ -752,10 +895,10 @@ export default function EmployeeDashboard() {
                                                     const status = requestMode === 'accept' ? 'accepted' : 'rejected';
                                                     submitRequest(currentScheduleId, status, requestReasonInput);
                                                 }}
-                                                disabled={requestMode === 'reject' && !requestReasonInput.trim()}
+                                                disabled={(requestMode === 'reject' || !isModalForFirstResponse()) && !requestReasonInput.trim()}
                                                 className="px-3 py-1.5 rounded-xl text-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
-                                                Ajukan Permintaan
+                                                {getModalButtonText()}
                                             </button>
                                         </div>
                                     </div>

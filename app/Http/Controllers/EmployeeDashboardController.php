@@ -28,10 +28,8 @@ class EmployeeDashboardController extends Controller
         // Get all schedules (past, present, and future)
         $mySchedules = $employee->schedules()
             ->with(['manPowerRequest.shift', 'subSection.section'])
-            ->orderBy('date', 'desc') // Changed to desc to show latest first
+            ->orderBy('date', 'desc')
             ->get();
-
-        \Log::info('Schedule: ' . $mySchedules);
 
         return inertia('EmployeeDashboard', [
             'auth' => [
@@ -61,7 +59,6 @@ class EmployeeDashboardController extends Controller
             $startTime = $s->manPowerRequest->start_time ?: 'N/A';
             $endTime = $s->manPowerRequest->end_time ?: 'N/A';
             
-            // Create a unique key for each time combination within a shift
             $timeKey = $startTime . '_' . $endTime;
             
             if (!isset($shiftGroups[$shiftId])) {
@@ -91,7 +88,6 @@ class EmployeeDashboardController extends Controller
             ];
         }
 
-        // Sort time groups within each shift by start time
         foreach ($shiftGroups as &$shiftGroup) {
             uasort($shiftGroup['timeGroups'], function($a, $b) {
                 if ($a['start_time'] === 'N/A') return 1;
@@ -106,81 +102,108 @@ class EmployeeDashboardController extends Controller
                 'status' => $schedule->status,
                 'section_name' => $currentSection->name
             ],
-            'shiftGroups' => $shiftGroups, // Back to shiftGroups but with timeGroups inside
+            'shiftGroups' => $shiftGroups,
             'current_user_id' => $employee->id
         ]);
     }
 
-  public function respond(Request $req, Schedule $schedule)
-{
-    // Only allow responding to today's or future schedules
-    if (Carbon::parse($schedule->date)->isPast() && !Carbon::parse($schedule->date)->isToday()) {
-        return back()->with('error', 'Tidak dapat merespon jadwal yang sudah lewat.');
+    public function respond(Request $req, Schedule $schedule)
+    {
+        // Only allow responding to today's or future schedules
+        if (Carbon::parse($schedule->date)->isPast() && !Carbon::parse($schedule->date)->isToday()) {
+            return back()->with('error', 'Tidak dapat merespon jadwal yang sudah lewat.');
+        }
+
+        $req->validate([
+            'status' => 'required|in:accepted,rejected',
+            'rejection_reason' => 'nullable|required_if:status,rejected|string|max:1000',
+        ]);
+
+        $employee = Auth::guard('employee')->user();
+
+        // Check if this is the first response or a pending schedule without change request
+        $isFirstResponse = empty($schedule->status) || $schedule->status === '' || 
+                           $schedule->status === 'pending';
+
+        // If it's a pending schedule, check if there's already a change request
+        if ($schedule->status === 'pending') {
+            $existingRequest = ScheduleChangeRequest::where('schedule_id', $schedule->id)
+                ->where('employee_id', $employee->id)
+                ->where('approval_status', 'pending')
+                ->first();
+            
+            // If there's already a pending change request, it's NOT a first response
+            if ($existingRequest) {
+                $isFirstResponse = false;
+            }
+        }
+
+        if ($isFirstResponse) {
+            // First time response - directly update schedule status, no approval needed
+            // Also remove any existing pending change requests for this schedule
+            ScheduleChangeRequest::where('schedule_id', $schedule->id)
+                ->where('employee_id', $employee->id)
+                ->where('approval_status', 'pending')
+                ->delete();
+
+            $schedule->update([
+                'status' => $req->status,
+                'rejection_reason' => $req->status === 'rejected' ? $req->rejection_reason : null
+            ]);
+
+            return back()->with('success', 'Status jadwal telah diperbarui.');
+        } else {
+            // Not first response - schedule already has accepted/rejected status, need approval
+            
+            DB::transaction(function () use ($req, $schedule, $employee) {
+                // Check if there's already a pending request for this schedule
+                $existingRequest = ScheduleChangeRequest::where('schedule_id', $schedule->id)
+                    ->where('employee_id', $employee->id)
+                    ->where('approval_status', 'pending')
+                    ->first();
+
+                if ($existingRequest) {
+                    throw new \Exception('Anda sudah memiliki permintaan perubahan yang menunggu persetujuan.');
+                }
+
+                // Store the current status before changing to pending
+                $currentStatus = $schedule->status;
+                
+                // Change schedule status to 'pending' when a change request is made
+                $schedule->update([
+                    'status' => 'pending',
+                    'rejection_reason' => $req->status === 'rejected' ? $req->rejection_reason : null
+                ]);
+
+                // Create change request for status change (needs supervisor approval)
+                ScheduleChangeRequest::create([
+                    'schedule_id' => $schedule->id,
+                    'employee_id' => $employee->id,
+                    'requested_status' => $req->status,
+                    'current_status' => $currentStatus,
+                    'reason' => $req->rejection_reason,
+                    'approval_status' => 'pending',
+                ]);
+            });
+
+            return back()->with('success', 'Permintaan perubahan status telah diajukan. Status berubah menjadi Menunggu Persetujuan.');
+        }
     }
 
-    $req->validate([
-        'status' => 'required|in:accepted,rejected',
-        'rejection_reason' => 'nullable|required_if:status,rejected|string|max:1000',
-    ]);
-
-    $employee = Auth::guard('employee')->user();
-
-    // Check if there's already a pending request for this schedule
-    $existingRequest = ScheduleChangeRequest::where('schedule_id', $schedule->id)
-        ->where('employee_id', $employee->id)
-        ->where('approval_status', 'pending')
-        ->first();
-
-    if ($existingRequest) {
-        return back()->with('error', 'Anda sudah memiliki permintaan perubahan yang menunggu persetujuan.');
-    }
-
-    DB::transaction(function () use ($req, $schedule, $employee) {
-        // Store the current status before changing to pending
-        $currentStatus = $schedule->status;
+    public function checkChangeRequestStatus(Schedule $schedule)
+    {
+        $employee = Auth::guard('employee')->user();
         
-        // Change schedule status to 'pending' when a request is made
-        $schedule->update([
-            'status' => 'pending',
-            'rejection_reason' => $req->status === 'rejected' ? $req->rejection_reason : null
+        $pendingRequest = ScheduleChangeRequest::where('schedule_id', $schedule->id)
+            ->where('employee_id', $employee->id)
+            ->where('approval_status', 'pending')
+            ->first();
+        
+        return response()->json([
+            'has_pending_request' => $pendingRequest ? true : false,
+            'pending_request' => $pendingRequest,
         ]);
-
-        // Create change request
-        ScheduleChangeRequest::create([
-            'schedule_id' => $schedule->id,
-            'employee_id' => $employee->id,
-            'requested_status' => $req->status,
-            'current_status' => $currentStatus, // Store what it was before
-            'reason' => $req->rejection_reason,
-            'approval_status' => 'pending',
-        ]);
-    });
-
-    return back()->with('success', 'Permintaan perubahan status telah diajukan. Status berubah menjadi Menunggu Persetujuan.');
-}
-
-public function checkChangeRequestStatus(Schedule $schedule)
-{
-    $employee = Auth::guard('employee')->user();
-    
-    $pendingRequest = ScheduleChangeRequest::where('schedule_id', $schedule->id)
-        ->where('employee_id', $employee->id)
-        ->where('approval_status', 'pending')
-        ->first();
-    
-    $recentlyApproved = ScheduleChangeRequest::where('schedule_id', $schedule->id)
-        ->where('employee_id', $employee->id)
-        ->where('approval_status', 'approved')
-        ->where('created_at', '>=', now()->subMinutes(5)) // Show notification for 5 minutes
-        ->first();
-    
-    return response()->json([
-        'has_pending_request' => $pendingRequest ? true : false,
-        'pending_request' => $pendingRequest,
-        'recently_approved' => $recentlyApproved ? true : false,
-        'recent_approval' => $recentlyApproved
-    ]);
-}
+    }
 
     // Helper function to parse CSV data
     private function parseFamdayCsv()

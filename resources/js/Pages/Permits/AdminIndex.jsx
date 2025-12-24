@@ -4,11 +4,17 @@ import { Head, useForm, Link, router } from '@inertiajs/react';
 import moment from 'moment';
 
 export default function AdminIndex({ auth, permits, scheduleChangeRequests, filters, totalPendingCount }) {
+    // Initialize with default empty arrays if props are undefined
+    const safePermits = permits || { data: [], links: [] };
+    const safeScheduleChangeRequests = scheduleChangeRequests || { data: [], links: [] };
+    const safeFilters = filters || { status: 'all' };
+    const safeTotalPendingCount = totalPendingCount || { permits: 0, schedule_changes: 0 };
+
     const { data, setData, post, processing, errors, reset } = useForm({
         status: '',
         admin_notes: '',
         approval_status: '',
-        admin_response: '',
+        approval_notes: '',
     });
 
     const [showRespondModal, setShowRespondModal] = useState(false);
@@ -37,7 +43,7 @@ export default function AdminIndex({ auth, permits, scheduleChangeRequests, filt
         } else {
             setData({
                 approval_status: request.approval_status,
-                admin_response: request.admin_response || '',
+                approval_notes: request.approval_notes || '',
             });
         }
         
@@ -75,7 +81,7 @@ export default function AdminIndex({ auth, permits, scheduleChangeRequests, filt
                 onError: () => console.error('Error submitting response')
             });
         } else {
-            post(route('admin.schedule-changes.respond', selectedRequest.id), {
+            post(route('admin.permits.schedule-change.respond', selectedRequest.id), {
                 onSuccess: () => {
                     closeRespondModal();
                     router.reload({ preserveScroll: true });
@@ -105,15 +111,22 @@ export default function AdminIndex({ auth, permits, scheduleChangeRequests, filt
     };
 
     const formatDateForMobile = (date) => {
+        if (!date) return '-';
         return moment(date).format('DD/MM');
     };
 
     const formatDateTime = (date) => {
+        if (!date) return '-';
         return moment(date).format('DD MMM YYYY HH:mm');
     };
 
+    const formatDateFull = (date) => {
+        if (!date) return '-';
+        return moment(date).format('DD MMM YYYY');
+    };
+
     // Calculate total pending requests for badge
-    const totalPendingAll = (totalPendingCount?.permits || 0) + (totalPendingCount?.schedule_changes || 0);
+    const totalPendingAll = (safeTotalPendingCount.permits || 0) + (safeTotalPendingCount.schedule_changes || 0);
 
     return (
         <AuthenticatedLayout
@@ -128,7 +141,7 @@ export default function AdminIndex({ auth, permits, scheduleChangeRequests, filt
                         <div className="p-4 sm:p-6 text-gray-900 dark:text-gray-100">
                             {/* Tabs */}
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                                <div className="flex space-x-4">
+                                <div className="flex flex-wrap gap-2">
                                     <button
                                         onClick={() => setActiveTab('all')}
                                         className={`px-4 py-2 rounded-md font-medium relative ${activeTab === 'all' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}
@@ -145,9 +158,9 @@ export default function AdminIndex({ auth, permits, scheduleChangeRequests, filt
                                         className={`px-4 py-2 rounded-md font-medium relative ${activeTab === 'permits' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}
                                     >
                                         Izin
-                                        {totalPendingCount?.permits > 0 && (
+                                        {safeTotalPendingCount.permits > 0 && (
                                             <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                                                {totalPendingCount.permits}
+                                                {safeTotalPendingCount.permits}
                                             </span>
                                         )}
                                     </button>
@@ -156,47 +169,51 @@ export default function AdminIndex({ auth, permits, scheduleChangeRequests, filt
                                         className={`px-4 py-2 rounded-md font-medium relative ${activeTab === 'schedule_changes' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'}`}
                                     >
                                         Perubahan Jadwal
-                                        {totalPendingCount?.schedule_changes > 0 && (
+                                        {safeTotalPendingCount.schedule_changes > 0 && (
                                             <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                                                {totalPendingCount.schedule_changes}
+                                                {safeTotalPendingCount.schedule_changes}
                                             </span>
                                         )}
                                     </button>
                                 </div>
                                 
-                                {/* Filter buttons - only for permits */}
-                                {activeTab !== 'schedule_changes' && (
+                                {/* Filter buttons - only for permits tab */}
+                                {activeTab === 'all' || activeTab === 'permits' ? (
                                     <div className="flex flex-wrap gap-2">
                                         <button
                                             onClick={() => handleFilterChange('all')}
-                                            className={`px-3 py-1 rounded-md text-xs sm:text-sm font-medium ${filters.status === 'all' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
+                                            className={`px-3 py-1 rounded-md text-xs sm:text-sm font-medium ${safeFilters.status === 'all' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
                                         >
                                             Semua
                                         </button>
                                         <button
                                             onClick={() => handleFilterChange('pending')}
-                                            className={`px-3 py-1 rounded-md text-xs sm:text-sm font-medium ${filters.status === 'pending' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
+                                            className={`px-3 py-1 rounded-md text-xs sm:text-sm font-medium ${safeFilters.status === 'pending' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
                                         >
                                             Pending
                                         </button>
                                         <button
                                             onClick={() => handleFilterChange('approved')}
-                                            className={`px-3 py-1 rounded-md text-xs sm:text-sm font-medium ${filters.status === 'approved' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
+                                            className={`px-3 py-1 rounded-md text-xs sm:text-sm font-medium ${safeFilters.status === 'approved' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
                                         >
                                             Diterima
                                         </button>
                                         <button
                                             onClick={() => handleFilterChange('rejected')}
-                                            className={`px-3 py-1 rounded-md text-xs sm:text-sm font-medium ${filters.status === 'rejected' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
+                                            className={`px-3 py-1 rounded-md text-xs sm:text-sm font-medium ${safeFilters.status === 'rejected' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
                                         >
                                             Ditolak
                                         </button>
                                         <button
                                             onClick={() => handleFilterChange('cancelled')}
-                                            className={`px-3 py-1 rounded-md text-xs sm:text-sm font-medium ${filters.status === 'cancelled' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
+                                            className={`px-3 py-1 rounded-md text-xs sm:text-sm font-medium ${safeFilters.status === 'cancelled' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}`}
                                         >
                                             Dibatalkan
                                         </button>
+                                    </div>
+                                ) : (
+                                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                                        {safeScheduleChangeRequests.data?.length || 0} permintaan perubahan jadwal
                                     </div>
                                 )}
                             </div>
@@ -206,11 +223,11 @@ export default function AdminIndex({ auth, permits, scheduleChangeRequests, filt
                                 <div className="mb-8">
                                     <h3 className="text-lg font-bold mb-4">Permintaan Izin Karyawan</h3>
                                     
-                                    {permits.data.length > 0 ? (
+                                    {safePermits.data?.length > 0 ? (
                                         <div className="overflow-x-auto">
                                             {/* Mobile Cards View */}
                                             <div className="sm:hidden space-y-3">
-                                                {permits.data.map((permit) => (
+                                                {safePermits.data.map((permit) => (
                                                     <div key={permit.id} className="border rounded-lg p-3 shadow-sm dark:border-gray-700 dark:bg-gray-700">
                                                         <div className="flex justify-between items-start">
                                                             <div>
@@ -302,7 +319,7 @@ export default function AdminIndex({ auth, permits, scheduleChangeRequests, filt
                                                     </tr>
                                                 </thead>
                                                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                                    {permits.data.map((permit) => (
+                                                    {safePermits.data.map((permit) => (
                                                         <tr key={permit.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                                                             <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
                                                                 {permit.employee ? permit.employee.name : 'N/A'}
@@ -365,19 +382,21 @@ export default function AdminIndex({ auth, permits, scheduleChangeRequests, filt
                                     )}
 
                                     {/* Pagination for permits */}
-                                    <div className="mt-4 flex flex-wrap justify-center">
-                                        {permits.links.map((link, index) => (
-                                            <Link
-                                                key={index}
-                                                href={link.url || '#'}
-                                                dangerouslySetInnerHTML={{ __html: link.label }}
-                                                className={`px-2 py-1 mx-0.5 sm:px-3 sm:py-1 sm:mx-1 rounded-md text-xs sm:text-sm
-                                                    ${link.active ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}
-                                                    ${!link.url ? 'opacity-50 cursor-not-allowed' : ''}
-                                                `}
-                                            />
-                                        ))}
-                                    </div>
+                                    {safePermits.links && safePermits.links.length > 1 && (
+                                        <div className="mt-4 flex flex-wrap justify-center">
+                                            {safePermits.links.map((link, index) => (
+                                                <Link
+                                                    key={index}
+                                                    href={link.url || '#'}
+                                                    dangerouslySetInnerHTML={{ __html: link.label }}
+                                                    className={`px-2 py-1 mx-0.5 sm:px-3 sm:py-1 sm:mx-1 rounded-md text-xs sm:text-sm
+                                                        ${link.active ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}
+                                                        ${!link.url ? 'opacity-50 cursor-not-allowed' : ''}
+                                                    `}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -386,16 +405,16 @@ export default function AdminIndex({ auth, permits, scheduleChangeRequests, filt
                                 <div>
                                     <h3 className="text-lg font-bold mb-4">Permintaan Perubahan Jadwal</h3>
                                     
-                                    {scheduleChangeRequests.data.length > 0 ? (
+                                    {safeScheduleChangeRequests.data?.length > 0 ? (
                                         <div className="overflow-x-auto">
                                             {/* Mobile Cards View for Schedule Changes */}
                                             <div className="sm:hidden space-y-3">
-                                                {scheduleChangeRequests.data.map((request) => (
+                                                {safeScheduleChangeRequests.data.map((request) => (
                                                     <div key={`schedule-${request.id}`} className="border rounded-lg p-3 shadow-sm dark:border-gray-700 dark:bg-gray-700">
                                                         <div className="flex justify-between items-start">
                                                             <div>
                                                                 <p className="font-medium text-sm dark:text-gray-100">
-                                                                    {request.schedule?.employee?.name || 'N/A'}
+                                                                    {request.employee?.name || request.schedule?.employee?.name || 'N/A'}
                                                                 </p>
                                                                 <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
                                                                     {request.requested_status === 'accepted' ? 'Permintaan Diterima' : 'Permintaan Ditolak'}
@@ -429,6 +448,11 @@ export default function AdminIndex({ auth, permits, scheduleChangeRequests, filt
                                                         <div className="mt-2">
                                                             <p className="text-xs text-gray-500 dark:text-gray-400">Diajukan</p>
                                                             <p className="text-sm dark:text-gray-100">{formatDateTime(request.created_at)}</p>
+                                                        </div>
+
+                                                        <div className="mt-2">
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400">Status Sebelumnya</p>
+                                                            <p className="text-sm dark:text-gray-100">{request.current_status || '-'}</p>
                                                         </div>
 
                                                         <div className="mt-2 flex justify-end">
@@ -477,30 +501,32 @@ export default function AdminIndex({ auth, permits, scheduleChangeRequests, filt
                                                     </tr>
                                                 </thead>
                                                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                                    {scheduleChangeRequests.data.map((request) => (
+                                                    {safeScheduleChangeRequests.data.map((request) => (
                                                         <tr key={`schedule-${request.id}`} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                                                             <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
-                                                                {request.schedule?.employee?.name || 'N/A'}
+                                                                {request.employee?.name || request.schedule?.employee?.name || 'N/A'}
                                                             </td>
                                                             <td className="hidden sm:table-cell px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                                                                {request.schedule?.employee?.nik || 'N/A'}
+                                                                {request.employee?.nik || request.schedule?.employee?.nik || 'N/A'}
                                                             </td>
                                                             <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                                                                {moment(request.schedule?.date).format('DD MMM YYYY')}
+                                                                {formatDateFull(request.schedule?.date)}
                                                             </td>
                                                             <td className="px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
                                                                 {request.schedule?.subSection?.section?.name || '-'} / {request.schedule?.subSection?.name || '-'}
                                                             </td>
                                                             <td className="hidden md:table-cell px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
-                                                                <span className={`px-2 py-1 text-xs rounded-full ${
-                                                                    request.requested_status === 'accepted' 
-                                                                    ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
-                                                                    : 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'
-                                                                }`}>
-                                                                    {request.requested_status === 'accepted' ? 'Diterima' : 'Ditolak'}
-                                                                </span>
-                                                                <div className="text-xs text-gray-500 mt-1">
-                                                                    Sebelumnya: {request.current_status}
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span className={`px-2 py-1 text-xs rounded-full ${
+                                                                        request.requested_status === 'accepted' 
+                                                                        ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
+                                                                        : 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'
+                                                                    }`}>
+                                                                        {request.requested_status === 'accepted' ? 'Diterima' : 'Ditolak'}
+                                                                    </span>
+                                                                    <div className="text-xs text-gray-500">
+                                                                        Sebelumnya: {request.current_status || '-'}
+                                                                    </div>
                                                                 </div>
                                                             </td>
                                                             <td className="hidden md:table-cell px-3 py-2 sm:px-6 sm:py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
@@ -532,19 +558,21 @@ export default function AdminIndex({ auth, permits, scheduleChangeRequests, filt
                                     )}
 
                                     {/* Pagination for schedule change requests */}
-                                    <div className="mt-4 flex flex-wrap justify-center">
-                                        {scheduleChangeRequests.links.map((link, index) => (
-                                            <Link
-                                                key={`schedule-${index}`}
-                                                href={link.url || '#'}
-                                                dangerouslySetInnerHTML={{ __html: link.label }}
-                                                className={`px-2 py-1 mx-0.5 sm:px-3 sm:py-1 sm:mx-1 rounded-md text-xs sm:text-sm
-                                                    ${link.active ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}
-                                                    ${!link.url ? 'opacity-50 cursor-not-allowed' : ''}
-                                                `}
-                                            />
-                                        ))}
-                                    </div>
+                                    {safeScheduleChangeRequests.links && safeScheduleChangeRequests.links.length > 1 && (
+                                        <div className="mt-4 flex flex-wrap justify-center">
+                                            {safeScheduleChangeRequests.links.map((link, index) => (
+                                                <Link
+                                                    key={`schedule-${index}`}
+                                                    href={link.url || '#'}
+                                                    dangerouslySetInnerHTML={{ __html: link.label }}
+                                                    className={`px-2 py-1 mx-0.5 sm:px-3 sm:py-1 sm:mx-1 rounded-md text-xs sm:text-sm
+                                                        ${link.active ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'}
+                                                        ${!link.url ? 'opacity-50 cursor-not-allowed' : ''}
+                                                    `}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -572,16 +600,19 @@ export default function AdminIndex({ auth, permits, scheduleChangeRequests, filt
                         ) : (
                             <>
                                 <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-                                    Karyawan: {selectedRequest.schedule?.employee?.name || 'N/A'}
+                                    Karyawan: {selectedRequest.employee?.name || selectedRequest.schedule?.employee?.name || 'N/A'}
                                 </p>
                                 <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-                                    Tanggal: {moment(selectedRequest.schedule?.date).format('DD MMM YYYY')}
+                                    Tanggal: {formatDateFull(selectedRequest.schedule?.date)}
                                 </p>
                                 <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
                                     Section: {selectedRequest.schedule?.subSection?.section?.name || '-'} / {selectedRequest.schedule?.subSection?.name || '-'}
                                 </p>
-                                <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+                                <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
                                     Permintaan: {selectedRequest.requested_status === 'accepted' ? 'Diterima' : 'Ditolak'}
+                                </p>
+                                <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+                                    Status Sebelumnya: {selectedRequest.current_status || '-'}
                                 </p>
                             </>
                         )}
@@ -644,22 +675,6 @@ export default function AdminIndex({ auth, permits, scheduleChangeRequests, filt
                                             <option value="rejected">Tolak</option>
                                         </select>
                                         {errors.approval_status && <p className="text-red-500 text-xs mt-1">{errors.approval_status}</p>}
-                                    </div>
-
-                                    <div className="mb-4">
-                                        <label htmlFor="admin_response" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                            Tanggapan Admin
-                                        </label>
-                                        <textarea
-                                            id="admin_response"
-                                            name="admin_response"
-                                            rows="3"
-                                            value={data.admin_response}
-                                            onChange={(e) => setData('admin_response', e.target.value)}
-                                            className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                                            placeholder="Masukkan tanggapan admin..."
-                                        ></textarea>
-                                        {errors.admin_response && <p className="text-red-500 text-xs mt-1">{errors.admin_response}</p>}
                                     </div>
                                 </>
                             )}

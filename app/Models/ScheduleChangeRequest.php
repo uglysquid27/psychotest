@@ -39,4 +39,26 @@ class ScheduleChangeRequest extends Model
     {
         return $this->belongsTo(Admin::class, 'approved_by');
     }
+
+    public function getApprovalStatusTextAttribute()
+{
+    $statuses = [
+        'pending' => 'Menunggu',
+        'approved' => 'Disetujui',
+        'rejected' => 'Ditolak'
+    ];
+    
+    return $statuses[$this->approval_status] ?? $this->approval_status;
+}
+
+// Add this accessor to get requested status text
+public function getRequestedStatusTextAttribute()
+{
+    $statuses = [
+        'accepted' => 'Diterima',
+        'rejected' => 'Ditolak'
+    ];
+    
+    return $statuses[$this->requested_status] ?? $this->requested_status;
+}
 }
