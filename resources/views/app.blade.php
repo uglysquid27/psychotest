@@ -18,6 +18,29 @@
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
+         <script>
+        // Immediately remove data-page
+        (function() {
+            // Function to remove attribute
+            function removeDataPage() {
+                var app = document.getElementById('app');
+                if (app && app.getAttribute('data-page')) {
+                    app.removeAttribute('data-page');
+                }
+            }
+            
+            // Remove on load
+            if (document.readyState === 'complete') {
+                removeDataPage();
+            } else {
+                window.addEventListener('load', removeDataPage);
+                document.addEventListener('DOMContentLoaded', removeDataPage);
+            }
+            
+            // Watch for Inertia updates (simple polling)
+            setInterval(removeDataPage, 100);
+        })();
+    </script>
 
         <!-- Scripts -->
         @routes
