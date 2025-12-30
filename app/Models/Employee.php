@@ -31,6 +31,10 @@ class Employee extends Authenticatable
         'birth_date',
         'religion',
         'phone',
+        // Bank account fields
+        'bank_account',
+        'bank_name',
+        // Address fields
         'street',
         'rt',
         'rw',
@@ -46,7 +50,6 @@ class Employee extends Authenticatable
         'deactivated_by',
     ];
 
-
     protected $hidden = [
         'password',
         'remember_token',
@@ -58,19 +61,11 @@ class Employee extends Authenticatable
         'birth_date' => 'date',
     ];
 
-    public function scopeActive($query)
-    {
-        return $query->whereNull('deactivated_at');
-    }
+    // ==================== RELATIONSHIPS ====================
 
     public function blindTests()
     {
         return $this->hasMany(BlindTest::class);
-    }
-
-    public function scopeInactive($query)
-    {
-        return $query->whereNotNull('deactivated_at');
     }
 
     public function subSections(): BelongsToMany
@@ -88,21 +83,9 @@ class Employee extends Authenticatable
         return $this->hasMany(Permit::class);
     }
 
-    public function isAssignedToday(): bool
-    {
-        return $this->schedules()
-            ->whereDate('date', Carbon::today())
-            ->exists();
-    }
-
     public function operatorLicense()
     {
         return $this->hasOne(OperatorLicense::class);
-    }
-
-    public function hasValidLicense()
-    {
-        return $this->operatorLicense && $this->operatorLicense->isValid();
     }
 
     public function ratings(): HasMany
@@ -114,24 +97,22 @@ class Employee extends Authenticatable
     {
         return $this->hasMany(Workload::class);
     }
+    
     public function workload()
     {
         return $this->hasMany(Workload::class);
     }
 
-    // In your Employee model
     public function deactivatedByUser()
     {
         return $this->belongsTo(User::class, 'deactivated_by');
     }
 
-    // In Employee.php - add this method
     public function handovers()
     {
         return $this->hasMany(Handover::class, 'employee_id');
     }
 
-    // Keep the existing handover method for single handover
     public function handover()
     {
         return $this->hasOne(Handover::class, 'employee_id');
@@ -140,41 +121,159 @@ class Employee extends Authenticatable
     public function pickingPriorities()
     {
         return $this->hasMany(EmployeePickingPriority::class);
+    }   
+
+    // ==================== BANK ACCOUNT CHANGES ====================
+
+public function bankAccountChangeLogs()
+{
+    return $this->hasMany(BankAccountChangeLog::class, 'nik', 'nik');
+}
+
+public function pendingBankAccountChange()
+{
+    return $this->hasOne(BankAccountChangeLog::class, 'nik', 'nik')
+        ->where('status', BankAccountChangeLog::STATUS_PENDING);
+}
+
+    public function hasPendingBankAccountChange()
+    {
+        return $this->pendingBankAccountChange()->exists();
     }
-    
-    /**
-     * Check if employee has any picking priority
-     */
+
+    public function getLatestBankAccountChange()
+    {
+        return $this->bankAccountChanges()->latest()->first();
+    }
+
+    // ==================== SCOPE METHODS ====================
+
+    public function scopeActive($query)
+    {
+        return $query->whereNull('deactivated_at');
+    }
+
+    public function scopeInactive($query)
+    {
+        return $query->whereNotNull('deactivated_at');
+    }
+
+    public function scopeWithPriority($query)
+    {
+        return $query->whereHas('pickingPriorities');
+    }
+
+    public function scopeWithoutPriority($query)
+    {
+        return $query->whereDoesntHave('pickingPriorities');
+    }
+
+    public function scopeHasBankAccount($query)
+    {
+        return $query->whereNotNull('bank_account')->whereNotNull('bank_name');
+    }
+
+    public function scopeNoBankAccount($query)
+    {
+        return $query->whereNull('bank_account')->orWhereNull('bank_name');
+    }
+
+    // ==================== HELPER METHODS ====================
+
+    public function isAssignedToday(): bool
+    {
+        return $this->schedules()
+            ->whereDate('date', Carbon::today())
+            ->exists();
+    }
+
+    public function hasValidLicense()
+    {
+        return $this->operatorLicense && $this->operatorLicense->isValid();
+    }
+
+    public function isAvailableForAssignment($date = null): bool
+    {
+        $date = $date ? Carbon::parse($date) : Carbon::today();
+        
+        return $this->status === 'available' && 
+               $this->cuti === 'no' &&
+               !$this->isAssignedOnDate($date);
+    }
+
+    public function isAssignedOnDate($date): bool
+    {
+        return $this->schedules()
+            ->whereDate('date', Carbon::parse($date))
+            ->exists();
+    }
+
+    public function isInSubsection($subSectionId): bool
+    {
+        return $this->subSections()->where('id', $subSectionId)->exists();
+    }
+
+    public function isInSection($sectionId): bool
+    {
+        if (!$sectionId) return false;
+        
+        return $this->subSections()
+            ->whereHas('section', function ($query) use ($sectionId) {
+                $query->where('id', $sectionId);
+            })
+            ->exists();
+    }
+
+    // ==================== ADDRESS METHODS ====================
+
+    public function getFullAddress()
+    {
+        $parts = [];
+        
+        if ($this->street) $parts[] = $this->street;
+        
+        if ($this->rt && $this->rw) {
+            $parts[] = "RT {$this->rt}/RW {$this->rw}";
+        }
+        
+        if ($this->kelurahan) $parts[] = $this->kelurahan;
+        if ($this->kecamatan) $parts[] = $this->kecamatan;
+        if ($this->kabupaten_kota) $parts[] = $this->kabupaten_kota;
+        if ($this->provinsi) $parts[] = $this->provinsi;
+        if ($this->kode_pos) $parts[] = $this->kode_pos;
+        
+        $address = implode(', ', array_filter($parts));
+        
+        return $address ?: $this->address;
+    }
+
+    public function isProfileComplete()
+    {
+        return !empty($this->kelurahan) && !empty($this->kecamatan);
+    }
+
+    // ==================== PRIORITY METHODS ====================
+
     public function hasPriority(): bool
     {
         return $this->pickingPriorities()->exists();
     }
 
-    /**
-     * Get priority status for display
-     */
     public function getPriorityStatusAttribute(): string
     {
         return $this->hasPriority() ? 'Yes' : 'No';
     }
 
-    /**
-     * Get priority boost score (1.5x if has priority, 1.0 if not)
-     */
     public function getPriorityBoostScore(): float
     {
         return $this->hasPriority() ? 1.5 : 1.0;
     }
 
-    /**
-     * Get priority categories (returns ['priority'] if has priority)
-     */
     public function getPriorityCategories(): array
     {
         return $this->hasPriority() ? ['priority'] : [];
     }
 
-    // Check if employee has specific category priority
     public function hasPriorityCategory(string $category): bool
     {
         return $this->pickingPriorities()
@@ -182,7 +281,6 @@ class Employee extends Authenticatable
             ->exists();
     }
 
-    // Get metadata for specific category
     public function getPriorityMetadata(string $category): ?array
     {
         $priority = $this->pickingPriorities()
@@ -192,33 +290,23 @@ class Employee extends Authenticatable
         return $priority?->metadata;
     }
 
-    /**
-     * Get employee type in numerical format for ML
-     */
+    // ==================== ML FEATURE METHODS ====================
+
     public function getTypeNumericAttribute(): int
     {
         return $this->type === 'bulanan' ? 1 : 0;
     }
 
-    /**
-     * Get gender in numerical format for ML
-     */
     public function getGenderNumericAttribute(): int
     {
         return $this->gender === 'male' ? 1 : 0;
     }
 
-    /**
-     * Get average rating score
-     */
     public function getAverageRatingAttribute(): float
     {
         return $this->ratings()->avg('rating') ?? 3.0;
     }
 
-    /**
-     * Get work days count in last 30 days
-     */
     public function getWorkDaysCountAttribute(): int
     {
         $startDate = Carbon::now()->subDays(30);
@@ -227,17 +315,11 @@ class Employee extends Authenticatable
             ->count();
     }
 
-    /**
-     * Get test score (1 if passed any test, 0 if not)
-     */
     public function getTestScoreAttribute(): int
     {
         return $this->blindTests()->where('result', 'Pass')->exists() ? 1 : 0;
     }
 
-    /**
-     * Get current workload normalized to 0-1
-     */
     public function getCurrentWorkloadAttribute(): float
     {
         $startDate = Carbon::now()->subDays(14);
@@ -250,74 +332,26 @@ class Employee extends Authenticatable
                 return $schedule->manPowerRequest->shift->hours ?? 0;
             });
 
-        return min($workHours / 80, 1.0); // Normalize to 0-1 (80 hours max for 2 weeks)
+        return min($workHours / 80, 1.0);
     }
 
-    /**
-     * Get priority flag for ML (1 if has priority, 0 if not)
-     */
     public function getHasPriorityAttribute(): int
     {
         return $this->hasPriority() ? 1 : 0;
     }
 
-    /**
-     * Scope: Employees with priority
-     */
-    public function scopeWithPriority($query)
-    {
-        return $query->whereHas('pickingPriorities');
-    }
-
-    /**
-     * Scope: Employees without priority
-     */
-    public function scopeWithoutPriority($query)
-    {
-        return $query->whereDoesntHave('pickingPriorities');
-    }
-
-    /**
-     * Get priority records count
-     */
     public function getPriorityCountAttribute(): int
     {
         return $this->pickingPriorities()->count();
     }
 
-    /**
-     * Check if employee is available for assignment
-     */
-    public function isAvailableForAssignment($date = null): bool
-    {
-        $date = $date ? Carbon::parse($date) : Carbon::today();
-        
-        return $this->status === 'available' && 
-               $this->cuti === 'no' &&
-               !$this->isAssignedOnDate($date);
-    }
-
-    /**
-     * Check if employee is assigned on specific date
-     */
-    public function isAssignedOnDate($date): bool
-    {
-        return $this->schedules()
-            ->whereDate('date', Carbon::parse($date))
-            ->exists();
-    }
-
-    /**
-     * Get shift priority score (for ML)
-     */
     public function getShiftPriorityAttribute($manpowerRequest = null, $referenceDate = null): float
     {
         if (!$manpowerRequest || !$referenceDate) {
-            return 0.5; // Default neutral priority
+            return 0.5;
         }
 
         try {
-            // Get the last assigned shift for this employee
             $lastSchedule = $this->schedules()
                 ->where('date', '<', $referenceDate)
                 ->with('manPowerRequest.shift')
@@ -325,33 +359,27 @@ class Employee extends Authenticatable
                 ->first();
 
             if (!$lastSchedule || !$lastSchedule->manPowerRequest->shift) {
-                return 1.0; // No previous shift, neutral priority
+                return 1.0;
             }
 
             $lastShiftOrder = $this->getShiftOrder($lastSchedule->manPowerRequest->shift);
             $currentShiftOrder = $this->getShiftOrder($manpowerRequest->shift);
 
             if ($lastShiftOrder === null || $currentShiftOrder === null) {
-                return 1.0; // Unknown shift, neutral priority
+                return 1.0;
             }
 
-            // Calculate shift priority based on sequential ordering
             $shiftDifference = $currentShiftOrder - $lastShiftOrder;
             
             if ($shiftDifference === 0) {
-                // Same shift as last time - lower priority
                 return 0.3;
             } elseif ($shiftDifference === 1) {
-                // Next sequential shift - medium priority
                 return 0.7;
             } elseif ($shiftDifference === 2) {
-                // Two shifts ahead - highest priority
                 return 1.0;
             } elseif ($shiftDifference === -1) {
-                // Previous shift - low priority
                 return 0.4;
             } else {
-                // Other cases - neutral
                 return 0.5;
             }
         } catch (\Exception $e) {
@@ -359,13 +387,9 @@ class Employee extends Authenticatable
         }
     }
 
-    /**
-     * Helper method to get shift order
-     */
     private function getShiftOrder($shift)
     {
         try {
-            // Map shift names to sequential order
             $shiftOrder = [
                 'pagi' => 1,
                 'siang' => 2,
@@ -382,9 +406,6 @@ class Employee extends Authenticatable
         }
     }
 
-    /**
-     * Get ML features array for this employee
-     */
     public function getMlFeatures($manpowerRequest = null, $referenceDate = null): array
     {
         $referenceDate = $referenceDate ? Carbon::parse($referenceDate) : Carbon::now();
@@ -404,39 +425,13 @@ class Employee extends Authenticatable
         ];
     }
 
-    /**
-     * Check if employee is in specific subsection
-     */
-    public function isInSubsection($subSectionId): bool
-    {
-        return $this->subSections()->where('id', $subSectionId)->exists();
-    }
+    // ==================== EQUIPMENT METHODS ====================
 
-    /**
-     * Check if employee is in specific section
-     */
-    public function isInSection($sectionId): bool
-    {
-        if (!$sectionId) return false;
-        
-        return $this->subSections()
-            ->whereHas('section', function ($query) use ($sectionId) {
-                $query->where('id', $sectionId);
-            })
-            ->exists();
-    }
-
-    /**
-     * Get all assigned equipment
-     */
     public function getAssignedEquipmentAttribute()
     {
         return $this->handovers()->with('equipment')->get();
     }
 
-    /**
-     * Get total assigned hours in current period
-     */
     public function getTotalAssignedHoursAttribute(): float
     {
         $startDate = Carbon::now()->subDays(14);
@@ -447,5 +442,53 @@ class Employee extends Authenticatable
             ->sum(function ($schedule) {
                 return $schedule->manPowerRequest->shift->hours ?? 0;
             });
+    }
+
+    // ==================== BANK ACCOUNT METHODS ====================
+
+    public function hasBankAccount(): bool
+    {
+        return !empty($this->bank_account) && !empty($this->bank_name);
+    }
+
+    public function getBankInfoAttribute(): ?array
+    {
+        if (!$this->hasBankAccount()) {
+            return null;
+        }
+
+        return [
+            'account_number' => $this->bank_account,
+            'bank_name' => $this->bank_name,
+        ];
+    }
+
+    public function getFormattedBankAccountAttribute(): string
+    {
+        if (!$this->hasBankAccount()) {
+            return 'Belum ada rekening';
+        }
+
+        return $this->bank_name . ' - ' . $this->bank_account;
+    }
+
+    public function updateBankAccount($accountNumber, $bankName)
+    {
+        $this->update([
+            'bank_account' => $accountNumber,
+            'bank_name' => $bankName,
+        ]);
+
+        return $this;
+    }
+
+    public function clearBankAccount()
+    {
+        $this->update([
+            'bank_account' => null,
+            'bank_name' => null,
+        ]);
+
+        return $this;
     }
 }

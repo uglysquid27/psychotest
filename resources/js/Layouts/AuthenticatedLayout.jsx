@@ -318,6 +318,12 @@ const navigationConfig = (
             show: isAdmin,
         },
         {
+            href: route("employee.bank-account-change.index"),
+            label: "Bank Account Changes",
+            active: route().current("employee.bank-account-change.index"),
+            show: isAdmin,
+        },
+        {
             href: route("lunch-coupons.index"),
             label: "Lunch Coupons",
             active: route().current("lunch-coupons.index"),
@@ -356,6 +362,18 @@ const navigationConfig = (
             active: route().current("employee.employees.edit"),
             show: !isAdmin && !hasUserLevelAccess,
         },
+         {
+        href: route('employee.bank-account-change.create'),
+        label: 'Ganti Rekening',
+        active: route().current('employee.bank-account-change.*'),
+        show: !isAdmin && !hasUserLevelAccess,
+    },
+    {
+        href: route('employee.bank-account-change.history'),
+        label: 'Riwayat Rekening',
+        active: route().current('employee.bank-account-change.history'),
+        show: !isAdmin && !hasUserLevelAccess,
+    },
     ];
 
     return [...baseNav, ...employeeNav].filter((item) => item.show);

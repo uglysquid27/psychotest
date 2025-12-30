@@ -10,6 +10,7 @@ use App\Http\Controllers\SubSectionController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\BankAccountChangeController;
 use App\Http\Controllers\PermitController;
 use App\Http\Controllers\EmployeeSum;
 use App\Http\Controllers\ScheduleController;
@@ -138,6 +139,7 @@ Route::middleware(['prevent.back'])->group(function () {
 });
 
 // Employee routes with proper session handling
+// Employee routes with proper session handling
 Route::middleware(['auth:employee', 'prevent.back'])
     ->prefix('employee')
     ->as('employee.')
@@ -157,6 +159,14 @@ Route::middleware(['auth:employee', 'prevent.back'])
             ->name('famday.data');
         Route::get('/schedule/{schedule}/change-request-status', [EmployeeDashboardController::class, 'checkChangeRequestStatus'])
         ->name('employee.schedule.change-request-status');
+
+        // Bank Account Change Routes - ADDED
+        Route::get('/bank-account-change', [BankAccountChangeController::class, 'create'])
+            ->name('bank-account-change.create');
+        Route::post('/bank-account-change', [BankAccountChangeController::class, 'store'])
+            ->name('bank-account-change.store');
+        Route::get('/bank-account-change/history', [BankAccountChangeController::class, 'employeeHistory'])
+            ->name('bank-account-change.history');
 
         // Other routes
         Route::resource('permits', PermitController::class);
@@ -201,6 +211,15 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     // Route::get('/employee-attendance/incomplete-profiles/export', [EmployeeSum::class, 'exportIncompleteProfiles'])
     // ->name('employee-attendance.incomplete-profiles.export')
     // ->middleware('auth');
+
+    Route::get('/bank-account-changes', [BankAccountChangeController::class, 'index'])
+    ->name('employee.bank-account-change.index');
+Route::get('/bank-account-changes/{bankAccountChangeLog}', [BankAccountChangeController::class, 'show'])
+    ->name('employee.bank-account-change.show');
+Route::post('/bank-account-changes/{bankAccountChangeLog}/update-status', [BankAccountChangeController::class, 'updateStatus'])
+    ->name('employee.bank-account-change.update-status');
+Route::get('/bank-account-changes/{bankAccountChangeLog}/generate-pdf', [BankAccountChangeController::class, 'generatePdf'])
+    ->name('employee.bank-account-change.generate-pdf');
 
     // Employee Attendance routes
     Route::prefix('employee-attendance')->group(function () {
