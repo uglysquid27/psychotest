@@ -139,7 +139,6 @@ Route::middleware(['prevent.back'])->group(function () {
 });
 
 // Employee routes with proper session handling
-// Employee routes with proper session handling
 Route::middleware(['auth:employee', 'prevent.back'])
     ->prefix('employee')
     ->as('employee.')
@@ -150,7 +149,7 @@ Route::middleware(['auth:employee', 'prevent.back'])
         // Schedule routes
         Route::post('/schedule/{schedule}/respond', [EmployeeDashboardController::class, 'respond'])->name('schedule.respond');
         Route::get('/schedule/{schedule}/same-day', [EmployeeDashboardController::class, 'sameDayEmployees'])
-            ->name('schedule.same-day'); // Changed from 'employee.schedule.same-day'
+            ->name('schedule.same-day');
     
         Route::get('/employee/famday/check', [EmployeeDashboardController::class, 'checkFamdayAccount'])
             ->name('famday.check');
@@ -158,7 +157,7 @@ Route::middleware(['auth:employee', 'prevent.back'])
         Route::get('/employee/famday/data', [EmployeeDashboardController::class, 'getFamdayData'])
             ->name('famday.data');
         Route::get('/schedule/{schedule}/change-request-status', [EmployeeDashboardController::class, 'checkChangeRequestStatus'])
-        ->name('employee.schedule.change-request-status');
+            ->name('employee.schedule.change-request-status');
 
         // Bank Account Change Routes - ADDED
         Route::get('/bank-account-change', [BankAccountChangeController::class, 'create'])
@@ -196,30 +195,36 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     Route::get('/employee-attendance/incomplete-profiles', [EmployeeSum::class, 'incompleteProfiles'])
         ->name('employee-attendance.incomplete-profiles');
     Route::post('/employee-attendance/{employee}/reset-cuti', [EmployeeSum::class, 'resetCuti'])->name('employee-attendance.reset-cuti');
-    // routes/web.php
+    
+    // Export routes
     Route::get('/employee-attendance/incomplete-profiles/export', [EmployeeSum::class, 'exportXls'])
         ->name('employee-attendance.incomplete-profiles.exports');
     Route::get('/employee-attendance/export-filtered', [EmployeeSum::class, 'exportFilteredXls'])
         ->name('employee-attendance.exports');
     Route::get('/employee-attendance/incomplete-profiles/exportIncomplete', [EmployeeSum::class, 'exportIncompleteXls'])
         ->name('employee-attendance.incomplete-profiles.exportIncomplete');
-    // Add this route to your web.php file
+    
+    // Bulk deactivate
     Route::post('/employee-attendance/bulk-deactivate', [EmployeeSum::class, 'bulkDeactivate'])
         ->name('employee-attendance.bulk-deactivate');
 
-
-    // Route::get('/employee-attendance/incomplete-profiles/export', [EmployeeSum::class, 'exportIncompleteProfiles'])
-    // ->name('employee-attendance.incomplete-profiles.export')
-    // ->middleware('auth');
-
-    Route::get('/bank-account-changes', [BankAccountChangeController::class, 'index'])
-    ->name('employee.bank-account-change.index');
-Route::get('/bank-account-changes/{bankAccountChangeLog}', [BankAccountChangeController::class, 'show'])
-    ->name('employee.bank-account-change.show');
-Route::post('/bank-account-changes/{bankAccountChangeLog}/update-status', [BankAccountChangeController::class, 'updateStatus'])
-    ->name('employee.bank-account-change.update-status');
-Route::get('/bank-account-changes/{bankAccountChangeLog}/generate-pdf', [BankAccountChangeController::class, 'generatePdf'])
-    ->name('employee.bank-account-change.generate-pdf');
+    // Bank Account Change Routes - PERBAIKI INI
+    Route::prefix('bank-account-changes')->name('employee.bank-account-change.')->group(function () {
+        Route::get('/', [BankAccountChangeController::class, 'index'])->name('index');
+        Route::get('/{bankAccountChangeLog}', [BankAccountChangeController::class, 'show'])->name('show');
+        Route::post('/{bankAccountChangeLog}/update-status', [BankAccountChangeController::class, 'updateStatus'])->name('update-status');
+        
+        // PDF Preview route - INI YANG SALAH
+        // Route::get('/{bankAccountChangeLog}/pdf', [BankAccountChangeController::class, 'showPdfPreview'])->name('pdf-preview');
+    });
+    
+    // PDF Preview route - PERBAIKI DI LUAR GROUP AGAR BISA DIAKSES
+    Route::get('/bank-account-changes/{bankAccountChangeLog}/pdf-preview', [BankAccountChangeController::class, 'showPdfPreview'])
+        ->name('employee.bank-account-change.pdf-preview');
+    
+    // Juga tambahkan generate-pdf route untuk compatibility
+    Route::get('/bank-account-changes/{bankAccountChangeLog}/generate-pdf', [BankAccountChangeController::class, 'showPdfPreview'])
+        ->name('employee.bank-account-change.generate-pdf');
 
     // Employee Attendance routes
     Route::prefix('employee-attendance')->group(function () {
@@ -236,10 +241,6 @@ Route::get('/bank-account-changes/{bankAccountChangeLog}/generate-pdf', [BankAcc
         Route::prefix('/{employee}')->group(function () {
             Route::get('/', [EmployeeSum::class, 'show'])->name('employee-attendance.show');
             Route::get('/edit', [EmployeeSum::class, 'edit'])->name('employee-attendance.edit');
-
-            // Add the license route within the same prefix group
-            // Route::get('employee-license/{employee}', [LicenseVerificationController::class, 'showForm'])->name('employee-license.show');
-
             Route::put('/', [EmployeeSum::class, 'update'])->name('employee-attendance.update');
             Route::get('/deactivate', [EmployeeSum::class, 'deactivate'])->name('employee-attendance.deactivate');
             Route::post('/activate', [EmployeeSum::class, 'activate'])
@@ -267,7 +268,6 @@ Route::get('/bank-account-changes/{bankAccountChangeLog}/generate-pdf', [BankAcc
         Route::delete('/{subSection}/destroy-subsection', [SubSectionController::class, 'destroySubSection'])->name('sections.destroy-subsection');
     });
 
-
     Route::get('/employees/{employee}/license', [LicenseVerificationController::class, 'showEmployeeLicense'])
         ->name('employees.license.show');
     Route::get('/employees/{employee}/rate', [RatingController::class, 'create'])->name('ratings.create');
@@ -294,14 +294,11 @@ Route::get('/bank-account-changes/{bankAccountChangeLog}/generate-pdf', [BankAcc
         ->name('manpower-requests.bulk-fulfill-multi-subsection');
     Route::post('/manpower-requests/bulk-preview-multi-subsection', [ManPowerRequestController::class, 'bulkPreviewMultiSubsection'])
         ->name('manpower-requests.bulk-preview-multi-subsection');
-    Route::post('/manpower-requests/bulk-preview-multi-subsection', [ManPowerRequestController::class, 'bulkPreviewMultiSubsection'])
-        ->name('manpower-requests.bulk-preview-multi-subsection');
     Route::get('/employees/available-for-request/{requestId}', [ManPowerRequestController::class, 'getAvailableEmployeesForRequest'])
         ->name('employees.available-for-request')
-        ->where('requestId', '[0-9]+'); // Ensure it's a numeric ID
+        ->where('requestId', '[0-9]+');
     Route::get('/manpower-requests/{requestId}/available-employees', [ManPowerRequestController::class, 'getAvailableEmployeesForRequest'])
         ->name('manpower-requests.get-available-employees');
-    // Make sure this route is added
     Route::get('/manpower-requests/{requestId}/bulk-available-employees', [ManPowerRequestController::class, 'bulkGetAvailableEmployees'])
         ->name('manpower-requests.bulk-get-available-employees');
     Route::get('/manpower-requests/{manpower_request}/revision', [ManPowerRequestController::class, 'edit'])
@@ -311,14 +308,12 @@ Route::get('/bank-account-changes/{bankAccountChangeLog}/generate-pdf', [BankAcc
     Route::get('/manpower-requests/{id}/can-revise', [ManPowerRequestController::class, 'canRevise'])
         ->name('manpower-requests.can-revise');
     Route::post('/manpower-requests/bulk-delete', [ManPowerRequestController::class, 'bulkDelete'])->name('manpower-requests.bulk-delete');
+    
     // Revision routes for fulfilled requests
     Route::get('/manpower-requests/{id}/revise', [ManPowerRequestFulfillmentController::class, 'revise'])
         ->name('manpower-requests.revise');
     Route::put('/manpower-requests/{id}/update-revision', [ManPowerRequestFulfillmentController::class, 'updateRevision'])
         ->name('manpower-requests.update-revision');
-
-    // Route::post('/manpower-requests/bulk-fulfill', [ManPowerRequestController::class, 'bulkFulfill'])
-    // ->name('manpower-requests.bulk-fulfill');
 
     // Additional dashboard routes
     Route::get('/dashboard/requests/{month}/{status}', [DashboardController::class, 'getManpowerRequestsByMonth'])
@@ -330,8 +325,6 @@ Route::get('/bank-account-changes/{bankAccountChangeLog}/generate-pdf', [BankAcc
 
     Route::get('/dashboard/employee-assignments/filtered', [DashboardController::class, 'getFilteredEmployeeAssignments'])
         ->name('dashboard.employee.assignments.filtered');
-
-
 
     Route::get('/dashboard/requests/{periodType}/{period}/{status}', [DashboardController::class, 'getManpowerRequestsByPeriod'])
         ->name('dashboard.requests.byPeriod');
@@ -350,7 +343,6 @@ Route::get('/bank-account-changes/{bankAccountChangeLog}/generate-pdf', [BankAcc
     Route::post('/whatsapp/send', [WhatsAppNotificationController::class, 'sendScheduleNotification'])->name('whatsapp.send');
     Route::get('/wa/test', [WhatsAppNotificationController::class, 'testSend']);
 
-
     Route::resource('employee-picking-priorities', \App\Http\Controllers\EmployeePickingPriorityController::class)
         ->except(['show', 'edit', 'update']);
 
@@ -358,20 +350,13 @@ Route::get('/bank-account-changes/{bankAccountChangeLog}/generate-pdf', [BankAcc
     Route::get('/employee-picking-priorities/categories', [EmployeePickingPriorityController::class, 'categories'])
         ->name('employee-picking-priorities.categories');
 
-    // Or if you prefer the manual definition:
     Route::get('/employee-picking-priorities', [EmployeePickingPriorityController::class, 'index'])->name('employee-picking-priorities.index');
     Route::get('/employee-picking-priorities/create', [EmployeePickingPriorityController::class, 'create'])->name('employee-picking-priorities.create');
     Route::post('/employee-picking-priorities', [EmployeePickingPriorityController::class, 'store'])->name('employee-picking-priorities.store');
     Route::delete('/employee-picking-priorities/{id}', [EmployeePickingPriorityController::class, 'destroy'])->name('employee-picking-priorities.destroy');
     Route::get('/employee-picking-priorities/categories', [EmployeePickingPriorityController::class, 'categories'])->name('employee-picking-priorities.categories');
 
-
-
-
-
     // Lunch routes
-
-    // routes/web.php
     Route::resource('lunch-coupons', LunchCouponController::class)->only(['index', 'store']);
     Route::get('/lunch-coupons/by-date/{date}', [LunchCouponController::class, 'getByDate'])
         ->name('lunch-coupons.by-date');
@@ -379,29 +364,24 @@ Route::get('/bank-account-changes/{bankAccountChangeLog}/generate-pdf', [BankAcc
     // Blind Test Routes
     Route::get('/employee-blind-test', [EmployeeBlindTestController::class, 'index'])
         ->name('employee-blind-test.index');
-
     Route::get('/employee-blind-test/create/{employee}', [EmployeeBlindTestController::class, 'create'])
         ->name('employee-blind-test.create');
-
     Route::post('/employee-blind-test/store/{employee}', [EmployeeBlindTestController::class, 'store'])
         ->name('employee-blind-test.store');
-
     Route::get('/employee-blind-test/{employee}', [EmployeeBlindTestController::class, 'show'])
         ->name('employee-blind-test.show');
-
     Route::delete('/employee-blind-test/{blindTest}', [EmployeeBlindTestController::class, 'destroy'])
         ->name('employee-blind-test.destroy');
 
     // Shift routes
     Route::resource('shifts', ShiftController::class);
-    // Route::get('/shifts', [ShiftController::class, 'index'])->name('shifts.index');
 
     // Admin permit routes
     Route::get('/admin/permits', [AdminPermitController::class, 'index'])->name('admin.permits.index');
     Route::post('/admin/permits/{permit}/respond', [AdminPermitController::class, 'respond'])
         ->name('admin.permits.respond');
     Route::post('/admin/schedule-changes/{scheduleChange}/respond', [AdminPermitController::class, 'respondScheduleChange'])
-    ->name('admin.permits.schedule-change.respond');
+        ->name('admin.permits.schedule-change.respond');
 
     Route::prefix('kraepelin')->name('kraepelin.')->group(function () {
         Route::get('/', [KraepelinController::class, 'index'])->name('index');
@@ -411,8 +391,8 @@ Route::get('/bank-account-changes/{bankAccountChangeLog}/generate-pdf', [BankAcc
         Route::get('/results/{id}', [KraepelinController::class, 'show'])->name('show');
         Route::delete('/results/{id}', [KraepelinController::class, 'destroy'])->name('destroy');
         Route::get('/employees', [KraepelinController::class, 'employees'])->name('employees');
-        // Route::get('/export/{id}', [KraepelinController::class, 'export'])->name('export');
     });
+    
     Route::prefix('wartegg')->name('wartegg.')->group(function () {
         Route::get('/', [WarteggTestController::class, 'index'])->name('index');
         Route::post('/', [WarteggTestController::class, 'store'])->name('store');
@@ -422,73 +402,62 @@ Route::get('/bank-account-changes/{bankAccountChangeLog}/generate-pdf', [BankAcc
 
     Route::prefix('analogi')->name('analogi.')->group(function () {
         Route::get('/', [AnalogiController::class, 'index'])->name('index');
-        Route::post('/submit', [AnalogiController::class, 'submit'])->name('submit'); // tambah route submit
-
+        Route::post('/submit', [AnalogiController::class, 'submit'])->name('submit');
     });
+    
     Route::prefix('ketelitian')->name('ketelitian.')->group(function () {
         Route::get('/', [KetelitianController::class, 'index'])->name('index');
-        Route::post('/submit', [KetelitianController::class, 'submit'])->name('submit'); // tambah route submit
-
+        Route::post('/submit', [KetelitianController::class, 'submit'])->name('submit');
     });
+    
     Route::prefix('hitungan')->name('hitungan.')->group(function () {
         Route::get('/', [HitunganController::class, 'index'])->name('index');
-        Route::post('/submit', [HitunganController::class, 'submit'])->name('submit'); // tambah route submit
-
+        Route::post('/submit', [HitunganController::class, 'submit'])->name('submit');
     });
+    
     Route::prefix('deret')->name('deret.')->group(function () {
         Route::get('/', [TesDeretController::class, 'index'])->name('index');
-        Route::post('/submit', [TesDeretController::class, 'submit'])->name('submit'); // tambah route submit
-
+        Route::post('/submit', [TesDeretController::class, 'submit'])->name('submit');
     });
+    
     Route::prefix('spasial')->name('spasial.')->group(function () {
         Route::get('/', [SpasialController::class, 'index'])->name('index');
-        Route::post('/submit', [SpasialController::class, 'submit'])->name('submit'); // tambah route submit
-
+        Route::post('/submit', [SpasialController::class, 'submit'])->name('submit');
     });
+    
     Route::prefix('numerik')->name('numerik.')->group(function () {
         Route::get('/', [TesNumerikController::class, 'index'])->name('index');
-        Route::post('/submit', [TesNumerikController::class, 'submit'])->name('submit'); // tambah route submit
-
+        Route::post('/submit', [TesNumerikController::class, 'submit'])->name('submit');
     });
+    
     Route::prefix('disc')->name('disc.')->group(function () {
         Route::get('/', [DiscTestController::class, 'index'])->name('index');
-        Route::post('/submit', [DiscTestController::class, 'submit'])->name('submit'); // tambah route submit
-
+        Route::post('/submit', [DiscTestController::class, 'submit'])->name('submit');
     });
+    
     Route::prefix('personality')->name('personality.')->group(function () {
         Route::get('/', [PersonalityTestController::class, 'index'])->name('index');
-        Route::post('/submit', [PersonalityTestController::class, 'submit'])->name('submit'); // tambah route submit
-
+        Route::post('/submit', [PersonalityTestController::class, 'submit'])->name('submit');
     });
+    
     Route::prefix('equipments')->name('equipments.')->middleware(['auth'])->group(function () {
         Route::get('/', [EquipmentController::class, 'index'])->name('index');
         Route::get('/create', [EquipmentController::class, 'create'])->name('create');
         Route::post('/', [EquipmentController::class, 'store'])->name('store');
         Route::put('/{equipment}', [EquipmentController::class, 'update'])->name('update');
         Route::delete('/{equipment}', [EquipmentController::class, 'destroy'])->name('destroy');
-
-        // ✅ CORRECT: Remove the duplicate 'equipments' prefix
-        Route::get('/assign', [EquipmentController::class, 'assignPage'])->name('assign.page'); // This becomes /equipments/assign
-
-        // Keep the existing equipment-specific route
+        Route::get('/assign', [EquipmentController::class, 'assignPage'])->name('assign.page');
         Route::get('/{equipment}/assign', [EquipmentController::class, 'assignPage'])->name('assign.page.id');
-
         Route::post('/{equipment}/assign', [EquipmentController::class, 'assignStore'])->name('assign.store');
-
-        // 👉 NEW modal-based assign routes (ADD THESE)
         Route::post('/assign/employees', [EquipmentController::class, 'getEmployeesForAssign'])->name('assign.employees');
         Route::post('/assign/store', [EquipmentController::class, 'assignStoreModal'])->name('assign.store.modal');
-
-        // 👉 update handover
         Route::put('/handover/{handover}', [EquipmentController::class, 'handoverUpdate'])->name('handover.update');
-
     });
 
     Route::get('/equipments/export', [EquipmentController::class, 'exportEquipment'])
         ->name('equipments.export');
 
     Route::get('/handovers/assign', [HandoverController::class, 'assignPage'])->name('handovers.assign');
-    Route::post('/handovers/bulk-assign', [HandoverController::class, 'bulkAssign'])->name('handovers.bulk-assign');
     Route::post('/handovers/bulk-assign', [HandoverController::class, 'bulkAssign'])->name('handovers.bulk-assign');
     Route::post('/handovers/{handover}/upload-photo', [HandoverController::class, 'uploadPhoto'])->name('handovers.upload-photo');
     Route::put('/handovers/{handover}', [HandoverController::class, 'updateWithDate'])->name('handovers.update');
@@ -500,5 +469,4 @@ Route::get('/bank-account-changes/{bankAccountChangeLog}/generate-pdf', [BankAcc
     Route::put('/handovers/employee/{employee}/update-handovers', [HandoverController::class, 'updateEmployeeHandovers'])->name('handovers.employee.update');
     Route::get('/handovers/employee-equipment-counts', [HandoverController::class, 'getEmployeeEquipmentCounts'])->name('handovers.employee.equipment-counts');
     Route::get('/handovers/export', [HandoverController::class, 'exportAssignments'])->name('handovers.export');
-
 });

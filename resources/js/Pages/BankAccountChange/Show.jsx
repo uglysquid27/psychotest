@@ -80,263 +80,32 @@ export default function BankAccountChangeShow({ auth, changeLog }) {
         });
     };
 
-    const handlePrint = () => {
-        const printWindow = window.open('', '_blank');
-        printWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Surat Pernyataan Perubahan Rekening</title>
-                <style>
-                    @page {
-                        size: A4;
-                        margin: 0;
-                    }
-                    
-                    * {
-                        margin: 0;
-                        padding: 0;
-                        box-sizing: border-box;
-                    }
-                    
-                    body {
-                        font-family: 'Times New Roman', serif;
-                        padding: 1.5cm 2cm;
-                        line-height: 1.4;
-                        font-size: 11pt;
-                        color: #000;
-                        height: 100vh;
-                        overflow: hidden;
-                    }
-                    
-                    @media print {
-                        html, body {
-                            width: 210mm;
-                            height: 297mm;
-                            margin: 0;
-                            padding: 0;
-                        }
-                        
-                        body {
-                            padding: 1.5cm 2cm;
-                        }
-                        
-                        @page {
-                            margin: 0;
-                        }
-                    }
-                    
-                    .title {
-                        text-align: center;
-                        font-weight: bold;
-                        font-size: 12pt;
-                        margin: 10px 0 15px 0;
-                        text-decoration: underline;
-                        letter-spacing: 0.5px;
-                    }
-                    
-                    .content {
-                        text-align: justify;
-                        margin-bottom: 8px;
-                        font-size: 11pt;
-                    }
-                    
-                    .identity-section {
-                        margin: 8px 0 8px 30px;
-                    }
-                    
-                    .identity-row {
-                        display: table;
-                        width: 100%;
-                        margin-bottom: 3px;
-                        font-size: 11pt;
-                    }
-                    
-                    .identity-label {
-                        display: table-cell;
-                        width: 140px;
-                        padding-right: 10px;
-                    }
-                    
-                    .identity-colon {
-                        display: table-cell;
-                        width: 15px;
-                    }
-                    
-                    .identity-value {
-                        display: table-cell;
-                    }
-                    
-                    .account-section {
-                        margin: 8px 0 8px 30px;
-                    }
-                    
-                    .closing-statement {
-                        text-align: justify;
-                        margin: 15px 0 20px 0;
-                        text-indent: 40px;
-                        font-size: 11pt;
-                    }
-                    
-                    .signature-area {
-                        margin-top: 20px;
-                        margin-left: 55%;
-                    }
-                    
-                    .signature-location {
-                        margin-bottom: 5px;
-                        font-size: 11pt;
-                    }
-                    
-                    .signature-title {
-                        margin-bottom: 50px;
-                        font-size: 11pt;
-                    }
-                    
-                    .signature-name {
-                        font-weight: bold;
-                        text-decoration: underline;
-                        margin-top: 8px;
-                        font-size: 11pt;
-                    }
-                    
-                    .signature-nik {
-                        font-size: 10pt;
-                        margin-top: 2px;
-                    }
-                    
-                    .signature-image {
-                        max-width: 140px;
-                        max-height: 50px;
-                        margin-top: -48px;
-                        margin-bottom: -2px;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="title">SURAT PERNYATAAN PERUBAHAN REKENING</div>
-                
-                <div class="content">
-                    Yang bertandatangan di bawah ini:
-                </div>
-                
-                <div class="identity-section">
-                    <div class="identity-row">
-                        <div class="identity-label">Nama</div>
-                        <div class="identity-colon">:</div>
-                        <div class="identity-value">${changeLog.employee?.name || 'N/A'}</div>
-                    </div>
-                    <div class="identity-row">
-                        <div class="identity-label">NIK</div>
-                        <div class="identity-colon">:</div>
-                        <div class="identity-value">${changeLog.nik}</div>
-                    </div>
-                    <div class="identity-row">
-                        <div class="identity-label">Bagian</div>
-                        <div class="identity-colon">:</div>
-                        <div class="identity-value">${changeLog.employee?.section || 'N/A'}</div>
-                    </div>
-                    <div class="identity-row">
-                        <div class="identity-label">Alamat</div>
-                        <div class="identity-colon">:</div>
-                        <div class="identity-value">${changeLog.employee?.address || 'N/A'}</div>
-                    </div>
-                </div>
-                
-                <div class="content">
-                    Dengan ini menyatakan bahwa saya mengajukan perubahan nomor rekening bank untuk pembayaran gaji dari:
-                </div>
-                
-                <div class="account-section">
-                    <div class="identity-row">
-                        <div class="identity-label">Nomor Rekening</div>
-                        <div class="identity-colon">:</div>
-                        <div class="identity-value">${changeLog.old_account_number || 'Tidak ada data sebelumnya'}</div>
-                    </div>
-                    <div class="identity-row">
-                        <div class="identity-label">Nama Bank</div>
-                        <div class="identity-colon">:</div>
-                        <div class="identity-value">${changeLog.old_bank || 'Tidak ada data sebelumnya'}</div>
-                    </div>
-                    <div class="identity-row">
-                        <div class="identity-label">Atas Nama</div>
-                        <div class="identity-colon">:</div>
-                        <div class="identity-value">${changeLog.employee?.name || 'N/A'}</div>
-                    </div>
-                </div>
-                
-                <div class="content">
-                    Menjadi:
-                </div>
-                
-                <div class="account-section">
-                    <div class="identity-row">
-                        <div class="identity-label">Nomor Rekening</div>
-                        <div class="identity-colon">:</div>
-                        <div class="identity-value"><strong>${changeLog.new_account_number}</strong></div>
-                    </div>
-                    <div class="identity-row">
-                        <div class="identity-label">Nama Bank</div>
-                        <div class="identity-colon">:</div>
-                        <div class="identity-value"><strong>${changeLog.new_bank}</strong></div>
-                    </div>
-                    <div class="identity-row">
-                        <div class="identity-label">Atas Nama</div>
-                        <div class="identity-colon">:</div>
-                        <div class="identity-value"><strong>${changeLog.employee?.name || 'N/A'}</strong></div>
-                    </div>
-                </div>
-                
-                <div class="closing-statement">
-                    Demikian surat pernyataan ini saya buat dengan sebenar-benarnya untuk dapat dipergunakan 
-                    sebagaimana mestinya. Apabila dikemudian hari terdapat kesalahan data atau permasalahan yang 
-                    timbul akibat perubahan rekening ini, maka saya bersedia bertanggung jawab sepenuhnya.
-                </div>
-                
-                <div class="signature-area">
-                    <div class="signature-location">
-                        Pasuruan, ${changeLog.signed_at ? formatDateShort(changeLog.signed_at) : getCurrentDate()}
-                    </div>
-                    <div class="signature-title">
-                        Yang membuat pernyataan,
-                    </div>
-                    ${changeLog.signature_data ? `
-                        <img 
-                            src="${changeLog.signature_data}" 
-                            alt="Tanda Tangan" 
-                            class="signature-image"
-                        />
-                    ` : ''}
-                    <div class="signature-name">
-                        ${changeLog.employee?.name || changeLog.nik}
-                    </div>
-                    <div class="signature-nik">
-                        NIK: ${changeLog.nik}
-                    </div>
-                </div>
-                
-                <script>
-                    window.onload = function() {
-                        setTimeout(function() {
-                            window.print();
-                        }, 250);
-                    };
-                    
-                    window.onafterprint = function() {
-                        setTimeout(function() {
-                            window.close();
-                        }, 100);
-                    };
-                </script>
-            </body>
-            </html>
-        `);
-        printWindow.document.close();
-    };
+    // Fungsi untuk download PDF menggunakan route Laravel
+const handleDownloadPdf = () => {
+    if (changeLog.status === 'approved') {
+        // Buka PDF preview di tab baru
+        window.open(
+            route('employee.bank-account-change.pdf-preview', changeLog.id),
+            '_blank'
+        );
+    } else {
+        alert('Hanya permohonan yang sudah disetujui yang dapat dilihat PDF.');
+    }
+};
 
-    const handleDownloadPdf = () => {
-        handlePrint(); // Use the same print functionality
-    };
+// Ganti fungsi handlePrint
+const handlePrint = () => {
+    if (changeLog.status === 'approved') {
+        // Buka PDF dengan parameter autoprint
+        window.open(
+            route('employee.bank-account-change.pdf-preview', changeLog.id) + '?autoprint=true',
+            '_blank'
+        );
+    } else {
+        // Fallback untuk status non-approved
+        handlePrintFallback();
+    }
+};
 
     return (
         <AuthenticatedLayout
@@ -407,17 +176,33 @@ export default function BankAccountChangeShow({ auth, changeLog }) {
                                         </div>
                                         <div>
                                             <label className="block text-sm font-medium text-gray-500 mb-1">
+                                                Sub Bagian
+                                            </label>
+                                            <p className="text-gray-900">
+                                                {changeLog.employee?.sub_section || 'N/A'}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-500 mb-1">
                                                 Penempatan
                                             </label>
                                             <p className="text-gray-900">
                                                 PT. Amerta Indah Otsuka
                                             </p>
                                         </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-500 mb-1">
+                                                Status Rekening
+                                            </label>
+                                            <p className="text-gray-900">
+                                                {changeLog.employee?.has_bank_account ? 'Sudah Ada' : 'Belum Ada'}
+                                            </p>
+                                        </div>
                                         <div className="md:col-span-2">
                                             <label className="block text-sm font-medium text-gray-500 mb-1">
                                                 Alamat
                                             </label>
-                                            <p className="text-gray-900">
+                                            <p className="text-gray-900 whitespace-pre-line">
                                                 {changeLog.employee?.address || 'N/A'}
                                             </p>
                                         </div>
@@ -519,6 +304,10 @@ export default function BankAccountChangeShow({ auth, changeLog }) {
                                                     src={changeLog.signature_data} 
                                                     alt="Tanda tangan digital" 
                                                     className="mx-auto max-w-xs h-auto border border-gray-200 rounded"
+                                                    onError={(e) => {
+                                                        e.target.style.display = 'none';
+                                                        e.target.parentElement.innerHTML += '<p class="text-red-500">Gagal memuat tanda tangan</p>';
+                                                    }}
                                                 />
                                                 <div className="mt-3 text-sm text-gray-600">
                                                     <p className="font-semibold">{changeLog.employee?.name || changeLog.nik}</p>
@@ -662,7 +451,7 @@ export default function BankAccountChangeShow({ auth, changeLog }) {
                                         </div>
                                         
                                         {changeLog.status === 'approved' && (
-                                            <div className="mt-4">
+                                            <div className="mt-4 space-y-2">
                                                 <button
                                                     onClick={handleDownloadPdf}
                                                     className="w-full flex items-center justify-center px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
@@ -671,6 +460,17 @@ export default function BankAccountChangeShow({ auth, changeLog }) {
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                                     </svg>
                                                     Download PDF
+                                                </button>
+                                                
+                                                {/* Desktop Print Button */}
+                                                <button
+                                                    onClick={handlePrint}
+                                                    className="hidden md:flex w-full items-center justify-center px-4 py-3 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                                                >
+                                                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                                    </svg>
+                                                    Cetak Surat
                                                 </button>
                                             </div>
                                         )}
@@ -771,21 +571,9 @@ export default function BankAccountChangeShow({ auth, changeLog }) {
                                     </h3>
                                     
                                     <div className="space-y-3">
-                                        {/* <Link
-                                            href={route('employee-attendance.show', changeLog.employee?.id)}
-                                            className="flex items-center justify-between p-3 border border-gray-300 rounded-md hover:bg-gray-50"
-                                        >
-                                            <span className="text-sm font-medium text-gray-900">
-                                                Lihat Data Karyawan
-                                            </span>
-                                            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                                            </svg>
-                                        </Link> */}
-                                        
                                         <button
                                             onClick={handlePrint}
-                                            className="w-full flex items-center justify-between p-3 border border-gray-300 rounded-md hover:bg-gray-50"
+                                            className="hidden md:flex items-center justify-between w-full p-3 border border-gray-300 rounded-md hover:bg-gray-50"
                                         >
                                             <span className="text-sm font-medium text-gray-900">
                                                 Cetak Surat Pernyataan
@@ -795,18 +583,27 @@ export default function BankAccountChangeShow({ auth, changeLog }) {
                                             </svg>
                                         </button>
                                         
+                                        <button
+                                            onClick={handleDownloadPdf}
+                                            className="flex items-center justify-between w-full p-3 border border-blue-300 rounded-md hover:bg-blue-50 bg-blue-50"
+                                        >
+                                            <span className="text-sm font-medium text-blue-900">
+                                                📄 Download PDF
+                                            </span>
+                                            <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                        </button>
+                                        
                                         {changeLog.status === 'approved' && (
-                                            <button
-                                                onClick={handleDownloadPdf}
-                                                className="flex items-center justify-between p-3 border border-green-300 rounded-md hover:bg-green-50"
-                                            >
-                                                <span className="text-sm font-medium text-green-900">
-                                                    Download Dokumen Resmi
-                                                </span>
-                                                <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                                </svg>
-                                            </button>
+                                            <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                                                <p className="text-xs text-green-800 font-medium mb-1">
+                                                    📱 Untuk Mobile/Tablet:
+                                                </p>
+                                                <p className="text-xs text-green-700">
+                                                    Gunakan tombol "Download PDF" untuk melihat dan menyimpan dokumen resmi.
+                                                </p>
+                                            </div>
                                         )}
                                     </div>
                                 </div>

@@ -7,7 +7,6 @@ use App\Models\Employee;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 
 class BankAccountChangeController extends Controller
@@ -27,49 +26,18 @@ class BankAccountChangeController extends Controller
             ->first();
 
         // Build full address from components
-        $addressParts = [];
-        if ($employee->street)
-            $addressParts[] = $employee->street;
-        if ($employee->rt && $employee->rw)
-            $addressParts[] = "RT {$employee->rt}/RW {$employee->rw}";
-        if ($employee->kelurahan)
-            $addressParts[] = $employee->kelurahan;
-        if ($employee->kecamatan)
-            $addressParts[] = $employee->kecamatan;
-        if ($employee->kabupaten_kota)
-            $addressParts[] = $employee->kabupaten_kota;
-        if ($employee->provinsi)
-            $addressParts[] = $employee->provinsi;
-        if ($employee->kode_pos)
-            $addressParts[] = $employee->kode_pos;
-
-        $fullAddress = implode(', ', array_filter($addressParts));
+        $fullAddress = $this->buildEmployeeAddress($employee);
 
         // Get employee's section and sub-section
-        $section = 'N/A';
-        $subSection = 'N/A';
-        
-        // Load the subSections relationship with section
-        $employee->load('subSections.section');
-        
-        // Get the first dedicated sub-section or any sub-section
-        $dedicatedSubSection = $employee->subSections->firstWhere('pivot.dedicated', true);
-        $anySubSection = $employee->subSections->first();
-        
-        $selectedSubSection = $dedicatedSubSection ?? $anySubSection;
-        
-        if ($selectedSubSection) {
-            $subSection = $selectedSubSection->name;
-            $section = $selectedSubSection->section->name ?? 'N/A';
-        }
+        list($section, $subSection) = $this->getEmployeeSectionInfo($employee);
 
         return inertia('BankAccountChange/Create', [
             'employee' => [
                 'nik' => $employee->nik,
                 'name' => $employee->name,
                 'section' => $section,
-                'sub_section' => $subSection, // Added sub-section
-                'address' => $fullAddress ?: ($employee->address ?? ''),
+                'sub_section' => $subSection,
+                'address' => $fullAddress,
                 'placement' => 'PT. Amerta Indah Otsuka',
                 'email' => $employee->email,
                 'bank_account' => $employee->bank_account,
@@ -170,22 +138,15 @@ class BankAccountChangeController extends Controller
         ]);
 
         // Get section and sub-section info for the employee
-        $section = 'N/A';
-        $subSection = 'N/A';
-        
-        $dedicatedSubSection = $bankAccountChangeLog->employee->subSections->firstWhere('pivot.dedicated', true);
-        $anySubSection = $bankAccountChangeLog->employee->subSections->first();
-        
-        $selectedSubSection = $dedicatedSubSection ?? $anySubSection;
-        
-        if ($selectedSubSection) {
-            $subSection = $selectedSubSection->name;
-            $section = $selectedSubSection->section->name ?? 'N/A';
-        }
+        list($section, $subSection) = $this->getEmployeeSectionInfo($bankAccountChangeLog->employee);
 
-        // Add section and sub-section to the employee object
+        // Build full address from employee data
+        $fullAddress = $this->buildEmployeeAddress($bankAccountChangeLog->employee);
+
+        // Add section, sub-section, and address to the employee object
         $bankAccountChangeLog->employee->section = $section;
         $bankAccountChangeLog->employee->sub_section = $subSection;
+        $bankAccountChangeLog->employee->address = $fullAddress;
 
         return inertia('BankAccountChange/Show', [
             'changeLog' => $bankAccountChangeLog,
@@ -228,46 +189,49 @@ class BankAccountChangeController extends Controller
         return back()->with('success', 'Status permintaan berhasil diperbarui.');
     }
 
-    // Generate PDF based on Excel template
-    public function generatePdf(BankAccountChangeLog $bankAccountChangeLog)
+    // Show HTML PDF Preview (works on mobile)
+    public function showPdfPreview(BankAccountChangeLog $bankAccountChangeLog)
     {
-        // Only generate PDF for approved changes
+        // Only show PDF for approved changes
         if ($bankAccountChangeLog->status !== 'approved') {
-            abort(403, 'Hanya perubahan yang sudah disetujui yang dapat dicetak.');
+            abort(403, 'Hanya perubahan yang sudah disetujui yang dapat dilihat.');
         }
 
-        // Load employee with section info for PDF
+        // Load employee with section info
         $bankAccountChangeLog->load([
-            'employee.subSections.section'
+            'employee.subSections.section',
+            'approver'
         ]);
 
-        // Get section info for PDF
-        $section = 'N/A';
-        $subSection = 'N/A';
-        
-        $dedicatedSubSection = $bankAccountChangeLog->employee->subSections->firstWhere('pivot.dedicated', true);
-        $anySubSection = $bankAccountChangeLog->employee->subSections->first();
-        
-        $selectedSubSection = $dedicatedSubSection ?? $anySubSection;
-        
-        if ($selectedSubSection) {
-            $subSection = $selectedSubSection->name;
-            $section = $selectedSubSection->section->name ?? 'N/A';
-        }
+        // Get section info
+        list($section, $subSection) = $this->getEmployeeSectionInfo($bankAccountChangeLog->employee);
 
-        $data = [
+        // Build full address
+        $fullAddress = $this->buildEmployeeAddress($bankAccountChangeLog->employee);
+
+        // Format dates
+        $signedDate = $bankAccountChangeLog->signed_at 
+            ? Carbon::parse($bankAccountChangeLog->signed_at)->locale('id-ID')->translatedFormat('d F Y')
+            : Carbon::now()->locale('id-ID')->translatedFormat('d F Y');
+        
+        $approvedDate = $bankAccountChangeLog->approved_at 
+            ? Carbon::parse($bankAccountChangeLog->approved_at)->locale('id-ID')->translatedFormat('d F Y H:i')
+            : null;
+
+        $currentDate = Carbon::now()->locale('id-ID')->translatedFormat('d F Y');
+
+        // Return HTML view for PDF preview - PERBAIKI DI SINI
+        // Gunakan view dengan path yang benar: 'pdf.bank-account-statement'
+        return response()->view('pdf.bank-account-statement', [
             'changeLog' => $bankAccountChangeLog,
             'section' => $section,
-            'sub_section' => $subSection,
-            'date' => Carbon::now()->locale('id-ID')->translatedFormat('d F Y'),
-        ];
-
-        $pdf = PDF::loadView('pdf.bank-account-statement', $data);
-        $pdf->setPaper('A4', 'portrait');
-
-        $filename = "Pernyataan_Ganti_Rekening_{$bankAccountChangeLog->nik}_{$bankAccountChangeLog->employee->name}.pdf";
-
-        return $pdf->download($filename);
+            'subSection' => $subSection,
+            'fullAddress' => $fullAddress,
+            'signedDate' => $signedDate,
+            'approvedDate' => $approvedDate,
+            'currentDate' => $currentDate,
+            'year' => date('Y'),
+        ]);
     }
 
     // Get employee's change history
@@ -283,5 +247,86 @@ class BankAccountChangeController extends Controller
         return inertia('BankAccountChange/History', [
             'changes' => $changes,
         ]);
+    }
+
+    /**
+     * Helper method to build employee's full address from components
+     */
+    private function buildEmployeeAddress(Employee $employee): string
+    {
+        $addressParts = [];
+        
+        // Add street address
+        if ($employee->street) {
+            $addressParts[] = $employee->street;
+        }
+        
+        // Add RT/RW if available
+        if ($employee->rt && $employee->rw) {
+            $addressParts[] = "RT {$employee->rt}/RW {$employee->rw}";
+        } elseif ($employee->rt) {
+            $addressParts[] = "RT {$employee->rt}";
+        } elseif ($employee->rw) {
+            $addressParts[] = "RW {$employee->rw}";
+        }
+        
+        // Add administrative divisions
+        if ($employee->kelurahan) {
+            $addressParts[] = $employee->kelurahan;
+        }
+        
+        if ($employee->kecamatan) {
+            $addressParts[] = $employee->kecamatan;
+        }
+        
+        if ($employee->kabupaten_kota) {
+            $addressParts[] = $employee->kabupaten_kota;
+        }
+        
+        if ($employee->provinsi) {
+            $addressParts[] = $employee->provinsi;
+        }
+        
+        // Add postal code
+        if ($employee->kode_pos) {
+            $addressParts[] = $employee->kode_pos;
+        }
+        
+        // If we have parts, combine them
+        if (!empty($addressParts)) {
+            $fullAddress = implode(', ', array_filter($addressParts));
+        } else {
+            // Fallback to the old address field if no components exist
+            $fullAddress = $employee->address ?? 'Alamat belum lengkap';
+        }
+        
+        return $fullAddress;
+    }
+
+    /**
+     * Helper method to get employee's section and sub-section info
+     */
+    private function getEmployeeSectionInfo(Employee $employee): array
+    {
+        $section = 'N/A';
+        $subSection = 'N/A';
+        
+        // Load the subSections relationship with section if not already loaded
+        if (!$employee->relationLoaded('subSections')) {
+            $employee->load('subSections.section');
+        }
+        
+        // Get the first dedicated sub-section or any sub-section
+        $dedicatedSubSection = $employee->subSections->firstWhere('pivot.dedicated', true);
+        $anySubSection = $employee->subSections->first();
+        
+        $selectedSubSection = $dedicatedSubSection ?? $anySubSection;
+        
+        if ($selectedSubSection) {
+            $subSection = $selectedSubSection->name;
+            $section = $selectedSubSection->section->name ?? 'N/A';
+        }
+        
+        return [$section, $subSection];
     }
 }

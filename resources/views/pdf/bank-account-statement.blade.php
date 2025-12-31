@@ -2,315 +2,445 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pernyataan Ganti Rekening Bank - {{ $changeLog->employee->name }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Surat Pernyataan Perubahan Rekening - {{ $changeLog->employee->name ?? $changeLog->nik }}</title>
     <style>
-        @page {
-            margin: 20mm;
-            size: A4 portrait;
+        @media print {
+            @page {
+                size: A4;
+                margin: 0;
+            }
+            body {
+                margin: 1.2cm 1.8cm;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .container {
+                page-break-inside: avoid;
+                page-break-after: avoid;
+            }
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
         
         body {
-            font-family: 'Arial', sans-serif;
-            line-height: 1.5;
+            font-family: 'Times New Roman', Georgia, serif;
+            line-height: 1.35;
+            font-size: 11pt;
             color: #000;
-            font-size: 12pt;
+            background: #ffffff;
+            max-width: 100%;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 15px;
         }
         
         .header {
-            text-align: center;
             margin-bottom: 20px;
-            border-bottom: 2px solid #000;
-            padding-bottom: 10px;
         }
         
-        .company-name {
-            font-size: 16pt;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        
-        .document-title {
-            font-size: 14pt;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        
-        .document-number {
-            font-size: 10pt;
-            color: #666;
-        }
-        
-        .content {
-            margin-top: 20px;
-        }
-        
-        .section {
+        .header-top {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #ddd;
             margin-bottom: 15px;
         }
         
-        .section-title {
+        .logo {
+            max-width: 100px;
+            max-height: 60px;
+            margin-right: 20px;
+        }
+        
+        .company-name {
+            font-weight: bold;
+            font-size: 24pt;
+            letter-spacing: 0.5px;
+            color: #2c328d;
+        }
+        
+        .title {
             font-weight: bold;
             font-size: 13pt;
-            margin-bottom: 10px;
-            text-decoration: underline;
-        }
-        
-        .data-row {
-            display: flex;
-            margin-bottom: 5px;
-        }
-        
-        .data-label {
-            width: 180px;
-            font-weight: bold;
-        }
-        
-        .data-value {
-            flex: 1;
-        }
-        
-        .signature-section {
-            margin-top: 50px;
+            margin-bottom: 3px;
+            letter-spacing: 0.5px;
             text-align: center;
         }
         
-        .signature-line {
-            width: 300px;
-            border-top: 1px solid #000;
-            margin: 60px auto 10px;
+        .content {
+            text-align: justify;
+            margin-bottom: 8px;
+            font-size: 11pt;
+        }
+        
+        .identity-section {
+            margin: 10px 0 10px 40px;
+        }
+        
+        .identity-row {
+            margin-bottom: 3px;
+            display: flex;
+            font-size: 11pt;
+        }
+        
+        .identity-label {
+            width: 160px;
+            padding-right: 10px;
+            flex-shrink: 0;
+        }
+        
+        .identity-colon {
+            width: 10px;
+            flex-shrink: 0;
+        }
+        
+        .identity-value {
+            flex: 1;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            hyphens: auto;
+        }
+        
+        .account-section {
+            margin: 10px 0 10px 40px;
+        }
+        
+        .closing-statement {
+            text-align: justify;
+            margin: 15px 0 20px 0;
+            text-indent: 40px;
+            font-size: 11pt;
+            line-height: 1.35;
+        }
+        
+        .signature-area {
+            margin-top: 30px;
+            margin-left: 55%;
+            font-size: 11pt;
+        }
+        
+        .signature-location {
+            margin-bottom: 3px;
+        }
+        
+        .signature-title {
+            margin-bottom: 45px;
         }
         
         .signature-name {
             font-weight: bold;
+            text-decoration: underline;
             margin-top: 5px;
+            word-wrap: break-word;
         }
         
         .signature-nik {
             font-size: 10pt;
-            color: #666;
+            margin-top: 2px;
         }
         
-        .signature-date {
-            margin-top: 5px;
-            font-size: 10pt;
+        .signature-image {
+            max-width: 120px;
+            max-height: 40px;
+            margin-top: -40px;
+            margin-bottom: -3px;
+        }
+        
+        .approval-section {
+            margin-top: 50px;
         }
         
         .footer {
-            margin-top: 50px;
-            font-size: 9pt;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            font-size: 8pt;
             color: #666;
             text-align: center;
-            border-top: 1px solid #ddd;
-            padding-top: 10px;
+            border-top: 1px solid #eee;
+            padding: 8px 0;
+            background: white;
         }
         
-        .table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 10px 0;
+        @media print {
+            .footer {
+                position: fixed;
+                bottom: 0;
+            }
+            body {
+                margin: 1.2cm 1.8cm 3cm 1.8cm;
+            }
         }
         
-        .table th, .table td {
-            border: 1px solid #000;
-            padding: 8px;
-            text-align: left;
+        /* Mobile Styles */
+        @media screen and (max-width: 768px) {
+            body {
+                font-size: 10pt;
+                padding: 10px;
+            }
+            
+            .container {
+                padding: 12px;
+            }
+            
+            .identity-label {
+                width: 140px;
+            }
+            
+            .signature-area {
+                margin-left: 0;
+                margin-top: 25px;
+            }
+            
+            .header {
+                margin-bottom: 15px;
+            }
+            
+            .title {
+                font-size: 12pt;
+            }
         }
         
-        .table th {
-            background-color: #f2f2f2;
-            font-weight: bold;
-        }
-        
-        .bank-info {
-            background-color: #f9f9f9;
+        /* Print Control Bar */
+        .print-controls {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #f8f9fa;
             padding: 15px;
-            border: 1px solid #ddd;
-            margin: 15px 0;
-            border-radius: 5px;
+            border-bottom: 1px solid #ddd;
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         
-        .bank-info-title {
-            font-weight: bold;
-            color: #d32f2f;
-            margin-bottom: 10px;
+        .print-btn {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
         }
         
-        .page-break {
-            page-break-before: always;
+        .print-btn:hover {
+            background: #0056b3;
         }
         
-        /* Signature image styling */
-        .signature-image {
-            max-width: 200px;
-            max-height: 100px;
-            margin: 0 auto;
-            display: block;
+        .back-btn {
+            padding: 10px 20px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .back-btn:hover {
+            background: #545b62;
+        }
+        
+        @media print {
+            .print-controls {
+                display: none;
+            }
         }
     </style>
+    <script>
+        function printDocument() {
+            window.print();
+        }
+        
+        function goBack() {
+            window.history.back();
+        }
+        
+        // Auto-print after 2 seconds if coming from print button
+        if (window.location.search.includes('autoprint')) {
+            setTimeout(function() {
+                window.print();
+            }, 2000);
+        }
+        
+        // Close window after print on mobile
+        window.addEventListener('afterprint', function() {
+            if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+                setTimeout(function() {
+                    window.close();
+                }, 500);
+            }
+        });
+    </script>
 </head>
 <body>
-    <!-- Header -->
-    <div class="header">
-        <div class="company-name">PT. AMERTA INDAH OTSUKA</div>
-        <div class="document-title">SURAT PERNYATAAN PERUBAHAN REKENING BANK</div>
-        <div class="document-number">
-            No: PRB/{{ $changeLog->id }}/{{ date('Y') }}
-        </div>
+    <!-- Print Control Bar -->
+    <div class="print-controls no-print">
+        <button onclick="printDocument()" class="print-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M5 1a2 2 0 0 0-2 2v1h10V3a2 2 0 0 0-2-2H5zm6 8H5a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1z"/>
+                <path d="M0 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-1v-2a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2H2a2 2 0 0 1-2-2V7zm2.5 1a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"/>
+            </svg>
+            Cetak Dokumen
+        </button>
+        <button onclick="goBack()" class="back-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                <path fill-rule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z"/>
+            </svg>
+            Kembali
+        </button>
     </div>
     
-    <!-- Employee Information -->
-    <div class="section">
-        <div class="section-title">DATA KARYAWAN</div>
-        <div class="data-row">
-            <div class="data-label">NIK</div>
-            <div class="data-value">: {{ $changeLog->employee->nik }}</div>
-        </div>
-        <div class="data-row">
-            <div class="data-label">Nama Lengkap</div>
-            <div class="data-value">: {{ $changeLog->employee->name }}</div>
-        </div>
-        <div class="data-row">
-            <div class="data-label">Jabatan/Bagian</div>
-            <div class="data-value">: {{ $changeLog->employee->subSection->section->name ?? 'N/A' }}</div>
-        </div>
-        <div class="data-row">
-            <div class="data-label">Penempatan</div>
-            <div class="data-value">: PT. Amerta Indah Otsuka</div>
-        </div>
-        <div class="data-row">
-            <div class="data-label">Alamat</div>
-            <div class="data-value">: {{ $changeLog->employee->address ?? 'N/A' }}</div>
-        </div>
-        <div class="data-row">
-            <div class="data-label">Email</div>
-            <div class="data-value">: {{ $changeLog->employee->email }}</div>
-        </div>
-    </div>
-    
-    <!-- Current Account Information -->
-    <div class="section">
-        <div class="section-title">REKENING SAAT INI</div>
-        <div class="bank-info">
-            <div class="bank-info-title">REKENING LAMA</div>
-            <div class="data-row">
-                <div class="data-label">Nomor Rekening</div>
-                <div class="data-value">: {{ $changeLog->old_account_number ?: 'Tidak ada data' }}</div>
+    <div class="container">
+        <div class="header">
+            <div class="header-top">
+                <img src="/applogo.png" alt="App Logo" class="logo" onerror="this.style.display='none'">
+                <div class="company-name">PT. ARINA MULTIKARYA</div>
             </div>
-            <div class="data-row">
-                <div class="data-label">Nama Bank</div>
-                <div class="data-value">: {{ $changeLog->old_bank ?: 'Tidak ada data' }}</div>
-            </div>
-            <div class="data-row">
-                <div class="data-label">Atas Nama</div>
-                <div class="data-value">: {{ $changeLog->employee->name }}</div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- New Account Information -->
-    <div class="section">
-        <div class="section-title">REKENING BARU</div>
-        <div class="bank-info">
-            <div class="bank-info-title">REKENING BARU</div>
-            <div class="data-row">
-                <div class="data-label">Nomor Rekening</div>
-                <div class="data-value">: {{ $changeLog->new_account_number }}</div>
-            </div>
-            <div class="data-row">
-                <div class="data-label">Nama Bank</div>
-                <div class="data-value">: {{ $changeLog->new_bank }}</div>
-            </div>
-            <div class="data-row">
-                <div class="data-label">Atas Nama</div>
-                <div class="data-value">: {{ $changeLog->employee->name }}</div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Statement -->
-    <div class="section">
-        <div class="section-title">PERNYATAAN</div>
-        <p style="text-align: justify; line-height: 1.6;">
-            Yang bertandatangan di bawah ini, saya <strong>{{ $changeLog->employee->name }}</strong> dengan NIK <strong>{{ $changeLog->employee->nik }}</strong>, menyatakan dengan sebenar-benarnya bahwa:
-        </p>
-        <ol style="text-align: justify; line-height: 1.6;">
-            <li>Saya mengajukan perubahan data rekening bank untuk keperluan pembayaran gaji dan tunjangan lainnya;</li>
-            <li>Data rekening baru yang saya berikan adalah benar dan sah sesuai dengan buku tabungan/buku rekening;</li>
-            <li>Saya bertanggung jawab penuh atas kebenaran data yang diberikan;</li>
-            <li>Perubahan rekening ini akan berlaku mulai pembayaran gaji periode berikutnya setelah disetujui;</li>
-            <li>Saya tidak akan menuntut perusahaan atas kesalahan yang disebabkan oleh ketidakbenaran data yang saya berikan.</li>
-        </ol>
-        <p style="text-align: justify; line-height: 1.6;">
-            Demikian surat pernyataan ini saya buat dengan penuh kesadaran dan tanpa paksaan dari pihak manapun.
-        </p>
-    </div>
-    
-    <!-- Signature Section -->
-    <div class="signature-section">
-        <div class="signature-date">
-            Pasuruan, {{ \Carbon\Carbon::parse($changeLog->signed_at ?? $changeLog->created_at)->translatedFormat('d F Y') }}
+            <div class="title">SURAT PERNYATAAN PERUBAHAN REKENING</div>
         </div>
         
-        <div class="signature-line"></div>
+        <div class="content">
+            Yang bertandatangan di bawah ini:
+        </div>
         
-        <div class="signature-name">{{ $changeLog->employee->name }}</div>
-        <div class="signature-nik">NIK: {{ $changeLog->employee->nik }}</div>
-        
-        <!-- Digital Signature Image -->
-        @if($changeLog->signature_data)
-            <div style="margin-top: 20px;">
-                <div style="font-size: 10pt; color: #666; margin-bottom: 5px;">Tanda Tangan Digital:</div>
-                <img src="{{ $changeLog->signature_data }}" alt="Tanda Tangan Digital" class="signature-image">
+        <div class="identity-section">
+            <div class="identity-row">
+                <div class="identity-label">Nama Lengkap</div>
+                <div class="identity-colon">:</div>
+                <div class="identity-value">{{ $changeLog->employee->name ?? 'N/A' }}</div>
             </div>
-        @endif
-    </div>
-    
-    <!-- Approval Section -->
-    <div class="section page-break">
-        <div class="section-title">PERSETUJUAN DAN CATATAN</div>
+            <div class="identity-row">
+                <div class="identity-label">NIK</div>
+                <div class="identity-colon">:</div>
+                <div class="identity-value">{{ $changeLog->nik }}</div>
+            </div>
+            <div class="identity-row">
+                <div class="identity-label">Bagian</div>
+                <div class="identity-colon">:</div>
+                <div class="identity-value">{{ $section }}</div>
+            </div>
+            <div class="identity-row">
+                <div class="identity-label">Sub Bagian</div>
+                <div class="identity-colon">:</div>
+                <div class="identity-value">{{ $subSection }}</div>
+            </div>
+            <div class="identity-row">
+                <div class="identity-label">Penempatan</div>
+                <div class="identity-colon">:</div>
+                <div class="identity-value">PT. Amerta Indah Otsuka</div>
+            </div>
+            <div class="identity-row">
+                <div class="identity-label">Alamat Lengkap</div>
+                <div class="identity-colon">:</div>
+                <div class="identity-value">{{ $fullAddress }}</div>
+            </div>
+        </div>
         
-        <!-- Status Information -->
-        <div class="bank-info">
-            <div class="bank-info-title">STATUS PERMOHONAN</div>
-            <div class="data-row">
-                <div class="data-label">Status</div>
-                <div class="data-value">: 
-                    @if($changeLog->status == 'approved')
-                        <strong style="color: green;">DISETUJUI</strong>
-                    @elseif($changeLog->status == 'rejected')
-                        <strong style="color: red;">DITOLAK</strong>
-                    @else
-                        <strong style="color: orange;">MENUNGGU</strong>
-                    @endif
-                </div>
+        <div class="content">
+            Dengan ini menyatakan bahwa saya mengajukan perubahan nomor rekening bank untuk pembayaran gaji dari:
+        </div>
+        
+        <div class="account-section">
+            <div class="identity-row">
+                <div class="identity-label">Nomor Rekening</div>
+                <div class="identity-colon">:</div>
+                <div class="identity-value">{{ $changeLog->old_account_number ?? 'Tidak ada data sebelumnya' }}</div>
+            </div>
+            <div class="identity-row">
+                <div class="identity-label">Nama Bank</div>
+                <div class="identity-colon">:</div>
+                <div class="identity-value">{{ $changeLog->old_bank ?? 'Tidak ada data sebelumnya' }}</div>
+            </div>
+            <div class="identity-row">
+                <div class="identity-label">Atas Nama</div>
+                <div class="identity-colon">:</div>
+                <div class="identity-value">{{ $changeLog->employee->name ?? 'N/A' }}</div>
+            </div>
+        </div>
+        
+        <div class="content">
+            Menjadi:
+        </div>
+        
+        <div class="account-section">
+            <div class="identity-row">
+                <div class="identity-label">Nomor Rekening</div>
+                <div class="identity-colon">:</div>
+                <div class="identity-value"><strong>{{ $changeLog->new_account_number }}</strong></div>
+            </div>
+            <div class="identity-row">
+                <div class="identity-label">Nama Bank</div>
+                <div class="identity-colon">:</div>
+                <div class="identity-value"><strong>{{ $changeLog->new_bank }}</strong></div>
+            </div>
+            <div class="identity-row">
+                <div class="identity-label">Atas Nama</div>
+                <div class="identity-colon">:</div>
+                <div class="identity-value"><strong>{{ $changeLog->employee->name ?? 'N/A' }}</strong></div>
+            </div>
+        </div>
+        
+        <div class="closing-statement">
+            Demikian surat pernyataan ini saya buat dengan sebenar-benarnya untuk dapat dipergunakan 
+            sebagaimana mestinya. Apabila dikemudian hari terdapat kesalahan data atau permasalahan yang 
+            timbul akibat perubahan rekening ini, maka saya bersedia bertanggung jawab sepenuhnya.
+        </div>
+        
+        <div class="signature-area">
+            <div class="signature-location">
+                Pasuruan, {{ $signedDate }}
+            </div>
+            <div class="signature-title">
+                Yang membuat pernyataan,
             </div>
             
-            @if($changeLog->approved_by && $changeLog->approved_at)
-            <div class="data-row">
-                <div class="data-label">Disetujui Oleh</div>
-                <div class="data-value">: {{ $changeLog->approver->name ?? 'Admin' }}</div>
-            </div>
-            <div class="data-row">
-                <div class="data-label">Tanggal Persetujuan</div>
-                <div class="data-value">: {{ \Carbon\Carbon::parse($changeLog->approved_at)->translatedFormat('d F Y') }}</div>
-            </div>
+            @if($changeLog->signature_data)
+                <img 
+                    src="{{ $changeLog->signature_data }}" 
+                    alt="Tanda Tangan Digital" 
+                    class="signature-image"
+                    onerror="this.style.display='none'"
+                />
             @endif
             
-            @if($changeLog->remarks)
-            <div class="data-row">
-                <div class="data-label">Catatan</div>
-                <div class="data-value">: {{ $changeLog->remarks }}</div>
+            <div class="signature-name">
+                {{ $changeLog->employee->name ?? $changeLog->nik }}
             </div>
-            @endif
+            <div class="signature-nik">
+                NIK: {{ $changeLog->nik }}
+            </div>
         </div>
-    </div>
-    
-    <!-- Footer -->
-    <div class="footer">
-        <div>Dokumen ini dicetak pada: {{ $date }}</div>
-        <div>ID Dokumen: PRB-{{ $changeLog->id }}-{{ date('YmdHis') }}</div>
-        <div>Dokumen ini berlaku sebagai bukti perubahan rekening bank karyawan</div>
+        
+        <div class="footer">
+            Dokumen ini dicetak secara otomatis pada {{ $currentDate }}<br>
+            Hak Cipta © {{ $year }} PT. Amerta Indah Otsuka
+        </div>
     </div>
 </body>
 </html>
