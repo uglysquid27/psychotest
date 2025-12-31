@@ -68,9 +68,9 @@
         
         .company-name {
             font-weight: bold;
-            font-size: 24pt;
+            font-size: 18pt;
             letter-spacing: 0.5px;
-            color: #2c328d;
+            color: #2596be;
         }
         
         .title {
@@ -278,7 +278,15 @@
         }
         
         function goBack() {
-            window.history.back();
+            // Try to close the window/tab first
+            window.close();
+            
+            // If window.close() doesn't work (browser restrictions), go back
+            setTimeout(function() {
+                if (!window.closed) {
+                    window.history.back();
+                }
+            }, 100);
         }
         
         // Auto-print after 2 seconds if coming from print button

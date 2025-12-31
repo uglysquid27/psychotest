@@ -830,7 +830,7 @@ if (pendingChange || isSubmitted) {
                                                 Hapus Tanda Tangan
                                             </button>
                                             
-                                            <button
+                                            {/* <button
                                                 type="button"
                                                 onClick={handleCancelSigning}
                                                 className="inline-flex items-center px-4 py-2 bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700 focus:bg-gray-700 active:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition ease-in-out duration-150"
@@ -839,7 +839,7 @@ if (pendingChange || isSubmitted) {
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                                 </svg>
                                                 Selesai
-                                            </button>
+                                            </button> */}
                                         </div>
                                         
                                         {signature && (
