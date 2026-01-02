@@ -308,6 +308,7 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     Route::get('/manpower-requests/{id}/can-revise', [ManPowerRequestController::class, 'canRevise'])
         ->name('manpower-requests.can-revise');
     Route::post('/manpower-requests/bulk-delete', [ManPowerRequestController::class, 'bulkDelete'])->name('manpower-requests.bulk-delete');
+    Route::get('/manpower-requests/employee-stats', [ManPowerRequestController::class, 'getEmployeeStats']);
     
     // Revision routes for fulfilled requests
     Route::get('/manpower-requests/{id}/revise', [ManPowerRequestFulfillmentController::class, 'revise'])

@@ -1,7 +1,7 @@
 // Dashboard.jsx
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, usePage } from '@inertiajs/react';
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { staggerContainer } from '@/Animations';
 import ErrorBoundary from '@/Components/Dashboard/ErrorBoundary';
@@ -26,12 +26,26 @@ export default function Dashboard() {
         sections = []
     } = props;
 
+    const [isMobile, setIsMobile] = useState(false);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
     const [componentHeights, setComponentHeights] = useState({
         chart1: 400,
         chart2: 400,
         table1: 400,
         table2: 400
     });
+
+    // Check screen size on mount and resize
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth < 1024);
+        };
+        
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     // Set default date range to last 5 months
     const [filters, setFilters] = useState({
@@ -154,32 +168,54 @@ export default function Dashboard() {
         }));
     };
 
-    const cardStyle = "bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl shadow-lg border border-white/30 dark:border-gray-600/30 p-4 sm:p-6 transition-all duration-300 hover:shadow-xl";
+    const cardStyle = "bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl shadow-lg border border-white/30 dark:border-gray-600/30 p-3 sm:p-4 lg:p-6 transition-all duration-300 hover:shadow-xl";
 
     return (
         <ErrorBoundary>
             <AuthenticatedLayout 
                 header={
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                        <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">
-                            Dashboard Overview
-                        </h2>
-                        {/* <div className="text-sm text-gray-600 dark:text-gray-400">
-                            Last updated: {dayjs().format('DD MMMM YYYY, HH:mm')}
-                        </div> */}
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 w-full">
+                        <div className="flex items-center gap-3">
+                            {isMobile && (
+                                <button
+                                    onClick={() => setSidebarOpen(!sidebarOpen)}
+                                    className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                                >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={sidebarOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
+                                    </svg>
+                                </button>
+                            )}
+                            <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 dark:from-gray-100 dark:to-gray-300 bg-clip-text text-transparent">
+                                Dashboard Overview
+                            </h2>
+                        </div>
+                        <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                            Last updated: {dayjs().format('DD MMM HH:mm')}
+                        </div>
                     </div>
                 }
+                sidebarOpen={sidebarOpen}
+                setSidebarOpen={setSidebarOpen}
             >
                 <Head title="Dashboard" />
+
+                {/* Overlay for mobile sidebar */}
+                {isMobile && sidebarOpen && (
+                    <div 
+                        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"
+                        onClick={() => setSidebarOpen(false)}
+                    />
+                )}
 
                 <motion.div
                     initial="hidden"
                     animate="show"
                     variants={staggerContainer}
-                    className="py-4 sm:py-6 px-3 sm:px-4 lg:px-6 space-y-4 sm:space-y-6"
+                    className="py-3 sm:py-4 lg:py-6 px-2 sm:px-3 lg:px-6 space-y-3 sm:space-y-4 lg:space-y-6"
                 >
                     {/* Summary Cards */}
-                           <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl shadow-lg border border-white/30 dark:border-gray-600/30 p-4 sm:p-6 transition-all duration-300 hover:shadow-xl">
+                    <div className={cardStyle}>
                         <SummaryCards
                             summary={summary}
                             setModalState={setModalState}
@@ -198,11 +234,11 @@ export default function Dashboard() {
                     </div>
 
                     {/* Charts Section */}
-                    <div className="flex flex-col xl:flex-row gap-4 sm:gap-6">
-                        <div className={`flex-1 ${cardStyle}`}>
+                    <div className="flex flex-col xl:flex-row gap-3 sm:gap-4 lg:gap-6">
+                        <div className={`flex-1 ${cardStyle} min-w-0`}>
                             <ManpowerChart
                                 data={manpowerRequestChartData}
-                                height={componentHeights.chart1}
+                                height={isMobile ? Math.min(componentHeights.chart1, 350) : componentHeights.chart1}
                                 handleResize={handleResize('chart1')}
                                 setChartModalState={setChartModalState}
                                 formatDate={formatDate}
@@ -214,10 +250,10 @@ export default function Dashboard() {
                             />
                         </div>
 
-                        <div className={`flex-1 ${cardStyle}`}>
+                        <div className={`flex-1 ${cardStyle} min-w-0`}>
                             <EmployeeChart
                                 data={employeeAssignmentChartData}
-                                height={componentHeights.chart2}
+                                height={isMobile ? Math.min(componentHeights.chart2, 350) : componentHeights.chart2}
                                 handleResize={handleResize('chart2')}
                                 setChartModalState={setChartModalState}
                                 sections={sections}
@@ -231,28 +267,28 @@ export default function Dashboard() {
                     </div>
 
                     {/* Tables Section */}
-                    <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
-                        <div className={`flex-1 ${cardStyle}`}>
+                    <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 lg:gap-6">
+                        <div className={`flex-1 ${cardStyle} min-w-0`}>
                             <PendingRequestsTable
                                 data={recentPendingRequests}
-                                height={componentHeights.table1}
+                                height={isMobile ? Math.min(componentHeights.table1, 300) : componentHeights.table1}
                                 handleResize={handleResize('table1')}
                                 formatDate={formatDate}
                             />
                         </div>
 
-                        <div className={`flex-1 ${cardStyle}`}>
+                        <div className={`flex-1 ${cardStyle} min-w-0`}>
                             <UpcomingSchedulesTable
                                 data={upcomingSchedules}
-                                height={componentHeights.table2}
+                                height={isMobile ? Math.min(componentHeights.table2, 300) : componentHeights.table2}
                                 handleResize={handleResize('table2')}
                                 formatDate={formatDate}
                             />
                         </div>
                     </div>
 
-                    {/* Lunch Coupons */}
-                    <div className={cardStyle}>
+                    {/* Lunch Coupons - Full width on mobile, half width on desktop */}
+                    <div className={`${cardStyle} w-full`}>
                         <LunchCouponsCard
                             formatDate={formatDate}
                         />

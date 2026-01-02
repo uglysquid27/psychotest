@@ -17,59 +17,60 @@ use Illuminate\Validation\ValidationException;
 use App\Rules\ShiftTimeOrder;
 use App\Models\Employee;
 use App\Models\Schedule;
+use App\Models\Permit;
 
 class ManPowerRequestController extends Controller
 {
     public function index(Request $request): Response
-{
-    // Always fetch last 30 days
-    $endDate = Carbon::now()->endOfDay();
-    $startDate = Carbon::now()->subDays(30)->startOfDay();
+    {
+        // Always fetch last 30 days
+        $endDate = Carbon::now()->endOfDay();
+        $startDate = Carbon::now()->subDays(30)->startOfDay();
 
-    $query = Section::with([
-        'subSections',
-        'subSections.manPowerRequests' => function ($query) use ($startDate, $endDate) {
-            $query->whereBetween('date', [$startDate, $endDate])
-                ->orderBy('date', 'desc')
-                ->orderBy('created_at', 'desc');
-        },
-        'subSections.manPowerRequests.shift'
-    ]);
+        $query = Section::with([
+            'subSections',
+            'subSections.manPowerRequests' => function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('date', [$startDate, $endDate])
+                    ->orderBy('date', 'desc')
+                    ->orderBy('created_at', 'desc');
+            },
+            'subSections.manPowerRequests.shift'
+        ]);
 
-    if ($request->has('section_id') && $request->section_id) {
-        $query->where('id', $request->section_id);
+        if ($request->has('section_id') && $request->section_id) {
+            $query->where('id', $request->section_id);
+        }
+
+        $sections = $query->get();
+
+        $perPage = 10;
+        $currentPage = $request->get('page', 1);
+        $offset = ($currentPage - 1) * $perPage;
+        $paginatedSections = $sections->slice($offset, $perPage);
+
+        $sectionsPaginator = new \Illuminate\Pagination\LengthAwarePaginator(
+            $paginatedSections,
+            $sections->count(),
+            $perPage,
+            $currentPage,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
+
+        $allSections = Section::all();
+
+        return Inertia::render('ManpowerRequests/Index', [
+            'sections' => $sectionsPaginator,
+            'filterSections' => $allSections,
+            'filters' => [
+                'section_id' => $request->section_id,
+            ],
+            // Pass date range info to frontend
+            'date_range' => [
+                'start' => $startDate->format('Y-m-d'),
+                'end' => $endDate->format('Y-m-d')
+            ]
+        ]);
     }
-
-    $sections = $query->get();
-
-    $perPage = 10;
-    $currentPage = $request->get('page', 1);
-    $offset = ($currentPage - 1) * $perPage;
-    $paginatedSections = $sections->slice($offset, $perPage);
-
-    $sectionsPaginator = new \Illuminate\Pagination\LengthAwarePaginator(
-        $paginatedSections,
-        $sections->count(),
-        $perPage,
-        $currentPage,
-        ['path' => $request->url(), 'query' => $request->query()]
-    );
-
-    $allSections = Section::all();
-
-    return Inertia::render('ManpowerRequests/Index', [
-        'sections' => $sectionsPaginator,
-        'filterSections' => $allSections,
-        'filters' => [
-            'section_id' => $request->section_id,
-        ],
-        // Pass date range info to frontend
-        'date_range' => [
-            'start' => $startDate->format('Y-m-d'),
-            'end' => $endDate->format('Y-m-d')
-        ]
-    ]);
-}
 
     public function getSectionRequests($sectionId)
     {
@@ -116,15 +117,451 @@ class ManPowerRequestController extends Controller
         ]);
     }
 
-    public function create(): Response
-    {
-        $sections = Section::with('subSections')->get();
-        $shifts = Shift::all();
+    private function getSafeEmployeeStatisticsData()
+{
+    try {
+        $stats = $this->getEmployeeStatisticsData();
+        
+        // Validate the structure before returning
+        if (!is_array($stats) || 
+            !isset($stats['sections']) || 
+            !isset($stats['subsections']) || 
+            !isset($stats['overall'])) {
+            
+            Log::warning('Invalid employee stats structure returned', ['stats' => $stats]);
+            
+            return [
+                'sections' => [],
+                'subsections' => [],
+                'overall' => [
+                    'total' => 0,
+                    'available' => 0,
+                    'assigned' => 0,
+                    'onLeave' => 0
+                ],
+                'last_updated' => now()->toISOString(),
+                'date' => Carbon::today()->format('Y-m-d'),
+                'error' => 'Invalid data structure'
+            ];
+        }
+        
+        return $stats;
+        
+    } catch (\Exception $e) {
+        Log::error('Error in getSafeEmployeeStatisticsData: ' . $e->getMessage());
+        
+        return [
+            'sections' => [],
+            'subsections' => [],
+            'overall' => [
+                'total' => 0,
+                'available' => 0,
+                'assigned' => 0,
+                'onLeave' => 0
+            ],
+            'last_updated' => now()->toISOString(),
+            'date' => Carbon::today()->format('Y-m-d'),
+            'error' => 'Failed to load statistics'
+        ];
+    }
+}
 
-        return Inertia::render('ManpowerRequests/Create', [
-            'sections' => $sections,
-            'shifts' => $shifts,
+    public function create(): Response
+{
+    $sections = Section::with('subSections')->get();
+    $shifts = Shift::all();
+
+    // Get employee statistics with safe fallback
+    $employeeStats = $this->getSafeEmployeeStatisticsData();
+
+    return Inertia::render('ManpowerRequests/Create', [
+        'sections' => $sections,
+        'shifts' => $shifts,
+        'employeeStats' => $employeeStats,
+    ]);
+}
+
+    /**
+     * Get employee statistics data
+     */
+    private function getEmployeeStatisticsData()
+    {
+        $today = Carbon::today();
+        
+        try {
+            // Get all active employees (not deactivated)
+            $activeEmployees = Employee::where('status', '!=', 'deactivated')
+                ->whereNull('deactivated_at')
+                ->get()
+                ->keyBy('id');
+            
+            // Get today's schedules to identify assigned employees
+            $assignedEmployeeIds = Schedule::whereDate('date', $today)
+                ->pluck('employee_id')
+                ->toArray();
+            
+            // Get employees on leave (cuti = 'yes' or active permits)
+            $onLeaveEmployeeIds = Employee::where('cuti', 'yes')
+                ->pluck('id')
+                ->toArray();
+            
+            // Also check permits table for active leaves/sick leaves
+            $permitEmployeeIds = Permit::whereDate('start_date', '<=', $today)
+                ->whereDate('end_date', '>=', $today)
+                ->pluck('employee_id')
+                ->toArray();
+            
+            $onLeaveEmployeeIds = array_unique(array_merge($onLeaveEmployeeIds, $permitEmployeeIds));
+            
+            // Get all sections with their subsections
+            $sections = Section::with('subSections')->get();
+            
+            // Preload all employee-subsection relationships
+            $employeeSubSections = DB::table('employee_sub_section')
+                ->select('employee_id', 'sub_section_id')
+                ->get()
+                ->groupBy('sub_section_id');
+            
+            // Also group by employee_id for easier lookup
+            $employeeSubSectionsByEmployee = DB::table('employee_sub_section')
+                ->select('employee_id', 'sub_section_id')
+                ->get()
+                ->groupBy('employee_id');
+            
+            $sectionStats = [];
+            $subsectionStats = [];
+            
+            // Initialize counters
+            $totalActiveEmployees = $activeEmployees->count();
+            $totalAssigned = count($assignedEmployeeIds);
+            $totalOnLeave = count($onLeaveEmployeeIds);
+            
+            Log::info('Employee Statistics Calculation', [
+                'total_active_employees' => $totalActiveEmployees,
+                'total_assigned' => $totalAssigned,
+                'total_on_leave' => $totalOnLeave,
+                'sections_count' => $sections->count(),
+                'employee_subsection_entries' => $employeeSubSections->count()
+            ]);
+            
+            foreach ($sections as $section) {
+                $sectionEmployees = collect();
+                
+                foreach ($section->subSections as $subSection) {
+                    $subSectionEmployeeIds = $employeeSubSections->get($subSection->id, collect())
+                        ->pluck('employee_id')
+                        ->filter(function ($employeeId) use ($activeEmployees) {
+                            return isset($activeEmployees[$employeeId]);
+                        })
+                        ->unique()
+                        ->values();
+                    
+                    $total = $subSectionEmployeeIds->count();
+                    
+                    // Calculate stats for this subsection
+                    $available = $subSectionEmployeeIds->filter(function ($employeeId) use ($assignedEmployeeIds, $onLeaveEmployeeIds, $activeEmployees) {
+                        $employee = $activeEmployees[$employeeId] ?? null;
+                        if (!$employee) return false;
+                        
+                        // Not assigned today
+                        $notAssigned = !in_array($employeeId, $assignedEmployeeIds);
+                        // Not on leave
+                        $notOnLeave = !in_array($employeeId, $onLeaveEmployeeIds);
+                        // Status is available (or assigned but not to this date's schedule)
+                        $isAvailable = $employee->status === 'available';
+                        
+                        return $notAssigned && $notOnLeave && $isAvailable;
+                    })->count();
+                    
+                    $assigned = $subSectionEmployeeIds->filter(function ($employeeId) use ($assignedEmployeeIds) {
+                        return in_array($employeeId, $assignedEmployeeIds);
+                    })->count();
+                    
+                    $onLeave = $subSectionEmployeeIds->filter(function ($employeeId) use ($onLeaveEmployeeIds) {
+                        return in_array($employeeId, $onLeaveEmployeeIds);
+                    })->count();
+                    
+                    // Store subsection stats
+                    $subsectionStats[$subSection->id] = [
+                        'total' => $total,
+                        'available' => $available,
+                        'assigned' => $assigned,
+                        'onLeave' => $onLeave
+                    ];
+                    
+                    // Add to section employees collection
+                    $sectionEmployees = $sectionEmployees->merge($subSectionEmployeeIds);
+                    
+                    Log::debug("Subsection {$subSection->id} ({$subSection->name})", [
+                        'total' => $total,
+                        'available' => $available,
+                        'assigned' => $assigned,
+                        'onLeave' => $onLeave
+                    ]);
+                }
+                
+                // Calculate section stats (unique employees across all subsections)
+                $uniqueSectionEmployees = $sectionEmployees->unique();
+                $sectionTotal = $uniqueSectionEmployees->count();
+                
+                $sectionAvailable = $uniqueSectionEmployees->filter(function ($employeeId) use ($assignedEmployeeIds, $onLeaveEmployeeIds, $activeEmployees) {
+                    $employee = $activeEmployees[$employeeId] ?? null;
+                    if (!$employee) return false;
+                    
+                    $notAssigned = !in_array($employeeId, $assignedEmployeeIds);
+                    $notOnLeave = !in_array($employeeId, $onLeaveEmployeeIds);
+                    $isAvailable = $employee->status === 'available';
+                    
+                    return $notAssigned && $notOnLeave && $isAvailable;
+                })->count();
+                
+                $sectionAssigned = $uniqueSectionEmployees->filter(function ($employeeId) use ($assignedEmployeeIds) {
+                    return in_array($employeeId, $assignedEmployeeIds);
+                })->count();
+                
+                $sectionOnLeave = $uniqueSectionEmployees->filter(function ($employeeId) use ($onLeaveEmployeeIds) {
+                    return in_array($employeeId, $onLeaveEmployeeIds);
+                })->count();
+                
+                // Store section stats
+                $sectionStats[$section->id] = [
+                    'total' => $sectionTotal,
+                    'available' => $sectionAvailable,
+                    'assigned' => $sectionAssigned,
+                    'onLeave' => $sectionOnLeave
+                ];
+                
+                Log::debug("Section {$section->id} ({$section->name})", [
+                    'total' => $sectionTotal,
+                    'available' => $sectionAvailable,
+                    'assigned' => $sectionAssigned,
+                    'onLeave' => $sectionOnLeave
+                ]);
+            }
+            
+            // Also calculate overall statistics
+            $overallStats = [
+                'total' => $totalActiveEmployees,
+                'available' => $totalActiveEmployees - $totalAssigned - $totalOnLeave,
+                'assigned' => $totalAssigned,
+                'onLeave' => $totalOnLeave
+            ];
+            
+            Log::info('Employee Statistics Complete', [
+                'sections_with_stats' => count($sectionStats),
+                'subsections_with_stats' => count($subsectionStats),
+                'overall_stats' => $overallStats
+            ]);
+            
+            return [
+                'sections' => $sectionStats,
+                'subsections' => $subsectionStats,
+                'overall' => $overallStats,
+                'last_updated' => now()->toISOString(),
+                'date' => $today->format('Y-m-d')
+            ];
+            
+        } catch (\Exception $e) {
+            Log::error('Error getting employee statistics: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
+            
+            // Return empty stats on error
+            return [
+                'sections' => [],
+                'subsections' => [],
+                'overall' => ['total' => 0, 'available' => 0, 'assigned' => 0, 'onLeave' => 0],
+                'last_updated' => now()->toISOString(),
+                'date' => Carbon::today()->format('Y-m-d'),
+                'error' => 'Failed to load employee statistics'
+            ];
+        }
+    }
+
+    /**
+     * Get employee statistics API endpoint
+     */
+    public function getEmployeeStats(Request $request)
+    {
+        try {
+            $stats = $this->getEmployeeStatisticsData();
+            
+            return response()->json($stats);
+            
+        } catch (\Exception $e) {
+            Log::error('Error in getEmployeeStats API: ' . $e->getMessage());
+            
+            return response()->json([
+                'sections' => [],
+                'subsections' => [],
+                'overall' => ['total' => 0, 'available' => 0, 'assigned' => 0, 'onLeave' => 0],
+                'last_updated' => now()->toISOString(),
+                'error' => 'Failed to load employee statistics'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get employee statistics for a specific date
+     */
+    public function getEmployeeStatsForDate(Request $request)
+    {
+        $request->validate([
+            'date' => 'required|date'
         ]);
+        
+        $date = Carbon::parse($request->date);
+        
+        try {
+            // Get all active employees (not deactivated)
+            $activeEmployees = Employee::where('status', '!=', 'deactivated')
+                ->whereNull('deactivated_at')
+                ->get()
+                ->keyBy('id');
+            
+            // Get schedules for the specific date
+            $assignedEmployeeIds = Schedule::whereDate('date', $date)
+                ->pluck('employee_id')
+                ->toArray();
+            
+            // Get employees on leave (cuti = 'yes' or active permits for that date)
+            $onLeaveEmployeeIds = Employee::where('cuti', 'yes')
+                ->pluck('id')
+                ->toArray();
+            
+            // Also check permits table for active leaves/sick leaves on that date
+            $permitEmployeeIds = Permit::whereDate('start_date', '<=', $date)
+                ->whereDate('end_date', '>=', $date)
+                ->pluck('employee_id')
+                ->toArray();
+            
+            $onLeaveEmployeeIds = array_unique(array_merge($onLeaveEmployeeIds, $permitEmployeeIds));
+            
+            // Get all sections with their subsections
+            $sections = Section::with('subSections')->get();
+            
+            // Preload all employee-subsection relationships
+            $employeeSubSections = DB::table('employee_sub_section')
+                ->select('employee_id', 'sub_section_id')
+                ->get()
+                ->groupBy('sub_section_id');
+            
+            $sectionStats = [];
+            $subsectionStats = [];
+            
+            // Initialize counters
+            $totalActiveEmployees = $activeEmployees->count();
+            $totalAssigned = count($assignedEmployeeIds);
+            $totalOnLeave = count($onLeaveEmployeeIds);
+            
+            foreach ($sections as $section) {
+                $sectionEmployees = collect();
+                
+                foreach ($section->subSections as $subSection) {
+                    $subSectionEmployeeIds = $employeeSubSections->get($subSection->id, collect())
+                        ->pluck('employee_id')
+                        ->filter(function ($employeeId) use ($activeEmployees) {
+                            return isset($activeEmployees[$employeeId]);
+                        })
+                        ->unique()
+                        ->values();
+                    
+                    $total = $subSectionEmployeeIds->count();
+                    
+                    // Calculate stats for this subsection for the specific date
+                    $available = $subSectionEmployeeIds->filter(function ($employeeId) use ($assignedEmployeeIds, $onLeaveEmployeeIds, $activeEmployees) {
+                        $employee = $activeEmployees[$employeeId] ?? null;
+                        if (!$employee) return false;
+                        
+                        // Not assigned on the specific date
+                        $notAssigned = !in_array($employeeId, $assignedEmployeeIds);
+                        // Not on leave
+                        $notOnLeave = !in_array($employeeId, $onLeaveEmployeeIds);
+                        // Status is available
+                        $isAvailable = $employee->status === 'available';
+                        
+                        return $notAssigned && $notOnLeave && $isAvailable;
+                    })->count();
+                    
+                    $assigned = $subSectionEmployeeIds->filter(function ($employeeId) use ($assignedEmployeeIds) {
+                        return in_array($employeeId, $assignedEmployeeIds);
+                    })->count();
+                    
+                    $onLeave = $subSectionEmployeeIds->filter(function ($employeeId) use ($onLeaveEmployeeIds) {
+                        return in_array($employeeId, $onLeaveEmployeeIds);
+                    })->count();
+                    
+                    // Store subsection stats
+                    $subsectionStats[$subSection->id] = [
+                        'total' => $total,
+                        'available' => $available,
+                        'assigned' => $assigned,
+                        'onLeave' => $onLeave
+                    ];
+                    
+                    // Add to section employees collection
+                    $sectionEmployees = $sectionEmployees->merge($subSectionEmployeeIds);
+                }
+                
+                // Calculate section stats (unique employees across all subsections)
+                $uniqueSectionEmployees = $sectionEmployees->unique();
+                $sectionTotal = $uniqueSectionEmployees->count();
+                
+                $sectionAvailable = $uniqueSectionEmployees->filter(function ($employeeId) use ($assignedEmployeeIds, $onLeaveEmployeeIds, $activeEmployees) {
+                    $employee = $activeEmployees[$employeeId] ?? null;
+                    if (!$employee) return false;
+                    
+                    $notAssigned = !in_array($employeeId, $assignedEmployeeIds);
+                    $notOnLeave = !in_array($employeeId, $onLeaveEmployeeIds);
+                    $isAvailable = $employee->status === 'available';
+                    
+                    return $notAssigned && $notOnLeave && $isAvailable;
+                })->count();
+                
+                $sectionAssigned = $uniqueSectionEmployees->filter(function ($employeeId) use ($assignedEmployeeIds) {
+                    return in_array($employeeId, $assignedEmployeeIds);
+                })->count();
+                
+                $sectionOnLeave = $uniqueSectionEmployees->filter(function ($employeeId) use ($onLeaveEmployeeIds) {
+                    return in_array($employeeId, $onLeaveEmployeeIds);
+                })->count();
+                
+                // Store section stats
+                $sectionStats[$section->id] = [
+                    'total' => $sectionTotal,
+                    'available' => $sectionAvailable,
+                    'assigned' => $sectionAssigned,
+                    'onLeave' => $sectionOnLeave
+                ];
+            }
+            
+            // Calculate overall statistics
+            $overallStats = [
+                'total' => $totalActiveEmployees,
+                'available' => $totalActiveEmployees - $totalAssigned - $totalOnLeave,
+                'assigned' => $totalAssigned,
+                'onLeave' => $totalOnLeave
+            ];
+            
+            return response()->json([
+                'sections' => $sectionStats,
+                'subsections' => $subsectionStats,
+                'overall' => $overallStats,
+                'date' => $date->format('Y-m-d'),
+                'last_updated' => now()->toISOString()
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error getting employee stats for date ' . $date->format('Y-m-d') . ': ' . $e->getMessage());
+            
+            return response()->json([
+                'sections' => [],
+                'subsections' => [],
+                'overall' => ['total' => 0, 'available' => 0, 'assigned' => 0, 'onLeave' => 0],
+                'date' => $date->format('Y-m-d'),
+                'last_updated' => now()->toISOString(),
+                'error' => 'Failed to load employee statistics'
+            ], 500);
+        }
     }
 
     public function checkDuplicates(Request $request)
@@ -546,103 +983,100 @@ class ManPowerRequestController extends Controller
     }
 
     /**
- * Bulk delete manpower requests
- */
-/**
- * Bulk delete manpower requests
- */
-public function bulkDelete(Request $request)
-{
-    try {
-        $validator = Validator::make($request->all(), [
-            'request_ids' => 'required|array|min:1',
-            'request_ids.*' => 'required|exists:man_power_requests,id',
-        ]);
+     * Bulk delete manpower requests
+     */
+    public function bulkDelete(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'request_ids' => 'required|array|min:1',
+                'request_ids.*' => 'required|exists:man_power_requests,id',
+            ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed: ' . $validator->errors()->first(),
-            ], 422);
-        }
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed: ' . $validator->errors()->first(),
+                ], 422);
+            }
 
-        DB::beginTransaction();
+            DB::beginTransaction();
 
-        $requestIds = $request->request_ids;
-        $deletedCount = 0;
-        $errors = [];
+            $requestIds = $request->request_ids;
+            $deletedCount = 0;
+            $errors = [];
 
-        foreach ($requestIds as $requestId) {
-            try {
-                $manPowerRequest = ManPowerRequest::with('schedules.employee')->findOrFail($requestId);
+            foreach ($requestIds as $requestId) {
+                try {
+                    $manPowerRequest = ManPowerRequest::with('schedules.employee')->findOrFail($requestId);
 
-                // Check if request can be deleted (same logic as single delete)
-                if (!in_array($manPowerRequest->status, ['pending', 'revision_requested', 'fulfilled'])) {
-                    $errors[] = "Request ID {$requestId} cannot be deleted in current status: {$manPowerRequest->status}";
-                    continue;
-                }
+                    // Check if request can be deleted (same logic as single delete)
+                    if (!in_array($manPowerRequest->status, ['pending', 'revision_requested', 'fulfilled'])) {
+                        $errors[] = "Request ID {$requestId} cannot be deleted in current status: {$manPowerRequest->status}";
+                        continue;
+                    }
 
-                // Handle employee status updates for fulfilled requests
-                if ($manPowerRequest->schedules->isNotEmpty()) {
-                    Log::info('Updating employee statuses for schedules related to deleted request', [
-                        'request_id' => $manPowerRequest->id,
-                        'schedule_count' => $manPowerRequest->schedules->count()
-                    ]);
-                    
-                    foreach ($manPowerRequest->schedules as $schedule) {
-                        if ($schedule->employee) {
-                            $employee = $schedule->employee;
-                            
-                            // Reset status to 'available' if currently 'assigned'
-                            if ($employee->status === 'assigned') {
-                                $employee->status = 'available';
-                                $employee->save();
-                                Log::debug("Employee ID {$employee->id} status changed to 'available'.");
-                            }
-                            
-                            // Reset cuti status to 'no' if needed
-                            if ($employee->cuti === 'yes') {
-                                $employee->cuti = 'no';
-                                $employee->save();
-                                Log::debug("Employee ID {$employee->id} cuti status reset to 'no'.");
+                    // Handle employee status updates for fulfilled requests
+                    if ($manPowerRequest->schedules->isNotEmpty()) {
+                        Log::info('Updating employee statuses for schedules related to deleted request', [
+                            'request_id' => $manPowerRequest->id,
+                            'schedule_count' => $manPowerRequest->schedules->count()
+                        ]);
+                        
+                        foreach ($manPowerRequest->schedules as $schedule) {
+                            if ($schedule->employee) {
+                                $employee = $schedule->employee;
+                                
+                                // Reset status to 'available' if currently 'assigned'
+                                if ($employee->status === 'assigned') {
+                                    $employee->status = 'available';
+                                    $employee->save();
+                                    Log::debug("Employee ID {$employee->id} status changed to 'available'.");
+                                }
+                                
+                                // Reset cuti status to 'no' if needed
+                                if ($employee->cuti === 'yes') {
+                                    $employee->cuti = 'no';
+                                    $employee->save();
+                                    Log::debug("Employee ID {$employee->id} cuti status reset to 'no'.");
+                                }
                             }
                         }
                     }
+
+                    $manPowerRequest->delete();
+                    $deletedCount++;
+
+                } catch (\Exception $e) {
+                    $errors[] = "Failed to delete request ID {$requestId}: " . $e->getMessage();
+                    Log::error("Bulk delete failed for request {$requestId}: " . $e->getMessage());
                 }
-
-                $manPowerRequest->delete();
-                $deletedCount++;
-
-            } catch (\Exception $e) {
-                $errors[] = "Failed to delete request ID {$requestId}: " . $e->getMessage();
-                Log::error("Bulk delete failed for request {$requestId}: " . $e->getMessage());
             }
+
+            DB::commit();
+
+            $message = "Bulk delete completed: {$deletedCount} requests deleted";
+            if (!empty($errors)) {
+                $message .= ". " . count($errors) . " errors occurred";
+            }
+
+            return response()->json([
+                'success' => $deletedCount > 0,
+                'message' => $message,
+                'deleted_count' => $deletedCount,
+                'errors' => $errors
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Bulk delete failed: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'An error occurred during bulk deletion: ' . $e->getMessage()
+            ], 500);
         }
-
-        DB::commit();
-
-        $message = "Bulk delete completed: {$deletedCount} requests deleted";
-        if (!empty($errors)) {
-            $message .= ". " . count($errors) . " errors occurred";
-        }
-
-        return response()->json([
-            'success' => $deletedCount > 0,
-            'message' => $message,
-            'deleted_count' => $deletedCount,
-            'errors' => $errors
-        ]);
-
-    } catch (\Exception $e) {
-        DB::rollBack();
-        Log::error('Bulk delete failed: ' . $e->getMessage());
-
-        return response()->json([
-            'success' => false,
-            'message' => 'An error occurred during bulk deletion: ' . $e->getMessage()
-        ], 500);
     }
-}
 
     public function fulfill(ManPowerRequest $manPowerRequest)
     {

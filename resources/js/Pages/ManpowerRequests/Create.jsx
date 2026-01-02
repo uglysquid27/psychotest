@@ -1,11 +1,11 @@
 import { useForm, Link } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import SectionSelection from './components/SectionSelection';
 import RequestForm from './components/RequestForm';
 import SubSectionModal from './components/SubSectionModal';
 
-export default function Create({ sections, shifts }) {
+export default function Create({ sections, shifts, employeeStats  }) {
   const [selectedSection, setSelectedSection] = useState(null);
   const [showSubSectionModal, setShowSubSectionModal] = useState(false);
   const [requests, setRequests] = useState([]);
@@ -13,12 +13,31 @@ export default function Create({ sections, shifts }) {
   const [globalDate, setGlobalDate] = useState('');
   const [showSummary, setShowSummary] = useState(false);
   const [selectedSubSections, setSelectedSubSections] = useState([]);
+   const [stats, setStats] = useState(employeeStats || {});
 
   const { data, setData, post, processing, errors } = useForm({
     requests: []
   });
 
   const today = new Date().toISOString().split('T')[0];
+
+   useEffect(() => {
+    if (Object.keys(stats).length === 0) {
+      const fetchEmployeeStats = async () => {
+        try {
+          const response = await fetch('/manpower-requests/employee-stats');
+          if (response.ok) {
+            const data = await response.json();
+            setStats(data);
+          }
+        } catch (error) {
+          console.error('Error fetching employee stats:', error);
+        }
+      };
+
+      fetchEmployeeStats();
+    }
+  }, []);
 
   const handleSectionSelect = (section) => {
     setSelectedSection(section);
@@ -380,6 +399,7 @@ export default function Create({ sections, shifts }) {
                 <SectionSelection 
                   sections={sections} 
                   onSelect={handleSectionSelect} 
+                  employeeStats={employeeStats}
                 />
               ) : (
                 <div className="space-y-6">
@@ -477,6 +497,7 @@ export default function Create({ sections, shifts }) {
         section={selectedSection}
         onSelect={handleSubSectionSelect}
         selectedSubSections={requests.map(r => r.sub_section_id)}
+        employeeStats={employeeStats}
       />
     </AuthenticatedLayout>
   );
