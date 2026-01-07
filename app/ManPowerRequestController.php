@@ -23,14 +23,27 @@ class ManPowerRequestController extends Controller
 {
     public function index(Request $request): Response
 {
-    $user = auth()->user();
-    
+    // Debug: Log user information
+    $user = Auth::user();
+    \Log::info('ManpowerRequests Index accessed by user:', [
+        'user_id' => $user->id,
+        'user_name' => $user->name,
+        'user_role' => $user->role,
+        'user_nik' => $user->nik,
+        'ip_address' => $request->ip(),
+        'user_agent' => $request->userAgent()
+    ]);
+
+    // Always fetch last 30 days
+    $endDate = Carbon::now()->endOfDay();
+    $startDate = Carbon::now()->subDays(30)->startOfDay();
+
     $query = Section::with([
         'subSections',
-        'subSections.manPowerRequests' => function ($query) {
-            // No date filtering - get all
-            $query->orderBy('date', 'desc')
-                  ->orderBy('created_at', 'desc');
+        'subSections.manPowerRequests' => function ($query) use ($startDate, $endDate) {
+            $query->whereBetween('date', [$startDate, $endDate])
+                ->orderBy('date', 'desc')
+                ->orderBy('created_at', 'desc');
         },
         'subSections.manPowerRequests.shift'
     ]);
@@ -40,6 +53,43 @@ class ManPowerRequestController extends Controller
     }
 
     $sections = $query->get();
+
+    // Debug: Log section data being returned
+    \Log::info('Sections data for user ' . $user->id . ' (' . $user->role . '):', [
+        'total_sections' => $sections->count(),
+        'sections_with_requests' => $sections->map(function($section) {
+            return [
+                'section_id' => $section->id,
+                'section_name' => $section->name,
+                'total_requests' => $section->subSections->sum(function($sub) {
+                    return $sub->manPowerRequests->count();
+                })
+            ];
+        })->toArray()
+    ]);
+
+    // Debug: Log specific section counts for different user roles
+    if ($user->role === 'logistic') {
+        \Log::info('Logistic user sections:', [
+            'allowed_sections' => ['Finished goods', 'Delivery', 'Loader', 'Operator Forklift', 'Inspeksi', 'Produksi'],
+            'available_sections' => $sections->pluck('name')->toArray()
+        ]);
+    } elseif ($user->role === 'rm/pm') {
+        \Log::info('RM/PM user sections:', [
+            'allowed_sections' => ['RM/PM'],
+            'available_sections' => $sections->pluck('name')->toArray()
+        ]);
+    } elseif ($user->role === 'fsb') {
+        \Log::info('FSB user sections:', [
+            'allowed_sections' => ['Food & Snackbar'],
+            'available_sections' => $sections->pluck('name')->toArray()
+        ]);
+    } elseif ($user->role === 'user') {
+        \Log::info('Regular user sections:', [
+            'total_available' => $sections->count(),
+            'section_names' => $sections->pluck('name')->toArray()
+        ]);
+    }
 
     $perPage = 10;
     $currentPage = $request->get('page', 1);
@@ -56,12 +106,37 @@ class ManPowerRequestController extends Controller
 
     $allSections = Section::all();
 
-    return Inertia::render('ManpowerRequests/Index', [
+    // Debug: Add user information to the response for frontend debugging
+    $response = Inertia::render('ManpowerRequests/Index', [
         'sections' => $sectionsPaginator,
         'filterSections' => $allSections,
         'filters' => [
             'section_id' => $request->section_id,
+        ],
+        // Pass date range info to frontend
+        'date_range' => [
+            'start' => $startDate->format('Y-m-d'),
+            'end' => $endDate->format('Y-m-d')
+        ],
+        // Pass additional debug info to frontend
+        'debug_info' => [
+            'user_role' => $user->role,
+            'user_id' => $user->id,
+            'total_sections_returned' => $sections->count(),
+            'section_names' => $sections->pluck('name')->toArray(),
+            'server_time' => now()->format('Y-m-d H:i:s'),
+            'date_range_applied' => [
+                'start' => $startDate->format('Y-m-d'),
+                'end' => $endDate->format('Y-m-d')
+            ]
         ]
+    ]);
+
+    // Also add debug headers for network inspection
+    return $response->withHeaders([
+        'X-Debug-User-Role' => $user->role,
+        'X-Debug-Total-Sections' => $sections->count(),
+        'X-Debug-Date-Range' => $startDate->format('Y-m-d') . ' to ' . $endDate->format('Y-m-d')
     ]);
 }
 
