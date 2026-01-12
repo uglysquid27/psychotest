@@ -329,6 +329,10 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
 
     Route::get('/dashboard/requests/{periodType}/{period}/{status}', [DashboardController::class, 'getManpowerRequestsByPeriod'])
         ->name('dashboard.requests.byPeriod');
+    Route::get('/dashboard/quota', [DashboardController::class, 'getEmployeeQuota'])
+    ->name('dashboard.quota');
+    Route::get('/manpower-requests/employee-stats/date', [ManPowerRequestController::class, 'getEmployeeStatsForDate'])
+    ->name('manpower-requests.employee-stats-for-date');
 
     // Schedule routes
     Route::get('/schedules', [ScheduleController::class, 'index'])->name('schedules.index');

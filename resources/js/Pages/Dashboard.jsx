@@ -1,4 +1,4 @@
-// Dashboard.jsx
+// Updated Dashboard.jsx
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, usePage } from '@inertiajs/react';
 import React, { useState, useCallback, useEffect } from 'react';
@@ -13,6 +13,7 @@ import PendingRequestsTable from '@/Components/Dashboard/PendingRequestsTable';
 import UpcomingSchedulesTable from '@/Components/Dashboard/UpcomingSchedulesTables';
 import DetailModal from '@/Components/Dashboard/DetailModal';
 import LunchCouponsCard from '@/Components/Dashboard/LunchCouponsCard';
+import QuotaComponent from '@/Components/Dashboard/QuotaComponent'; 
 import dayjs from 'dayjs';
 
 export default function Dashboard() {
@@ -233,7 +234,7 @@ export default function Dashboard() {
                         />
                     </div>
 
-                    {/* Charts Section */}
+                    {/* Charts Section - Stack vertically on mobile */}
                     <div className="flex flex-col xl:flex-row gap-3 sm:gap-4 lg:gap-6">
                         <div className={`flex-1 ${cardStyle} min-w-0`}>
                             <ManpowerChart
@@ -266,7 +267,11 @@ export default function Dashboard() {
                         </div>
                     </div>
 
-                    {/* Tables Section */}
+                    <div className={cardStyle}>
+                        <QuotaComponent />
+                    </div>
+
+                    {/* Tables Section - Stack vertically on mobile, side by side on desktop */}
                     <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 lg:gap-6">
                         <div className={`flex-1 ${cardStyle} min-w-0`}>
                             <PendingRequestsTable
@@ -287,7 +292,7 @@ export default function Dashboard() {
                         </div>
                     </div>
 
-                    {/* Lunch Coupons - Full width on mobile, half width on desktop */}
+                    {/* Lunch Coupons - Full width */}
                     <div className={`${cardStyle} w-full`}>
                         <LunchCouponsCard
                             formatDate={formatDate}
