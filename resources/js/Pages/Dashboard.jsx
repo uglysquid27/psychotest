@@ -12,7 +12,6 @@ import EmployeeChart from '@/Components/Dashboard/EmployeeChart';
 import PendingRequestsTable from '@/Components/Dashboard/PendingRequestsTable';
 import UpcomingSchedulesTable from '@/Components/Dashboard/UpcomingSchedulesTables';
 import DetailModal from '@/Components/Dashboard/DetailModal';
-import LunchCouponsCard from '@/Components/Dashboard/LunchCouponsCard';
 import QuotaComponent from '@/Components/Dashboard/QuotaComponent'; 
 import dayjs from 'dayjs';
 
@@ -290,13 +289,6 @@ export default function Dashboard() {
                                 formatDate={formatDate}
                             />
                         </div>
-                    </div>
-
-                    {/* Lunch Coupons - Full width */}
-                    <div className={`${cardStyle} w-full`}>
-                        <LunchCouponsCard
-                            formatDate={formatDate}
-                        />
                     </div>
 
                     {/* Modals */}

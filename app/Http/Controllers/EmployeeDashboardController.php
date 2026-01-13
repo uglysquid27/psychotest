@@ -110,7 +110,8 @@ class EmployeeDashboardController extends Controller
     public function respond(Request $req, Schedule $schedule)
     {
         // Only allow responding to today's or future schedules
-        if (Carbon::parse($schedule->date)->isPast() && !Carbon::parse($schedule->date)->isToday()) {
+        $scheduleDate = Carbon::parse($schedule->date);
+        if ($scheduleDate->isPast() && !$scheduleDate->isToday()) {
             return back()->with('error', 'Tidak dapat merespon jadwal yang sudah lewat.');
         }
 
@@ -121,31 +122,25 @@ class EmployeeDashboardController extends Controller
 
         $employee = Auth::guard('employee')->user();
 
-        // Check if this is the first response or a pending schedule without change request
-        $isFirstResponse = empty($schedule->status) || $schedule->status === '' || 
-                           $schedule->status === 'pending';
+        // Check if there's already a pending change request
+        $existingRequest = ScheduleChangeRequest::where('schedule_id', $schedule->id)
+            ->where('employee_id', $employee->id)
+            ->where('approval_status', 'pending')
+            ->first();
 
-        // If it's a pending schedule, check if there's already a change request
-        if ($schedule->status === 'pending') {
-            $existingRequest = ScheduleChangeRequest::where('schedule_id', $schedule->id)
-                ->where('employee_id', $employee->id)
-                ->where('approval_status', 'pending')
-                ->first();
-            
-            // If there's already a pending change request, it's NOT a first response
-            if ($existingRequest) {
-                $isFirstResponse = false;
-            }
+        // If there's a pending request, don't allow another one
+        if ($existingRequest) {
+            return back()->with('error', 'Anda sudah memiliki permintaan perubahan yang menunggu persetujuan.');
         }
+
+        // Determine if this is first response
+        // If schedule has no status or has pending status without pending request, it's first response
+        $isFirstResponse = empty($schedule->status) || 
+                          $schedule->status === '' || 
+                          $schedule->status === 'pending';
 
         if ($isFirstResponse) {
             // First time response - directly update schedule status, no approval needed
-            // Also remove any existing pending change requests for this schedule
-            ScheduleChangeRequest::where('schedule_id', $schedule->id)
-                ->where('employee_id', $employee->id)
-                ->where('approval_status', 'pending')
-                ->delete();
-
             $schedule->update([
                 'status' => $req->status,
                 'rejection_reason' => $req->status === 'rejected' ? $req->rejection_reason : null
@@ -156,16 +151,6 @@ class EmployeeDashboardController extends Controller
             // Not first response - schedule already has accepted/rejected status, need approval
             
             DB::transaction(function () use ($req, $schedule, $employee) {
-                // Check if there's already a pending request for this schedule
-                $existingRequest = ScheduleChangeRequest::where('schedule_id', $schedule->id)
-                    ->where('employee_id', $employee->id)
-                    ->where('approval_status', 'pending')
-                    ->first();
-
-                if ($existingRequest) {
-                    throw new \Exception('Anda sudah memiliki permintaan perubahan yang menunggu persetujuan.');
-                }
-
                 // Store the current status before changing to pending
                 $currentStatus = $schedule->status;
                 
