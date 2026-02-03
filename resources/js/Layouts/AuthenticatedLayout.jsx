@@ -95,7 +95,7 @@ const ChevronDownIcon = ({ className = "w-5 h-5" }) => (
     </svg>
 );
 
-// ADD THIS - PsychologyIcon component
+// ICONS FOR ADMIN MENUS
 const PsychologyIcon = () => (
     <svg
         className="mr-3 w-5 h-5"
@@ -108,6 +108,70 @@ const PsychologyIcon = () => (
             strokeLinejoin="round"
             strokeWidth={2}
             d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+        />
+    </svg>
+);
+
+const CalculatorIcon = () => (
+    <svg
+        className="mr-3 w-5 h-5"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+    >
+        <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+        />
+    </svg>
+);
+
+const DashboardIcon = () => (
+    <svg
+        className="mr-3 w-5 h-5"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+    >
+        <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+        />
+    </svg>
+);
+
+const AttendanceIcon = () => (
+    <svg
+        className="mr-3 w-5 h-5"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+    >
+        <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+    </svg>
+);
+
+const QuestionIcon = () => (
+    <svg
+        className="mr-3 w-5 h-5"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+    >
+        <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
         />
     </svg>
 );
@@ -191,7 +255,6 @@ const ProfileDropdown = ({ user, isEmployee, isAdmin }) => {
                         </div>
 
                         {isEmployee ? (
-                            // EMPLOYEE: Edit Profile link
                             <Link
                                 href={route("employee.employees.edit", { employee: user.id })}
                                 className="flex items-center hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 px-4 py-3 border-gray-100/50 dark:border-gray-700/50 border-b text-gray-700 dark:text-gray-200 text-sm transition-all duration-200"
@@ -200,10 +263,7 @@ const ProfileDropdown = ({ user, isEmployee, isAdmin }) => {
                                 <UserIcon className="mr-3 w-4 h-4" />
                                 Edit Profile
                             </Link>
-                        ) : (
-                            // ADMIN: No Edit Profile (since we removed profile.edit route)
-                            null
-                        )}
+                        ) : null}
 
                         <Link
                             href={route("logout")}
@@ -217,7 +277,7 @@ const ProfileDropdown = ({ user, isEmployee, isAdmin }) => {
                                 fill="none"
                                 stroke="currentColor"
                                 viewBox="0 0 24 24"
-                                >
+                            >
                                 <path
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
@@ -262,25 +322,8 @@ const ThemeToggle = ({ isDark, toggleDarkMode }) => (
     </motion.label>
 );
 
-// Psikotes Dropdown Component (ONLY FOR ADMIN)
-const PsikotesDropdown = ({ isAdmin, isOpen, setIsOpen }) => {
-    const psikotesRoutes = [
-        { href: route("kraepelin.index"), label: "Kraepelin Test", active: route().current("kraepelin.*") },
-        // { href: route("wartegg.index"), label: "Wartegg Test", active: route().current("wartegg.*") },
-        // { href: route("analogi.index"), label: "Analogi Test", active: route().current("analogi.*") },
-        { href: route("ketelitian.index"), label: "Ketelitian Test", active: route().current("ketelitian.*") },
-        { href: route("hitungan.index"), label: "Hitungan Test", active: route().current("hitungan.*") },
-        { href: route("deret.index"), label: "Deret Test", active: route().current("deret.*") },
-        // { href: route("spasial.index"), label: "Spasial Test", active: route().current("spasial.*") },
-        // { href: route("numerik.index"), label: "Numerik Test", active: route().current("numerik.*") },
-        // { href: route("disc.index"), label: "DISC Test", active: route().current("disc.*") },
-        // { href: route("personality.index"), label: "Personality Test", active: route().current("personality.*") },
-    ];
-
-    const isAnyPsikotesActive = psikotesRoutes.some(route => route.active);
-
-    if (!isAdmin) return null;
-
+// Generic Admin Dropdown Component
+const AdminDropdown = ({ icon: Icon, label, isOpen, setIsOpen, children, isActive }) => {
     return (
         <div className="relative">
             <motion.button
@@ -288,14 +331,14 @@ const PsikotesDropdown = ({ isAdmin, isOpen, setIsOpen }) => {
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setIsOpen(!isOpen)}
                 className={`flex items-center justify-between w-full py-4 px-6 text-base font-medium rounded-2xl transition-all duration-300 ${
-                    isAnyPsikotesActive
+                    isActive
                         ? "bg-gradient-to-r from-indigo-500/20 to-purple-600/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-700/50 shadow-md"
                         : "text-gray-700 dark:text-gray-200 hover:bg-indigo-50/60 dark:hover:bg-gray-700/60 hover:text-indigo-600 dark:hover:text-indigo-400 hover:shadow-lg"
                 }`}
             >
                 <div className="flex items-center">
-                    <PsychologyIcon />
-                    <span className="font-semibold">Psikotes</span>
+                    <Icon />
+                    <span className="font-semibold">{label}</span>
                 </div>
                 <motion.div
                     animate={{ rotate: isOpen ? 180 : 0 }}
@@ -314,23 +357,7 @@ const PsikotesDropdown = ({ isAdmin, isOpen, setIsOpen }) => {
                         className="mt-2 ml-6 overflow-hidden"
                     >
                         <div className="space-y-1 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-2 border border-gray-200/50 dark:border-gray-700/50 rounded-xl">
-                            {psikotesRoutes.map((item, index) => (
-                                <motion.div
-                                    key={item.href}
-                                    initial={{ opacity: 0, x: -10 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ delay: index * 0.05 }}
-                                >
-                                    <NavLink
-                                        href={item.href}
-                                        active={item.active}
-                                        className="flex items-center hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 px-4 py-3 rounded-xl font-medium hover:text-indigo-600 dark:hover:text-indigo-400 text-sm transition-all duration-200"
-                                        onClick={() => setIsOpen(false)}
-                                    >
-                                        <span className="font-medium">{item.label}</span>
-                                    </NavLink>
-                                </motion.div>
-                            ))}
+                            {children}
                         </div>
                     </motion.div>
                 )}
@@ -339,21 +366,218 @@ const PsikotesDropdown = ({ isAdmin, isOpen, setIsOpen }) => {
     );
 };
 
+// Dashboard Dropdown Component
+const AdminDashboardDropdown = ({ isOpen, setIsOpen }) => {
+    const dashboardRoutes = [
+        { href: route("dashboard"), label: "Admin Dashboard", active: route().current("dashboard") },
+    ];
+
+    const isAnyDashboardActive = dashboardRoutes.some(route => route.active);
+
+    return (
+        <AdminDropdown
+            icon={DashboardIcon}
+            label="Dashboard"
+            isOpen={isOpen}
+            setIsOpen={setIsOpen}
+            isActive={isAnyDashboardActive}
+        >
+            {dashboardRoutes.map((item, index) => (
+                <motion.div
+                    key={item.href}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                >
+                    <NavLink
+                        href={item.href}
+                        active={item.active}
+                        className="flex items-center hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 px-4 py-3 rounded-xl font-medium hover:text-indigo-600 dark:hover:text-indigo-400 text-sm transition-all duration-200"
+                        onClick={() => setIsOpen(false)}
+                    >
+                        <span className="font-medium">{item.label}</span>
+                    </NavLink>
+                </motion.div>
+            ))}
+        </AdminDropdown>
+    );
+};
+
+// Attendance Dropdown Component
+const EmployeeAttendanceDropdown = ({ isOpen, setIsOpen }) => {
+    const attendanceRoutes = [
+        { href: route("employee-attendance.index"), label: "Employee Attendance", active: route().current("employee-attendance.index") },
+    ];
+
+    const isAnyAttendanceActive = attendanceRoutes.some(route => route.active);
+
+    return (
+        <AdminDropdown
+            icon={AttendanceIcon}
+            label="Attendance"
+            isOpen={isOpen}
+            setIsOpen={setIsOpen}
+            isActive={isAnyAttendanceActive}
+        >
+            {attendanceRoutes.map((item, index) => (
+                <motion.div
+                    key={item.href}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                >
+                    <NavLink
+                        href={item.href}
+                        active={item.active}
+                        className="flex items-center hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 px-4 py-3 rounded-xl font-medium hover:text-indigo-600 dark:hover:text-indigo-400 text-sm transition-all duration-200"
+                        onClick={() => setIsOpen(false)}
+                    >
+                        <span className="font-medium">{item.label}</span>
+                    </NavLink>
+                </motion.div>
+            ))}
+        </AdminDropdown>
+    );
+};
+
+const PsikotesDropdown = ({ isOpen, setIsOpen }) => {
+    const psikotesRoutes = [
+        { href: route("kraepelin.index"), label: "Kraepelin Test", active: route().current("kraepelin.*") },
+        { href: route("ketelitian.index"), label: "Ketelitian Test", active: route().current("ketelitian.index") },
+        { href: route("hitungan.test"), label: "Hitungan Test", active: route().current("hitungan.test") }, // Changed from hitungan.index to hitungan.test
+        { href: route("deret.index"), label: "Deret Test", active: route().current("deret.*") },
+    ];
+
+    const isAnyPsikotesActive = psikotesRoutes.some(route => route.active);
+
+    return (
+        <AdminDropdown
+            icon={PsychologyIcon}
+            label="Psikotes"
+            isOpen={isOpen}
+            setIsOpen={setIsOpen}
+            isActive={isAnyPsikotesActive}
+        >
+            {psikotesRoutes.map((item, index) => (
+                <motion.div
+                    key={item.href}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                >
+                    <NavLink
+                        href={item.href}
+                        active={item.active}
+                        className="flex items-center hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 px-4 py-3 rounded-xl font-medium hover:text-indigo-600 dark:hover:text-indigo-400 text-sm transition-all duration-200"
+                        onClick={() => setIsOpen(false)}
+                    >
+                        <span className="font-medium">{item.label}</span>
+                    </NavLink>
+                </motion.div>
+            ))}
+        </AdminDropdown>
+    );
+};
+
+// Ketelitian Questions Management Dropdown Component (ADMIN ONLY)
+const KetelitianQuestionsDropdown = ({ isOpen, setIsOpen }) => {
+    const ketelitianManagementRoutes = [
+        { href: route("admin.ketelitian.questions.index"), label: "Kelola Soal Ketelitian", active: route().current("admin.ketelitian.questions.index") },
+        { href: route("admin.ketelitian.questions.create"), label: "Tambah Soal", active: route().current("admin.ketelitian.questions.create") },
+    ];
+
+    const isAnyManagementActive = ketelitianManagementRoutes.some(route => route.active);
+
+    return (
+        <AdminDropdown
+            icon={QuestionIcon}
+            label="Kelola Soal"
+            isOpen={isOpen}
+            setIsOpen={setIsOpen}
+            isActive={isAnyManagementActive}
+        >
+            {ketelitianManagementRoutes.map((item, index) => (
+                <motion.div
+                    key={item.href}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                >
+                    <NavLink
+                        href={item.href}
+                        active={item.active}
+                        className="flex items-center hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 px-4 py-3 rounded-xl font-medium hover:text-indigo-600 dark:hover:text-indigo-400 text-sm transition-all duration-200"
+                        onClick={() => setIsOpen(false)}
+                    >
+                        <span className="font-medium">{item.label}</span>
+                    </NavLink>
+                </motion.div>
+            ))}
+        </AdminDropdown>
+    );
+};
+
+
+const HitunganQuestionsDropdown = ({ isOpen, setIsOpen }) => {
+    const hitunganManagementRoutes = [
+        { href: route("admin.hitungan.questions.index"), label: "Kelola Soal Hitungan", active: route().current("admin.hitungan.questions.index") },
+        { href: route("admin.hitungan.questions.create"), label: "Tambah Soal", active: route().current("admin.hitungan.questions.create") },
+    ];
+
+    const isAnyManagementActive = hitunganManagementRoutes.some(route => route.active);
+
+    return (
+        <AdminDropdown
+            icon={CalculatorIcon} // Changed to CalculatorIcon
+            label="Kelola Soal Hitungan"
+            isOpen={isOpen}
+            setIsOpen={setIsOpen}
+            isActive={isAnyManagementActive}
+        >
+            {hitunganManagementRoutes.map((item, index) => (
+                <motion.div
+                    key={item.href}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                >
+                    <NavLink
+                        href={item.href}
+                        active={item.active}
+                        className="flex items-center hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 px-4 py-3 rounded-xl font-medium hover:text-indigo-600 dark:hover:text-indigo-400 text-sm transition-all duration-200"
+                        onClick={() => setIsOpen(false)}
+                    >
+                        <span className="font-medium">{item.label}</span>
+                    </NavLink>
+                </motion.div>
+            ))}
+        </AdminDropdown>
+    );
+};
+
 // Navigation Items Configuration for ADMIN
-const adminNavigationConfig = (user, psikotesOpen, setPsikotesOpen) => {
+const adminNavigationConfig = (user, openStates, setOpenState) => {
     return [
         {
-            type: "link",
-            href: route("dashboard"),
-            label: "Admin Dashboard",
-            active: route().current("dashboard"),
+            type: "dropdown",
+            component: (
+                <AdminDashboardDropdown 
+                    key="dashboard"
+                    isOpen={openStates.dashboard}
+                    setIsOpen={(value) => setOpenState('dashboard', value)}
+                />
+            ),
             show: true,
         },
         {
-            type: "link",
-            href: route("employee-attendance.index"),
-            label: "Employee Attendance",
-            active: route().current("employee-attendance.index"),
+            type: "dropdown",
+            component: (
+                <EmployeeAttendanceDropdown 
+                    key="attendance"
+                    isOpen={openStates.attendance}
+                    setIsOpen={(value) => setOpenState('attendance', value)}
+                />
+            ),
             show: true,
         },
         {
@@ -361,9 +585,30 @@ const adminNavigationConfig = (user, psikotesOpen, setPsikotesOpen) => {
             component: (
                 <PsikotesDropdown 
                     key="psikotes"
-                    isAdmin={true} 
-                    isOpen={psikotesOpen} 
-                    setIsOpen={setPsikotesOpen} 
+                    isOpen={openStates.psikotes}
+                    setIsOpen={(value) => setOpenState('psikotes', value)}
+                />
+            ),
+            show: true,
+        },
+        {
+            type: "dropdown",
+            component: (
+                <KetelitianQuestionsDropdown 
+                    key="ketelitian-questions"
+                    isOpen={openStates.ketelitianQuestions}
+                    setIsOpen={(value) => setOpenState('ketelitianQuestions', value)}
+                />
+            ),
+            show: true,
+        },
+        {
+            type: "dropdown",
+            component: (
+                <HitunganQuestionsDropdown 
+                    key="hitungan-questions"
+                    isOpen={openStates.hitunganQuestions}
+                    setIsOpen={(value) => setOpenState('hitunganQuestions', value)}
                 />
             ),
             show: true,
@@ -371,7 +616,7 @@ const adminNavigationConfig = (user, psikotesOpen, setPsikotesOpen) => {
     ].filter((item) => item.show);
 };
 
-// Navigation Items Configuration for EMPLOYEE (KEEP ALL ORIGINAL MENUS)
+// Navigation Items Configuration for EMPLOYEE
 const employeeNavigationConfig = (user, isForkliftOperator) => {
     const employeeNav = [
         {
@@ -428,7 +673,47 @@ export default function AuthenticatedLayout({
     const user = auth?.user;
     const [isDark, setIsDark] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const [psikotesOpen, setPsikotesOpen] = useState(false);
+    
+    // Manage all dropdown states
+    const [dropdownStates, setDropdownStates] = useState({
+    dashboard: false,
+    attendance: false,
+    psikotes: false,
+    ketelitianQuestions: false,
+    hitunganQuestions: false, // Add this
+});
+
+    // Function to set a specific dropdown state
+  const setDropdownState = (key, value) => {
+    // If opening one dropdown, close others
+    if (value === true) {
+        setDropdownStates(prev => {
+            const newState = {};
+            Object.keys(prev).forEach(k => {
+                newState[k] = k === key;
+            });
+            return newState;
+        });
+    } else {
+        setDropdownStates(prev => ({
+            ...prev,
+            [key]: value
+        }));
+    }
+};
+
+    // Close all dropdowns when mobile menu closes
+    useEffect(() => {
+    if (!isMobileMenuOpen) {
+        setDropdownStates({
+            dashboard: false,
+            attendance: false,
+            psikotes: false,
+            ketelitianQuestions: false,
+            hitunganQuestions: false, // Add this
+        });
+    }
+}, [isMobileMenuOpen]);
 
     // User role checks
     const isAdmin = user?.role === "admin";
@@ -445,7 +730,7 @@ export default function AuthenticatedLayout({
 
     // Get navigation items based on user role
     const navItems = isAdmin 
-        ? adminNavigationConfig(user, psikotesOpen, setPsikotesOpen)
+        ? adminNavigationConfig(user, dropdownStates, setDropdownState)
         : employeeNavigationConfig(user, isForkliftOperator);
 
     // Theme management
@@ -582,7 +867,13 @@ export default function AuthenticatedLayout({
                                                 className={navItemStyle(item.active)}
                                                 onClick={() => {
                                                     setIsMobileMenuOpen(false);
-                                                    setPsikotesOpen(false);
+                                                    // Close all dropdowns when clicking a regular link
+                                                    setDropdownStates({
+                                                        dashboard: false,
+                                                        attendance: false,
+                                                        psikotes: false,
+                                                        ketelitianQuestions: false,
+                                                    });
                                                 }}
                                             >
                                                 <span className="font-semibold">{item.label}</span>
@@ -591,7 +882,7 @@ export default function AuthenticatedLayout({
                                     );
                                 })
                             ) : (
-                                // EMPLOYEE NAVIGATION (original full menu)
+                                // EMPLOYEE NAVIGATION
                                 navItems.map((item, index) => (
                                     <motion.div key={item.href} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }}>
                                         <NavLink

@@ -48,7 +48,7 @@ Route::middleware(['prevent.back'])->group(function () {
     Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
     Route::post('/login', [AuthenticatedSessionController::class, 'store']);
     Route::post('/employee/login', [AuthenticatedSessionController::class, 'store'])->name('employee.login');
-    
+
     // Unified Logout Route with session cleanup
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
         ->middleware(['auth:web,employee'])
@@ -63,7 +63,7 @@ Route::middleware(['auth:employee', 'prevent.back'])
     ->as('employee.')
     ->group(function () {
         Route::get('/dashboard', [EmployeeDashboardController::class, 'index'])->name('dashboard');
-        
+
         // Bank Account Change Routes
         Route::get('/bank-account-change', [BankAccountChangeController::class, 'create'])
             ->name('bank-account-change.create');
@@ -92,7 +92,7 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     // ============ EMPLOYEE ATTENDANCE ============
     Route::prefix('employee-attendance')->group(function () {
         Route::get('/', [EmployeeSum::class, 'index'])->name('employee-attendance.index');
-        
+
         // Individual employee routes
         Route::prefix('/{employee}')->group(function () {
             Route::get('/', [EmployeeSum::class, 'show'])->name('employee-attendance.show');
@@ -100,7 +100,7 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     });
 
     // ============ PSIKOTES ROUTES ============
-    
+
     // 1. Kraepelin Test
     Route::prefix('kraepelin')->name('kraepelin.')->group(function () {
         Route::get('/', [KraepelinController::class, 'index'])->name('index');
@@ -111,7 +111,7 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
         Route::delete('/results/{id}', [KraepelinController::class, 'destroy'])->name('destroy');
         Route::get('/employees', [KraepelinController::class, 'employees'])->name('employees');
     });
-    
+
     // 2. Wartegg Test
     Route::prefix('wartegg')->name('wartegg.')->group(function () {
         Route::get('/', [WarteggTestController::class, 'index'])->name('index');
@@ -125,55 +125,68 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
         Route::get('/', [AnalogiController::class, 'index'])->name('index');
         Route::post('/submit', [AnalogiController::class, 'submit'])->name('submit');
     });
-    
-Route::prefix('ketelitian')->name('ketelitian.')->group(function () {
-    Route::get('/', [KetelitianController::class, 'index'])->name('index');
-    Route::post('/submit', [KetelitianController::class, 'submit'])->name('submit');
-});
 
-// Admin question management routes
-Route::prefix('admin/ketelitian-questions')->name('admin.ketelitian.')->group(function () {
-    Route::get('/', [KetelitianController::class, 'questionsIndex'])->name('questions.index');
-    Route::get('/create', [KetelitianController::class, 'create'])->name('questions.create');
-    Route::post('/', [KetelitianController::class, 'store'])->name('questions.store');
-    Route::get('/{question}/edit', [KetelitianController::class, 'edit'])->name('questions.edit');
-    Route::put('/{question}', [KetelitianController::class, 'update'])->name('questions.update');
-    Route::delete('/{question}', [KetelitianController::class, 'destroy'])->name('questions.destroy');
-        Route::get('/download-template', [KetelitianController::class, 'downloadTemplate'])->name('questions.download-template');
-    Route::post('/import', [KetelitianController::class, 'import'])->name('questions.import');
-});
-    
-    
-    // 5. Hitungan Test
-    Route::prefix('hitungan')->name('hitungan.')->group(function () {
-        Route::get('/', [HitunganController::class, 'index'])->name('index');
-        Route::post('/submit', [HitunganController::class, 'submit'])->name('submit');
+    Route::prefix('ketelitian')->name('ketelitian.')->group(function () {
+        Route::get('/', [KetelitianController::class, 'index'])->name('index');
+        Route::post('/submit', [KetelitianController::class, 'submit'])->name('submit');
     });
-    
+
+    // Admin question management routes
+    Route::prefix('admin/ketelitian-questions')->name('admin.ketelitian.')->group(function () {
+        Route::get('/', [KetelitianController::class, 'questionsIndex'])->name('questions.index');
+        Route::get('/create', [KetelitianController::class, 'create'])->name('questions.create');
+        Route::post('/', [KetelitianController::class, 'store'])->name('questions.store');
+        Route::get('/{question}/edit', [KetelitianController::class, 'edit'])->name('questions.edit');
+        Route::put('/{question}', [KetelitianController::class, 'update'])->name('questions.update');
+        Route::delete('/{question}', [KetelitianController::class, 'destroy'])->name('questions.destroy');
+        Route::get('/download-template', [KetelitianController::class, 'downloadTemplate'])->name('questions.download-template');
+        Route::post('/import', [KetelitianController::class, 'import'])->name('questions.import');
+    });
+
+
+    Route::get('/hitungan', [HitunganController::class, 'index'])->name('hitungan.test');
+    Route::post('/hitungan/submit', [HitunganController::class, 'submit'])->name('hitungan.submit');
+
+    // Admin question management routes for Hitungan
+    Route::prefix('admin/hitungan-questions')->name('admin.hitungan.')->group(function () {
+        Route::get('/', [HitunganController::class, 'questionsIndex'])->name('questions.index');
+        Route::get('/create', [HitunganController::class, 'create'])->name('questions.create');
+        Route::post('/', [HitunganController::class, 'store'])->name('questions.store');
+        Route::get('/{question}/edit', [HitunganController::class, 'edit'])->name('questions.edit');
+        Route::put('/{question}', [HitunganController::class, 'update'])->name('questions.update');
+        Route::delete('/{question}', [HitunganController::class, 'destroy'])->name('questions.destroy');
+        Route::get('/download-template', [HitunganController::class, 'downloadTemplate'])->name('questions.download-template');
+        Route::post('/import', [HitunganController::class, 'import'])->name('questions.import');
+
+        // Optional: Add bulk actions if you need them (similar to ketelitian)
+        Route::post('/bulk-toggle-active', [HitunganController::class, 'bulkToggleActive'])->name('questions.bulk-toggle-active');
+        Route::post('/bulk-delete', [HitunganController::class, 'bulkDelete'])->name('questions.bulk-delete');
+    });
+
     // 6. Deret Test
     Route::prefix('deret')->name('deret.')->group(function () {
         Route::get('/', [TesDeretController::class, 'index'])->name('index');
         Route::post('/submit', [TesDeretController::class, 'submit'])->name('submit');
     });
-    
+
     // 7. Spasial Test
     Route::prefix('spasial')->name('spasial.')->group(function () {
         Route::get('/', [SpasialController::class, 'index'])->name('index');
         Route::post('/submit', [SpasialController::class, 'submit'])->name('submit');
     });
-    
+
     // 8. Numerik Test
     Route::prefix('numerik')->name('numerik.')->group(function () {
         Route::get('/', [TesNumerikController::class, 'index'])->name('index');
         Route::post('/submit', [TesNumerikController::class, 'submit'])->name('submit');
     });
-    
+
     // 9. DISC Test
     Route::prefix('disc')->name('disc.')->group(function () {
         Route::get('/', [DiscTestController::class, 'index'])->name('index');
         Route::post('/submit', [DiscTestController::class, 'submit'])->name('submit');
     });
-    
+
     // 10. Personality Test
     Route::prefix('personality')->name('personality.')->group(function () {
         Route::get('/', [PersonalityTestController::class, 'index'])->name('index');
