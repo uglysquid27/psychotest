@@ -5,85 +5,119 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\HitunganQuestion;
-use App\Models\KetelitianQuestion; // For pattern reference
+use App\Models\HitunganTestResult;
 
 class HitunganController extends Controller
 {
     public function index()
-{
-    // Get 50 random active questions from database
-    $questions = HitunganQuestion::where('is_active', true)
-        ->inRandomOrder()
-        ->limit(50)
-        ->get()
-        ->map(function ($question) {
-            return [
-                'question' => $question->question,
-                'answer' => $question->answer
-            ];
-        })
-        ->toArray();
-
-    // If not enough questions in DB, generate some from default dataset
-    if (count($questions) < 50) {
-        $needed = 50 - count($questions);
-        $defaultQuestions = $this->getDefaultQuestions();
-        shuffle($defaultQuestions);
-        
-        for ($i = 0; $i < $needed && $i < count($defaultQuestions); $i++) {
-            $questions[] = $defaultQuestions[$i];
-        }
-    }
-
-    // Render TestPage.jsx for employee test
-    return Inertia::render('Psychotest/HitunganTest/TestPage', [
-        'questions' => $questions
-    ]);
-}
-
-    public function submit(Request $request)
     {
-        $userAnswers = $request->input('answers');
-        $questions = $request->input('questions');
-        $score = 0;
+        // Get 50 random active questions from database ONLY
+        $questions = HitunganQuestion::where('is_active', true)
+            ->inRandomOrder()
+            ->limit(50)
+            ->get()
+            ->map(function ($question) {
+                return [
+                    'question' => $question->question,
+                    'answer' => (float) $question->answer // Ensure it's float
+                ];
+            })
+            ->toArray();
 
-        foreach ($questions as $i => $q) {
-            if (isset($userAnswers[$i]) && floatval($userAnswers[$i]) === floatval($q['answer'])) {
-                $score++;
-            }
+        // If not enough questions in database, show error message
+        if (count($questions) < 50) {
+            return Inertia::render('Psychotest/HitunganTest/TestPage', [
+                'questions' => $questions,
+                'error' => 'Maaf, belum cukup soal di database. Hanya tersedia ' . count($questions) . ' soal dari 50 soal yang dibutuhkan.'
+            ]);
         }
 
-        return response()->json([
-            'score' => $score,
-            'total' => count($questions)
+        // Render TestPage.jsx for employee test
+        return Inertia::render('Psychotest/HitunganTest/TestPage', [
+            'questions' => $questions
         ]);
     }
 
-    // ADMIN SECTION - Question Management
-    public function questionsIndex(Request $request)
+    public function submit(Request $request)
 {
-    $perPage = $request->get('per_page', 10);
-    $search = $request->get('search', '');
+    $user = auth()->user();
+    $userAnswers = $request->input('answers');
+    $questions = $request->input('questions');
+    $timeElapsed = $request->input('time_elapsed', 0);
     
-    $questions = HitunganQuestion::query()
-        ->when($search, function ($query, $search) {
-            return $query->where(function ($q) use ($search) {
-                $q->where('question', 'like', "%{$search}%")
-                  ->orWhere('answer', 'like', "%{$search}%");
-            });
-        })
-        ->orderBy('created_at', 'desc')
-        ->paginate($perPage);
+    $score = 0;
+    $correctAnswers = 0;
+    $wrongAnswers = 0;
+    $unanswered = 0;
+    $totalQuestions = count($questions);
     
-    // Render Index.jsx for admin question list
-    return Inertia::render('Psychotest/HitunganTest/Index', [
-        'questions' => $questions,
-        'filters' => [
-            'search' => $search,
-            'per_page' => $perPage
-        ]
+    // Calculate score
+    foreach ($questions as $i => $q) {
+        if (isset($userAnswers[$i]) && $userAnswers[$i] !== '') {
+            if (floatval($userAnswers[$i]) === floatval($q['answer'])) {
+                $score++;
+                $correctAnswers++;
+            } else {
+                $wrongAnswers++;
+            }
+        } else {
+            $unanswered++;
+        }
+    }
+    
+    $percentage = $totalQuestions > 0 ? ($score / $totalQuestions) * 100 : 0;
+    
+    // Save to database
+    HitunganTestResult::create([
+        'user_id' => $user->id,
+        'score' => $score,
+        'total_questions' => $totalQuestions,
+        'correct_answers' => $correctAnswers,
+        'wrong_answers' => $wrongAnswers,
+        'unanswered' => $unanswered,
+        'time_elapsed' => $timeElapsed,
+        'percentage' => $percentage,
+        'answers' => json_encode($userAnswers),
+    ]);
+    
+    // Return JSON response for AJAX call
+    return response()->json([
+        'success' => true,
+        'score' => $score,
+        'total' => $totalQuestions,
+        'correctAnswers' => $correctAnswers,
+        'wrongAnswers' => $wrongAnswers,
+        'unanswered' => $unanswered,
+        'timeElapsed' => $timeElapsed,
+        'percentage' => $percentage,
+        'message' => 'Hasil tes telah disimpan.'
     ]);
 }
+
+    // ADMIN SECTION - Question Management
+    public function questionsIndex(Request $request)
+    {
+        $perPage = $request->get('per_page', 10);
+        $search = $request->get('search', '');
+        
+        $questions = HitunganQuestion::query()
+            ->when($search, function ($query, $search) {
+                return $query->where(function ($q) use ($search) {
+                    $q->where('question', 'like', "%{$search}%")
+                      ->orWhere('answer', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('created_at', 'desc')
+            ->paginate($perPage);
+        
+        return Inertia::render('Psychotest/HitunganTest/Index', [
+            'questions' => $questions,
+            'filters' => [
+                'search' => $search,
+                'per_page' => $perPage
+            ]
+        ]);
+    }
 
     public function create()
     {
