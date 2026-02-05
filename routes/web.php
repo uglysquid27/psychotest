@@ -163,11 +163,24 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
         Route::post('/bulk-delete', [HitunganController::class, 'bulkDelete'])->name('questions.bulk-delete');
     });
 
-    // 6. Deret Test
-    Route::prefix('deret')->name('deret.')->group(function () {
-        Route::get('/', [TesDeretController::class, 'index'])->name('index');
-        Route::post('/submit', [TesDeretController::class, 'submit'])->name('submit');
-    });
+    Route::middleware(['auth'])->group(function () {
+    Route::get('/deret', [TesDeretController::class, 'index'])->name('deret.index');
+    Route::post('/deret/submit', [TesDeretController::class, 'submit'])->name('deret.submit');
+});
+
+// Admin Deret Questions Management - Following same pattern as hitungan
+Route::prefix('admin/deret-questions')->name('admin.deret.')->group(function () {
+    Route::get('/', [TesDeretController::class, 'questionsIndex'])->name('questions.index');
+    Route::get('/create', [TesDeretController::class, 'create'])->name('questions.create');
+    Route::post('/', [TesDeretController::class, 'store'])->name('questions.store');
+    Route::get('/{question}/edit', [TesDeretController::class, 'edit'])->name('questions.edit');
+    Route::put('/{question}', [TesDeretController::class, 'update'])->name('questions.update');
+    Route::delete('/{question}', [TesDeretController::class, 'destroy'])->name('questions.destroy');
+    Route::get('/download-template', [TesDeretController::class, 'downloadTemplate'])->name('questions.download-template');
+    Route::post('/import', [TesDeretController::class, 'import'])->name('questions.import');
+    Route::post('/bulk-toggle-active', [TesDeretController::class, 'bulkToggleActive'])->name('questions.bulk-toggle-active');
+    Route::post('/bulk-delete', [TesDeretController::class, 'bulkDelete'])->name('questions.bulk-delete');
+});
 
     // 7. Spasial Test
     Route::prefix('spasial')->name('spasial.')->group(function () {

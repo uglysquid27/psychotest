@@ -1,4 +1,3 @@
-// AuthenticatedLayout.jsx
 import { useState, useEffect } from "react";
 import ApplicationLogo from "@/Components/ApplicationLogo";
 import NavLink from "@/Components/NavLink";
@@ -172,6 +171,22 @@ const QuestionIcon = () => (
             strokeLinejoin="round"
             strokeWidth={2}
             d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        />
+    </svg>
+);
+
+const NumberSeriesIcon = () => (
+    <svg
+        className="mr-3 w-5 h-5"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+    >
+        <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
         />
     </svg>
 );
@@ -440,11 +455,12 @@ const EmployeeAttendanceDropdown = ({ isOpen, setIsOpen }) => {
     );
 };
 
+// Psikotes Dropdown Component
 const PsikotesDropdown = ({ isOpen, setIsOpen }) => {
     const psikotesRoutes = [
         { href: route("kraepelin.index"), label: "Kraepelin Test", active: route().current("kraepelin.*") },
         { href: route("ketelitian.index"), label: "Ketelitian Test", active: route().current("ketelitian.index") },
-        { href: route("hitungan.test"), label: "Hitungan Test", active: route().current("hitungan.test") }, // Changed from hitungan.index to hitungan.test
+        { href: route("hitungan.test"), label: "Hitungan Test", active: route().current("hitungan.test") },
         { href: route("deret.index"), label: "Deret Test", active: route().current("deret.*") },
     ];
 
@@ -479,7 +495,7 @@ const PsikotesDropdown = ({ isOpen, setIsOpen }) => {
     );
 };
 
-// Ketelitian Questions Management Dropdown Component (ADMIN ONLY)
+// Ketelitian Questions Management Dropdown Component
 const KetelitianQuestionsDropdown = ({ isOpen, setIsOpen }) => {
     const ketelitianManagementRoutes = [
         { href: route("admin.ketelitian.questions.index"), label: "Kelola Soal Ketelitian", active: route().current("admin.ketelitian.questions.index") },
@@ -491,7 +507,7 @@ const KetelitianQuestionsDropdown = ({ isOpen, setIsOpen }) => {
     return (
         <AdminDropdown
             icon={QuestionIcon}
-            label="Kelola Soal"
+            label="Kelola Soal Ketelitian"
             isOpen={isOpen}
             setIsOpen={setIsOpen}
             isActive={isAnyManagementActive}
@@ -517,7 +533,7 @@ const KetelitianQuestionsDropdown = ({ isOpen, setIsOpen }) => {
     );
 };
 
-
+// Hitungan Questions Management Dropdown Component
 const HitunganQuestionsDropdown = ({ isOpen, setIsOpen }) => {
     const hitunganManagementRoutes = [
         { href: route("admin.hitungan.questions.index"), label: "Kelola Soal Hitungan", active: route().current("admin.hitungan.questions.index") },
@@ -528,13 +544,51 @@ const HitunganQuestionsDropdown = ({ isOpen, setIsOpen }) => {
 
     return (
         <AdminDropdown
-            icon={CalculatorIcon} // Changed to CalculatorIcon
+            icon={CalculatorIcon}
             label="Kelola Soal Hitungan"
             isOpen={isOpen}
             setIsOpen={setIsOpen}
             isActive={isAnyManagementActive}
         >
             {hitunganManagementRoutes.map((item, index) => (
+                <motion.div
+                    key={item.href}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                >
+                    <NavLink
+                        href={item.href}
+                        active={item.active}
+                        className="flex items-center hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 px-4 py-3 rounded-xl font-medium hover:text-indigo-600 dark:hover:text-indigo-400 text-sm transition-all duration-200"
+                        onClick={() => setIsOpen(false)}
+                    >
+                        <span className="font-medium">{item.label}</span>
+                    </NavLink>
+                </motion.div>
+            ))}
+        </AdminDropdown>
+    );
+};
+
+// Deret Questions Management Dropdown Component
+const DeretQuestionsDropdown = ({ isOpen, setIsOpen }) => {
+    const deretManagementRoutes = [
+        { href: route("admin.deret.questions.index"), label: "Kelola Soal Deret", active: route().current("admin.deret.questions.index") },
+        { href: route("admin.deret.questions.create"), label: "Tambah Soal", active: route().current("admin.deret.questions.create") },
+    ];
+
+    const isAnyManagementActive = deretManagementRoutes.some(route => route.active);
+
+    return (
+        <AdminDropdown
+            icon={NumberSeriesIcon}
+            label="Kelola Soal Deret"
+            isOpen={isOpen}
+            setIsOpen={setIsOpen}
+            isActive={isAnyManagementActive}
+        >
+            {deretManagementRoutes.map((item, index) => (
                 <motion.div
                     key={item.href}
                     initial={{ opacity: 0, x: -10 }}
@@ -613,6 +667,17 @@ const adminNavigationConfig = (user, openStates, setOpenState) => {
             ),
             show: true,
         },
+        {
+            type: "dropdown",
+            component: (
+                <DeretQuestionsDropdown 
+                    key="deret-questions"
+                    isOpen={openStates.deretQuestions}
+                    setIsOpen={(value) => setOpenState('deretQuestions', value)}
+                />
+            ),
+            show: true,
+        },
     ].filter((item) => item.show);
 };
 
@@ -674,46 +739,46 @@ export default function AuthenticatedLayout({
     const [isDark, setIsDark] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     
-    // Manage all dropdown states
+    // Manage all dropdown states - FIXED: Added deretQuestions to initial state
     const [dropdownStates, setDropdownStates] = useState({
-    dashboard: false,
-    attendance: false,
-    psikotes: false,
-    ketelitianQuestions: false,
-    hitunganQuestions: false, // Add this
-});
+        dashboard: false,
+        attendance: false,
+        psikotes: false,
+        ketelitianQuestions: false,
+        hitunganQuestions: false,
+        deretQuestions: false,
+    });
 
     // Function to set a specific dropdown state
-  const setDropdownState = (key, value) => {
-    // If opening one dropdown, close others
-    if (value === true) {
-        setDropdownStates(prev => {
+    const setDropdownState = (key, value) => {
+        // If opening one dropdown, close others
+        if (value === true) {
             const newState = {};
-            Object.keys(prev).forEach(k => {
+            Object.keys(dropdownStates).forEach(k => {
                 newState[k] = k === key;
             });
-            return newState;
-        });
-    } else {
-        setDropdownStates(prev => ({
-            ...prev,
-            [key]: value
-        }));
-    }
-};
+            setDropdownStates(newState);
+        } else {
+            setDropdownStates(prev => ({
+                ...prev,
+                [key]: value
+            }));
+        }
+    };
 
     // Close all dropdowns when mobile menu closes
     useEffect(() => {
-    if (!isMobileMenuOpen) {
-        setDropdownStates({
-            dashboard: false,
-            attendance: false,
-            psikotes: false,
-            ketelitianQuestions: false,
-            hitunganQuestions: false, // Add this
-        });
-    }
-}, [isMobileMenuOpen]);
+        if (!isMobileMenuOpen) {
+            setDropdownStates({
+                dashboard: false,
+                attendance: false,
+                psikotes: false,
+                ketelitianQuestions: false,
+                hitunganQuestions: false,
+                deretQuestions: false,
+            });
+        }
+    }, [isMobileMenuOpen]);
 
     // User role checks
     const isAdmin = user?.role === "admin";
@@ -873,6 +938,8 @@ export default function AuthenticatedLayout({
                                                         attendance: false,
                                                         psikotes: false,
                                                         ketelitianQuestions: false,
+                                                        hitunganQuestions: false,
+                                                        deretQuestions: false,
                                                     });
                                                 }}
                                             >
