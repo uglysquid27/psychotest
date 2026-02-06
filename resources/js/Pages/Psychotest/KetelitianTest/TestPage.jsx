@@ -10,6 +10,7 @@ export default function TesKetelitian({ questions }) {
   const [isFinished, setIsFinished] = useState(false);
   const [timeStarted, setTimeStarted] = useState(null);
   const [timeElapsed, setTimeElapsed] = useState(0);
+  const [showGuide, setShowGuide] = useState(true); // New state for guide
   const questionRefs = useRef([]);
   const questionsContainerRef = useRef(null);
   const timerRef = useRef(null);
@@ -54,25 +55,55 @@ export default function TesKetelitian({ questions }) {
   const startTest = () => {
     setTestStarted(true);
     setTimeStarted(new Date());
+    setShowGuide(false); // Hide guide when test starts
   };
 
-  const handleAnswer = (answer) => {
-    if (isFinished || !testStarted) return;
-
-    const newAnswers = [...userAnswers];
-    newAnswers[currentIndex] = answer;
-    setUserAnswers(newAnswers);
-
-    if (currentIndex < questions.length - 1) {
-      setCurrentIndex(prev => prev + 1);
-    } else {
-      // Hitung skor
-      const correct = newAnswers.filter((ans, i) => ans === questions[i].answer).length;
-      const wrong = questions.length - correct;
-      setScore({ correct, wrong });
-      setIsFinished(true);
-      clearInterval(timerRef.current);
+  const submitTest = async () => {
+    if (isFinished) return;
+    
+    // Hitung skor
+    const correct = userAnswers.filter((ans, i) => ans === questions[i].answer).length;
+    const wrong = questions.length - correct;
+    setScore({ correct, wrong });
+    
+    // Prepare data for submission
+    const submissionData = {
+        answers: userAnswers,
+        questions: questions,
+        time_elapsed: timeElapsed
+    };
+    
+    try {
+        const response = await axios.post(route('ketelitian.submit'), submissionData);
+        
+        if (response.data.success) {
+            setIsFinished(true);
+            clearInterval(timerRef.current);
+            
+            // Optional: Show success message
+            console.log('Test results saved successfully');
+        }
+    } catch (error) {
+        console.error('Failed to save test results:', error);
+        // Still finish test locally even if save fails
+        setIsFinished(true);
+        clearInterval(timerRef.current);
     }
+};
+
+  const handleAnswer = (answer) => {
+      if (isFinished || !testStarted) return;
+
+      const newAnswers = [...userAnswers];
+      newAnswers[currentIndex] = answer;
+      setUserAnswers(newAnswers);
+
+      if (currentIndex < questions.length - 1) {
+          setCurrentIndex(prev => prev + 1);
+      } else {
+          // Auto submit when last question answered
+          submitTest();
+      }
   };
 
   const navigateToQuestion = (index) => {
@@ -93,6 +124,7 @@ export default function TesKetelitian({ questions }) {
 
   const handleRestart = () => {
     setTestStarted(false);
+    setShowGuide(true); // Show guide again
     setCurrentIndex(0);
     setUserAnswers(Array(questions.length).fill(null));
     setScore({ correct: 0, wrong: 0 });
@@ -102,6 +134,213 @@ export default function TesKetelitian({ questions }) {
     clearInterval(timerRef.current);
   };
 
+  const handleNewSession = () => {
+    window.location.reload(); // Reload for new questions
+  };
+
+  // Guide/Introduction Screen
+  if (showGuide) {
+    return (
+      <AuthenticatedLayout
+        header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Tes Ketelitian (S/T)</h2>}
+      >
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 min-h-screen py-8 px-4">
+          <div className="max-w-4xl mx-auto">
+            {/* Header */}
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full mb-4 shadow-lg">
+                <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">
+                Tes Ketelitian (S/T)
+              </h1>
+              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+                Uji kemampuan Anda dalam memperhatikan detail dan menemukan perbedaan
+              </p>
+            </div>
+
+            {/* Test Info Cards */}
+            <div className="grid md:grid-cols-3 gap-6 mb-8">
+              <div className="bg-white rounded-xl p-6 shadow-md border border-gray-100">
+                <div className="text-blue-600 mb-3">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                </div>
+                <h3 className="font-bold text-lg mb-2">50 Soal</h3>
+                <p className="text-gray-600">Tentukan apakah pasangan teks SAMA atau TIDAK SAMA</p>
+              </div>
+              
+              <div className="bg-white rounded-xl p-6 shadow-md border border-gray-100">
+                <div className="text-green-600 mb-3">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 className="font-bold text-lg mb-2">Tidak Terbatas</h3>
+                <p className="text-gray-600">Waktu pengerjaan tidak dibatasi, fokus pada ketelitian</p>
+              </div>
+              
+              <div className="bg-white rounded-xl p-6 shadow-md border border-gray-100">
+                <div className="text-purple-600 mb-3">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </div>
+                <h3 className="font-bold text-lg mb-2">Detail Oriented</h3>
+                <p className="text-gray-600">Perhatikan setiap karakter termasuk huruf, angka, dan tanda baca</p>
+              </div>
+            </div>
+
+            {/* Instructions */}
+            <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border border-gray-200">
+              <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center">
+                <svg className="w-6 h-6 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Petunjuk Pengerjaan
+              </h2>
+              
+              <div className="space-y-4">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-4">
+                    <span className="font-bold text-blue-600">1</span>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-800">SAMA (S)</h4>
+                    <p className="text-gray-600">Tekan tombol <span className="font-bold text-green-600">S</span> jika kedua teks identik persis tanpa perbedaan</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start">
+                  <div className="flex-shrink-0 w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-4">
+                    <span className="font-bold text-red-600">2</span>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-800">TIDAK SAMA (T)</h4>
+                    <p className="text-gray-600">Tekan tombol <span className="font-bold text-red-600">T</span> jika ada perbedaan sekecil apapun pada kedua teks</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start">
+                  <div className="flex-shrink-0 w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center mr-4">
+                    <span className="font-bold text-yellow-600">3</span>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-800">Perhatian Khusus</h4>
+                    <p className="text-gray-600">Perhatikan huruf besar/kecil, spasi, tanda baca, dan angka</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start">
+                  <div className="flex-shrink-0 w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-4">
+                    <span className="font-bold text-green-600">4</span>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-800">Navigasi</h4>
+                    <p className="text-gray-600">Gunakan panel soal di kiri untuk berpindah ke soal tertentu</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Examples */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 mb-8 border border-blue-200">
+              <h3 className="text-xl font-bold text-gray-800 mb-4">Contoh Soal</h3>
+              
+              <div className="space-y-6">
+                <div className="bg-white rounded-lg p-4 shadow-sm">
+                  <div className="flex justify-between items-center mb-3">
+                    <div className="text-lg font-semibold bg-blue-100 text-blue-800 px-3 py-1 rounded">"PT. Maju Jaya Sejahtera"</div>
+                    <div className="text-lg font-semibold bg-blue-100 text-blue-800 px-3 py-1 rounded">"PT. Maju Jaya Sejahtera"</div>
+                  </div>
+                  <div className="flex items-center text-green-600 font-medium">
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    Jawaban: <span className="font-bold ml-1">S (Sama)</span>
+                  </div>
+                </div>
+                
+                <div className="bg-white rounded-lg p-4 shadow-sm">
+                  <div className="flex justify-between items-center mb-3">
+                    <div className="text-lg font-semibold bg-red-100 text-red-800 px-3 py-1 rounded">"021-55667788"</div>
+                    <div className="text-lg font-semibold bg-red-100 text-red-800 px-3 py-1 rounded">"021-55667789"</div>
+                  </div>
+                  <div className="flex items-center text-red-600 font-medium">
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Jawaban: <span className="font-bold ml-1">T (Tidak Sama)</span>
+                    <span className="ml-2 text-sm text-gray-600">(angka terakhir berbeda)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Tips */}
+            <div className="bg-white rounded-xl p-6 mb-8 shadow-md border border-gray-200">
+              <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <svg className="w-5 h-5 mr-2 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+                Tips untuk Hasil Terbaik
+              </h3>
+              <ul className="grid md:grid-cols-2 gap-3">
+                <li className="flex items-center text-gray-700">
+                  <svg className="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Fokus pada satu soal pada satu waktu
+                </li>
+                <li className="flex items-center text-gray-700">
+                  <svg className="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Scan teks dari kiri ke kanan
+                </li>
+                <li className="flex items-center text-gray-700">
+                  <svg className="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Periksa spasi dan tanda baca
+                </li>
+                <li className="flex items-center text-gray-700">
+                  <svg className="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Jangan terburu-buru, teliti lebih penting
+                </li>
+              </ul>
+            </div>
+
+            {/* Start Button */}
+            <div className="text-center">
+              <button 
+                onClick={startTest}
+                className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-4 px-12 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 text-lg"
+              >
+                <div className="flex items-center justify-center">
+                  <svg className="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Mulai Tes Ketelitian
+                </div>
+              </button>
+              <p className="text-gray-600 mt-4 text-sm">
+                Siap untuk menguji ketelitian Anda? Klik tombol di atas untuk memulai
+              </p>
+            </div>
+          </div>
+        </div>
+      </AuthenticatedLayout>
+    );
+  }
+
+  // Main Test Interface
   return (
     <AuthenticatedLayout
       header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Tes Ketelitian (S/T)</h2>}
@@ -112,7 +351,7 @@ export default function TesKetelitian({ questions }) {
 
             {/* Header: Progress + Timer */}
             {testStarted && (
-              <div className="bg-blue-600 p-4 text-white">
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white">
                 <div className="flex justify-between items-center">
                   <div className="font-bold text-lg">
                     Pertanyaan {currentIndex + 1} / {questions.length}
@@ -130,7 +369,7 @@ export default function TesKetelitian({ questions }) {
               </div>
             )}
 
-            {!testStarted ? (
+            {!testStarted && !showGuide ? (
               /* Start Screen */
               <div className="p-6 md:p-8 text-center">
                 <div className="mb-6">
@@ -288,15 +527,24 @@ export default function TesKetelitian({ questions }) {
                   </div>
                   
                   {isFinished && (
-                    <div className="text-center">
+                    <div className="flex justify-center gap-4">
                       <button 
                         onClick={handleRestart}
-                        className="flex justify-center items-center bg-indigo-600 hover:bg-indigo-700 mx-auto px-6 py-3 rounded-lg text-white transition-colors duration-200"
+                        className="flex items-center bg-indigo-600 hover:bg-indigo-700 px-6 py-3 rounded-lg text-white transition-colors duration-200"
                       >
                         <svg className="mr-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
                         Kerjakan Tes Lagi
+                      </button>
+                      <button 
+                        onClick={handleNewSession}
+                        className="flex items-center bg-green-600 hover:bg-green-700 px-6 py-3 rounded-lg text-white transition-colors duration-200"
+                      >
+                        <svg className="mr-2 w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        Sesi Baru
                       </button>
                     </div>
                   )}
@@ -309,10 +557,10 @@ export default function TesKetelitian({ questions }) {
                     <div className="mb-6 lg:text-left text-center">
                       <p className="mb-4 text-gray-600">Apakah kedua teks di samping SAMA atau TIDAK SAMA?</p>
                       <div className="flex flex-col gap-4 mb-6">
-                        <button onClick={() => handleAnswer('S')} className="bg-green-600 hover:bg-green-700 shadow-md px-4 md:px-8 py-3 md:py-4 rounded-lg font-bold text-white text-lg md:text-xl hover:scale-105 transition-colors transform">
+                        <button onClick={() => handleAnswer('S')} className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-md px-4 md:px-8 py-3 md:py-4 rounded-lg font-bold text-white text-lg md:text-xl hover:scale-105 transition-all transform">
                           S (Sama)
                         </button>
-                        <button onClick={() => handleAnswer('T')} className="bg-red-600 hover:bg-red-700 shadow-md px-4 md:px-8 py-3 md:py-4 rounded-lg font-bold text-white text-lg md:text-xl hover:scale-105 transition-colors transform">
+                        <button onClick={() => handleAnswer('T')} className="bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 shadow-md px-4 md:px-8 py-3 md:py-4 rounded-lg font-bold text-white text-lg md:text-xl hover:scale-105 transition-all transform">
                           T (Tidak Sama)
                         </button>
                       </div>
@@ -322,7 +570,7 @@ export default function TesKetelitian({ questions }) {
                       </div>
                     </div>
                   ) : (
-                    <div className="bg-green-50 p-6 border border-green-200 rounded-lg text-center">
+                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 border border-green-200 rounded-lg text-center">
                       <h3 className="mb-4 font-bold text-green-800 text-xl md:text-2xl">Tes Selesai!</h3>
                       <div className="gap-4 grid grid-cols-2 mb-6">
                         <div className="bg-white shadow p-4 rounded-lg">
@@ -335,7 +583,12 @@ export default function TesKetelitian({ questions }) {
                         </div>
                       </div>
                       <div className="mb-4 text-gray-700">
-                        <p>Total Waktu: {formatTime(timeElapsed)}</p>
+                        <p className="flex items-center justify-center">
+                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Total Waktu: {formatTime(timeElapsed)}
+                        </p>
                         <p className="mt-2 font-bold">
                           Skor: {((score.correct / questions.length) * 100).toFixed(1)}%
                         </p>

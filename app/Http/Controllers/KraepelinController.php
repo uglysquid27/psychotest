@@ -68,89 +68,195 @@ class KraepelinController extends Controller
         }
     }
 
-    /**
-     * Submit test answers and calculate results
-     */
-    public function submit(Request $request)
+     public function submit(Request $request)
     {
-        $request->validate([
-            'test_id' => 'required|exists:kraepelin_tests,id',
-            'answers' => 'required|array',
-            'time_taken_seconds' => 'required|integer|min:0'
-        ]);
-
-        try {
-            DB::beginTransaction();
-
-            $kraepelinTest = KraepelinTest::findOrFail($request->test_id);
-
-            // Check if test belongs to current user
-            if ($kraepelinTest->user_id !== Auth::id()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Unauthorized access to this test'
-                ], 403);
-            }
-
-            // Check if test is still active
-            if ($kraepelinTest->status !== 'active') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Test sudah tidak aktif'
-                ], 400);
-            }
-
-            // Decode test data to get correct answers
-            $testData = json_decode($kraepelinTest->test_data, true);
-            $answers = $request->answers;
-
-            // Calculate results
-            $results = $this->calculateResults($testData, $answers);
-
-            // Update test status
-            $kraepelinTest->update([
-                'status' => 'completed',
-                'finished_at' => now(),
-                'time_taken_seconds' => $request->time_taken_seconds
-            ]);
-
-            // Save detailed results
-            KraepelinTestResult::create([
-                'kraepelin_test_id' => $kraepelinTest->id,
-                'answers' => json_encode($answers),
-                'total_questions' => $results['total_questions'],
-                'total_answered' => $results['total_answered'],
-                'correct_answers' => $results['correct_answers'],
-                'wrong_answers' => $results['wrong_answers'],
-                'accuracy_percentage' => $results['accuracy_percentage'],
-                'speed_per_minute' => $results['speed_per_minute'],
-                'detailed_results' => json_encode($results['detailed_results']),
-                'performance_score' => $results['performance_score']
-            ]);
-
-            DB::commit();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Test berhasil diselesaikan',
-                'data' => [
-                    'results' => $results,
-                    'test_info' => [
-                        'started_at' => $kraepelinTest->started_at,
-                        'finished_at' => $kraepelinTest->finished_at,
-                        'duration_minutes' => $kraepelinTest->duration_minutes,
-                        'time_taken_seconds' => $kraepelinTest->time_taken_seconds
-                    ]
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
+        if (!auth()->check()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal menyimpan hasil test: ' . $e->getMessage()
+                'message' => 'User not authenticated'
+            ], 401);
+        }
+
+        $user = auth()->user();
+        $userAnswers = $request->input('answers', []);
+        $testData = $request->input('test_data', []); // This is the pre-calculated pairs
+        $timeElapsed = $request->input('time_elapsed', 0);
+        $rows = $request->input('rows', 5);
+        $cols = $request->input('cols', 5);
+        
+        // Log for debugging
+        Log::info('Kraepelin Submit - Received data:', [
+            'answers_count' => count($userAnswers),
+            'test_data_count' => count($testData),
+            'rows' => $rows,
+            'cols' => $cols,
+            'time_elapsed' => $timeElapsed
+        ]);
+        
+        $score = 0;
+        $correctAnswers = 0;
+        $wrongAnswers = 0;
+        $unanswered = 0;
+        $totalQuestions = ($rows - 1) * $cols; // For 5x5: 4 * 5 = 20
+        
+        // Calculate score from test_data (pre-calculated pairs) and user answers
+        foreach ($testData as $colIndex => $column) {
+            foreach ($column as $rowIndex => $pair) {
+                // Skip the last pair (rowIndex == rows-1) because there's no question there
+                if ($rowIndex >= $rows - 1) {
+                    continue;
+                }
+                
+                // Get correct answer from the pair
+                if (isset($pair['num1']) && isset($pair['num2'])) {
+                    $correctAnswer = ($pair['num1'] + $pair['num2']) % 10;
+                    
+                    // Get user's answer
+                    $userAnswer = $userAnswers[$rowIndex][$colIndex] ?? null;
+                    
+                    Log::info("Checking - Col $colIndex, Row $rowIndex", [
+                        'num1' => $pair['num1'],
+                        'num2' => $pair['num2'],
+                        'correct' => $correctAnswer,
+                        'user' => $userAnswer
+                    ]);
+                    
+                    if ($userAnswer === null || $userAnswer === '') {
+                        $unanswered++;
+                    } elseif ($userAnswer == $correctAnswer) {
+                        $score++;
+                        $correctAnswers++;
+                    } else {
+                        $wrongAnswers++;
+                    }
+                }
+            }
+        }
+        
+        // Calculate row performance
+        $rowPerformance = [];
+        for ($row = 0; $row < $rows - 1; $row++) {
+            $answered = 0;
+            for ($col = 0; $col < $cols; $col++) {
+                if (isset($userAnswers[$row][$col]) && 
+                    $userAnswers[$row][$col] !== null && 
+                    $userAnswers[$row][$col] !== '') {
+                    $answered++;
+                }
+            }
+            $rowPerformance[] = $answered;
+        }
+        
+        // Calculate column performance
+        $columnPerformance = [];
+        for ($col = 0; $col < $cols; $col++) {
+            $answered = 0;
+            for ($row = 0; $row < $rows - 1; $row++) {
+                if (isset($userAnswers[$row][$col]) && 
+                    $userAnswers[$row][$col] !== null && 
+                    $userAnswers[$row][$col] !== '') {
+                    $answered++;
+                }
+            }
+            $columnPerformance[] = $answered;
+        }
+        
+        $percentage = $totalQuestions > 0 ? ($score / $totalQuestions) * 100 : 0;
+        
+        Log::info('Kraepelin Submit - Results:', [
+            'score' => $score,
+            'total' => $totalQuestions,
+            'correct' => $correctAnswers,
+            'wrong' => $wrongAnswers,
+            'unanswered' => $unanswered,
+            'percentage' => $percentage
+        ]);
+        
+        try {
+            // Save to database
+            $result = KraepelinTestResult::create([
+                'user_id' => $user->id,
+                'score' => $score,
+                'total_questions' => $totalQuestions,
+                'correct_answers' => $correctAnswers,
+                'wrong_answers' => $wrongAnswers,
+                'unanswered' => $unanswered,
+                'time_elapsed' => $timeElapsed,
+                'percentage' => $percentage,
+                'test_data' => json_encode($testData),
+                'answers' => json_encode($userAnswers),
+                'row_performance' => json_encode($rowPerformance),
+                'column_performance' => json_encode($columnPerformance),
+            ]);
+            
+            Log::info('Kraepelin Submit - Saved to database with ID: ' . $result->id);
+            
+            return response()->json([
+                'success' => true,
+                'score' => $score,
+                'total' => $totalQuestions,
+                'correctAnswers' => $correctAnswers,
+                'wrongAnswers' => $wrongAnswers,
+                'unanswered' => $unanswered,
+                'timeElapsed' => $timeElapsed,
+                'percentage' => $percentage,
+                'rowPerformance' => $rowPerformance,
+                'columnPerformance' => $columnPerformance,
+                'message' => 'Hasil tes telah disimpan.'
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error saving kraepelin test result: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menyimpan hasil tes: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    private function calculateRowPerformance($userAnswers, $rows, $cols)
+    {
+        $rowPerformance = array_fill(0, $rows - 1, 0); // One less row than matrix
+
+        // User answers structure: array[col][row] = answer
+        for ($col = 0; $col < $cols; $col++) {
+            for ($row = 0; $row < $rows - 1; $row++) {
+                if (
+                    isset($userAnswers[$col][$row]) &&
+                    $userAnswers[$col][$row] !== null &&
+                    $userAnswers[$col][$row] !== ''
+                ) {
+                    $rowPerformance[$row]++;
+                }
+            }
+        }
+
+        return $rowPerformance;
+    }
+
+    private function calculateColumnPerformance($userAnswers, $rows, $cols)
+    {
+        $columnPerformance = array_fill(0, $cols, 0);
+
+        for ($col = 0; $col < $cols; $col++) {
+            $answered = 0;
+            if (isset($userAnswers[$col])) {
+                for ($row = 0; $row < $rows - 1; $row++) {
+                    if (
+                        isset($userAnswers[$col][$row]) &&
+                        $userAnswers[$col][$row] !== null &&
+                        $userAnswers[$col][$row] !== ''
+                    ) {
+                        $answered++;
+                    }
+                }
+            }
+            $columnPerformance[$col] = $answered;
+        }
+
+        return $columnPerformance;
     }
 
     /**
@@ -201,34 +307,12 @@ class KraepelinController extends Controller
     /**
      * Delete a test result
      */
-    public function destroy($id)
+    public function destroy(KraepelinTestResult $result)
     {
-        try {
-            $test = KraepelinTest::where('user_id', Auth::id())->findOrFail($id);
-            
-            DB::beginTransaction();
-            
-            // Delete related result first
-            if ($test->result) {
-                $test->result->delete();
-            }
-            
-            $test->delete();
-            
-            DB::commit();
+        $result->delete();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Test berhasil dihapus'
-            ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal menghapus test: ' . $e->getMessage()
-            ], 500);
-        }
+        return redirect()->route('admin.kraepelin.results.index')
+            ->with('success', 'Test result deleted successfully!');
     }
 
     /**
@@ -240,7 +324,7 @@ class KraepelinController extends Controller
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
-                      ->orWhere('nik', 'like', "%{$search}%");
+                        ->orWhere('nik', 'like', "%{$search}%");
                 });
             })
             ->orderBy('name')
@@ -259,13 +343,13 @@ class KraepelinController extends Controller
     private function generateTestData()
     {
         $data = [];
-        
+
         for ($col = 0; $col < 20; $col++) {
             $column = [];
             for ($row = 0; $row < 40; $row++) {
                 $num1 = rand(1, 9);
                 $num2 = rand(1, 9);
-                
+
                 $column[] = [
                     'num1' => $num1,
                     'num2' => $num2,
@@ -274,65 +358,125 @@ class KraepelinController extends Controller
             }
             $data[] = $column;
         }
-        
+
         return $data;
     }
 
     /**
      * Calculate test results
      */
-    private function calculateResults($testData, $answers)
+    private function calculateResults($testData, $userAnswers)
     {
-        $totalQuestions = 20 * 40; // 800 total questions
-        $totalAnswered = count($answers);
-        $correctAnswers = 0;
-        $wrongAnswers = 0;
-        $detailedResults = [];
+        $score = 0;
+        $correct = 0;
+        $wrong = 0;
+        $unanswered = 0;
 
-        // Check each answer
-        foreach ($answers as $key => $userAnswer) {
-            [$col, $row] = explode('-', $key);
-            $col = (int)$col;
-            $row = (int)$row;
+        foreach ($testData as $colIndex => $column) {
+            foreach ($column as $rowIndex => $question) {
+                $userAnswer = $userAnswers[$colIndex][$rowIndex] ?? null;
+                $correctAnswer = ($question['num1'] + $question['num2']) % 10;
 
-            if (isset($testData[$col][$row])) {
-                $correctAnswer = $testData[$col][$row]['answer'];
-                $isCorrect = (int)$userAnswer === $correctAnswer;
-
-                if ($isCorrect) {
-                    $correctAnswers++;
+                if ($userAnswer === null || $userAnswer === '') {
+                    $unanswered++;
+                } elseif ($userAnswer == $correctAnswer) {
+                    $score++;
+                    $correct++;
                 } else {
-                    $wrongAnswers++;
+                    $wrong++;
                 }
-
-                $detailedResults[] = [
-                    'column' => $col + 1,
-                    'row' => $row + 1,
-                    'num1' => $testData[$col][$row]['num1'],
-                    'num2' => $testData[$col][$row]['num2'],
-                    'correct_answer' => $correctAnswer,
-                    'user_answer' => (int)$userAnswer,
-                    'is_correct' => $isCorrect
-                ];
             }
         }
 
-        $accuracyPercentage = $totalAnswered > 0 ? round(($correctAnswers / $totalAnswered) * 100, 2) : 0;
-        $speedPerMinute = $totalAnswered; // Assuming 1 minute test, adjust based on actual time
-        
-        // Calculate performance score (0-100)
-        $performanceScore = $this->calculatePerformanceScore($correctAnswers, $wrongAnswers, $totalAnswered);
-
         return [
-            'total_questions' => $totalQuestions,
-            'total_answered' => $totalAnswered,
-            'correct_answers' => $correctAnswers,
-            'wrong_answers' => $wrongAnswers,
-            'accuracy_percentage' => $accuracyPercentage,
-            'speed_per_minute' => $speedPerMinute,
-            'performance_score' => $performanceScore,
-            'detailed_results' => $detailedResults
+            'score' => $score,
+            'correct' => $correct,
+            'wrong' => $wrong,
+            'unanswered' => $unanswered
         ];
+    }
+
+    public function generateTest(Request $request)
+    {
+        $rows = $request->input('rows', 27);
+        $cols = $request->input('cols', 22);
+
+        $testData = [];
+
+        for ($col = 0; $col < $cols; $col++) {
+            $column = [];
+            for ($row = 0; $row < $rows; $row++) {
+                // Generate random numbers 1-9
+                $column[] = [
+                    'num1' => rand(1, 9),
+                    'num2' => rand(1, 9)
+                ];
+            }
+            $testData[] = $column;
+        }
+
+        return response()->json([
+            'success' => true,
+            'test_data' => $testData,
+            'rows' => $rows,
+            'cols' => $cols,
+            'total_questions' => ($rows - 1) * $cols
+        ]);
+    }
+
+      public function resultsIndex(Request $request)
+    {
+        $perPage = $request->get('per_page', 10);
+        $search = $request->get('search', '');
+        
+        $results = KraepelinTestResult::with('user')
+            ->when($search, function ($query, $search) {
+                return $query->whereHas('user', function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('email', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('created_at', 'desc')
+            ->paginate($perPage);
+        
+        return Inertia::render('Psychotest/KraepelinTest/Results', [
+            'results' => $results,
+            'filters' => [
+                'search' => $search,
+                'per_page' => $perPage
+            ]
+        ]);
+    }
+
+     public function myResults(Request $request)
+    {
+        $user = auth()->user();
+        $perPage = $request->get('per_page', 10);
+        
+        $results = KraepelinTestResult::where('user_id', $user->id)
+            ->orderBy('created_at', 'desc')
+            ->paginate($perPage);
+        
+        return Inertia::render('Psychotest/KraepelinTest/MyResults', [
+            'results' => $results
+        ]);
+    }
+
+    public function showResult($id)
+    {
+        $result = KraepelinTestResult::with('user')
+            ->where('user_id', auth()->id())
+            ->findOrFail($id);
+
+        // Parse JSON data
+        $result->test_data = json_decode($result->test_data, true);
+        $result->answers = json_decode($result->answers, true);
+        $result->row_performance = json_decode($result->row_performance, true);
+        $result->column_performance = json_decode($result->column_performance, true);
+
+        return Inertia::render('Psychotest/KraepelinTest/ResultDetail', [
+            'result' => $result
+        ]);
     }
 
     /**
@@ -340,11 +484,12 @@ class KraepelinController extends Controller
      */
     private function calculatePerformanceScore($correct, $wrong, $total)
     {
-        if ($total === 0) return 0;
+        if ($total === 0)
+            return 0;
 
         $accuracy = ($correct / $total) * 100;
         $speed = min($total / 8, 100); // Normalize speed (800 questions = 100%)
-        
+
         // Weight: 70% accuracy, 30% speed
         return round(($accuracy * 0.7) + ($speed * 0.3), 2);
     }
@@ -362,7 +507,7 @@ class KraepelinController extends Controller
 
     //     // Implementation for PDF/Excel export would go here
     //     // This is a placeholder for the export functionality
-        
+
     //     return response()->json([
     //         'success' => true,
     //         'message' => 'Export functionality to be implemented',

@@ -110,6 +110,7 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
         Route::get('/results/{id}', [KraepelinController::class, 'show'])->name('show');
         Route::delete('/results/{id}', [KraepelinController::class, 'destroy'])->name('destroy');
         Route::get('/employees', [KraepelinController::class, 'employees'])->name('employees');
+        Route::post('/kraepelin/submit', [KraepelinController::class, 'submit'])->middleware(['auth', 'verified'])->name('kraepelin.submit');
     });
 
     // 2. Wartegg Test

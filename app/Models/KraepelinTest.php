@@ -57,11 +57,10 @@ class KraepelinTest extends Model
 
     /**
      * Get the test result
-     */
-    public function result()
-    {
-        return $this->hasOne(KraepelinTestResult::class);
-    }
+     */public function result()
+{
+    return $this->hasOne(KraepelinTestResult::class, 'kraepelin_test_id');
+}
 
     /**
      * Scope for active tests
@@ -119,4 +118,5 @@ class KraepelinTest extends Model
         $totalQuestions = 20 * 40; // 800 questions
         return round(($this->result->total_answered / $totalQuestions) * 100, 2);
     }
+    
 }
