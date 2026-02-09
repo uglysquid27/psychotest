@@ -16,17 +16,41 @@ class TesDeretController extends Controller
         // Get 5 random active questions from database
         $questions = DeretQuestion::getTestQuestions(5);
 
+        // Check if $questions is an array and convert to Collection if needed
+        if (is_array($questions)) {
+            $questions = collect($questions);
+        }
+
+        // Transform the questions for the frontend
+        $formattedQuestions = $questions->map(function($question) {
+            return [
+                'id' => $question['id'] ?? $question->id ?? null,
+                'sequence' => $question['sequence'] ?? $question->sequence ?? [],
+                'answer' => $question['answer'] ?? $question->answer ?? null,
+                'pattern_type' => $question['pattern_type'] ?? $question->pattern_type ?? null,
+                'explanation' => $question['explanation'] ?? $question->explanation ?? null
+            ];
+        })->toArray();
+
         return Inertia::render('Psychotest/DeretTest/TestPage', [
-            'initialQuestions' => $questions
+            'initialQuestions' => $formattedQuestions
         ]);
     }
 
     public function submit(Request $request)
     {
         $user = auth()->user();
-        $userAnswers = $request->input('answers', []);
-        $questions = $request->input('questions', []);
-        $timeElapsed = $request->input('time_elapsed', 0);
+        
+        // Validate the request
+        $validated = $request->validate([
+            'userAnswers' => 'required|array',
+            'questions' => 'required|array',
+            'timeElapsed' => 'required|integer|min:0',
+        ]);
+
+        $userAnswers = $validated['userAnswers'];
+        $questions = $validated['questions'];
+        $timeElapsed = $validated['timeElapsed'];
 
         $score = 0;
         $correctAnswers = 0;
@@ -36,8 +60,11 @@ class TesDeretController extends Controller
 
         // Calculate score
         foreach ($questions as $index => $question) {
-            if (isset($userAnswers[$index]) && $userAnswers[$index] !== '') {
-                if (intval($userAnswers[$index]) === intval($question['answer'])) {
+            if (isset($userAnswers[$index]) && $userAnswers[$index] !== '' && $userAnswers[$index] !== null) {
+                $userAnswer = intval($userAnswers[$index]);
+                $correctAnswer = intval($question['answer']);
+                
+                if ($userAnswer === $correctAnswer) {
                     $score++;
                     $correctAnswers++;
                 } else {
@@ -48,31 +75,52 @@ class TesDeretController extends Controller
             }
         }
 
-        $percentage = $totalQuestions > 0 ? ($score / $totalQuestions) * 100 : 0;
+        $percentage = $totalQuestions > 0 ? round(($score / $totalQuestions) * 100, 2) : 0;
 
-        // Save to database
-        DeretTestResult::create([
-            'user_id' => $user->id,
-            'score' => $score,
-            'total_questions' => $totalQuestions,
-            'correct_answers' => $correctAnswers,
-            'wrong_answers' => $wrongAnswers,
-            'unanswered' => $unanswered,
-            'time_elapsed' => $timeElapsed,
-            'percentage' => $percentage,
-            'answers' => json_encode($userAnswers),
-            'questions_used' => json_encode($questions),
-        ]);
+        try {
+            // Save to database
+            $testResult = DeretTestResult::create([
+                'user_id' => $user->id,
+                'score' => $score,
+                'total_questions' => $totalQuestions,
+                'correct_answers' => $correctAnswers,
+                'wrong_answers' => $wrongAnswers,
+                'unanswered' => $unanswered,
+                'time_elapsed' => $timeElapsed,
+                'percentage' => $percentage,
+                'answers' => json_encode($userAnswers),
+                'questions_used' => json_encode($questions),
+            ]);
 
-        return response()->json([
-            'score' => $score,
-            'total' => $totalQuestions,
-            'correctAnswers' => $correctAnswers,
-            'wrongAnswers' => $wrongAnswers,
-            'unanswered' => $unanswered,
-            'timeElapsed' => $timeElapsed,
-            'percentage' => $percentage,
-        ]);
+            \Log::info('Test result saved successfully', [
+                'user_id' => $user->id,
+                'score' => $score,
+                'test_result_id' => $testResult->id
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'score' => $score,
+                'total' => $totalQuestions,
+                'correctAnswers' => $correctAnswers,
+                'wrongAnswers' => $wrongAnswers,
+                'unanswered' => $unanswered,
+                'timeElapsed' => $timeElapsed,
+                'percentage' => $percentage,
+                'message' => 'Hasil tes berhasil disimpan!'
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to save test result', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menyimpan hasil tes: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     // ADMIN SECTION - Question Management
@@ -124,15 +172,14 @@ class TesDeretController extends Controller
             ->with('success', 'Soal deret berhasil dibuat!');
     }
 
-    // Update these methods to use type-hinting
-    public function edit(DeretQuestion $question)  // Add type-hint
+    public function edit(DeretQuestion $question)
     {
         return Inertia::render('Psychotest/DeretTest/Edit', [
             'question' => $question
         ]);
     }
 
-    public function update(Request $request, DeretQuestion $question)  // Add type-hint
+    public function update(Request $request, DeretQuestion $question)
     {
         $validated = $request->validate([
             'sequence' => 'required|array',
@@ -150,7 +197,7 @@ class TesDeretController extends Controller
             ->with('success', 'Soal deret berhasil diperbarui!');
     }
 
-    public function destroy(DeretQuestion $question)  // Add type-hint
+    public function destroy(DeretQuestion $question)
     {
         $question->delete();
 
@@ -183,19 +230,19 @@ class TesDeretController extends Controller
     }
 
     public function downloadTemplate()
-{
-    $csv = "sequence,answer,pattern_type,difficulty_level,explanation,is_active\n";
-    $csv .= "\"[2,4,6,null,10]\",8,arithmetic,1,Tambah 2 setiap langkah,1\n";
-    $csv .= "\"[1,3,9,null,81]\",27,geometric,2,Kali 3 setiap langkah,1\n";
-    $csv .= "\"[5,10,15,null,25]\",20,arithmetic,1,Tambah 5 setiap langkah,1\n";
-    $csv .= "\"[100,50,25,null,6.25]\",12.5,geometric,2,Bagi 2 setiap langkah,1\n";
-    $csv .= "\"[1,4,9,null,25]\",16,square,3,Bilangan kuadrat,1\n";
-    $csv .= "\"[2,3,5,null,13]\",8,fibonacci,3,Bilangan Fibonacci,1\n";
-    
-    return response($csv)
-        ->header('Content-Type', 'text/csv; charset=utf-8')
-        ->header('Content-Disposition', 'attachment; filename="deret_template.csv"');
-}
+    {
+        $csv = "sequence,answer,pattern_type,difficulty_level,explanation,is_active\n";
+        $csv .= "\"[2,4,6,null,10]\",8,arithmetic,1,Tambah 2 setiap langkah,1\n";
+        $csv .= "\"[1,3,9,null,81]\",27,geometric,2,Kali 3 setiap langkah,1\n";
+        $csv .= "\"[5,10,15,null,25]\",20,arithmetic,1,Tambah 5 setiap langkah,1\n";
+        $csv .= "\"[100,50,25,null,6.25]\",12.5,geometric,2,Bagi 2 setiap langkah,1\n";
+        $csv .= "\"[1,4,9,null,25]\",16,square,3,Bilangan kuadrat,1\n";
+        $csv .= "\"[2,3,5,null,13]\",8,fibonacci,3,Bilangan Fibonacci,1\n";
+        
+        return response($csv)
+            ->header('Content-Type', 'text/csv; charset=utf-8')
+            ->header('Content-Disposition', 'attachment; filename="deret_template.csv"');
+    }
 
     public function import(Request $request)
     {

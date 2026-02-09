@@ -4,7 +4,7 @@ import NavLink from "@/Components/NavLink";
 import { Link, usePage } from "@inertiajs/react";
 import { motion, AnimatePresence } from "framer-motion";
 
-// SVG Icons
+// SVG Icons (with proper definitions)
 const SunIcon = () => (
     <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -78,12 +78,13 @@ const CloseIcon = () => (
     </svg>
 );
 
-const ChevronDownIcon = ({ className = "w-5 h-5" }) => (
+const ChevronDownIcon = ({ className = "w-5 h-5", style = {} }) => (
     <svg
         className={className}
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
+        style={style}
     >
         <path
             strokeLinecap="round"
@@ -95,12 +96,13 @@ const ChevronDownIcon = ({ className = "w-5 h-5" }) => (
 );
 
 // ICONS FOR ADMIN MENUS
-const PsychologyIcon = () => (
+const PsychologyIcon = ({ style = {} }) => (
     <svg
         className="mr-3 w-5 h-5"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
+        style={style}
     >
         <path
             strokeLinecap="round"
@@ -111,12 +113,13 @@ const PsychologyIcon = () => (
     </svg>
 );
 
-const CalculatorIcon = () => (
+const CalculatorIcon = ({ style = {} }) => (
     <svg
         className="mr-3 w-5 h-5"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
+        style={style}
     >
         <path
             strokeLinecap="round"
@@ -127,12 +130,13 @@ const CalculatorIcon = () => (
     </svg>
 );
 
-const DashboardIcon = () => (
+const DashboardIcon = ({ style = {} }) => (
     <svg
         className="mr-3 w-5 h-5"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
+        style={style}
     >
         <path
             strokeLinecap="round"
@@ -143,12 +147,13 @@ const DashboardIcon = () => (
     </svg>
 );
 
-const AttendanceIcon = () => (
+const AttendanceIcon = ({ style = {} }) => (
     <svg
         className="mr-3 w-5 h-5"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
+        style={style}
     >
         <path
             strokeLinecap="round"
@@ -159,12 +164,13 @@ const AttendanceIcon = () => (
     </svg>
 );
 
-const QuestionIcon = () => (
+const QuestionIcon = ({ style = {} }) => (
     <svg
         className="mr-3 w-5 h-5"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
+        style={style}
     >
         <path
             strokeLinecap="round"
@@ -175,12 +181,13 @@ const QuestionIcon = () => (
     </svg>
 );
 
-const NumberSeriesIcon = () => (
+const NumberSeriesIcon = ({ style = {} }) => (
     <svg
         className="mr-3 w-5 h-5"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
+        style={style}
     >
         <path
             strokeLinecap="round"
@@ -191,8 +198,128 @@ const NumberSeriesIcon = () => (
     </svg>
 );
 
-// Profile Dropdown Component
-const ProfileDropdown = ({ user, isEmployee, isAdmin }) => {
+// Theme definitions with CSS color values
+const themes = {
+    kraepelin: {
+        name: "Kraepelin",
+        colors: {
+            primary: "#f59e0b", // amber-500
+            secondary: "#ea580c", // orange-600
+            light: "#fef3c7", // amber-100
+            medium: "#fbbf24", // amber-400
+            dark: "#d97706", // amber-600
+            text: "#92400e", // amber-900
+            textLight: "#b45309", // amber-700
+            bgFrom: "#fffbeb", // amber-50
+            bgVia: "#ffedd5", // orange-50
+            bgTo: "#fef3c7", // yellow-50
+            border: "#fde68a", // amber-200
+            shadow: "rgba(245, 158, 11, 0.15)" // amber-500 with opacity
+        }
+    },
+    ketelitian: {
+        name: "Ketelitian",
+        colors: {
+            primary: "#3b82f6", // blue-500
+            secondary: "#4f46e5", // indigo-600
+            light: "#dbeafe", // blue-100
+            medium: "#60a5fa", // blue-400
+            dark: "#1d4ed8", // blue-700
+            text: "#1e40af", // blue-900
+            textLight: "#1d4ed8", // blue-700
+            bgFrom: "#eff6ff", // blue-50
+            bgVia: "#eef2ff", // indigo-50
+            bgTo: "#e0e7ff", // purple-50
+            border: "#bfdbfe", // blue-200
+            shadow: "rgba(59, 130, 246, 0.15)" // blue-500 with opacity
+        }
+    },
+    hitungan: {
+        name: "Hitungan",
+        colors: {
+            primary: "#10b981", // emerald-500
+            secondary: "#059669", // emerald-600
+            light: "#d1fae5", // emerald-100
+            medium: "#34d399", // emerald-400
+            dark: "#059669", // emerald-600
+            text: "#065f46", // emerald-900
+            textLight: "#047857", // emerald-700
+            bgFrom: "#ecfdf5", // emerald-50
+            bgVia: "#d1fae5", // emerald-100
+            bgTo: "#a7f3d0", // emerald-200
+            border: "#a7f3d0", // emerald-200
+            shadow: "rgba(16, 185, 129, 0.15)" // emerald-500 with opacity
+        }
+    },
+    deret: {
+        name: "Deret",
+        colors: {
+            primary: "#8b5cf6", // violet-500
+            secondary: "#7c3aed", // violet-600
+            light: "#ede9fe", // violet-100
+            medium: "#a78bfa", // violet-400
+            dark: "#7c3aed", // violet-600
+            text: "#5b21b6", // violet-900
+            textLight: "#6d28d9", // violet-700
+            bgFrom: "#f5f3ff", // violet-50
+            bgVia: "#ede9fe", // violet-100
+            bgTo: "#ddd6fe", // violet-200
+            border: "#ddd6fe", // violet-200
+            shadow: "rgba(139, 92, 246, 0.15)" // violet-500 with opacity
+        }
+    },
+    default: {
+        name: "Default",
+        colors: {
+            primary: "#6366f1", // indigo-500
+            secondary: "#8b5cf6", // purple-500
+            light: "#e0e7ff", // indigo-100
+            medium: "#818cf8", // indigo-400
+            dark: "#4f46e5", // indigo-600
+            text: "#3730a3", // indigo-900
+            textLight: "#4338ca", // indigo-700
+            bgFrom: "#f8fafc", // slate-50
+            bgVia: "#f1f5f9", // gray-50
+            bgTo: "#f4f4f5", // zinc-50
+            border: "#e2e8f0", // slate-200
+            shadow: "rgba(100, 116, 139, 0.15)" // slate-500 with opacity
+        }
+    }
+};
+
+// Helper function to detect current page theme - UPDATED FOR ALL PAGES
+const detectTheme = (currentRoute) => {
+    if (!currentRoute) return themes.default;
+    
+    const route = currentRoute.toLowerCase();
+    
+    // Check for specific test pages first
+    if (route.includes('kraepelin')) {
+        return themes.kraepelin;
+    } else if (route.includes('ketelitian')) {
+        return themes.ketelitian;
+    } else if (route.includes('hitungan')) {
+        return themes.hitungan;
+    } else if (route.includes('deret')) {
+        return themes.deret;
+    }
+    
+    // Check for employee dashboard or pages
+    if (route.includes('employee')) {
+        // You can set a specific theme for employee pages or use default
+        return themes.default;
+    }
+    
+    // Check for admin dashboard
+    if (route.includes('dashboard')) {
+        return themes.default;
+    }
+    
+    return themes.default;
+};
+
+// Profile Dropdown Component with inline styles
+const ProfileDropdown = ({ user, isEmployee, isAdmin, currentTheme }) => {
     const [isOpen, setIsOpen] = useState(false);
 
     useEffect(() => {
@@ -221,24 +348,32 @@ const ProfileDropdown = ({ user, isEmployee, isAdmin }) => {
                     <img
                         src={`/storage/${user.photo}`}
                         alt={user.name}
-                        className="border-2 border-white/30 rounded-full w-10 h-10 object-cover"
+                        className="border-2 rounded-full w-10 h-10 object-cover shadow-lg"
+                        style={{ borderColor: currentTheme.colors.border }}
                     />
                 ) : (
-                    <div className="flex justify-center items-center bg-gradient-to-br from-indigo-500 to-purple-600 border-2 border-white/30 rounded-full w-10 h-10 font-semibold text-white text-lg">
+                    <div 
+                        className="flex justify-center items-center border-2 rounded-full w-10 h-10 font-bold text-white text-lg shadow-lg"
+                        style={{ 
+                            background: `linear-gradient(135deg, ${currentTheme.colors.primary}, ${currentTheme.colors.secondary})`,
+                            borderColor: currentTheme.colors.border
+                        }}
+                    >
                         {userInitial}
                     </div>
                 )}
                 <div className="hidden lg:flex flex-col items-start">
-                    <span className="font-semibold text-gray-700 dark:text-gray-200 text-sm">
+                    <span className="font-bold text-sm" style={{ color: currentTheme.colors.text }}>
                         {user?.name || "User"}
                     </span>
-                    <span className="text-gray-500 dark:text-gray-400 text-xs">
+                    <span className="text-xs font-medium" style={{ color: currentTheme.colors.textLight }}>
                         {user?.role ? user.role.toUpperCase() : "USER"}
                     </span>
                 </div>
                 <motion.svg
                     animate={{ rotate: isOpen ? 180 : 0 }}
-                    className="w-5 h-5 text-gray-600 dark:text-gray-300"
+                    className="w-5 h-5"
+                    style={{ color: currentTheme.colors.textLight }}
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -258,13 +393,17 @@ const ProfileDropdown = ({ user, isEmployee, isAdmin }) => {
                         initial={{ opacity: 0, y: -10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                        className="right-0 z-50 absolute bg-white/95 dark:bg-gray-800/95 shadow-xl backdrop-blur-md mt-3 py-2 border border-white/30 dark:border-gray-600/30 rounded-2xl w-56"
+                        className="right-0 z-50 absolute shadow-xl backdrop-blur-md mt-3 py-2 border-2 rounded-2xl w-56"
+                        style={{ 
+                            background: `linear-gradient(135deg, ${currentTheme.colors.bgFrom}, ${currentTheme.colors.bgVia})`,
+                            borderColor: currentTheme.colors.border
+                        }}
                     >
-                        <div className="px-4 py-3 border-gray-100/50 dark:border-gray-700/50 border-b">
-                            <p className="font-semibold text-gray-800 dark:text-gray-200 text-sm truncate">
+                        <div className="px-4 py-3 border-b" style={{ borderColor: `${currentTheme.colors.border}80` }}>
+                            <p className="font-bold text-sm truncate" style={{ color: currentTheme.colors.text }}>
                                 {user?.name}
                             </p>
-                            <p className="text-gray-500 dark:text-gray-400 text-xs truncate">
+                            <p className="text-xs truncate font-medium" style={{ color: currentTheme.colors.textLight }}>
                                 {user?.email || user?.nik}
                             </p>
                         </div>
@@ -272,11 +411,17 @@ const ProfileDropdown = ({ user, isEmployee, isAdmin }) => {
                         {isEmployee ? (
                             <Link
                                 href={route("employee.employees.edit", { employee: user.id })}
-                                className="flex items-center hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 px-4 py-3 border-gray-100/50 dark:border-gray-700/50 border-b text-gray-700 dark:text-gray-200 text-sm transition-all duration-200"
+                                className="flex items-center px-4 py-3 border-b text-sm transition-all duration-200"
+                                style={{ 
+                                    borderColor: `${currentTheme.colors.border}80`,
+                                    color: currentTheme.colors.text,
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = `${currentTheme.colors.light}80`}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                                 onClick={() => setIsOpen(false)}
                             >
-                                <UserIcon className="mr-3 w-4 h-4" />
-                                Edit Profile
+                                <UserIcon />
+                                <span className="ml-3">Edit Profile</span>
                             </Link>
                         ) : null}
 
@@ -284,7 +429,10 @@ const ProfileDropdown = ({ user, isEmployee, isAdmin }) => {
                             href={route("logout")}
                             method="post"
                             as="button"
-                            className="flex items-center hover:bg-red-50/50 dark:hover:bg-red-900/20 px-4 py-3 w-full text-red-600 dark:text-red-400 text-sm text-left transition-all duration-200"
+                            className="flex items-center px-4 py-3 w-full text-sm text-left transition-all duration-200"
+                            style={{ color: '#dc2626' }}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fef2f280'}
+                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                             onClick={() => setIsOpen(false)}
                         >
                             <svg
@@ -329,7 +477,7 @@ const ThemeToggle = ({ isDark, toggleDarkMode }) => (
             <div className="block bg-gray-300 dark:bg-gray-700 rounded-full w-14 h-7 transition-colors duration-300" />
             <motion.div
                 animate={{ x: isDark ? 28 : 0 }}
-                className="top-1 left-1 absolute flex justify-center items-center bg-white dark:bg-gray-300 shadow-lg rounded-full w-5 h-5 transition-all duration-300"
+                className="top-1 left-1 absolute flex justify-center items-center bg-white shadow-lg rounded-full w-5 h-5 transition-all duration-300"
             >
                 {isDark ? <MoonIcon /> : <SunIcon />}
             </motion.div>
@@ -337,29 +485,54 @@ const ThemeToggle = ({ isDark, toggleDarkMode }) => (
     </motion.label>
 );
 
-// Generic Admin Dropdown Component
-const AdminDropdown = ({ icon: Icon, label, isOpen, setIsOpen, children, isActive }) => {
+// Generic Admin Dropdown Component with inline styles
+const AdminDropdown = ({ icon: Icon, label, isOpen, setIsOpen, children, isActive, currentTheme }) => {
+    const activeStyle = {
+        background: `linear-gradient(135deg, ${currentTheme.colors.primary}, ${currentTheme.colors.secondary})`,
+        borderColor: currentTheme.colors.medium,
+        color: 'white',
+        boxShadow: `0 10px 15px -3px ${currentTheme.colors.shadow}`
+    };
+
+    const inactiveStyle = {
+        color: currentTheme.colors.text,
+        borderColor: 'transparent'
+    };
+
     return (
         <div className="relative">
             <motion.button
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setIsOpen(!isOpen)}
-                className={`flex items-center justify-between w-full py-4 px-6 text-base font-medium rounded-2xl transition-all duration-300 ${
-                    isActive
-                        ? "bg-gradient-to-r from-indigo-500/20 to-purple-600/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-700/50 shadow-md"
-                        : "text-gray-700 dark:text-gray-200 hover:bg-indigo-50/60 dark:hover:bg-gray-700/60 hover:text-indigo-600 dark:hover:text-indigo-400 hover:shadow-lg"
-                }`}
+                className="flex items-center justify-between w-full py-4 px-6 text-base font-bold rounded-2xl transition-all duration-300 border-2"
+                style={isActive ? activeStyle : inactiveStyle}
+                onMouseEnter={(e) => {
+                    if (!isActive) {
+                        e.currentTarget.style.background = `linear-gradient(135deg, ${currentTheme.colors.light}, ${currentTheme.colors.bgVia})`;
+                        e.currentTarget.style.color = currentTheme.colors.text;
+                        e.currentTarget.style.borderColor = currentTheme.colors.medium;
+                        e.currentTarget.style.boxShadow = `0 10px 15px -3px ${currentTheme.colors.shadow}`;
+                    }
+                }}
+                onMouseLeave={(e) => {
+                    if (!isActive) {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = currentTheme.colors.text;
+                        e.currentTarget.style.borderColor = 'transparent';
+                        e.currentTarget.style.boxShadow = 'none';
+                    }
+                }}
             >
                 <div className="flex items-center">
-                    <Icon />
-                    <span className="font-semibold">{label}</span>
+                    <Icon style={{ color: isActive ? 'white' : currentTheme.colors.textLight }} />
+                    <span className="font-bold ml-3">{label}</span>
                 </div>
                 <motion.div
                     animate={{ rotate: isOpen ? 180 : 0 }}
                     className="transition-transform duration-300"
                 >
-                    <ChevronDownIcon className="w-5 h-5" />
+                    <ChevronDownIcon className="w-5 h-5" style={{ color: isActive ? 'white' : currentTheme.colors.textLight }} />
                 </motion.div>
             </motion.button>
 
@@ -371,7 +544,13 @@ const AdminDropdown = ({ icon: Icon, label, isOpen, setIsOpen, children, isActiv
                         exit={{ opacity: 0, height: 0, scale: 0.95 }}
                         className="mt-2 ml-6 overflow-hidden"
                     >
-                        <div className="space-y-1 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm p-2 border border-gray-200/50 dark:border-gray-700/50 rounded-xl">
+                        <div 
+                            className="space-y-1 backdrop-blur-sm p-2 border-2 rounded-xl shadow-inner"
+                            style={{ 
+                                background: `linear-gradient(135deg, ${currentTheme.colors.bgFrom}, ${currentTheme.colors.bgVia})`,
+                                borderColor: currentTheme.colors.border
+                            }}
+                        >
                             {children}
                         </div>
                     </motion.div>
@@ -381,334 +560,275 @@ const AdminDropdown = ({ icon: Icon, label, isOpen, setIsOpen, children, isActiv
     );
 };
 
-// Dashboard Dropdown Component
-const AdminDashboardDropdown = ({ isOpen, setIsOpen }) => {
-    const dashboardRoutes = [
-        { href: route("dashboard"), label: "Admin Dashboard", active: route().current("dashboard") },
-    ];
+// Generic Dropdown Component for Employees
+const EmployeeDropdown = ({ icon: Icon, label, isOpen, setIsOpen, children, isActive, currentTheme }) => {
+    const activeStyle = {
+        background: `linear-gradient(135deg, ${currentTheme.colors.primary}, ${currentTheme.colors.secondary})`,
+        borderColor: currentTheme.colors.medium,
+        color: 'white',
+        boxShadow: `0 10px 15px -3px ${currentTheme.colors.shadow}`
+    };
 
-    const isAnyDashboardActive = dashboardRoutes.some(route => route.active);
-
-    return (
-        <AdminDropdown
-            icon={DashboardIcon}
-            label="Dashboard"
-            isOpen={isOpen}
-            setIsOpen={setIsOpen}
-            isActive={isAnyDashboardActive}
-        >
-            {dashboardRoutes.map((item, index) => (
-                <motion.div
-                    key={item.href}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                >
-                    <NavLink
-                        href={item.href}
-                        active={item.active}
-                        className="flex items-center hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 px-4 py-3 rounded-xl font-medium hover:text-indigo-600 dark:hover:text-indigo-400 text-sm transition-all duration-200"
-                        onClick={() => setIsOpen(false)}
-                    >
-                        <span className="font-medium">{item.label}</span>
-                    </NavLink>
-                </motion.div>
-            ))}
-        </AdminDropdown>
-    );
-};
-
-// Attendance Dropdown Component
-const EmployeeAttendanceDropdown = ({ isOpen, setIsOpen }) => {
-    const attendanceRoutes = [
-        { href: route("employee-attendance.index"), label: "Employee Attendance", active: route().current("employee-attendance.index") },
-    ];
-
-    const isAnyAttendanceActive = attendanceRoutes.some(route => route.active);
+    const inactiveStyle = {
+        color: currentTheme.colors.text,
+        borderColor: 'transparent'
+    };
 
     return (
-        <AdminDropdown
-            icon={AttendanceIcon}
-            label="Attendance"
-            isOpen={isOpen}
-            setIsOpen={setIsOpen}
-            isActive={isAnyAttendanceActive}
-        >
-            {attendanceRoutes.map((item, index) => (
+        <div className="relative">
+            <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setIsOpen(!isOpen)}
+                className="flex items-center justify-between w-full py-4 px-6 text-base font-bold rounded-2xl transition-all duration-300 border-2"
+                style={isActive ? activeStyle : inactiveStyle}
+                onMouseEnter={(e) => {
+                    if (!isActive) {
+                        e.currentTarget.style.background = `linear-gradient(135deg, ${currentTheme.colors.light}, ${currentTheme.colors.bgVia})`;
+                        e.currentTarget.style.color = currentTheme.colors.text;
+                        e.currentTarget.style.borderColor = currentTheme.colors.medium;
+                        e.currentTarget.style.boxShadow = `0 10px 15px -3px ${currentTheme.colors.shadow}`;
+                    }
+                }}
+                onMouseLeave={(e) => {
+                    if (!isActive) {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = currentTheme.colors.text;
+                        e.currentTarget.style.borderColor = 'transparent';
+                        e.currentTarget.style.boxShadow = 'none';
+                    }
+                }}
+            >
+                <div className="flex items-center">
+                    <Icon style={{ color: isActive ? 'white' : currentTheme.colors.textLight }} />
+                    <span className="font-bold ml-3">{label}</span>
+                </div>
                 <motion.div
-                    key={item.href}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
+                    animate={{ rotate: isOpen ? 180 : 0 }}
+                    className="transition-transform duration-300"
                 >
-                    <NavLink
-                        href={item.href}
-                        active={item.active}
-                        className="flex items-center hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 px-4 py-3 rounded-xl font-medium hover:text-indigo-600 dark:hover:text-indigo-400 text-sm transition-all duration-200"
-                        onClick={() => setIsOpen(false)}
-                    >
-                        <span className="font-medium">{item.label}</span>
-                    </NavLink>
+                    <ChevronDownIcon className="w-5 h-5" style={{ color: isActive ? 'white' : currentTheme.colors.textLight }} />
                 </motion.div>
-            ))}
-        </AdminDropdown>
-    );
-};
+            </motion.button>
 
-// Psikotes Dropdown Component
-const PsikotesDropdown = ({ isOpen, setIsOpen }) => {
-    const psikotesRoutes = [
-        { href: route("kraepelin.index"), label: "Kraepelin Test", active: route().current("kraepelin.*") },
-        { href: route("ketelitian.index"), label: "Ketelitian Test", active: route().current("ketelitian.index") },
-        { href: route("hitungan.test"), label: "Hitungan Test", active: route().current("hitungan.test") },
-        { href: route("deret.index"), label: "Deret Test", active: route().current("deret.*") },
-    ];
-
-    const isAnyPsikotesActive = psikotesRoutes.some(route => route.active);
-
-    return (
-        <AdminDropdown
-            icon={PsychologyIcon}
-            label="Psikotes"
-            isOpen={isOpen}
-            setIsOpen={setIsOpen}
-            isActive={isAnyPsikotesActive}
-        >
-            {psikotesRoutes.map((item, index) => (
-                <motion.div
-                    key={item.href}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                >
-                    <NavLink
-                        href={item.href}
-                        active={item.active}
-                        className="flex items-center hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 px-4 py-3 rounded-xl font-medium hover:text-indigo-600 dark:hover:text-indigo-400 text-sm transition-all duration-200"
-                        onClick={() => setIsOpen(false)}
+            <AnimatePresence>
+                {isOpen && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, height: "auto", scale: 1 }}
+                        exit={{ opacity: 0, height: 0, scale: 0.95 }}
+                        className="mt-2 ml-6 overflow-hidden"
                     >
-                        <span className="font-medium">{item.label}</span>
-                    </NavLink>
-                </motion.div>
-            ))}
-        </AdminDropdown>
-    );
-};
-
-// Ketelitian Questions Management Dropdown Component
-const KetelitianQuestionsDropdown = ({ isOpen, setIsOpen }) => {
-    const ketelitianManagementRoutes = [
-        { href: route("admin.ketelitian.questions.index"), label: "Kelola Soal Ketelitian", active: route().current("admin.ketelitian.questions.index") },
-        { href: route("admin.ketelitian.questions.create"), label: "Tambah Soal", active: route().current("admin.ketelitian.questions.create") },
-    ];
-
-    const isAnyManagementActive = ketelitianManagementRoutes.some(route => route.active);
-
-    return (
-        <AdminDropdown
-            icon={QuestionIcon}
-            label="Kelola Soal Ketelitian"
-            isOpen={isOpen}
-            setIsOpen={setIsOpen}
-            isActive={isAnyManagementActive}
-        >
-            {ketelitianManagementRoutes.map((item, index) => (
-                <motion.div
-                    key={item.href}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                >
-                    <NavLink
-                        href={item.href}
-                        active={item.active}
-                        className="flex items-center hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 px-4 py-3 rounded-xl font-medium hover:text-indigo-600 dark:hover:text-indigo-400 text-sm transition-all duration-200"
-                        onClick={() => setIsOpen(false)}
-                    >
-                        <span className="font-medium">{item.label}</span>
-                    </NavLink>
-                </motion.div>
-            ))}
-        </AdminDropdown>
-    );
-};
-
-// Hitungan Questions Management Dropdown Component
-const HitunganQuestionsDropdown = ({ isOpen, setIsOpen }) => {
-    const hitunganManagementRoutes = [
-        { href: route("admin.hitungan.questions.index"), label: "Kelola Soal Hitungan", active: route().current("admin.hitungan.questions.index") },
-        { href: route("admin.hitungan.questions.create"), label: "Tambah Soal", active: route().current("admin.hitungan.questions.create") },
-    ];
-
-    const isAnyManagementActive = hitunganManagementRoutes.some(route => route.active);
-
-    return (
-        <AdminDropdown
-            icon={CalculatorIcon}
-            label="Kelola Soal Hitungan"
-            isOpen={isOpen}
-            setIsOpen={setIsOpen}
-            isActive={isAnyManagementActive}
-        >
-            {hitunganManagementRoutes.map((item, index) => (
-                <motion.div
-                    key={item.href}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                >
-                    <NavLink
-                        href={item.href}
-                        active={item.active}
-                        className="flex items-center hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 px-4 py-3 rounded-xl font-medium hover:text-indigo-600 dark:hover:text-indigo-400 text-sm transition-all duration-200"
-                        onClick={() => setIsOpen(false)}
-                    >
-                        <span className="font-medium">{item.label}</span>
-                    </NavLink>
-                </motion.div>
-            ))}
-        </AdminDropdown>
-    );
-};
-
-// Deret Questions Management Dropdown Component
-const DeretQuestionsDropdown = ({ isOpen, setIsOpen }) => {
-    const deretManagementRoutes = [
-        { href: route("admin.deret.questions.index"), label: "Kelola Soal Deret", active: route().current("admin.deret.questions.index") },
-        { href: route("admin.deret.questions.create"), label: "Tambah Soal", active: route().current("admin.deret.questions.create") },
-    ];
-
-    const isAnyManagementActive = deretManagementRoutes.some(route => route.active);
-
-    return (
-        <AdminDropdown
-            icon={NumberSeriesIcon}
-            label="Kelola Soal Deret"
-            isOpen={isOpen}
-            setIsOpen={setIsOpen}
-            isActive={isAnyManagementActive}
-        >
-            {deretManagementRoutes.map((item, index) => (
-                <motion.div
-                    key={item.href}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                >
-                    <NavLink
-                        href={item.href}
-                        active={item.active}
-                        className="flex items-center hover:bg-indigo-50/50 dark:hover:bg-gray-700/50 px-4 py-3 rounded-xl font-medium hover:text-indigo-600 dark:hover:text-indigo-400 text-sm transition-all duration-200"
-                        onClick={() => setIsOpen(false)}
-                    >
-                        <span className="font-medium">{item.label}</span>
-                    </NavLink>
-                </motion.div>
-            ))}
-        </AdminDropdown>
+                        <div 
+                            className="space-y-1 backdrop-blur-sm p-2 border-2 rounded-xl shadow-inner"
+                            style={{ 
+                                background: `linear-gradient(135deg, ${currentTheme.colors.bgFrom}, ${currentTheme.colors.bgVia})`,
+                                borderColor: currentTheme.colors.border
+                            }}
+                        >
+                            {children}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
     );
 };
 
 // Navigation Items Configuration for ADMIN
-const adminNavigationConfig = (user, openStates, setOpenState) => {
+const adminNavigationConfig = (user, openStates, setOpenState, currentTheme) => {
+    const createDropdown = (IconComponent, label, key, routes) => (
+        <AdminDropdown
+            key={key}
+            icon={IconComponent}
+            label={label}
+            isOpen={openStates[key]}
+            setIsOpen={(value) => setOpenState(key, value)}
+            isActive={routes.some(route => route.active)}
+            currentTheme={currentTheme}
+        >
+            {routes.map((item, index) => (
+                <motion.div
+                    key={item.href}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                >
+                    <NavLink
+                        href={item.href}
+                        active={item.active}
+                        className="flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all duration-200"
+                        style={{ color: currentTheme.colors.text }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = `${currentTheme.colors.light}80`}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                        onClick={() => setOpenState(key, false)}
+                    >
+                        <span className="font-bold">{item.label}</span>
+                    </NavLink>
+                </motion.div>
+            ))}
+        </AdminDropdown>
+    );
+
     return [
         {
             type: "dropdown",
-            component: (
-                <AdminDashboardDropdown 
-                    key="dashboard"
-                    isOpen={openStates.dashboard}
-                    setIsOpen={(value) => setOpenState('dashboard', value)}
-                />
+            component: createDropdown(
+                DashboardIcon,
+                "Dashboard",
+                "dashboard",
+                [{ href: route("dashboard"), label: "Admin Dashboard", active: route().current("dashboard") }]
             ),
             show: true,
         },
         {
             type: "dropdown",
-            component: (
-                <EmployeeAttendanceDropdown 
-                    key="attendance"
-                    isOpen={openStates.attendance}
-                    setIsOpen={(value) => setOpenState('attendance', value)}
-                />
+            component: createDropdown(
+                AttendanceIcon,
+                "Attendance",
+                "attendance",
+                [{ href: route("employee-attendance.index"), label: "Employee Attendance", active: route().current("employee-attendance.index") }]
             ),
             show: true,
         },
         {
             type: "dropdown",
-            component: (
-                <PsikotesDropdown 
-                    key="psikotes"
-                    isOpen={openStates.psikotes}
-                    setIsOpen={(value) => setOpenState('psikotes', value)}
-                />
+            component: createDropdown(
+                PsychologyIcon,
+                "Psikotes",
+                "psikotes",
+                [
+                    { href: route("kraepelin.index"), label: "Kraepelin Test", active: route().current("kraepelin.*") },
+                    { href: route("ketelitian.index"), label: "Ketelitian Test", active: route().current("ketelitian.index") },
+                    { href: route("hitungan.test"), label: "Hitungan Test", active: route().current("hitungan.test") },
+                    { href: route("deret.index"), label: "Deret Test", active: route().current("deret.*") },
+                ]
             ),
             show: true,
         },
         {
             type: "dropdown",
-            component: (
-                <KetelitianQuestionsDropdown 
-                    key="ketelitian-questions"
-                    isOpen={openStates.ketelitianQuestions}
-                    setIsOpen={(value) => setOpenState('ketelitianQuestions', value)}
-                />
+            component: createDropdown(
+                QuestionIcon,
+                "Kelola Soal Ketelitian",
+                "ketelitianQuestions",
+                [
+                    { href: route("admin.ketelitian.questions.index"), label: "Kelola Soal Ketelitian", active: route().current("admin.ketelitian.questions.index") },
+                    { href: route("admin.ketelitian.questions.create"), label: "Tambah Soal", active: route().current("admin.ketelitian.questions.create") },
+                ]
             ),
             show: true,
         },
         {
             type: "dropdown",
-            component: (
-                <HitunganQuestionsDropdown 
-                    key="hitungan-questions"
-                    isOpen={openStates.hitunganQuestions}
-                    setIsOpen={(value) => setOpenState('hitunganQuestions', value)}
-                />
+            component: createDropdown(
+                CalculatorIcon,
+                "Kelola Soal Hitungan",
+                "hitunganQuestions",
+                [
+                    { href: route("admin.hitungan.questions.index"), label: "Kelola Soal Hitungan", active: route().current("admin.hitungan.questions.index") },
+                    { href: route("admin.hitungan.questions.create"), label: "Tambah Soal", active: route().current("admin.hitungan.questions.create") },
+                ]
             ),
             show: true,
         },
         {
             type: "dropdown",
-            component: (
-                <DeretQuestionsDropdown 
-                    key="deret-questions"
-                    isOpen={openStates.deretQuestions}
-                    setIsOpen={(value) => setOpenState('deretQuestions', value)}
-                />
+            component: createDropdown(
+                NumberSeriesIcon,
+                "Kelola Soal Deret",
+                "deretQuestions",
+                [
+                    { href: route("admin.deret.questions.index"), label: "Kelola Soal Deret", active: route().current("admin.deret.questions.index") },
+                    { href: route("admin.deret.questions.create"), label: "Tambah Soal", active: route().current("admin.deret.questions.create") },
+                ]
             ),
             show: true,
         },
     ].filter((item) => item.show);
 };
 
-// Navigation Items Configuration for EMPLOYEE
-const employeeNavigationConfig = (user, isForkliftOperator) => {
-    const employeeNav = [
+// Navigation Items Configuration for EMPLOYEE - UPDATED WITH PSIKOTES MENU
+const employeeNavigationConfig = (user, isForkliftOperator, openStates, setOpenState, currentTheme) => {
+    const createEmployeeDropdown = (IconComponent, label, key, routes) => (
+        <EmployeeDropdown
+            key={key}
+            icon={IconComponent}
+            label={label}
+            isOpen={openStates[key]}
+            setIsOpen={(value) => setOpenState(key, value)}
+            isActive={routes.some(route => route.active)}
+            currentTheme={currentTheme}
+        >
+            {routes.map((item, index) => (
+                <motion.div
+                    key={item.href}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                >
+                    <NavLink
+                        href={item.href}
+                        active={item.active}
+                        className="flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all duration-200"
+                        style={{ color: currentTheme.colors.text }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = `${currentTheme.colors.light}80`}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                        onClick={() => setOpenState(key, false)}
+                    >
+                        <span className="font-bold">{item.label}</span>
+                    </NavLink>
+                </motion.div>
+            ))}
+        </EmployeeDropdown>
+    );
+
+    const employeeNavItems = [
         {
+            type: "link",
             href: route("employee.dashboard"),
             label: "Employee Dashboard",
             active: route().current("employee.dashboard"),
             show: true,
         },
         {
+            type: "dropdown",
+            component: createEmployeeDropdown(
+                PsychologyIcon,
+                "Psikotes",
+                "psikotes",
+                [
+                    { href: route("kraepelin.index"), label: "Kraepelin Test", active: route().current("kraepelin.*") },
+                    { href: route("ketelitian.index"), label: "Ketelitian Test", active: route().current("ketelitian.index") },
+                    { href: route("hitungan.test"), label: "Hitungan Test", active: route().current("hitungan.test") },
+                    { href: route("deret.index"), label: "Deret Test", active: route().current("deret.*") },
+                ]
+            ),
+            show: true,
+        },
+        {
+            type: "link",
             href: route("employee.permits.index"),
             label: "Leave Requests",
             active: route().current("employee.permits.index"),
             show: true,
         },
         {
+            type: "link",
             href: route("employee.bank-account-change.create"),
             label: 'Ganti Rekening',
             active: route().current('employee.bank-account-change.*'),
             show: true,
         },
         {
+            type: "link",
             href: route('employee.bank-account-change.history'),
             label: 'Riwayat Rekening',
             active: route().current('employee.bank-account-change.history'),
             show: true,
         },
         {
+            type: "link",
             href: route("employee.employees.edit", { employee: user?.id }),
             label: "Edit Profile",
             active: route().current("employee.employees.edit"),
@@ -716,9 +836,10 @@ const employeeNavigationConfig = (user, isForkliftOperator) => {
         },
     ];
 
-    // Add SIO Input only for forklift operators
+    // Add SIO Input for forklift operators
     if (isForkliftOperator) {
-        employeeNav.splice(2, 0, {
+        employeeNavItems.splice(2, 0, {
+            type: "link",
             href: route("employee.license"),
             label: "SIO Input",
             active: route().current("employee.license"),
@@ -726,7 +847,7 @@ const employeeNavigationConfig = (user, isForkliftOperator) => {
         });
     }
 
-    return employeeNav;
+    return employeeNavItems;
 };
 
 export default function AuthenticatedLayout({
@@ -734,12 +855,15 @@ export default function AuthenticatedLayout({
     children,
     hideSidebar = false,
 }) {
-    const { auth } = usePage().props;
+    const { auth, url } = usePage().props;
     const user = auth?.user;
     const [isDark, setIsDark] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     
-    // Manage all dropdown states - FIXED: Added deretQuestions to initial state
+    // Detect current theme based on URL - NOW WORKS FOR ALL PAGES
+    const currentTheme = detectTheme(url);
+    
+    // Manage all dropdown states
     const [dropdownStates, setDropdownStates] = useState({
         dashboard: false,
         attendance: false,
@@ -751,7 +875,6 @@ export default function AuthenticatedLayout({
 
     // Function to set a specific dropdown state
     const setDropdownState = (key, value) => {
-        // If opening one dropdown, close others
         if (value === true) {
             const newState = {};
             Object.keys(dropdownStates).forEach(k => {
@@ -795,8 +918,8 @@ export default function AuthenticatedLayout({
 
     // Get navigation items based on user role
     const navItems = isAdmin 
-        ? adminNavigationConfig(user, dropdownStates, setDropdownState)
-        : employeeNavigationConfig(user, isForkliftOperator);
+        ? adminNavigationConfig(user, dropdownStates, setDropdownState, currentTheme)
+        : employeeNavigationConfig(user, isForkliftOperator, dropdownStates, setDropdownState, currentTheme);
 
     // Theme management
     useEffect(() => {
@@ -830,26 +953,23 @@ export default function AuthenticatedLayout({
 
     const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : "U";
 
-    const cardStyle =
-        "bg-white/90 dark:bg-gray-800/90 backdrop-blur-md rounded-2xl shadow-lg border border-white/30 dark:border-gray-600/30";
-
-    const navItemStyle = (isActive) =>
-        `flex items-center py-4 px-6 text-base font-medium rounded-2xl transition-all duration-300
-        ${
-            isActive
-                ? "bg-gradient-to-r from-indigo-500/20 to-purple-600/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200/50 dark:border-indigo-700/50 shadow-md"
-                : "text-gray-700 dark:text-gray-200 hover:bg-indigo-50/60 dark:hover:bg-gray-700/60 hover:text-indigo-600 dark:hover:text-indigo-400 hover:shadow-lg hover:scale-105"
-        }`;
-
     return (
-        <div className="flex lg:flex-row flex-col bg-gradient-to-br from-blue-50 dark:from-gray-900 to-purple-50 dark:to-gray-800 min-h-screen font-sans antialiased transition-all duration-300">
+        <div 
+            className="flex lg:flex-row flex-col min-h-screen font-sans antialiased transition-all duration-300"
+            style={{ 
+                background: `linear-gradient(135deg, ${currentTheme.colors.bgFrom}, ${currentTheme.colors.bgVia}, ${currentTheme.colors.bgTo})`
+            }}
+        >
             {/* Mobile & Tablet Header */}
-            <header className="lg:hidden top-0 z-40 sticky flex justify-between items-center bg-white/80 dark:bg-gray-800/80 shadow-lg backdrop-blur-sm p-4">
+            <header 
+                className="lg:hidden top-0 z-40 sticky flex justify-between items-center shadow-lg backdrop-blur-sm p-4"
+                style={{ background: `linear-gradient(135deg, ${currentTheme.colors.primary}, ${currentTheme.colors.secondary}, ${currentTheme.colors.primary})` }}
+            >
                 <motion.button
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
                     onClick={toggleMobileMenu}
-                    className="focus:outline-none text-gray-600 dark:text-gray-300"
+                    className="focus:outline-none text-white"
                     aria-label="Toggle menu"
                 >
                     {isMobileMenuOpen ? <CloseIcon /> : <MenuIcon />}
@@ -890,22 +1010,37 @@ export default function AuthenticatedLayout({
                             damping: 25,
                             stiffness: 200,
                         }}
-                        className={`fixed lg:sticky lg:top-0 lg:self-start lg:h-screen top-0 inset-y-0 left-0 w-80 lg:w-96 ${cardStyle} flex flex-col pt-6 z-40 border-r border-white/30 dark:border-gray-600/30 overflow-y-auto ${
+                        className={`fixed lg:sticky lg:top-0 lg:self-start lg:h-screen top-0 inset-y-0 left-0 w-80 lg:w-96 backdrop-blur-md rounded-2xl shadow-lg border-2 flex flex-col pt-6 z-40 border-r-2 overflow-y-auto ${
                             isMobileMenuOpen ? 'block' : 'hidden lg:flex'
                         }`}
+                        style={{ 
+                            background: `linear-gradient(135deg, ${currentTheme.colors.bgFrom}, ${currentTheme.colors.bgVia})`,
+                            borderColor: currentTheme.colors.border
+                        }}
                     >
                         {/* Header */}
-                        <div className="flex justify-between items-center px-6 pb-6 border-gray-200/50 dark:border-gray-700/50 border-b">
+                        <div className="flex justify-between items-center px-6 pb-6 border-b-2" style={{ borderColor: `${currentTheme.colors.border}80` }}>
                             <Link
                                 href={isAdmin ? "/dashboard" : "/employee/dashboard"}
                                 className="flex items-center space-x-4 hover:opacity-80 transition-opacity"
                             >
-                                <ApplicationLogo className="fill-current w-auto h-10 text-indigo-600 dark:text-indigo-400 ease-in ease-out" />
+                                <ApplicationLogo className="fill-current w-auto h-10 ease-in ease-out" style={{ color: currentTheme.colors.primary }} />
+                                <div>
+                                    <h1 className="font-bold text-lg" style={{ color: currentTheme.colors.text }}>
+                                        {isAdmin ? "Admin Dashboard" : "Employee Portal"}
+                                    </h1>
+                                    <p className="text-xs font-medium" style={{ color: currentTheme.colors.textLight }}>
+                                        {isAdmin ? "Management System" : "Psikotes Platform"}
+                                    </p>
+                                </div>
                             </Link>
                             {/* Close button for mobile/tablet */}
                             <button
                                 onClick={() => setIsMobileMenuOpen(false)}
-                                className="lg:hidden p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-400"
+                                className="lg:hidden p-2"
+                                style={{ color: currentTheme.colors.textLight }}
+                                onMouseEnter={(e) => e.currentTarget.style.color = currentTheme.colors.text}
+                                onMouseLeave={(e) => e.currentTarget.style.color = currentTheme.colors.textLight}
                                 aria-label="Close menu"
                             >
                                 <CloseIcon />
@@ -914,76 +1049,95 @@ export default function AuthenticatedLayout({
 
                         {/* Navigation */}
                         <nav className="flex-1 space-y-3 p-6">
-                            {isAdmin ? (
-                                // ADMIN NAVIGATION
-                                navItems.map((item, index) => {
-                                    if (item.type === "dropdown") {
-                                        return (
-                                            <motion.div key={`dropdown-${index}`} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }}>
-                                                {item.component}
-                                            </motion.div>
-                                        );
-                                    }
+                            {navItems.map((item, index) => {
+                                if (item.type === "dropdown") {
                                     return (
-                                        <motion.div key={item.href} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }}>
-                                            <NavLink
-                                                href={item.href}
-                                                active={item.active}
-                                                className={navItemStyle(item.active)}
-                                                onClick={() => {
-                                                    setIsMobileMenuOpen(false);
-                                                    // Close all dropdowns when clicking a regular link
-                                                    setDropdownStates({
-                                                        dashboard: false,
-                                                        attendance: false,
-                                                        psikotes: false,
-                                                        ketelitianQuestions: false,
-                                                        hitunganQuestions: false,
-                                                        deretQuestions: false,
-                                                    });
-                                                }}
-                                            >
-                                                <span className="font-semibold">{item.label}</span>
-                                            </NavLink>
+                                        <motion.div key={`dropdown-${index}`} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }}>
+                                            {item.component}
                                         </motion.div>
                                     );
-                                })
-                            ) : (
-                                // EMPLOYEE NAVIGATION
-                                navItems.map((item, index) => (
+                                }
+                                return (
                                     <motion.div key={item.href} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }}>
                                         <NavLink
                                             href={item.href}
                                             active={item.active}
-                                            className={navItemStyle(item.active)}
-                                            onClick={() => setIsMobileMenuOpen(false)}
+                                            className="flex items-center py-4 px-6 text-base font-bold rounded-2xl transition-all duration-300 border-2"
+                                            style={{ 
+                                                color: item.active ? 'white' : currentTheme.colors.text,
+                                                background: item.active ? `linear-gradient(135deg, ${currentTheme.colors.primary}, ${currentTheme.colors.secondary})` : 'transparent',
+                                                borderColor: item.active ? currentTheme.colors.medium : 'transparent',
+                                                boxShadow: item.active ? `0 10px 15px -3px ${currentTheme.colors.shadow}` : 'none'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                if (!item.active) {
+                                                    e.currentTarget.style.background = `linear-gradient(135deg, ${currentTheme.colors.light}, ${currentTheme.colors.bgVia})`;
+                                                    e.currentTarget.style.color = currentTheme.colors.text;
+                                                    e.currentTarget.style.borderColor = currentTheme.colors.medium;
+                                                    e.currentTarget.style.boxShadow = `0 10px 15px -3px ${currentTheme.colors.shadow}`;
+                                                    e.currentTarget.style.transform = 'scale(1.05)';
+                                                }
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                if (!item.active) {
+                                                    e.currentTarget.style.background = 'transparent';
+                                                    e.currentTarget.style.color = currentTheme.colors.text;
+                                                    e.currentTarget.style.borderColor = 'transparent';
+                                                    e.currentTarget.style.boxShadow = 'none';
+                                                    e.currentTarget.style.transform = 'scale(1)';
+                                                }
+                                            }}
+                                            onClick={() => {
+                                                setIsMobileMenuOpen(false);
+                                                setDropdownStates({
+                                                    dashboard: false,
+                                                    attendance: false,
+                                                    psikotes: false,
+                                                    ketelitianQuestions: false,
+                                                    hitunganQuestions: false,
+                                                    deretQuestions: false,
+                                                });
+                                            }}
                                         >
-                                            <span className="font-semibold">{item.label}</span>
+                                            <span className="font-bold">{item.label}</span>
                                         </NavLink>
                                     </motion.div>
-                                ))
-                            )}
+                                );
+                            })}
                         </nav>
 
                         {/* Mobile & Tablet Profile Section */}
-                        <div className="lg:hidden space-y-4 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm p-6 border-gray-200/50 dark:border-gray-700/50 border-t">
+                        <div 
+                            className="lg:hidden space-y-4 backdrop-blur-sm p-6 border-t-2"
+                            style={{ 
+                                background: `linear-gradient(135deg, ${currentTheme.colors.bgFrom}, ${currentTheme.colors.bgVia})`,
+                                borderColor: `${currentTheme.colors.border}80`
+                            }}
+                        >
                             <div className="flex items-center space-x-4">
                                 {user?.photo ? (
                                     <img
                                         src={`/storage/${user.photo}`}
                                         alt={user.name}
-                                        className="border-2 border-white/30 rounded-full w-12 h-12 object-cover"
+                                        className="border-2 rounded-full w-12 h-12 object-cover shadow-lg"
+                                        style={{ borderColor: currentTheme.colors.border }}
                                     />
                                 ) : (
-                                    <div className="flex justify-center items-center bg-gradient-to-br from-indigo-500 to-purple-600 border-2 border-white/30 rounded-full w-12 h-12 font-semibold text-white text-lg">
+                                    <div 
+                                        className="flex justify-center items-center border-2 rounded-full w-12 h-12 font-bold text-white text-lg shadow-lg"
+                                        style={{ 
+                                            background: `linear-gradient(135deg, ${currentTheme.colors.primary}, ${currentTheme.colors.secondary})`,
+                                            borderColor: currentTheme.colors.border
+                                        }}
+                                    >
                                         {userInitial}
                                     </div>
                                 )}
                                 <div className="flex-1 min-w-0">
-                                    <div className="font-semibold text-gray-800 dark:text-gray-100 text-base truncate">
+                                    <div className="font-bold text-base truncate" style={{ color: currentTheme.colors.text }}>
                                         {user?.name || "Loading..."}
                                     </div>
-                                    <div className="text-gray-500 dark:text-gray-400 text-sm truncate">
+                                    <div className="text-sm truncate font-medium" style={{ color: currentTheme.colors.textLight }}>
                                         {user?.email || user?.nik || ""}
                                     </div>
                                 </div>
@@ -993,7 +1147,20 @@ export default function AuthenticatedLayout({
                                 {isEmployee && (
                                     <Link
                                         href={route("employee.employees.edit", { employee: user.id })}
-                                        className="hover:bg-indigo-50/50 dark:hover:bg-indigo-900/20 py-3 rounded-xl font-medium text-indigo-600 dark:text-indigo-400 text-sm text-center transition-all duration-200"
+                                        className="py-3 rounded-xl font-bold text-sm text-center transition-all duration-200 border-2"
+                                        style={{ 
+                                            color: currentTheme.colors.text,
+                                            borderColor: currentTheme.colors.border,
+                                            background: 'transparent'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.background = `linear-gradient(135deg, ${currentTheme.colors.light}, ${currentTheme.colors.bgVia})`;
+                                            e.currentTarget.style.borderColor = currentTheme.colors.medium;
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.background = 'transparent';
+                                            e.currentTarget.style.borderColor = currentTheme.colors.border;
+                                        }}
                                         onClick={() => setIsMobileMenuOpen(false)}
                                     >
                                         Edit Profile
@@ -1003,7 +1170,20 @@ export default function AuthenticatedLayout({
                                     href={route("logout")}
                                     method="post"
                                     as="button"
-                                    className="hover:bg-red-50/50 dark:hover:bg-red-900/20 py-3 rounded-xl font-medium text-red-600 dark:text-red-400 text-sm text-center transition-all duration-200"
+                                    className="py-3 rounded-xl font-bold text-sm text-center transition-all duration-200 border-2"
+                                    style={{ 
+                                        color: '#dc2626',
+                                        borderColor: '#fecaca',
+                                        background: 'transparent'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.background = '#fef2f280';
+                                        e.currentTarget.style.borderColor = '#fca5a5';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.background = 'transparent';
+                                        e.currentTarget.style.borderColor = '#fecaca';
+                                    }}
                                     onClick={() => setIsMobileMenuOpen(false)}
                                 >
                                     Log Out
@@ -1022,7 +1202,11 @@ export default function AuthenticatedLayout({
             >
                 {/* Desktop Header */}
                 <header
-                    className={`hidden lg:flex items-center justify-between p-8 ${cardStyle} shadow-xl transition-colors duration-300 mx-8 mt-8 sticky top-0 z-30`}
+                    className={`hidden lg:flex items-center justify-between p-8 backdrop-blur-md rounded-2xl shadow-xl border-2 transition-colors duration-300 mx-8 mt-8 sticky top-0 z-30`}
+                    style={{ 
+                        background: `linear-gradient(135deg, ${currentTheme.colors.bgFrom}, ${currentTheme.colors.bgVia})`,
+                        borderColor: currentTheme.colors.border
+                    }}
                 >
                     <div className="flex items-center space-x-4">
                         {/* Burger button for tablet (md) screens */}
@@ -1030,14 +1214,15 @@ export default function AuthenticatedLayout({
                             whileHover={{ scale: 1.1 }}
                             whileTap={{ scale: 0.9 }}
                             onClick={toggleMobileMenu}
-                            className="xl:hidden focus:outline-none text-gray-600 dark:text-gray-300"
+                            className="xl:hidden focus:outline-none"
+                            style={{ color: currentTheme.colors.textLight }}
                             aria-label="Toggle menu"
                         >
                             <MenuIcon />
                         </motion.button>
                         <div className="flex-1">
                             {header && (
-                                <h1 className="font-bold text-gray-800 dark:text-gray-200 text-2xl transition-colors duration-200">
+                                <h1 className="font-bold text-2xl transition-colors duration-200" style={{ color: currentTheme.colors.text }}>
                                     {header}
                                 </h1>
                             )}
@@ -1053,12 +1238,13 @@ export default function AuthenticatedLayout({
                             user={user}
                             isEmployee={isEmployee}
                             isAdmin={isAdmin}
+                            currentTheme={currentTheme}
                         />
                     </div>
                 </header>
 
                 {/* Page Content */}
-                <div className="p-6 transition-all duration-300">
+                <div className="p-4 md:p-6 lg:p-8 transition-all duration-300">
                     {children}
                 </div>
             </main>

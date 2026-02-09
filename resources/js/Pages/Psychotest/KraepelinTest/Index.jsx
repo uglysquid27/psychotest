@@ -22,13 +22,13 @@ ChartJS.register(
 );
 
 export default function KraepelinSimple() {
-  const ROWS = 5;
-  const COLS = 5;
+  const ROWS = 45;
+  const COLS = 60;
   const TIME_PER_COL = 15;
 
   const [currentRow, setCurrentRow] = useState(ROWS - 2);
   const [currentCol, setCurrentCol] = useState(0);
-  const [score, setScore] = useState({ correct: 0, wrong: 0 });
+  const [score, setScore] = useState({ correct: 0, wrong: 0, unanswered: 0 });
   const [isFinished, setIsFinished] = useState(false);
   const [timeLeft, setTimeLeft] = useState(TIME_PER_COL);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
@@ -38,13 +38,14 @@ export default function KraepelinSimple() {
   const [performanceData, setPerformanceData] = useState([]);
   const [rowPerformance, setRowPerformance] = useState([]);
   const [columnPerformance, setColumnPerformance] = useState([]);
+  const [answerMatrix, setAnswerMatrix] = useState([]); // New: matrix of answer status
   const [showGuide, setShowGuide] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const keypadRef = useRef(null);
   const rowRefs = useRef([]);
   const containerRef = useRef(null);
+  const activeQuestionRef = useRef(null);
 
-  // Generate matrix angka
   useEffect(() => {
     const matrix = [];
     for (let r = 0; r < ROWS; r++) {
@@ -59,7 +60,49 @@ export default function KraepelinSimple() {
     setIsLoading(false);
   }, []);
 
-  // Timer per kolom
+  // Auto-scroll to active question within container only
+  useEffect(() => {
+    if (activeQuestionRef.current && containerRef.current && isTimerRunning) {
+      const container = containerRef.current;
+      const element = activeQuestionRef.current;
+      
+      const containerRect = container.getBoundingClientRect();
+      const elementRect = element.getBoundingClientRect();
+      
+      const relativeTop = elementRect.top - containerRect.top;
+      const relativeBottom = elementRect.bottom - containerRect.top;
+      
+      // Check if element is outside visible area
+      if (relativeTop < 0 || relativeBottom > container.clientHeight) {
+        // Scroll within the container only
+        const scrollTop = container.scrollTop + relativeTop - (container.clientHeight / 2) + (element.offsetHeight / 2);
+        container.scrollTo({
+          top: scrollTop,
+          behavior: 'smooth'
+        });
+      }
+    }
+  }, [currentRow, currentCol, isTimerRunning]);
+
+  // Scroll to active row when test is running
+  useEffect(() => {
+    if (isTimerRunning && rowRefs.current[currentRow]) {
+      setTimeout(() => {
+        rowRefs.current[currentRow]?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }, 100);
+    }
+  }, [isTimerRunning]);
+
+  // Scroll keypad into view
+  useEffect(() => {
+    if (keypadRef.current && !isFinished) {
+      keypadRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [currentRow, currentCol, isFinished]);
+
   useEffect(() => {
     if (isLoading) return;
     let timer;
@@ -70,35 +113,6 @@ export default function KraepelinSimple() {
     }
     return () => clearInterval(timer);
   }, [isTimerRunning, timeLeft, isLoading]);
-
-  // Scroll ke row aktif
-  useEffect(() => {
-    if (rowRefs.current[currentRow]) {
-      rowRefs.current[currentRow].scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    }
-  }, [currentRow, currentCol]);
-
-  // Scroll ke row aktif ketika test dimulai
-  useEffect(() => {
-    if (isTimerRunning && rowRefs.current[currentRow]) {
-      setTimeout(() => {
-        rowRefs.current[currentRow].scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
-      }, 100);
-    }
-  }, [isTimerRunning]);
-
-  // Scroll keypad ke bawah
-  useEffect(() => {
-    if (keypadRef.current && !isFinished) {
-      keypadRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-  }, [currentRow, currentCol, isFinished]);
 
   const startTest = () => {
     setIsTimerRunning(true);
@@ -134,11 +148,45 @@ export default function KraepelinSimple() {
   const handleBackspace = () => {
     const newAnswers = [...userAnswers];
     if (newAnswers[currentRow][currentCol] !== null) {
+      // Decrease score if removing an answer
+      const correctAnswer = (numberMatrix[currentRow][currentCol] + numberMatrix[currentRow + 1][currentCol]) % 10;
+      if (newAnswers[currentRow][currentCol] === correctAnswer) {
+        setScore(prev => ({ ...prev, correct: Math.max(0, prev.correct - 1) }));
+      } else {
+        setScore(prev => ({ ...prev, wrong: Math.max(0, prev.wrong - 1) }));
+      }
+      
       newAnswers[currentRow][currentCol] = null;
       setUserAnswers(newAnswers);
     } else if (currentRow < ROWS - 2) {
       setCurrentRow(prev => prev + 1);
     }
+  };
+
+  const calculateAnswerMatrix = () => {
+    const matrix = [];
+    for (let row = 0; row < ROWS - 1; row++) {
+      const rowData = [];
+      for (let col = 0; col < COLS; col++) {
+        const userAnswer = userAnswers[row]?.[col];
+        if (userAnswer === null || userAnswer === '') {
+          rowData.push({
+            status: 'unanswered',
+            userAnswer: null,
+            correctAnswer: (numberMatrix[row][col] + numberMatrix[row + 1][col]) % 10
+          });
+        } else {
+          const correctAnswer = (numberMatrix[row][col] + numberMatrix[row + 1][col]) % 10;
+          rowData.push({
+            status: userAnswer === correctAnswer ? 'correct' : 'wrong',
+            userAnswer: userAnswer,
+            correctAnswer: correctAnswer
+          });
+        }
+      }
+      matrix.push(rowData);
+    }
+    return matrix;
   };
 
   const calculateRowPerformanceData = () => {
@@ -165,29 +213,55 @@ export default function KraepelinSimple() {
     return colData;
   };
 
- const submitTest = async () => {
+  const calculatePerformanceByColumn = () => {
+    const perfData = [];
+    for (let col = 0; col < COLS; col++) {
+      let correct = 0;
+      let total = 0;
+      
+      for (let row = 0; row < ROWS - 1; row++) {
+        if (userAnswers[row] && userAnswers[row][col] !== null) {
+          total++;
+          const correctAnswer = (numberMatrix[row][col] + numberMatrix[row + 1][col]) % 10;
+          if (userAnswers[row][col] === correctAnswer) {
+            correct++;
+          }
+        }
+      }
+      
+      if (total > 0) {
+        perfData.push({
+          column: col + 1,
+          correct: correct,
+          total: total
+        });
+      }
+    }
+    return perfData;
+  };
+
+  const submitTest = async () => {
     if (isFinished || isSubmitting) return;
     
     setIsSubmitting(true);
     
-    // Calculate performance data
     const rowPerf = calculateRowPerformanceData();
     const colPerf = calculateColumnPerformanceData();
+    const perfByCol = calculatePerformanceByColumn();
+    const answerMatrixData = calculateAnswerMatrix();
+    
     setRowPerformance(rowPerf);
     setColumnPerformance(colPerf);
+    setPerformanceData(perfByCol);
+    setAnswerMatrix(answerMatrixData);
     
-    // Calculate total time elapsed
     const totalTimeElapsed = (COLS * TIME_PER_COL) - timeLeft;
+    const totalQuestions = (ROWS - 1) * COLS;
+    const unanswered = totalQuestions - (score.correct + score.wrong);
     
-    // DEBUG: Log what we're sending
-    console.log('Number Matrix:', numberMatrix);
-    console.log('User Answers:', userAnswers);
-    console.log('Rows:', ROWS, 'Cols:', COLS);
-    
-    // Prepare submission data - send the RAW number matrix
     const submissionData = {
         answers: userAnswers,
-        number_matrix: numberMatrix, // Send the raw 5x5 number matrix
+        number_matrix: numberMatrix,
         time_elapsed: totalTimeElapsed,
         rows: ROWS,
         cols: COLS
@@ -197,9 +271,6 @@ export default function KraepelinSimple() {
         const response = await axios.post(route('kraepelin.submit'), submissionData);
         
         if (response.data.success) {
-            console.log('Server Response:', response.data);
-            
-            // Store performance data from backend
             if (response.data.rowPerformance) {
                 setRowPerformance(response.data.rowPerformance);
             }
@@ -210,55 +281,43 @@ export default function KraepelinSimple() {
             setIsFinished(true);
             setIsTimerRunning(false);
             
-            // Update score with data from server
-            if (response.data.score !== undefined) {
-                setScore({
-                    correct: response.data.correctAnswers || response.data.score || score.correct,
-                    wrong: response.data.wrongAnswers || score.wrong
-                });
-            }
-            
-            console.log('Kraepelin test results saved successfully');
+            // Update score with data from backend
+            setScore({
+                correct: response.data.correctAnswers || score.correct,
+                wrong: response.data.wrongAnswers || score.wrong,
+                unanswered: response.data.unanswered || unanswered
+            });
         }
     } catch (error) {
         console.error('Failed to save test results:', error);
-        console.error('Error details:', error.response?.data);
-        // Still finish the test locally
         setIsFinished(true);
         setIsTimerRunning(false);
     } finally {
         setIsSubmitting(false);
     }
-};
+  };
 
   const nextColumn = () => {
     if (currentCol >= 0) {
-      const correctInColumn = userAnswers.slice(0, ROWS - 1).filter(
-        (row, idx) =>
-          row[currentCol] !== null &&
-          row[currentCol] ===
-            (numberMatrix[idx][currentCol] + numberMatrix[idx + 1][currentCol]) % 10
-      ).length;
-      
-      // Add to performance data for column graph
-      const columnPerformance = {
-        column: currentCol + 1,
-        correct: correctInColumn,
-        total: ROWS - 1,
-        answered: userAnswers.reduce((count, row) => 
-          count + (row[currentCol] !== null ? 1 : 0), 0
-        )
-      };
-      setPerformanceData(prev => [...prev, columnPerformance]);
+        const correctInColumn = userAnswers.slice(0, ROWS - 1).filter(
+            (row, idx) =>
+                row[currentCol] !== null &&
+                row[currentCol] ===
+                    (numberMatrix[idx][currentCol] + numberMatrix[idx + 1][currentCol]) % 10
+        ).length;
+        setPerformanceData(prev => [
+            ...prev,
+            { column: currentCol + 1, correct: correctInColumn, total: ROWS - 1 }
+        ]);
     }
 
     if (currentCol < COLS - 1) {
-      setCurrentCol(prev => prev + 1);
-      setCurrentRow(ROWS - 2);
-      setTimeLeft(TIME_PER_COL);
+        setCurrentCol(prev => prev + 1);
+        setCurrentRow(ROWS - 2);
+        setTimeLeft(TIME_PER_COL);
     } else {
-      // Test finished, submit results
-      submitTest();
+        // Test finished, submit results
+        submitTest();
     }
   };
 
@@ -266,689 +325,78 @@ export default function KraepelinSimple() {
     window.location.reload();
   };
 
-  // Performance Graph Component
-  const PerformanceGraph = ({ rowPerformance, columnPerformance }) => {
-    // Row Performance Chart (Bottom to Top)
-    const rowChartData = {
-      labels: Array.from({ length: rowPerformance.length }, (_, i) => `Row ${i + 1}`),
-      datasets: [
-        {
-          label: 'Questions Answered',
-          data: rowPerformance,
-          backgroundColor: 'rgba(54, 162, 235, 0.5)',
-          borderColor: 'rgba(54, 162, 235, 1)',
-          borderWidth: 1,
-        },
-      ],
-    };
-
-    const rowChartOptions = {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: 'top',
-        },
-        title: {
-          display: true,
-          text: 'Performance by Row (Bottom to Top)',
-        },
-        tooltip: {
-          callbacks: {
-            label: (context) => {
-              return `Answered: ${context.raw} questions`;
-            }
-          }
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          max: Math.max(...rowPerformance) + 5,
-          title: {
-            display: true,
-            text: 'Questions Answered'
-          }
-        },
-        x: {
-          title: {
-            display: true,
-            text: 'Row Number'
-          }
-        }
-      },
-    };
-
-    // Column Performance Chart (Left to Right)
-    const columnChartData = {
-      labels: Array.from({ length: columnPerformance.length }, (_, i) => `Col ${i + 1}`),
-      datasets: [
-        {
-          label: 'Questions Answered',
-          data: columnPerformance,
-          backgroundColor: 'rgba(255, 99, 132, 0.5)',
-          borderColor: 'rgba(255, 99, 132, 1)',
-          borderWidth: 1,
-        },
-      ],
-    };
-
-    const columnChartOptions = {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: 'top',
-        },
-        title: {
-          display: true,
-          text: 'Performance by Column (Left to Right)',
-        },
-        tooltip: {
-          callbacks: {
-            label: (context) => {
-              return `Answered: ${context.raw} questions`;
-            }
-          }
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          max: Math.max(...columnPerformance) + 5,
-          title: {
-            display: true,
-            text: 'Questions Answered'
-          }
-        },
-        x: {
-          title: {
-            display: true,
-            text: 'Column Number'
-          }
-        }
-      },
-    };
-
-    return (
-      <div className="space-y-8">
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-lg font-bold mb-4">Row Performance Analysis</h3>
-          <p className="text-gray-600 mb-4">
-            Shows how many questions you answered in each row. Typically, 
-            answers decrease as you move up (showing fatigue).
-          </p>
-          <div className="h-64">
-            <Bar options={rowChartOptions} data={rowChartData} />
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            <div className="bg-blue-50 p-3 rounded">
-              <div className="text-sm text-gray-600">Highest Row</div>
-              <div className="text-xl font-bold text-blue-600">
-                Row {rowPerformance.indexOf(Math.max(...rowPerformance)) + 1}: {Math.max(...rowPerformance)} answers
-              </div>
-            </div>
-            <div className="bg-red-50 p-3 rounded">
-              <div className="text-sm text-gray-600">Lowest Row</div>
-              <div className="text-xl font-bold text-red-600">
-                Row {rowPerformance.indexOf(Math.min(...rowPerformance)) + 1}: {Math.min(...rowPerformance)} answers
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-lg font-bold mb-4">Column Performance Analysis</h3>
-          <p className="text-gray-600 mb-4">
-            Shows how many questions you answered in each column. 
-            Consistent performance across columns indicates good time management.
-          </p>
-          <div className="h-64">
-            <Bar options={columnChartOptions} data={columnChartData} />
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            <div className="bg-green-50 p-3 rounded">
-              <div className="text-sm text-gray-600">Best Column</div>
-              <div className="text-xl font-bold text-green-600">
-                Column {columnPerformance.indexOf(Math.max(...columnPerformance)) + 1}: {Math.max(...columnPerformance)} answers
-              </div>
-            </div>
-            <div className="bg-yellow-50 p-3 rounded">
-              <div className="text-sm text-gray-600">Average per Column</div>
-              <div className="text-xl font-bold text-yellow-600">
-                {Math.round(columnPerformance.reduce((a, b) => a + b, 0) / columnPerformance.length)} answers
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <h4 className="font-bold text-gray-700 mb-2">Interpretation Guide:</h4>
-          <ul className="text-gray-600 text-sm space-y-1">
-            <li>• <span className="font-medium">Ideal Pattern:</span> Consistent answers across all rows and columns</li>
-            <li>• <span className="font-medium">Fatigue Pattern:</span> Decreasing answers as you move up rows</li>
-            <li>• <span className="font-medium">Time Pressure:</span> Decreasing answers in later columns</li>
-            <li>• <span className="font-medium">Consistency Score:</span> Higher consistency = better mental stamina</li>
-          </ul>
-        </div>
-      </div>
-    );
+  const calculateConsistencyScore = () => {
+    if (!rowPerformance || rowPerformance.length === 0) return 0;
+    const avg = rowPerformance.reduce((a, b) => a + b, 0) / rowPerformance.length;
+    const variance = rowPerformance.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) / rowPerformance.length;
+    const stdDev = Math.sqrt(variance);
+    const consistencyScore = Math.max(0, 100 - (stdDev * 20));
+    return Math.round(consistencyScore);
   };
 
-  // Guide/Introduction Screen
-  if (showGuide) {
-    return (
-      <AuthenticatedLayout
-        fullScreen={true}
-        header={
-          <h2 className="font-semibold text-slate-800 text-xl leading-tight">
-            Kraepelin Addition Test
-          </h2>
-        }
-      >
-        <div className="h-screen bg-gradient-to-br from-slate-50 via-teal-50 to-cyan-50 overflow-y-auto py-8 px-4">
-          <div className="max-w-6xl mx-auto">
-            {/* Header */}
-            <div className="text-center mb-10">
-              <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-r from-teal-500 to-cyan-600 rounded-full mb-6 shadow-2xl">
-                <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
-              <h1 className="text-4xl md:text-5xl font-bold text-slate-800 mb-3">
-                Kraepelin Test
-              </h1>
-              <p className="text-xl text-slate-600 max-w-3xl mx-auto">
-                Uji kemampuan berhitung cepat, konsentrasi, dan ketahanan mental Anda
-              </p>
-            </div>
+  const calculateFatigueIndex = () => {
+    if (!columnPerformance || columnPerformance.length === 0) return 0;
+    const firstHalf = columnPerformance.slice(0, Math.floor(columnPerformance.length / 2));
+    const secondHalf = columnPerformance.slice(Math.floor(columnPerformance.length / 2));
+    const avgFirst = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length;
+    const avgSecond = secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length;
+    const drop = ((avgFirst - avgSecond) / avgFirst) * 100;
+    return Math.max(0, Math.min(100, Math.round(drop)));
+  };
 
-            {/* Test Info Cards */}
-            <div className="grid md:grid-cols-3 gap-6 mb-10">
-              <div className="bg-white rounded-2xl p-6 shadow-lg border border-slate-100 transform transition-transform hover:scale-105">
-                <div className="text-teal-600 mb-4">
-                  <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                  </svg>
-                </div>
-                <h3 className="font-bold text-xl mb-3">22 Kolom</h3>
-                <p className="text-slate-600">Setiap kolom berisi 26 pasangan angka yang harus dijumlahkan</p>
-              </div>
-              
-              <div className="bg-white rounded-2xl p-6 shadow-lg border border-slate-100 transform transition-transform hover:scale-105">
-                <div className="text-cyan-600 mb-4">
-                  <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <h3 className="font-bold text-xl mb-3">15 Detik/Kolom</h3>
-                <p className="text-slate-600">Waktu terbatas untuk meningkatkan tekanan dan menguji ketahanan</p>
-              </div>
-              
-              <div className="bg-white rounded-2xl p-6 shadow-lg border border-slate-100 transform transition-transform hover:scale-105">
-                <div className="text-blue-600 mb-4">
-                  <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <h3 className="font-bold text-xl mb-3">Akurasi & Kecepatan</h3>
-                <p className="text-slate-600">Nilai berdasarkan kombinasi kecepatan dan ketepatan jawaban</p>
-              </div>
-            </div>
+  const calculateOverallScore = () => {
+    const total = score.correct + score.wrong + score.unanswered;
+    if (total === 0) return 0;
+    const accuracy = (score.correct / total) * 100;
+    const speed = ((score.correct + score.wrong) / ((COLS * (ROWS - 1)) || 1)) * 100;
+    return Math.round((accuracy * 0.6) + (speed * 0.4));
+  };
 
-            {/* Instructions */}
-            <div className="bg-gradient-to-r from-teal-500 to-cyan-600 rounded-2xl shadow-2xl p-8 mb-10 text-white">
-              <h2 className="text-3xl font-bold mb-6 flex items-center">
-                <svg className="w-8 h-8 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-                Cara Mengerjakan Tes Kraepelin
-              </h2>
-              
-              <div className="space-y-6">
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mr-5 mt-1">
-                    <span className="font-bold text-white text-xl">1</span>
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-xl mb-2">Jumlahkan Dua Angka</h4>
-                    <p className="text-teal-100">Jumlahkan angka di baris atas dengan angka di baris bawah pada kolom yang sama</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mr-5 mt-1">
-                    <span className="font-bold text-white text-xl">2</span>
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-xl mb-2">Masukkan Digit Terakhir</h4>
-                    <p className="text-teal-100">Jika hasil penjumlahan lebih dari 9, masukkan hanya digit terakhirnya</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mr-5 mt-1">
-                    <span className="font-bold text-white text-xl">3</span>
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-xl mb-2">Kerjakan dari Bawah ke Atas</h4>
-                    <p className="text-teal-100">Mulai dari baris terbawah yang tersedia dan naik ke atas dalam satu kolom</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mr-5 mt-1">
-                    <span className="font-bold text-white text-xl">4</span>
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-xl mb-2">Pindah Kolom Otomatis</h4>
-                    <p className="text-teal-100">Setelah 15 detik atau selesai satu kolom, pindah ke kolom berikutnya secara otomatis</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+  const getPerformanceFeedback = () => {
+    const total = score.correct + score.wrong + score.unanswered;
+    if (total === 0) return { title: "Belum Ada Data", desc: "Silakan mulai tes", color: "slate" };
+    const accuracy = (score.correct / total) * 100;
 
-            {/* Visual Example */}
-            <div className="bg-white rounded-2xl shadow-lg p-8 mb-10 border border-slate-200">
-              <h3 className="text-2xl font-bold text-slate-800 mb-6 text-center">Contoh Perhitungan</h3>
-              
-              <div className="flex flex-col items-center mb-6">
-                <div className="flex items-center justify-center gap-6 mb-4">
-                  <div className="text-center">
-                    <div className="w-16 h-16 bg-teal-100 rounded-xl flex items-center justify-center text-2xl font-bold text-teal-700 mb-2">
-                      7
-                    </div>
-                    <div className="text-sm text-slate-600">Angka atas</div>
-                  </div>
-                  <div className="text-3xl font-bold text-slate-400">+</div>
-                  <div className="text-center">
-                    <div className="w-16 h-16 bg-cyan-100 rounded-xl flex items-center justify-center text-2xl font-bold text-cyan-700 mb-2">
-                      8
-                    </div>
-                    <div className="text-sm text-slate-600">Angka bawah</div>
-                  </div>
-                  <div className="text-3xl font-bold text-slate-400">=</div>
-                  <div className="text-center">
-                    <div className="w-16 h-16 bg-gradient-to-r from-teal-200 to-cyan-200 rounded-xl flex items-center justify-center text-2xl font-bold text-slate-800 mb-2">
-                      15
-                    </div>
-                    <div className="text-sm text-slate-600">Hasil jumlah</div>
-                  </div>
-                  <div className="text-3xl font-bold text-slate-400">→</div>
-                  <div className="text-center">
-                    <div className="w-16 h-16 bg-gradient-to-r from-green-400 to-emerald-500 rounded-xl flex items-center justify-center text-2xl font-bold text-white mb-2">
-                      5
-                    </div>
-                    <div className="text-sm text-slate-600">Digit terakhir</div>
-                  </div>
-                </div>
-                <p className="text-slate-600 text-center">
-                  <strong>Contoh:</strong> 7 + 8 = 15 → masukkan <span className="font-bold text-green-600">5</span> (digit terakhir)
-                </p>
-              </div>
-              
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="bg-slate-50 p-4 rounded-xl">
-                  <h4 className="font-bold text-slate-800 mb-2">Contoh Lain:</h4>
-                  <ul className="space-y-2">
-                    <li className="flex items-center">
-                      <span className="font-medium text-slate-700 w-24">3 + 6 = 9</span>
-                      <span className="mx-2">→</span>
-                      <span className="font-bold text-teal-600">Jawaban: 9</span>
-                    </li>
-                    <li className="flex items-center">
-                      <span className="font-medium text-slate-700 w-24">4 + 9 = 13</span>
-                      <span className="mx-2">→</span>
-                      <span className="font-bold text-teal-600">Jawaban: 3</span>
-                    </li>
-                    <li className="flex items-center">
-                      <span className="font-medium text-slate-700 w-24">8 + 8 = 16</span>
-                      <span className="mx-2">→</span>
-                      <span className="font-bold text-teal-600">Jawaban: 6</span>
-                    </li>
-                  </ul>
-                </div>
-                
-                <div className="bg-teal-50 p-4 rounded-xl">
-                  <h4 className="font-bold text-slate-800 mb-2">Tips Sukses:</h4>
-                  <ul className="space-y-2">
-                    <li className="flex items-start">
-                      <svg className="w-5 h-5 text-teal-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span>Fokus pada satu kolom pada satu waktu</span>
-                    </li>
-                    <li className="flex items-start">
-                      <svg className="w-5 h-5 text-teal-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span>Gunakan keypad untuk jawaban cepat</span>
-                    </li>
-                    <li className="flex items-start">
-                      <svg className="w-5 h-5 text-teal-500 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span>Jangan panik saat waktu hampir habis</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
+    if (accuracy >= 90) return { title: "Luar Biasa!", desc: "Performa sempurna", color: "emerald" };
+    if (accuracy >= 80) return { title: "Sangat Baik", desc: "Hasil memuaskan", color: "green" };
+    if (accuracy >= 70) return { title: "Baik", desc: "Terus tingkatkan", color: "lime" };
+    if (accuracy >= 60) return { title: "Cukup", desc: "Ada ruang perbaikan", color: "amber" };
+    return { title: "Perlu Latihan", desc: "Fokus pada akurasi", color: "rose" };
+  };
 
-            {/* Test Structure */}
-            <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl shadow-lg p-8 mb-10 text-white">
-              <h3 className="text-2xl font-bold mb-6 flex items-center">
-                <svg className="w-7 h-7 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                </svg>
-                Struktur Tes
-              </h3>
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="bg-white/10 p-5 rounded-xl">
-                  <div className="text-4xl font-bold text-teal-300 mb-2">27</div>
-                  <div className="text-lg font-medium mb-1">Baris Angka</div>
-                  <div className="text-teal-200 text-sm">Setiap baris berisi 22 angka acak dari 1-9</div>
-                </div>
-                <div className="bg-white/10 p-5 rounded-xl">
-                  <div className="text-4xl font-bold text-cyan-300 mb-2">22</div>
-                  <div className="text-lg font-medium mb-1">Kolom Soal</div>
-                  <div className="text-cyan-200 text-sm">Setiap kolom harus diselesaikan dalam 15 detik</div>
-                </div>
-                <div className="bg-white/10 p-5 rounded-xl">
-                  <div className="text-4xl font-bold text-blue-300 mb-2">572</div>
-                  <div className="text-lg font-medium mb-1">Total Soal</div>
-                  <div className="text-blue-200 text-sm">Semua pasangan angka yang harus dijumlahkan</div>
-                </div>
-                <div className="bg-white/10 p-5 rounded-xl">
-                  <div className="text-4xl font-bold text-emerald-300 mb-2">5:30</div>
-                  <div className="text-lg font-medium mb-1">Total Waktu</div>
-                  <div className="text-emerald-200 text-sm">Waktu maksimal untuk menyelesaikan tes</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Start Button */}
-            <div className="text-center mb-10">
-              <button 
-                onClick={startTest}
-                className="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white font-bold py-5 px-16 rounded-2xl shadow-2xl hover:shadow-3xl transition-all duration-300 transform hover:scale-105 text-xl"
-              >
-                <div className="flex items-center justify-center">
-                  <svg className="w-7 h-7 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Mulai Tes Kraepelin
-                </div>
-              </button>
-              <p className="text-slate-600 mt-4 text-sm">
-                Siap untuk menguji kemampuan berhitung dan konsentrasi Anda?
-              </p>
-            </div>
-
-            {/* Disclaimer */}
-            <div className="bg-slate-50 rounded-xl p-6 text-center border border-slate-200">
-              <p className="text-slate-600 text-sm">
-                <strong>Catatan:</strong> Tes ini dirancang untuk mengukur kecepatan, ketepatan, dan ketahanan mental. 
-                Hasilnya dapat bervariasi tergantung kondisi fisik dan mental saat mengerjakan.
-              </p>
-            </div>
-          </div>
-        </div>
-      </AuthenticatedLayout>
-    );
-  }
-
-  // Main Test Interface
-  return (
-    <AuthenticatedLayout
-      fullScreen={true}
-      header={
-        <h2 className="font-semibold text-slate-800 text-xl leading-tight">
-          Kraepelin Addition Test
-        </h2>
-      }
-    >
-      <div className="h-screen bg-gradient-to-br from-slate-50 via-teal-50 to-cyan-50 overflow-hidden flex flex-col">
-        <div className="flex-1 overflow-auto">
-          {isFinished ? (
-            <div className="container mx-auto max-w-7xl px-4 py-6">
-              {renderFinishedScreen()}
-            </div>
-          ) : (
-            <div className="h-full flex flex-col">
-              {/* Header Section */}
-              <div className="bg-gradient-to-r from-teal-500 to-cyan-600 p-4 sm:p-6 text-white flex-shrink-0">
-                <div className="max-w-4xl mx-auto">
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                    <div className="flex-1">
-                      <div className="text-base sm:text-lg font-bold mb-1">
-                        Column {currentCol + 1} of {COLS} • Row {ROWS - currentRow - 1} of {ROWS - 1}
-                      </div>
-                      <div className="text-xs sm:text-sm opacity-90">
-                        Correct: {score.correct} • Incorrect: {score.wrong}
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span className="text-xl font-bold">{timeLeft}s</span>
-                    </div>
-                  </div>
-                  
-                  {/* Timer Progress Bar */}
-                  <div className="mt-3 bg-white/20 rounded-full h-2 overflow-hidden">
-                    <div
-                      className={`h-2 rounded-full transition-all duration-1000 ${
-                        timeLeft > 10 
-                          ? 'bg-white' 
-                          : timeLeft > 5 
-                          ? 'bg-yellow-300' 
-                          : 'bg-red-300'
-                      }`}
-                      style={{ width: `${(timeLeft / TIME_PER_COL) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Encouraging Message */}
-              {isTimerRunning && (
-                <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border-b-2 border-amber-200 px-4 py-3 flex-shrink-0">
-                  <p className="text-center text-slate-700 font-medium text-sm sm:text-base">
-                    {getEncouragingMessage()}
-                  </p>
-                </div>
-              )}
-
-              {/* Instructions (only show when timer not running but test has started) */}
-              {!isTimerRunning && !showGuide && (
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b-2 border-blue-200 px-4 py-4 flex-shrink-0">
-                  <div className="max-w-3xl mx-auto">
-                    <h3 className="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
-                      <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      How to Complete This Test
-                    </h3>
-                    <ul className="space-y-1.5 text-slate-700 text-sm">
-                      <li className="flex items-start gap-2">
-                        <span className="text-teal-600 font-bold">•</span>
-                        <span>Add the two numbers in each column and enter the last digit of the sum</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-teal-600 font-bold">•</span>
-                        <span>Work from bottom to top in each column</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-teal-600 font-bold">•</span>
-                        <span>You have {TIME_PER_COL} seconds per column</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-teal-600 font-bold">•</span>
-                        <span>Take a deep breath, focus, and do your best!</span>
-                      </li>
-                    </ul>
-                    <div className="mt-4 text-center">
-                      <button
-                        onClick={startTest}
-                        className="px-6 py-3 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all duration-200"
-                      >
-                        Start Test
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Number Matrix */}
-              <div className="flex-1 overflow-auto p-4">
-                {renderNumberMatrix()}
-              </div>
-
-              {/* Keypad Section */}
-              {!isLoading && (
-                <div ref={keypadRef} className="flex-shrink-0 bg-gradient-to-t from-slate-100 to-white border-t-2 border-slate-200 px-4 py-3">
-                  {!isTimerRunning ? (
-                    <div className="text-center max-w-md mx-auto">
-                      <button
-                        onClick={startTest}
-                        className="w-full px-6 py-4 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white font-bold rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 text-lg flex items-center justify-center gap-3"
-                      >
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        Start Test
-                      </button>
-                      <p className="mt-2 text-slate-600 text-xs sm:text-sm">
-                        Ready when you are. No rush!
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="max-w-sm mx-auto space-y-2.5">
-                      {/* Timer Display Above Keypad */}
-                      <div className={`rounded-xl p-2.5 text-center transition-all duration-300 ${
-                        timeLeft > 10 
-                          ? 'bg-gradient-to-r from-teal-100 to-cyan-100 border-2 border-teal-300' 
-                          : timeLeft > 5 
-                          ? 'bg-gradient-to-r from-yellow-100 to-amber-100 border-2 border-yellow-400' 
-                          : 'bg-gradient-to-r from-red-100 to-orange-100 border-2 border-red-400 animate-pulse'
-                      }`}>
-                        <div className="flex items-center justify-center gap-2">
-                          <svg className={`w-5 h-5 ${
-                            timeLeft > 10 ? 'text-teal-600' : timeLeft > 5 ? 'text-yellow-600' : 'text-red-600'
-                          }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <div>
-                            <div className={`text-2xl font-bold ${
-                              timeLeft > 10 ? 'text-teal-700' : timeLeft > 5 ? 'text-yellow-700' : 'text-red-700'
-                            }`}>
-                              {timeLeft}s
-                            </div>
-                            <div className="text-xs text-slate-600">
-                              {timeLeft > 10 ? 'Time remaining' : timeLeft > 5 ? 'Hurry up!' : 'Almost out!'}
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* Mini Progress Bar */}
-                        <div className="mt-2 bg-white/50 rounded-full h-1.5 overflow-hidden">
-                          <div
-                            className={`h-1.5 rounded-full transition-all duration-1000 ${
-                              timeLeft > 10 
-                                ? 'bg-gradient-to-r from-teal-400 to-cyan-500' 
-                                : timeLeft > 5 
-                                ? 'bg-gradient-to-r from-yellow-400 to-amber-500' 
-                                : 'bg-gradient-to-r from-red-400 to-orange-500'
-                            }`}
-                            style={{ width: `${(timeLeft / TIME_PER_COL) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Keypad */}
-                      <div className="bg-white rounded-2xl p-3 shadow-xl border-2 border-slate-200">
-                        <div className="grid grid-cols-3 gap-2">
-                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, "⌫", 0, ""].map((digit, idx) => (
-                            <button
-                              key={idx}
-                              onClick={() => {
-                                if (digit === "⌫") handleBackspace();
-                                else if (digit !== "") handleNumberClick(digit);
-                              }}
-                              disabled={digit === ""}
-                              className={`
-                                h-12 sm:h-14 font-bold text-lg sm:text-xl rounded-xl
-                                transition-all duration-150 active:scale-95
-                                ${digit === "" 
-                                  ? "invisible" 
-                                  : digit === "⌫" 
-                                  ? "bg-gradient-to-br from-slate-400 to-slate-500 hover:from-slate-500 hover:to-slate-600 text-white shadow-lg hover:shadow-xl" 
-                                  : "bg-gradient-to-br from-white to-slate-50 hover:from-teal-50 hover:to-cyan-50 border-2 border-slate-300 hover:border-teal-400 text-slate-800 shadow-md hover:shadow-lg"
-                                }
-                              `}
-                            >
-                              {digit}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      
-                      {/* Helper Text */}
-                      <div className="text-center pb-1">
-                        <p className="text-slate-600 text-xs">
-                          Tap numbers to answer • Press ⌫ to go back
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </AuthenticatedLayout>
-  );
-
-  // Helper functions
-  function getEncouragingMessage() {
+  const getEncouragingMessage = () => {
     const progress = ((currentCol + 1) / COLS) * 100;
     const accuracy = score.correct + score.wrong > 0 
       ? (score.correct / (score.correct + score.wrong)) * 100 
       : 0;
 
     if (progress < 25) {
-      return "You're doing great! Take your time and stay focused. 🌟";
+      return "Kamu hebat! Luangkan waktu dan tetap fokus. 🌟";
     } else if (progress < 50) {
       if (accuracy > 75) {
-        return "Excellent work! Your accuracy is impressive! 💪";
+        return "Kerja bagus! Akurasi Anda mengesankan! 💪";
       }
-      return "Keep going! You're making steady progress. 🚀";
+      return "Teruskan! Kamu membuat kemajuan yang stabil. 🚀";
     } else if (progress < 75) {
-      return "More than halfway there! You're doing wonderfully! 🎯";
+      return "Lebih dari setengah jalan! Kamu melakukan dengan luar biasa! 🎯";
     } else {
-      return "Almost done! Finish strong, you've got this! 🏆";
+      return "Hampir selesai! Selesaikan dengan kuat, kamu bisa! 🏆";
     }
-  }
+  };
 
-  function renderNumberMatrix() {
+  const renderNumberMatrix = () => {
     if (isLoading || numberMatrix.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center py-12 space-y-4">
-          <div className="w-16 h-16 border-4 border-teal-200 border-t-teal-500 rounded-full animate-spin"></div>
-          <p className="text-slate-600 text-lg font-medium">Preparing your test...</p>
+          <div className="w-16 h-16 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin"></div>
+          <p className="text-slate-600 text-lg font-medium">Menyiapkan tes Anda...</p>
         </div>
       );
     }
 
     return (
-      <div className="h-full flex items-center justify-center" ref={containerRef}>
-        <div className="w-full max-w-6xl overflow-auto rounded-xl border-2 border-slate-200 bg-white shadow-inner pt-12 pb-4" style={{ maxHeight: 'calc(100% - 2rem)' }}>
+      <div className="h-full flex items-center justify-center">
+        <div className="w-full max-w-6xl overflow-auto rounded-xl border-2 border-slate-200 bg-white shadow-inner pt-8 pb-4">
           <table className="mx-auto border-collapse">
             <tbody>
               {numberMatrix.map((row, rowIndex) => {
@@ -961,47 +409,69 @@ export default function KraepelinSimple() {
                     ref={el => rowRefs.current[rowIndex] = el}
                     className={`transition-colors duration-200 ${
                       rowIndex === currentRow 
-                        ? "bg-gradient-to-r from-teal-50 to-cyan-50" 
+                        ? "bg-gradient-to-r from-amber-50 to-orange-50" 
                         : ""
                     }`}
                   >
                     {row.map((num, colIndex) => {
                       const isActiveColumn = colIndex === currentCol;
                       const isCurrentCell = isActiveColumn && rowIndex === currentRow;
-                      const alreadyAnswered = userAnswers[rowIndex] && userAnswers[rowIndex][colIndex] !== null;
+                      const isPairCell = isActiveColumn && rowIndex === currentRow + 1;
+                      const alreadyAnswered = userAnswers[rowIndex]?.[colIndex] !== null;
+                      const showAnswer = alreadyAnswered && isWorkableRow;
                       
                       return (
                         <td
                           key={`${rowIndex}-${colIndex}`}
+                          ref={isCurrentCell ? activeQuestionRef : null}
                           className={`text-center p-2 border border-slate-300
-                            w-10 sm:w-12 md:w-14 h-10 sm:h-12 md:h-14
+                            w-14 sm:w-16 md:w-20 h-10 sm:h-12 md:h-14
                             transition-all duration-200
                             ${isCurrentCell 
-                              ? 'bg-gradient-to-br from-amber-200 via-yellow-200 to-amber-100 ring-2 ring-amber-400 ring-offset-2 shadow-lg scale-105 font-bold' 
+                              ? 'bg-gradient-to-br from-amber-400 to-orange-500 ring-2 ring-amber-400 ring-offset-2 shadow-lg scale-105 font-bold text-white' 
                               : ''
                             }
-                            ${alreadyAnswered && isWorkableRow && !isCurrentCell
-                              ? 'bg-slate-50' 
+                            ${isPairCell
+                              ? 'bg-gradient-to-br from-orange-200 to-amber-200 text-orange-800 border-orange-400 shadow-md'
+                              : ''
+                            }
+                            ${showAnswer && !isCurrentCell && !isPairCell
+                              ? 'bg-gradient-to-br from-emerald-50 to-green-50' 
                               : ''
                             }
                             ${isBottomRow 
                               ? 'bg-gradient-to-b from-slate-200 to-slate-300 opacity-80' 
                               : ''
                             }
-                            ${!isActiveColumn && !isBottomRow && !isCurrentCell
+                            ${!isActiveColumn && !isBottomRow && !isCurrentCell && !isPairCell
                               ? 'opacity-40' 
                               : ''
                             }
                           `}
                         >
-                          <div className="flex items-center justify-center gap-2">
+                          <div className="flex items-center justify-center gap-1 md:gap-2 w-full h-full">
                             <span className={`text-lg sm:text-xl md:text-2xl font-semibold ${
-                              isCurrentCell ? 'text-slate-800' : 'text-slate-700'
+                              isCurrentCell ? 'text-white' : 
+                              isPairCell ? 'text-orange-800' :
+                              'text-slate-700'
                             }`}>
                               {num}
                             </span>
-                            {alreadyAnswered && isWorkableRow && (
-                              <span className="text-teal-600 font-bold text-base sm:text-lg md:text-xl">
+                            {/* Show answer in current cell if answered */}
+                            {isCurrentCell && userAnswers[rowIndex]?.[colIndex] !== null && (
+                              <span className="text-white font-bold text-base sm:text-lg md:text-xl">
+                                {userAnswers[rowIndex][colIndex]}
+                              </span>
+                            )}
+                            {/* Show answer in previous row for the pair cell */}
+                            {rowIndex > 0 && isActiveColumn && userAnswers[rowIndex-1]?.[colIndex] !== null && (
+                              <span className="text-emerald-600 font-bold text-base sm:text-lg md:text-xl">
+                                {userAnswers[rowIndex-1][colIndex]}
+                              </span>
+                            )}
+                            {/* Show answer in normal answered cells (not current or pair) */}
+                            {showAnswer && !isCurrentCell && !isPairCell && rowIndex < currentRow && (
+                              <span className="text-emerald-600 font-bold text-base sm:text-lg md:text-xl">
                                 {userAnswers[rowIndex][colIndex]}
                               </span>
                             )}
@@ -1017,239 +487,755 @@ export default function KraepelinSimple() {
         </div>
       </div>
     );
-  }
+  };
 
-  function renderFinishedScreen() {
-    const totalQuestions = (ROWS - 1) * COLS; // 572 questions
-    const answeredQuestions = rowPerformance.reduce((a, b) => a + b, 0);
-    const accuracyValue = score.correct + score.wrong > 0 
-      ? ((score.correct / (score.correct + score.wrong)) * 100).toFixed(1)
-      : 0;
-    const completionRate = ((answeredQuestions / totalQuestions) * 100).toFixed(1);
-    const totalTimeElapsed = (COLS * TIME_PER_COL) - timeLeft;
-    
-    // Helper functions moved inside renderFinishedScreen to access local variables
-    const calculateConsistencyScore = () => {
-        if (rowPerformance.length === 0) return 0;
-        
-        const max = Math.max(...rowPerformance);
-        const min = Math.min(...rowPerformance);
-        const range = max - min;
-        
-        // Higher score = more consistent (smaller range)
-        const consistency = 100 - (range / max * 100);
-        return Math.max(0, Math.min(100, Math.round(consistency)));
-    };
-
-    const calculateFatigueIndex = () => {
-        if (rowPerformance.length < 2) return 0;
-        
-        // Compare first half vs second half of rows (fatigue typically shows in later rows)
-        const midpoint = Math.floor(rowPerformance.length / 2);
-        const firstHalf = rowPerformance.slice(0, midpoint);
-        const secondHalf = rowPerformance.slice(midpoint);
-        
-        const avgFirst = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length;
-        const avgSecond = secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length;
-        
-        // Calculate percentage decrease
-        const decrease = avgFirst > 0 ? ((avgFirst - avgSecond) / avgFirst) * 100 : 0;
-        return Math.max(0, Math.min(100, Math.round(decrease)));
-    };
-
-    const calculateOverallScore = () => {
-        const accuracyNum = parseFloat(accuracyValue);
-        const consistency = calculateConsistencyScore();
-        const completion = parseFloat(completionRate);
-        
-        // Weighted score: 50% accuracy, 30% completion, 20% consistency
-        const overall = (accuracyNum * 0.5) + (completion * 0.3) + (consistency * 0.2);
-        return Math.round(overall);
-    };
+  const renderAnswerMatrix = () => {
+    if (answerMatrix.length === 0) {
+      const matrix = calculateAnswerMatrix();
+      setAnswerMatrix(matrix);
+      return null;
+    }
 
     return (
-      <div className="max-w-6xl mx-auto mt-8">
-        {/* Score Summary */}
-        <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-2xl shadow-xl p-8 border-2 border-teal-200 mb-8">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-teal-400 to-cyan-500 rounded-full mb-4 shadow-lg">
-              <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h2 className="text-3xl font-bold text-slate-800 mb-2">
-              Test Completed! 🎉
-            </h2>
-            <p className="text-slate-600 text-lg">
-              Great job completing the Kraepelin Test!
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white rounded-xl p-6 text-center shadow-md border border-slate-200">
-              <div className="text-4xl font-bold text-teal-600 mb-2">
-                {score.correct}
-              </div>
-              <div className="text-slate-600 font-medium">Correct</div>
-            </div>
-            
-            <div className="bg-white rounded-xl p-6 text-center shadow-md border border-slate-200">
-              <div className="text-4xl font-bold text-rose-600 mb-2">
-                {score.wrong}
-              </div>
-              <div className="text-slate-600 font-medium">Incorrect</div>
-            </div>
-            
-            <div className="bg-white rounded-xl p-6 text-center shadow-md border border-slate-200">
-              <div className="text-4xl font-bold text-cyan-600 mb-2">
-                {accuracyValue}%
-              </div>
-              <div className="text-slate-600 font-medium">Accuracy</div>
-            </div>
-            
-            <div className="bg-white rounded-xl p-6 text-center shadow-md border border-slate-200">
-              <div className="text-4xl font-bold text-emerald-600 mb-2">
-                {completionRate}%
-              </div>
-              <div className="text-slate-600 font-medium">Completion</div>
-            </div>
-          </div>
-
-          {/* Test Statistics */}
-          <div className="bg-white rounded-xl p-6 shadow-md border border-slate-200">
-            <h3 className="text-lg font-semibold text-slate-800 mb-4">
-              Test Statistics
-            </h3>
-            <div className="grid md:grid-cols-3 gap-4">
-              <div className="p-4 bg-slate-50 rounded-lg">
-                <div className="text-sm text-slate-600 mb-1">Total Time</div>
-                <div className="text-xl font-bold text-slate-800">
-                  {Math.floor(totalTimeElapsed / 60)}:{String(totalTimeElapsed % 60).padStart(2, '0')}
-                </div>
-              </div>
-              <div className="p-4 bg-slate-50 rounded-lg">
-                <div className="text-sm text-slate-600 mb-1">Questions Answered</div>
-                <div className="text-xl font-bold text-slate-800">
-                  {answeredQuestions} / {totalQuestions}
-                </div>
-              </div>
-              <div className="p-4 bg-slate-50 rounded-lg">
-                <div className="text-sm text-slate-600 mb-1">Speed</div>
-                <div className="text-xl font-bold text-slate-800">
-                  {Math.round(answeredQuestions / (totalTimeElapsed / 60))} Q/min
-                </div>
-              </div>
-            </div>
-          </div>
+      <div className="soft-beige-shadow bg-gradient-to-br from-slate-50 to-gray-50 rounded-3xl p-4 md:p-6 border border-slate-200">
+        <h3 className="text-lg md:text-xl font-semibold text-slate-800 mb-4 md:mb-6" style={{fontFamily: "'Raleway', sans-serif"}}>
+          Matrix Jawaban
+          <span className="text-sm font-normal text-slate-600 ml-3">
+            ({ROWS - 1} baris × {COLS} kolom)
+          </span>
+        </h3>
+        
+        <div className="overflow-x-auto">
+          <table className="mx-auto border-collapse">
+            <thead>
+              <tr>
+                <th className="p-2 text-slate-500 text-sm font-medium">Baris/Kolom</th>
+                {Array.from({ length: COLS }).map((_, colIndex) => (
+                  <th key={colIndex} className="p-2 text-slate-500 text-sm font-medium">
+                    K{colIndex + 1}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {answerMatrix.map((row, rowIndex) => (
+                <tr key={rowIndex} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="p-2 text-slate-500 text-sm font-medium text-center border border-slate-200 bg-slate-100">
+                    B{rowIndex + 1}
+                  </td>
+                  {row.map((cell, colIndex) => {
+                    const bgColor = cell.status === 'correct' 
+                      ? 'bg-gradient-to-br from-emerald-100 to-green-100 border-emerald-300' 
+                      : cell.status === 'wrong' 
+                      ? 'bg-gradient-to-br from-rose-100 to-red-100 border-rose-300' 
+                      : 'bg-gradient-to-br from-slate-100 to-gray-100 border-slate-300';
+                    
+                    const textColor = cell.status === 'correct' 
+                      ? 'text-emerald-700' 
+                      : cell.status === 'wrong' 
+                      ? 'text-rose-700' 
+                      : 'text-slate-500';
+                    
+                    return (
+                      <td
+                        key={colIndex}
+                        className={`text-center p-3 border-2 ${bgColor} transition-all duration-300`}
+                      >
+                        <div className="flex flex-col items-center justify-center gap-1">
+                          {/* Show numbers being added */}
+                          <div className="flex items-center justify-center gap-1 text-xs text-slate-600">
+                            <span className="font-semibold">{numberMatrix[rowIndex]?.[colIndex]}</span>
+                            <span>+</span>
+                            <span className="font-semibold">{numberMatrix[rowIndex + 1]?.[colIndex]}</span>
+                          </div>
+                          
+                          {/* Show user answer vs correct answer */}
+                          <div className="flex items-center justify-center gap-2">
+                            {cell.status === 'unanswered' ? (
+                              <span className="text-sm font-medium text-slate-400">-</span>
+                            ) : (
+                              <>
+                                <span className={`text-lg font-bold ${textColor}`}>
+                                  {cell.userAnswer}
+                                </span>
+                                {cell.status === 'wrong' && (
+                                  <span className="text-xs text-slate-500">
+                                    (✓{cell.correctAnswer})
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </div>
+                          
+                          {/* Status indicator */}
+                          <div className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                            cell.status === 'correct' 
+                              ? 'bg-emerald-500/20 text-emerald-700' 
+                              : cell.status === 'wrong' 
+                              ? 'bg-rose-500/20 text-rose-700' 
+                              : 'bg-slate-500/20 text-slate-600'
+                          }`}>
+                            {cell.status === 'correct' ? 'Benar' : cell.status === 'wrong' ? 'Salah' : 'Kosong'}
+                          </div>
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-
-        {/* Performance Graphs */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 border-2 border-slate-200 mb-8">
-          <h3 className="text-2xl font-bold text-slate-800 mb-6">Performance Analysis</h3>
-          
-          {rowPerformance.length > 0 && columnPerformance.length > 0 ? (
-            <PerformanceGraph 
-              rowPerformance={rowPerformance} 
-              columnPerformance={columnPerformance} 
-            />
-          ) : (
-            <div className="text-center py-12">
-              <div className="w-16 h-16 border-4 border-teal-200 border-t-teal-500 rounded-full animate-spin mx-auto mb-4"></div>
-              <p className="text-slate-600">Loading performance data...</p>
-            </div>
-          )}
-        </div>
-
-        {/* Performance Summary */}
-        <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-2xl shadow-xl p-8 border-2 border-slate-300 mb-8">
-          <h3 className="text-xl font-bold text-slate-800 mb-4">Performance Summary</h3>
-          
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm">
-              <div>
-                <div className="font-medium text-slate-800">Consistency Score</div>
-                <div className="text-sm text-slate-600">How consistent you were across rows</div>
-              </div>
-              <div className="text-xl font-bold text-teal-600">
-                {calculateConsistencyScore()}%
-              </div>
-            </div>
-            
-            <div className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm">
-              <div>
-                <div className="font-medium text-slate-800">Fatigue Index</div>
-                <div className="text-sm text-slate-600">How much your performance decreased over time</div>
-              </div>
-              <div className="text-xl font-bold text-rose-600">
-                {calculateFatigueIndex()}%
-              </div>
-            </div>
-            
-            <div className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm">
-              <div>
-                <div className="font-medium text-slate-800">Overall Performance</div>
-                <div className="text-sm text-slate-600">Combined score based on accuracy and speed</div>
-              </div>
-              <div className={`text-xl font-bold ${
-                parseFloat(accuracyValue) >= 80 ? 'text-green-600' : 
-                parseFloat(accuracyValue) >= 60 ? 'text-yellow-600' : 
-                'text-red-600'
-              }`}>
-                {calculateOverallScore()}%
-              </div>
-            </div>
+        
+        {/* Legend */}
+        <div className="mt-6 flex flex-wrap gap-3 justify-center">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-gradient-to-br from-emerald-400 to-green-500 rounded-sm"></div>
+            <span className="text-sm text-slate-700">Benar</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-gradient-to-br from-rose-400 to-red-500 rounded-sm"></div>
+            <span className="text-sm text-slate-700">Salah</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-gradient-to-br from-slate-300 to-gray-400 rounded-sm"></div>
+            <span className="text-sm text-slate-700">Tidak Terjawab</span>
           </div>
         </div>
-
-        {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row justify-center gap-4">
-          <button
-            onClick={handleRestart}
-            className="px-8 py-4 bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 text-lg"
-          >
-            Take Test Again
-          </button>
-          <button
-            onClick={() => setShowGuide(true)}
-            className="px-8 py-4 bg-gradient-to-r from-slate-500 to-slate-700 hover:from-slate-600 hover:to-slate-800 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 text-lg"
-          >
-            Back to Guide
-          </button>
-          {isSubmitting && (
-            <div className="flex items-center justify-center">
-              <div className="w-6 h-6 border-2 border-teal-200 border-t-teal-500 rounded-full animate-spin mr-2"></div>
-              <span className="text-slate-600">Saving results...</span>
-            </div>
-          )}
-        </div>
-
-        {/* Tips for Improvement */}
-        <div className="mt-8 bg-blue-50 rounded-2xl p-6 border-2 border-blue-200">
-          <h4 className="font-bold text-blue-800 mb-3">Tips for Improvement:</h4>
-          <ul className="text-blue-700 space-y-2">
-            <li className="flex items-start">
-              <svg className="w-5 h-5 mr-2 mt-0.5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span>Practice mental math regularly to improve speed</span>
-            </li>
-            <li className="flex items-start">
-              <svg className="w-5 h-5 mr-2 mt-0.5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span>Focus on accuracy first, then gradually increase speed</span>
-            </li>
-            <li className="flex items-start">
-              <svg className="w-5 h-5 mr-2 mt-0.5 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span>Take breaks to maintain concentration during long tests</span>
-            </li>
-          </ul>
+        
+        {/* Summary Statistics */}
+        <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-3 border border-emerald-200">
+            <div className="text-2xl font-bold text-emerald-700">{score.correct}</div>
+            <div className="text-xs text-emerald-600 font-medium">Jawaban Benar</div>
+          </div>
+          <div className="bg-gradient-to-br from-rose-50 to-red-50 rounded-xl p-3 border border-rose-200">
+            <div className="text-2xl font-bold text-rose-700">{score.wrong}</div>
+            <div className="text-xs text-rose-600 font-medium">Jawaban Salah</div>
+          </div>
+          <div className="bg-gradient-to-br from-slate-100 to-gray-100 rounded-xl p-3 border border-slate-300">
+            <div className="text-2xl font-bold text-slate-600">{score.unanswered}</div>
+            <div className="text-xs text-slate-500 font-medium">Tidak Terjawab</div>
+          </div>
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-3 border border-amber-200">
+            <div className="text-2xl font-bold text-amber-700">{score.correct + score.wrong + score.unanswered}</div>
+            <div className="text-xs text-amber-600 font-medium">Total Soal</div>
+          </div>
         </div>
       </div>
     );
-  }
+  };
 
-  
+  const feedback = getPerformanceFeedback();
+  const accuracyValue = ((score.correct / (score.correct + score.wrong + score.unanswered)) * 100 || 0).toFixed(1);
+
+  return (
+    <AuthenticatedLayout
+      header={
+        <h2 className="text-xl font-semibold leading-tight text-gray-800">
+          Tes Kraepelin
+        </h2>
+      }
+    >
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 py-6 md:py-12">
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Raleway:wght@600;700;800&display=swap');
+          
+          .soft-beige-shadow {
+            box-shadow: 0 4px 6px -1px rgba(251, 191, 36, 0.15), 0 2px 4px -1px rgba(251, 191, 36, 0.1);
+          }
+          
+          @keyframes fadeInUp {
+            from {
+              opacity: 0;
+              transform: translateY(20px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+          
+          .fade-in-up {
+            animation: fadeInUp 0.6s ease-out forwards;
+            opacity: 0;
+          }
+          
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+          }
+          
+          .animate-pulse-gentle {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+          }
+
+          @keyframes slideIn {
+            from {
+              transform: translateX(-100%);
+              opacity: 0;
+            }
+            to {
+              transform: translateX(0);
+              opacity: 1;
+            }
+          }
+
+          .slide-in {
+            animation: slideIn 0.5s ease-out;
+          }
+        `}</style>
+
+        {showGuide ? (
+          <div className="max-w-4xl mx-auto px-4 md:px-6">
+            <div className="fade-in-up soft-beige-shadow bg-white rounded-3xl shadow-2xl overflow-hidden border-2 border-amber-100">
+              <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-amber-600 p-6 md:p-10">
+                <h1 className="text-3xl md:text-5xl font-bold text-white mb-3 md:mb-4" style={{fontFamily: "'Raleway', sans-serif"}}>
+                  Tes Kraepelin
+                </h1>
+                <p className="text-base md:text-xl text-amber-50 font-medium" style={{fontFamily: "'Inter', sans-serif"}}>
+                  Ukur konsentrasi dan kecepatan perhitungan mental Anda
+                </p>
+              </div>
+
+              <div className="p-6 md:p-10 space-y-6 md:space-y-8">
+                <div className="space-y-4 md:space-y-6">
+                  <div className="flex items-start gap-4 md:gap-5 soft-beige-shadow bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-4 md:p-6 border border-amber-100">
+                    <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-amber-600 to-orange-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg">
+                      <span className="text-xl md:text-2xl font-bold text-white">1</span>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg md:text-xl font-bold text-slate-800 mb-2 md:mb-3" style={{fontFamily: "'Raleway', sans-serif"}}>Tambahkan Dua Angka</h3>
+                      <p className="text-sm md:text-base text-slate-600 leading-relaxed" style={{fontFamily: "'Inter', sans-serif"}}>
+                        Tambahkan angka yang <span className="font-semibold text-amber-700">disorot</span> dengan angka <span className="font-semibold text-amber-700">di bawahnya</span>. Ambil digit terakhir dari hasil penjumlahan (misal: 7 + 8 = 15, jawab <span className="font-bold text-orange-600">5</span>).
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4 md:gap-5 soft-beige-shadow bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-4 md:p-6 border border-orange-100">
+                    <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-orange-600 to-amber-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg">
+                      <span className="text-xl md:text-2xl font-bold text-white">2</span>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg md:text-xl font-bold text-slate-800 mb-2 md:mb-3" style={{fontFamily: "'Raleway', sans-serif"}}>Kerjakan dengan Cepat</h3>
+                      <p className="text-sm md:text-base text-slate-600 leading-relaxed" style={{fontFamily: "'Inter', sans-serif"}}>
+                        Klik tombol angka atau gunakan <span className="font-semibold text-orange-700">keyboard</span> Anda. Kerjakan dari <span className="font-semibold text-orange-700">bawah ke atas</span> secepat mungkin tanpa mengorbankan akurasi.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-4 md:gap-5 soft-beige-shadow bg-gradient-to-br from-amber-50 to-yellow-50 rounded-2xl p-4 md:p-6 border border-yellow-100">
+                    <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-amber-600 to-yellow-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg">
+                      <span className="text-xl md:text-2xl font-bold text-white">3</span>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg md:text-xl font-bold text-slate-800 mb-2 md:mb-3" style={{fontFamily: "'Raleway', sans-serif"}}>Batasan Waktu</h3>
+                      <p className="text-sm md:text-base text-slate-600 leading-relaxed" style={{fontFamily: "'Inter', sans-serif"}}>
+                        Setiap kolom memiliki waktu <span className="font-bold text-amber-700">{TIME_PER_COL} detik</span>. Timer akan berpindah ke kolom berikutnya secara otomatis.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="soft-beige-shadow bg-gradient-to-br from-yellow-50 to-amber-50 border-2 border-yellow-200 rounded-2xl p-4 md:p-6">
+                  <div className="flex items-start gap-3 md:gap-4">
+                    <svg className="w-6 h-6 md:w-8 md:h-8 text-yellow-600 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                      <h4 className="font-bold text-yellow-900 mb-1 md:mb-2 text-sm md:text-base" style={{fontFamily: "'Raleway', sans-serif"}}>Tips Penting</h4>
+                      <p className="text-xs md:text-sm text-yellow-800 leading-relaxed" style={{fontFamily: "'Inter', sans-serif"}}>
+                        Kerjakan dengan ritme stabil. Pertahankan <span className="font-semibold">keseimbangan antara kecepatan dan akurasi</span>. Fokus adalah kunci!
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={startTest}
+                  className="w-full py-5 md:py-6 bg-gradient-to-r from-amber-600 via-orange-600 to-amber-600 text-white text-lg md:text-xl font-bold rounded-2xl shadow-lg hover:shadow-2xl hover:from-amber-700 hover:via-orange-700 hover:to-amber-700 transition-all duration-300 transform hover:-translate-y-1 flex items-center justify-center gap-3 md:gap-4"
+                  style={{fontFamily: "'Raleway', sans-serif"}}
+                >
+                  <svg className="w-6 h-6 md:w-8 md:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  Mulai Tes Sekarang
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : !isFinished ? (
+          <div className="max-w-6xl mx-auto px-4 md:px-6">
+            <div className="fade-in-up soft-beige-shadow bg-white rounded-3xl shadow-2xl p-4 md:p-8 border-2 border-amber-100">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
+                <div className="soft-beige-shadow bg-gradient-to-br from-emerald-50 to-green-50 rounded-2xl p-4 md:p-6 border-2 border-emerald-200">
+                  <div className="flex items-center justify-between mb-2 md:mb-3">
+                    <span className="text-sm md:text-base font-semibold text-emerald-700" style={{fontFamily: "'Raleway', sans-serif"}}>Benar</span>
+                    <svg className="w-5 h-5 md:w-6 md:h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div className="text-3xl md:text-4xl font-bold text-emerald-700">{score.correct}</div>
+                </div>
+
+                <div className="soft-beige-shadow bg-gradient-to-br from-rose-50 to-red-50 rounded-2xl p-4 md:p-6 border-2 border-rose-200">
+                  <div className="flex items-center justify-between mb-2 md:mb-3">
+                    <span className="text-sm md:text-base font-semibold text-rose-700" style={{fontFamily: "'Raleway', sans-serif"}}>Salah</span>
+                    <svg className="w-5 h-5 md:w-6 md:h-6 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414 6.414a2 2 0 001.414.586H19a2 2 0 002-2V7a2 2 0 00-2-2h-8.172a2 2 0 00-1.414.586L3 12z" />
+                    </svg>
+                  </div>
+                  <div className="text-3xl md:text-4xl font-bold text-rose-700">{score.wrong}</div>
+                </div>
+
+                <div className="soft-beige-shadow bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-4 md:p-6 border-2 border-amber-200">
+                  <div className="flex items-center justify-between mb-2 md:mb-3">
+                    <span className="text-sm md:text-base font-semibold text-amber-700" style={{fontFamily: "'Raleway', sans-serif"}}>Waktu</span>
+                    <svg className="w-5 h-5 md:w-6 md:h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div className="text-3xl md:text-4xl font-bold text-amber-700">{timeLeft}s</div>
+                </div>
+              </div>
+
+              <div className="mb-6 md:mb-8">
+                <div className="flex justify-between items-center mb-3 md:mb-4">
+                  <span className="text-sm md:text-base font-semibold text-slate-700" style={{fontFamily: "'Raleway', sans-serif"}}>
+                    Kolom {currentCol + 1} dari {COLS}
+                  </span>
+                  <span className="text-xs md:text-sm font-medium text-slate-500">
+                    {Math.round((currentCol / COLS) * 100)}% selesai
+                  </span>
+                </div>
+                <div className="h-3 md:h-4 bg-slate-100 rounded-full overflow-hidden shadow-inner">
+                  <div 
+                    className="h-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 rounded-full transition-all duration-500 ease-out shadow-md"
+                    style={{width: `${((currentCol + (1 - timeLeft / TIME_PER_COL)) / COLS) * 100}%`}}
+                  ></div>
+                </div>
+              </div>
+
+              {/* Encouraging Message */}
+              {isTimerRunning && (
+                <div className="soft-beige-shadow bg-gradient-to-r from-amber-50 to-yellow-50 border-2 border-amber-200 rounded-2xl px-4 py-3 mb-6 md:mb-8">
+                  <p className="text-center text-slate-700 font-medium text-sm sm:text-base">
+                    {getEncouragingMessage()}
+                  </p>
+                </div>
+              )}
+
+              {/* Number Matrix */}
+              <div className="soft-beige-shadow bg-gradient-to-br from-slate-50 to-gray-50 rounded-2xl p-4 md:p-6 mb-6 md:mb-8 border border-slate-200" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                {renderNumberMatrix()}
+              </div>
+
+              {/* Keypad Section */}
+              <div className="space-y-2.5" ref={keypadRef}>
+                {/* Timer Display Above Keypad */}
+                {isTimerRunning && (
+                  <div className={`rounded-2xl p-3 text-center transition-all duration-300 ${
+                    timeLeft > 10 
+                      ? 'bg-gradient-to-r from-amber-100 to-orange-100 border-2 border-amber-300' 
+                      : timeLeft > 5 
+                      ? 'bg-gradient-to-r from-yellow-100 to-amber-100 border-2 border-yellow-400' 
+                      : 'bg-gradient-to-r from-red-100 to-orange-100 border-2 border-red-400 animate-pulse'
+                  }`}>
+                    <div className="flex items-center justify-center gap-3">
+                      <svg className={`w-6 h-6 ${
+                        timeLeft > 10 ? 'text-amber-600' : timeLeft > 5 ? 'text-yellow-600' : 'text-red-600'
+                      }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div>
+                        <div className={`text-3xl font-bold ${
+                          timeLeft > 10 ? 'text-amber-700' : timeLeft > 5 ? 'text-yellow-700' : 'text-red-700'
+                        }`}>
+                          {timeLeft}s
+                        </div>
+                        <div className="text-sm text-slate-600">
+                          {timeLeft > 10 ? 'Sisa waktu' : timeLeft > 5 ? 'Cepat!' : 'Hampir habis!'}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Mini Progress Bar */}
+                    <div className="mt-3 bg-white/50 rounded-full h-2 overflow-hidden">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-1000 ${
+                          timeLeft > 10 
+                            ? 'bg-gradient-to-r from-amber-400 to-orange-500' 
+                            : timeLeft > 5 
+                            ? 'bg-gradient-to-r from-yellow-400 to-amber-500' 
+                            : 'bg-gradient-to-r from-red-400 to-orange-500'
+                        }`}
+                        style={{ width: `${(timeLeft / TIME_PER_COL) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Keypad */}
+                <div className="grid grid-cols-3 gap-2 md:gap-3 mb-4 md:mb-6">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                    <button
+                      key={num}
+                      onClick={() => handleNumberClick(num)}
+                      className="soft-beige-shadow py-4 md:py-6 bg-gradient-to-br from-white to-amber-50 hover:from-amber-100 hover:to-orange-100 text-slate-700 hover:text-amber-900 text-xl md:text-2xl font-bold rounded-xl md:rounded-2xl border-2 border-amber-100 hover:border-amber-300 transition-all duration-200 transform hover:-translate-y-1 hover:shadow-xl active:translate-y-0"
+                      style={{fontFamily: "'Inter', sans-serif"}}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 md:gap-3">
+                  <button
+                    onClick={() => handleNumberClick(0)}
+                    className="soft-beige-shadow py-4 md:py-5 bg-gradient-to-br from-white to-slate-50 hover:from-slate-100 hover:to-slate-200 text-slate-700 hover:text-slate-900 text-xl md:text-2xl font-bold rounded-xl md:rounded-2xl border-2 border-slate-200 hover:border-slate-400 transition-all duration-200 transform hover:-translate-y-1 hover:shadow-xl"
+                    style={{fontFamily: "'Inter', sans-serif"}}
+                  >
+                    0
+                  </button>
+                  <button
+                    onClick={handleBackspace}
+                    className="soft-beige-shadow py-4 md:py-5 bg-gradient-to-br from-rose-100 to-red-100 hover:from-rose-200 hover:to-red-200 text-rose-700 hover:text-rose-900 font-bold rounded-xl md:rounded-2xl border-2 border-rose-200 hover:border-rose-400 transition-all duration-200 transform hover:-translate-y-1 hover:shadow-xl flex items-center justify-center gap-2"
+                    style={{fontFamily: "'Raleway', sans-serif"}}
+                  >
+                    <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414 6.414a2 2 0 001.414.586H19a2 2 0 002-2V7a2 2 0 00-2-2h-8.172a2 2 0 00-1.414.586L3 12z" />
+                    </svg>
+                    <span className="hidden md:inline text-sm md:text-base">Hapus</span>
+                  </button>
+                </div>
+
+                {/* Helper Text */}
+                <div className="text-center pt-2">
+                  <p className="text-slate-600 text-xs">
+                    Klik angka untuk menjawab • Tekan Hapus untuk kembali
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="max-w-6xl mx-auto px-4 md:px-6">
+            <div className="fade-in-up soft-beige-shadow bg-white rounded-3xl shadow-2xl overflow-hidden border-2 border-amber-100">
+              <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-amber-600 p-6 md:p-10">
+                <div className="flex items-center justify-center gap-3 md:gap-4 mb-3 md:mb-4">
+                  <div className="w-12 h-12 md:w-16 md:h-16 bg-white/20 rounded-full flex items-center justify-center animate-pulse-gentle">
+                    <svg className="w-7 h-7 md:w-10 md:h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <h1 className="text-3xl md:text-5xl font-bold text-white" style={{fontFamily: "'Raleway', sans-serif"}}>
+                    Tes Selesai!
+                  </h1>
+                </div>
+                <p className="text-center text-base md:text-xl text-amber-50 font-medium" style={{fontFamily: "'Inter', sans-serif"}}>
+                  Lihat hasil dan analisis performa Anda di bawah
+                </p>
+              </div>
+
+              <div className="p-6 md:p-10 space-y-6 md:space-y-8">
+                <div className={`fade-in-up text-center soft-beige-shadow bg-gradient-to-br from-${feedback.color}-50 to-${feedback.color}-100 rounded-3xl p-6 md:p-10 border-2 border-${feedback.color}-200`} style={{animationDelay: '0.1s'}}>
+                  <div className={`inline-flex items-center justify-center w-16 h-16 md:w-20 md:h-20 bg-gradient-to-br from-${feedback.color}-400 to-${feedback.color}-600 rounded-full mb-4 md:mb-6 shadow-xl`}>
+                    <svg className="w-9 h-9 md:w-12 md:h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                    </svg>
+                  </div>
+                  <h2 className={`text-2xl md:text-4xl font-bold text-${feedback.color}-800 mb-2 md:mb-3`} style={{fontFamily: "'Raleway', sans-serif"}}>
+                    {feedback.title}
+                  </h2>
+                  <p className={`text-base md:text-xl text-${feedback.color}-700 font-medium`} style={{fontFamily: "'Inter', sans-serif"}}>
+                    {feedback.desc}
+                  </p>
+                </div>
+
+                {/* Answer Matrix Section */}
+                <div className="fade-in-up" style={{animationDelay: '0.2s'}}>
+                  {renderAnswerMatrix()}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 md:gap-6">
+                  <div className="fade-in-up soft-beige-shadow bg-gradient-to-br from-emerald-50 to-green-50 rounded-2xl md:rounded-3xl p-4 md:p-6 border border-emerald-200" style={{animationDelay: '0.3s'}}>
+                    <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+                      <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-emerald-500 to-green-600 rounded-full flex items-center justify-center shadow-md">
+                        <svg className="w-4 h-4 md:w-6 md:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                      <h3 className="text-sm md:text-base font-semibold text-emerald-800" style={{fontFamily: "'Raleway', sans-serif"}}>Jawaban Benar</h3>
+                    </div>
+                    <div className="text-3xl md:text-5xl font-bold text-emerald-700 mb-1 md:mb-2">{score.correct}</div>
+                    <p className="text-xs md:text-sm text-emerald-600 font-medium">dari {score.correct + score.wrong + score.unanswered} soal</p>
+                  </div>
+
+                  <div className="fade-in-up soft-beige-shadow bg-gradient-to-br from-rose-50 to-red-50 rounded-2xl md:rounded-3xl p-4 md:p-6 border border-rose-200" style={{animationDelay: '0.4s'}}>
+                    <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+                      <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-rose-500 to-red-600 rounded-full flex items-center justify-center shadow-md">
+                        <svg className="w-4 h-4 md:w-6 md:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </div>
+                      <h3 className="text-sm md:text-base font-semibold text-rose-800" style={{fontFamily: "'Raleway', sans-serif"}}>Jawaban Salah</h3>
+                    </div>
+                    <div className="text-3xl md:text-5xl font-bold text-rose-700 mb-1 md:mb-2">{score.wrong}</div>
+                    <p className="text-xs md:text-sm text-rose-600 font-medium">kesalahan tercatat</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                  <div className="fade-in-up soft-beige-shadow bg-white rounded-3xl p-4 md:p-6 border border-blue-100" style={{animationDelay: '0.5s'}}>
+                    <h3 className="text-base md:text-lg font-semibold text-slate-800 mb-2 md:mb-3" style={{fontFamily: "'Raleway', sans-serif"}}>Akurasi</h3>
+                    <div className="text-3xl md:text-4xl font-bold text-blue-600 mb-2 md:mb-3">{accuracyValue}%</div>
+                    <p className="text-xs md:text-sm text-slate-600 mb-3 md:mb-4">Persentase jawaban benar</p>
+                    <div className="h-2 md:h-3 bg-blue-50 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full transition-all duration-1000" style={{width: `${accuracyValue}%`}}></div>
+                    </div>
+                  </div>
+
+                  <div className="fade-in-up soft-beige-shadow bg-white rounded-3xl p-4 md:p-6 border border-purple-100" style={{animationDelay: '0.6s'}}>
+                    <h3 className="text-base md:text-lg font-semibold text-slate-800 mb-2 md:mb-3" style={{fontFamily: "'Raleway', sans-serif"}}>Kecepatan</h3>
+                    <div className="text-3xl md:text-4xl font-bold text-purple-600 mb-2 md:mb-3">{((score.correct + score.wrong) / (COLS * (ROWS - 1)) * 100).toFixed(1)}%</div>
+                    <p className="text-xs md:text-sm text-slate-600 mb-3 md:mb-4">Tingkat penyelesaian soal</p>
+                    <div className="h-2 md:h-3 bg-purple-50 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-purple-400 to-pink-500 rounded-full transition-all duration-1000" style={{width: `${((score.correct + score.wrong) / (COLS * (ROWS - 1)) * 100)}%`}}></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Performance Overview by Column */}
+                <div className="fade-in-up soft-beige-shadow bg-white rounded-3xl p-4 md:p-6 border border-slate-200" style={{animationDelay: '0.7s'}}>
+                  <h3 className="text-base md:text-lg font-semibold text-slate-800 mb-4 md:mb-5" style={{fontFamily: "'Raleway', sans-serif"}}>
+                    Performance Overview
+                  </h3>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {performanceData.map((data, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                        <span className="font-medium text-slate-700">Kolom {data.column}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm text-slate-600">
+                            {data.correct}/{data.total}
+                          </span>
+                          <div className="w-24 bg-slate-200 rounded-full h-2">
+                            <div 
+                              className="bg-gradient-to-r from-amber-400 to-orange-500 h-2 rounded-full transition-all"
+                              style={{ width: `${(data.correct / data.total) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="fade-in-up" style={{animationDelay: '0.8s'}}>
+                  <h3 className="text-lg md:text-xl font-semibold text-slate-800 mb-4 md:mb-6" style={{fontFamily: "'Raleway', sans-serif"}}>Grafik Performa</h3>
+                  <PerformanceGraph rowPerformance={rowPerformance} columnPerformance={columnPerformance} />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                  <div className="fade-in-up soft-beige-shadow bg-white rounded-3xl p-4 md:p-6 border border-indigo-100" style={{animationDelay: '0.9s'}}>
+                    <h3 className="text-base md:text-lg font-semibold text-slate-800 mb-2 md:mb-3" style={{fontFamily: "'Raleway', sans-serif"}}>Konsistensi</h3>
+                    <div className="text-3xl md:text-4xl font-bold text-indigo-600 mb-2 md:mb-3">{calculateConsistencyScore()}%</div>
+                    <p className="text-xs md:text-sm text-slate-600 mb-3 md:mb-4">Stabilitas performa antar baris</p>
+                    <div className="h-2 md:h-3 bg-indigo-50 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-indigo-400 to-purple-500 rounded-full transition-all duration-1000" style={{width: `${calculateConsistencyScore()}%`}}></div>
+                    </div>
+                  </div>
+
+                  <div className="fade-in-up soft-beige-shadow bg-white rounded-3xl p-4 md:p-6 border border-orange-100" style={{animationDelay: '1s'}}>
+                    <h3 className="text-base md:text-lg font-semibold text-slate-800 mb-2 md:mb-3" style={{fontFamily: "'Raleway', sans-serif"}}>Indeks Kelelahan</h3>
+                    <div className="text-3xl md:text-4xl font-bold text-orange-600 mb-2 md:mb-3">{calculateFatigueIndex()}%</div>
+                    <p className="text-xs md:text-sm text-slate-600 mb-3 md:mb-4">Penurunan performa seiring waktu</p>
+                    <div className="h-2 md:h-3 bg-orange-50 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-orange-400 to-red-500 rounded-full transition-all duration-1000" style={{width: `${calculateFatigueIndex()}%`}}></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="fade-in-up flex flex-col sm:flex-row justify-center gap-3 md:gap-4 mb-6 md:mb-8" style={{animationDelay: '1.1s'}}>
+                  <button
+                    onClick={handleRestart}
+                    className="px-8 md:px-10 py-4 md:py-5 bg-gradient-to-r from-amber-600 via-orange-600 to-amber-600 text-white font-bold rounded-2xl shadow-lg hover:shadow-2xl hover:from-amber-700 hover:via-orange-700 hover:to-amber-700 transition-all duration-300 transform hover:-translate-y-1 flex items-center justify-center gap-2 md:gap-3 text-sm md:text-base"
+                    style={{fontFamily: "'Raleway', sans-serif"}}
+                  >
+                    <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Ulangi Tes
+                  </button>
+                  
+                  <button
+                    onClick={() => setShowGuide(true)}
+                    className="px-8 md:px-10 py-4 md:py-5 bg-white text-amber-700 font-bold rounded-2xl shadow-lg hover:shadow-2xl border-2 border-amber-200 hover:border-amber-400 transition-all duration-300 transform hover:-translate-y-1 flex items-center justify-center gap-2 md:gap-3 text-sm md:text-base"
+                    style={{fontFamily: "'Raleway', sans-serif"}}
+                  >
+                    <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                    </svg>
+                    Kembali ke Panduan
+                  </button>
+                </div>
+
+                <div className="fade-in-up soft-beige-shadow bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-3xl p-6 md:p-8" style={{animationDelay: '1.2s'}}>
+                  <h3 className="text-lg md:text-xl font-semibold text-amber-900 mb-4 md:mb-5 flex items-center gap-3" style={{fontFamily: "'Raleway', sans-serif"}}>
+                    <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-amber-600 to-orange-600 rounded-full flex items-center justify-center">
+                      <svg className="w-5 h-5 md:w-6 md:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                    </div>
+                    Saran Untuk Peningkatan
+                  </h3>
+                  <div className="space-y-3 md:space-y-4">
+                    {[
+                      'Latih perhitungan mental secara rutin untuk meningkatkan kecepatan',
+                      'Fokus pada akurasi terlebih dahulu, kemudian tingkatkan kecepatan',
+                      'Istirahat yang cukup membantu menjaga konsentrasi',
+                      'Tinjau pola kesalahan untuk identifikasi area yang perlu diperbaiki'
+                    ].map((tip, idx) => (
+                      <div key={idx} className="flex items-start gap-3 md:gap-4 bg-white/70 rounded-2xl p-3 md:p-4">
+                        <div className="w-6 h-6 md:w-8 md:h-8 bg-gradient-to-br from-amber-500 to-orange-500 text-white rounded-full flex items-center justify-center flex-shrink-0 shadow-sm">
+                          <svg className="w-3 h-3 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                        <p className="text-slate-700 leading-relaxed text-sm md:text-base">{tip}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {isSubmitting && (
+                  <div className="fixed bottom-4 right-4 md:bottom-8 md:right-8 soft-beige-shadow bg-white rounded-2xl p-4 md:p-5 border-2 border-amber-200 flex items-center gap-3 md:gap-4">
+                    <div className="w-5 h-5 md:w-6 md:h-6 border-3 border-amber-200 border-t-amber-500 rounded-full animate-spin"></div>
+                    <span className="text-amber-700 font-semibold text-sm md:text-base" style={{fontFamily: "'Raleway', sans-serif"}}>Menyimpan hasil...</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </AuthenticatedLayout>
+  );
+}
+
+function PerformanceGraph({ rowPerformance, columnPerformance }) {
+  const rowChartData = {
+    labels: rowPerformance.map((_, idx) => `Baris ${idx + 1}`),
+    datasets: [
+      {
+        label: 'Jawaban per Baris',
+        data: rowPerformance,
+        backgroundColor: 'rgba(217, 119, 6, 0.6)',
+        borderColor: 'rgb(180, 83, 9)',
+        borderWidth: 2,
+        borderRadius: 12,
+      },
+    ],
+  };
+
+  const colChartData = {
+    labels: columnPerformance.map((_, idx) => `Kolom ${idx + 1}`),
+    datasets: [
+      {
+        label: 'Jawaban per Kolom',
+        data: columnPerformance,
+        backgroundColor: 'rgba(251, 146, 60, 0.6)',
+        borderColor: 'rgb(234, 88, 12)',
+        borderWidth: 2,
+        borderRadius: 12,
+      },
+    ],
+  };
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: true,
+        position: 'top',
+        labels: {
+          font: {
+            family: "'Inter', sans-serif",
+            size: 13,
+            weight: '600'
+          },
+          color: '#475569',
+          padding: 16,
+          usePointStyle: true,
+          pointStyle: 'circle'
+        },
+      },
+      tooltip: {
+        backgroundColor: 'rgba(255, 255, 255, 0.98)',
+        titleColor: '#92400e',
+        bodyColor: '#475569',
+        borderColor: '#fde68a',
+        borderWidth: 2,
+        padding: 14,
+        cornerRadius: 12,
+        titleFont: {
+          family: "'Raleway', sans-serif",
+          size: 14,
+          weight: '600',
+        },
+        bodyFont: {
+          family: "'Inter', sans-serif",
+          size: 13,
+        },
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        grid: {
+          color: '#fef3c7',
+          drawBorder: false,
+        },
+        ticks: {
+          color: '#64748b',
+          font: {
+            family: "'Inter', sans-serif",
+            size: 12,
+          },
+          padding: 10,
+        },
+      },
+      x: {
+        grid: {
+          display: false,
+        },
+        ticks: {
+          color: '#64748b',
+          font: {
+            family: "'Inter', sans-serif",
+            size: 12,
+          },
+          padding: 10,
+        },
+      },
+    },
+  };
+
+  return (
+    <div className="space-y-6 md:space-y-10">
+      <div>
+        <h3 className="text-base md:text-lg font-semibold text-slate-700 mb-4 md:mb-5" style={{fontFamily: "'Raleway', sans-serif"}}>Performa per Baris</h3>
+        <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-4 md:p-6 border border-amber-100" style={{height: '250px', maxHeight: '320px'}}>
+          <Bar data={rowChartData} options={chartOptions} />
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-base md:text-lg font-semibold text-slate-700 mb-4 md:mb-5" style={{fontFamily: "'Raleway', sans-serif"}}>Performa per Kolom</h3>
+        <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-4 md:p-6 border border-orange-100" style={{height: '250px', maxHeight: '320px'}}>
+          <Bar data={colChartData} options={chartOptions} />
+        </div>
+      </div>
+    </div>
+  );
 }

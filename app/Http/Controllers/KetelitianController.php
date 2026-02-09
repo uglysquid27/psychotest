@@ -32,60 +32,100 @@ class KetelitianController extends Controller
 
 
     public function submit(Request $request)
-    {
-        $user = auth()->user();
-        $userAnswers = $request->input('answers');
-        $questions = $request->input('questions');
-        $timeElapsed = $request->input('time_elapsed', 0);
+{
+    $user = auth()->user();
+    $userAnswers = $request->input('answers');
+    $questions = $request->input('questions');
+    $timeElapsed = $request->input('time_elapsed', 0);
 
-        $score = 0;
-        $correctAnswers = 0;
-        $wrongAnswers = 0;
-        $unanswered = 0;
-        $totalQuestions = count($questions);
+    $score = 0;
+    $correctAnswers = 0;
+    $wrongAnswers = 0;
+    $unanswered = 0;
+    $totalQuestions = count($questions);
 
-        // Calculate score
-        foreach ($questions as $i => $q) {
-            if (isset($userAnswers[$i]) && $userAnswers[$i] !== '') {
-                if ($userAnswers[$i] === $q['answer']) {
-                    $score++;
-                    $correctAnswers++;
-                } else {
-                    $wrongAnswers++;
-                }
+    // Calculate performance per question
+    $performanceByQuestion = [];
+    
+    // Calculate score and performance
+    foreach ($questions as $i => $q) {
+        if (isset($userAnswers[$i]) && $userAnswers[$i] !== '') {
+            if ($userAnswers[$i] === $q['answer']) {
+                $score++;
+                $correctAnswers++;
+                $performanceByQuestion[] = [
+                    'question_number' => $i + 1,
+                    'correct' => true,
+                    'user_answer' => $userAnswers[$i],
+                    'correct_answer' => $q['answer']
+                ];
             } else {
-                $unanswered++;
+                $wrongAnswers++;
+                $performanceByQuestion[] = [
+                    'question_number' => $i + 1,
+                    'correct' => false,
+                    'user_answer' => $userAnswers[$i],
+                    'correct_answer' => $q['answer']
+                ];
             }
+        } else {
+            $unanswered++;
+            $performanceByQuestion[] = [
+                'question_number' => $i + 1,
+                'correct' => false,
+                'user_answer' => null,
+                'correct_answer' => $q['answer']
+            ];
         }
-
-        $percentage = $totalQuestions > 0 ? ($score / $totalQuestions) * 100 : 0;
-
-        // Save to database
-        KetelitianTestResult::create([
-            'user_id' => $user->id,
-            'score' => $score,
-            'total_questions' => $totalQuestions,
-            'correct_answers' => $correctAnswers,
-            'wrong_answers' => $wrongAnswers,
-            'unanswered' => $unanswered,
-            'time_elapsed' => $timeElapsed,
-            'percentage' => $percentage,
-            'answers' => json_encode($userAnswers),
-        ]);
-
-        // Return JSON response for AJAX call
-        return response()->json([
-            'success' => true,
-            'score' => $score,
-            'total' => $totalQuestions,
-            'correctAnswers' => $correctAnswers,
-            'wrongAnswers' => $wrongAnswers,
-            'unanswered' => $unanswered,
-            'timeElapsed' => $timeElapsed,
-            'percentage' => $percentage,
-            'message' => 'Hasil tes telah disimpan.'
-        ]);
     }
+
+    $percentage = $totalQuestions > 0 ? ($score / $totalQuestions) * 100 : 0;
+    $accuracy = ($correctAnswers + $wrongAnswers) > 0 
+        ? ($correctAnswers / ($correctAnswers + $wrongAnswers)) * 100 
+        : 0;
+    $completionRate = $totalQuestions > 0 
+        ? (($correctAnswers + $wrongAnswers) / $totalQuestions) * 100 
+        : 0;
+    $averageTimePerQuestion = ($correctAnswers + $wrongAnswers) > 0 
+        ? $timeElapsed / ($correctAnswers + $wrongAnswers) 
+        : null;
+
+    // Save to database
+    $testResult = KetelitianTestResult::create([
+        'user_id' => $user->id,
+        'score' => $score,
+        'total_questions' => $totalQuestions,
+        'correct_answers' => $correctAnswers,
+        'wrong_answers' => $wrongAnswers,
+        'unanswered' => $unanswered,
+        'time_elapsed' => $timeElapsed,
+        'percentage' => $percentage,
+        'accuracy' => $accuracy,
+        'completion_rate' => $completionRate,
+        'average_time_per_question' => $averageTimePerQuestion,
+        'answers' => json_encode($userAnswers),
+        'questions' => json_encode($questions),
+        'performance_by_question' => json_encode($performanceByQuestion),
+        'test_version' => 'v1.0',
+    ]);
+
+    // Return JSON response for AJAX call
+    return response()->json([
+        'success' => true,
+        'test_result_id' => $testResult->id,
+        'score' => $score,
+        'total' => $totalQuestions,
+        'correctAnswers' => $correctAnswers,
+        'wrongAnswers' => $wrongAnswers,
+        'unanswered' => $unanswered,
+        'timeElapsed' => $timeElapsed,
+        'percentage' => $percentage,
+        'accuracy' => $accuracy,
+        'completionRate' => $completionRate,
+        'performanceByQuestion' => $performanceByQuestion,
+        'message' => 'Hasil tes telah disimpan.'
+    ]);
+}
 
 
     public function questionsIndex(Request $request)

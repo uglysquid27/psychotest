@@ -56,7 +56,75 @@ Route::middleware(['prevent.back'])->group(function () {
 });
 
 // ============================================
-// EMPLOYEE ROUTES (KEEP ALL)
+// SHARED PSIKOTES ROUTES (ACCESSIBLE BY BOTH ADMIN AND EMPLOYEE)
+// ============================================
+Route::middleware(['auth:web,employee', 'prevent.back'])->group(function () {
+    // 1. Kraepelin Test
+    Route::prefix('kraepelin')->name('kraepelin.')->group(function () {
+        Route::get('/', [KraepelinController::class, 'index'])->name('index');
+        Route::post('/start', [KraepelinController::class, 'start'])->name('start');
+        Route::post('/submit', [KraepelinController::class, 'submit'])->name('submit');
+        Route::get('/results', [KraepelinController::class, 'results'])->name('results');
+        Route::get('/results/{id}', [KraepelinController::class, 'show'])->name('show');
+        Route::delete('/results/{id}', [KraepelinController::class, 'destroy'])->name('destroy');
+        Route::get('/employees', [KraepelinController::class, 'employees'])->name('employees');
+    });
+
+    // 2. Wartegg Test
+    Route::prefix('wartegg')->name('wartegg.')->group(function () {
+        Route::get('/', [WarteggTestController::class, 'index'])->name('index');
+        Route::post('/', [WarteggTestController::class, 'store'])->name('store');
+        Route::get('/history', [WarteggTestController::class, 'history'])->name('history');
+        Route::get('/{warteggTest}', [WarteggTestController::class, 'show'])->name('show');
+    });
+
+    // 3. Analogi Test
+    Route::prefix('analogi')->name('analogi.')->group(function () {
+        Route::get('/', [AnalogiController::class, 'index'])->name('index');
+        Route::post('/submit', [AnalogiController::class, 'submit'])->name('submit');
+    });
+
+    // 4. Ketelitian Test
+    Route::prefix('ketelitian')->name('ketelitian.')->group(function () {
+        Route::get('/', [KetelitianController::class, 'index'])->name('index');
+        Route::post('/submit', [KetelitianController::class, 'submit'])->name('submit');
+    });
+
+    // 5. Hitungan Test
+    Route::get('/hitungan', [HitunganController::class, 'index'])->name('hitungan.test');
+    Route::post('/hitungan/submit', [HitunganController::class, 'submit'])->name('hitungan.submit');
+
+    // 6. Deret Test
+    Route::get('/deret', [TesDeretController::class, 'index'])->name('deret.index');
+    Route::post('/deret/submit', [TesDeretController::class, 'submit'])->name('deret.submit');
+
+    // 7. Spasial Test
+    Route::prefix('spasial')->name('spasial.')->group(function () {
+        Route::get('/', [SpasialController::class, 'index'])->name('index');
+        Route::post('/submit', [SpasialController::class, 'submit'])->name('submit');
+    });
+
+    // 8. Numerik Test
+    Route::prefix('numerik')->name('numerik.')->group(function () {
+        Route::get('/', [TesNumerikController::class, 'index'])->name('index');
+        Route::post('/submit', [TesNumerikController::class, 'submit'])->name('submit');
+    });
+
+    // 9. DISC Test
+    Route::prefix('disc')->name('disc.')->group(function () {
+        Route::get('/', [DiscTestController::class, 'index'])->name('index');
+        Route::post('/submit', [DiscTestController::class, 'submit'])->name('submit');
+    });
+
+    // 10. Personality Test
+    Route::prefix('personality')->name('personality.')->group(function () {
+        Route::get('/', [PersonalityTestController::class, 'index'])->name('index');
+        Route::post('/submit', [PersonalityTestController::class, 'submit'])->name('submit');
+    });
+});
+
+// ============================================
+// EMPLOYEE ROUTES
 // ============================================
 Route::middleware(['auth:employee', 'prevent.back'])
     ->prefix('employee')
@@ -82,7 +150,7 @@ Route::middleware(['auth:employee', 'prevent.back'])
     });
 
 // ============================================
-// ADMIN ROUTES (CLEANED UP - ONLY ESSENTIALS)
+// ADMIN-ONLY ROUTES
 // ============================================
 Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     // ============ DASHBOARD ============
@@ -99,40 +167,9 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
         });
     });
 
-    // ============ PSIKOTES ROUTES ============
+    // ============ ADMIN QUESTION MANAGEMENT ROUTES (ADMIN ONLY) ============
 
-    // 1. Kraepelin Test
-    Route::prefix('kraepelin')->name('kraepelin.')->group(function () {
-        Route::get('/', [KraepelinController::class, 'index'])->name('index');
-        Route::post('/start', [KraepelinController::class, 'start'])->name('start');
-        Route::post('/submit', [KraepelinController::class, 'submit'])->name('submit');
-        Route::get('/results', [KraepelinController::class, 'results'])->name('results');
-        Route::get('/results/{id}', [KraepelinController::class, 'show'])->name('show');
-        Route::delete('/results/{id}', [KraepelinController::class, 'destroy'])->name('destroy');
-        Route::get('/employees', [KraepelinController::class, 'employees'])->name('employees');
-        Route::post('/kraepelin/submit', [KraepelinController::class, 'submit'])->middleware(['auth', 'verified'])->name('kraepelin.submit');
-    });
-
-    // 2. Wartegg Test
-    Route::prefix('wartegg')->name('wartegg.')->group(function () {
-        Route::get('/', [WarteggTestController::class, 'index'])->name('index');
-        Route::post('/', [WarteggTestController::class, 'store'])->name('store');
-        Route::get('/history', [WarteggTestController::class, 'history'])->name('history');
-        Route::get('/{warteggTest}', [WarteggTestController::class, 'show'])->name('show');
-    });
-
-    // 3. Analogi Test
-    Route::prefix('analogi')->name('analogi.')->group(function () {
-        Route::get('/', [AnalogiController::class, 'index'])->name('index');
-        Route::post('/submit', [AnalogiController::class, 'submit'])->name('submit');
-    });
-
-    Route::prefix('ketelitian')->name('ketelitian.')->group(function () {
-        Route::get('/', [KetelitianController::class, 'index'])->name('index');
-        Route::post('/submit', [KetelitianController::class, 'submit'])->name('submit');
-    });
-
-    // Admin question management routes
+    // 1. Ketelitian Questions Management
     Route::prefix('admin/ketelitian-questions')->name('admin.ketelitian.')->group(function () {
         Route::get('/', [KetelitianController::class, 'questionsIndex'])->name('questions.index');
         Route::get('/create', [KetelitianController::class, 'create'])->name('questions.create');
@@ -144,11 +181,7 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
         Route::post('/import', [KetelitianController::class, 'import'])->name('questions.import');
     });
 
-
-    Route::get('/hitungan', [HitunganController::class, 'index'])->name('hitungan.test');
-    Route::post('/hitungan/submit', [HitunganController::class, 'submit'])->name('hitungan.submit');
-
-    // Admin question management routes for Hitungan
+    // 2. Hitungan Questions Management
     Route::prefix('admin/hitungan-questions')->name('admin.hitungan.')->group(function () {
         Route::get('/', [HitunganController::class, 'questionsIndex'])->name('questions.index');
         Route::get('/create', [HitunganController::class, 'create'])->name('questions.create');
@@ -158,52 +191,21 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
         Route::delete('/{question}', [HitunganController::class, 'destroy'])->name('questions.destroy');
         Route::get('/download-template', [HitunganController::class, 'downloadTemplate'])->name('questions.download-template');
         Route::post('/import', [HitunganController::class, 'import'])->name('questions.import');
-
-        // Optional: Add bulk actions if you need them (similar to ketelitian)
         Route::post('/bulk-toggle-active', [HitunganController::class, 'bulkToggleActive'])->name('questions.bulk-toggle-active');
         Route::post('/bulk-delete', [HitunganController::class, 'bulkDelete'])->name('questions.bulk-delete');
     });
 
-    Route::middleware(['auth'])->group(function () {
-    Route::get('/deret', [TesDeretController::class, 'index'])->name('deret.index');
-    Route::post('/deret/submit', [TesDeretController::class, 'submit'])->name('deret.submit');
-});
-
-// Admin Deret Questions Management - Following same pattern as hitungan
-Route::prefix('admin/deret-questions')->name('admin.deret.')->group(function () {
-    Route::get('/', [TesDeretController::class, 'questionsIndex'])->name('questions.index');
-    Route::get('/create', [TesDeretController::class, 'create'])->name('questions.create');
-    Route::post('/', [TesDeretController::class, 'store'])->name('questions.store');
-    Route::get('/{question}/edit', [TesDeretController::class, 'edit'])->name('questions.edit');
-    Route::put('/{question}', [TesDeretController::class, 'update'])->name('questions.update');
-    Route::delete('/{question}', [TesDeretController::class, 'destroy'])->name('questions.destroy');
-    Route::get('/download-template', [TesDeretController::class, 'downloadTemplate'])->name('questions.download-template');
-    Route::post('/import', [TesDeretController::class, 'import'])->name('questions.import');
-    Route::post('/bulk-toggle-active', [TesDeretController::class, 'bulkToggleActive'])->name('questions.bulk-toggle-active');
-    Route::post('/bulk-delete', [TesDeretController::class, 'bulkDelete'])->name('questions.bulk-delete');
-});
-
-    // 7. Spasial Test
-    Route::prefix('spasial')->name('spasial.')->group(function () {
-        Route::get('/', [SpasialController::class, 'index'])->name('index');
-        Route::post('/submit', [SpasialController::class, 'submit'])->name('submit');
-    });
-
-    // 8. Numerik Test
-    Route::prefix('numerik')->name('numerik.')->group(function () {
-        Route::get('/', [TesNumerikController::class, 'index'])->name('index');
-        Route::post('/submit', [TesNumerikController::class, 'submit'])->name('submit');
-    });
-
-    // 9. DISC Test
-    Route::prefix('disc')->name('disc.')->group(function () {
-        Route::get('/', [DiscTestController::class, 'index'])->name('index');
-        Route::post('/submit', [DiscTestController::class, 'submit'])->name('submit');
-    });
-
-    // 10. Personality Test
-    Route::prefix('personality')->name('personality.')->group(function () {
-        Route::get('/', [PersonalityTestController::class, 'index'])->name('index');
-        Route::post('/submit', [PersonalityTestController::class, 'submit'])->name('submit');
+    // 3. Deret Questions Management
+    Route::prefix('admin/deret-questions')->name('admin.deret.')->group(function () {
+        Route::get('/', [TesDeretController::class, 'questionsIndex'])->name('questions.index');
+        Route::get('/create', [TesDeretController::class, 'create'])->name('questions.create');
+        Route::post('/', [TesDeretController::class, 'store'])->name('questions.store');
+        Route::get('/{question}/edit', [TesDeretController::class, 'edit'])->name('questions.edit');
+        Route::put('/{question}', [TesDeretController::class, 'update'])->name('questions.update');
+        Route::delete('/{question}', [TesDeretController::class, 'destroy'])->name('questions.destroy');
+        Route::get('/download-template', [TesDeretController::class, 'downloadTemplate'])->name('questions.download-template');
+        Route::post('/import', [TesDeretController::class, 'import'])->name('questions.import');
+        Route::post('/bulk-toggle-active', [TesDeretController::class, 'bulkToggleActive'])->name('questions.bulk-toggle-active');
+        Route::post('/bulk-delete', [TesDeretController::class, 'bulkDelete'])->name('questions.bulk-delete');
     });
 });

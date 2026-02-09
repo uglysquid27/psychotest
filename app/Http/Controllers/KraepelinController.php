@@ -8,6 +8,7 @@ use App\Models\Employee;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Carbon\Carbon;
 
@@ -68,153 +69,152 @@ class KraepelinController extends Controller
         }
     }
 
-     public function submit(Request $request)
-    {
-        if (!auth()->check()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'User not authenticated'
-            ], 401);
-        }
+    public function submit(Request $request)
+{
+    if (!auth()->check()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'User not authenticated'
+        ], 401);
+    }
 
-        $user = auth()->user();
-        $userAnswers = $request->input('answers', []);
-        $testData = $request->input('test_data', []); // This is the pre-calculated pairs
-        $timeElapsed = $request->input('time_elapsed', 0);
-        $rows = $request->input('rows', 5);
-        $cols = $request->input('cols', 5);
-        
-        // Log for debugging
-        Log::info('Kraepelin Submit - Received data:', [
-            'answers_count' => count($userAnswers),
-            'test_data_count' => count($testData),
-            'rows' => $rows,
-            'cols' => $cols,
-            'time_elapsed' => $timeElapsed
-        ]);
-        
-        $score = 0;
-        $correctAnswers = 0;
-        $wrongAnswers = 0;
-        $unanswered = 0;
-        $totalQuestions = ($rows - 1) * $cols; // For 5x5: 4 * 5 = 20
-        
-        // Calculate score from test_data (pre-calculated pairs) and user answers
-        foreach ($testData as $colIndex => $column) {
-            foreach ($column as $rowIndex => $pair) {
-                // Skip the last pair (rowIndex == rows-1) because there's no question there
-                if ($rowIndex >= $rows - 1) {
-                    continue;
-                }
-                
-                // Get correct answer from the pair
-                if (isset($pair['num1']) && isset($pair['num2'])) {
-                    $correctAnswer = ($pair['num1'] + $pair['num2']) % 10;
-                    
-                    // Get user's answer
-                    $userAnswer = $userAnswers[$rowIndex][$colIndex] ?? null;
-                    
-                    Log::info("Checking - Col $colIndex, Row $rowIndex", [
-                        'num1' => $pair['num1'],
-                        'num2' => $pair['num2'],
-                        'correct' => $correctAnswer,
-                        'user' => $userAnswer
-                    ]);
-                    
-                    if ($userAnswer === null || $userAnswer === '') {
-                        $unanswered++;
-                    } elseif ($userAnswer == $correctAnswer) {
-                        $score++;
-                        $correctAnswers++;
-                    } else {
-                        $wrongAnswers++;
-                    }
-                }
-            }
-        }
-        
-        // Calculate row performance
-        $rowPerformance = [];
+    $user = auth()->user();
+    $userAnswers = $request->input('answers', []);
+    $numberMatrix = $request->input('number_matrix', []); // Changed from test_data to number_matrix
+    $timeElapsed = $request->input('time_elapsed', 0);
+    $rows = $request->input('rows', 45);
+    $cols = $request->input('cols', 60);
+    
+    Log::info('Kraepelin Submit - Received data:', [
+        'answers_count' => count($userAnswers),
+        'number_matrix_count' => count($numberMatrix),
+        'rows' => $rows,
+        'cols' => $cols,
+        'time_elapsed' => $timeElapsed
+    ]);
+    
+    $score = 0;
+    $correctAnswers = 0;
+    $wrongAnswers = 0;
+    $unanswered = 0;
+    $totalQuestions = ($rows - 1) * $cols; // For 5x5: 4 * 5 = 20
+    
+    // Calculate score from number_matrix (raw numbers, not pre-calculated pairs)
+    for ($col = 0; $col < $cols; $col++) {
         for ($row = 0; $row < $rows - 1; $row++) {
-            $answered = 0;
-            for ($col = 0; $col < $cols; $col++) {
-                if (isset($userAnswers[$row][$col]) && 
-                    $userAnswers[$row][$col] !== null && 
-                    $userAnswers[$row][$col] !== '') {
-                    $answered++;
-                }
+            // Get numbers from the matrix
+            $num1 = $numberMatrix[$row][$col] ?? null;
+            $num2 = $numberMatrix[$row + 1][$col] ?? null;
+            
+            if ($num1 === null || $num2 === null) {
+                continue;
             }
-            $rowPerformance[] = $answered;
-        }
-        
-        // Calculate column performance
-        $columnPerformance = [];
-        for ($col = 0; $col < $cols; $col++) {
-            $answered = 0;
-            for ($row = 0; $row < $rows - 1; $row++) {
-                if (isset($userAnswers[$row][$col]) && 
-                    $userAnswers[$row][$col] !== null && 
-                    $userAnswers[$row][$col] !== '') {
-                    $answered++;
-                }
-            }
-            $columnPerformance[] = $answered;
-        }
-        
-        $percentage = $totalQuestions > 0 ? ($score / $totalQuestions) * 100 : 0;
-        
-        Log::info('Kraepelin Submit - Results:', [
-            'score' => $score,
-            'total' => $totalQuestions,
-            'correct' => $correctAnswers,
-            'wrong' => $wrongAnswers,
-            'unanswered' => $unanswered,
-            'percentage' => $percentage
-        ]);
-        
-        try {
-            // Save to database
-            $result = KraepelinTestResult::create([
-                'user_id' => $user->id,
-                'score' => $score,
-                'total_questions' => $totalQuestions,
-                'correct_answers' => $correctAnswers,
-                'wrong_answers' => $wrongAnswers,
-                'unanswered' => $unanswered,
-                'time_elapsed' => $timeElapsed,
-                'percentage' => $percentage,
-                'test_data' => json_encode($testData),
-                'answers' => json_encode($userAnswers),
-                'row_performance' => json_encode($rowPerformance),
-                'column_performance' => json_encode($columnPerformance),
+            
+            $correctAnswer = ($num1 + $num2) % 10;
+            
+            // Get user's answer
+            $userAnswer = $userAnswers[$row][$col] ?? null;
+            
+            Log::info("Checking - Col $col, Row $row", [
+                'num1' => $num1,
+                'num2' => $num2,
+                'correct' => $correctAnswer,
+                'user' => $userAnswer
             ]);
             
-            Log::info('Kraepelin Submit - Saved to database with ID: ' . $result->id);
-            
-            return response()->json([
-                'success' => true,
-                'score' => $score,
-                'total' => $totalQuestions,
-                'correctAnswers' => $correctAnswers,
-                'wrongAnswers' => $wrongAnswers,
-                'unanswered' => $unanswered,
-                'timeElapsed' => $timeElapsed,
-                'percentage' => $percentage,
-                'rowPerformance' => $rowPerformance,
-                'columnPerformance' => $columnPerformance,
-                'message' => 'Hasil tes telah disimpan.'
-            ]);
-            
-        } catch (\Exception $e) {
-            Log::error('Error saving kraepelin test result: ' . $e->getMessage());
-            Log::error('Stack trace: ' . $e->getTraceAsString());
-            
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal menyimpan hasil tes: ' . $e->getMessage()
-            ], 500);
+            if ($userAnswer === null || $userAnswer === '') {
+                $unanswered++;
+            } elseif ($userAnswer == $correctAnswer) {
+                $score++;
+                $correctAnswers++;
+            } else {
+                $wrongAnswers++;
+            }
         }
     }
+    
+    // Calculate row performance
+    $rowPerformance = [];
+    for ($row = 0; $row < $rows - 1; $row++) {
+        $answered = 0;
+        for ($col = 0; $col < $cols; $col++) {
+            if (isset($userAnswers[$row][$col]) && 
+                $userAnswers[$row][$col] !== null && 
+                $userAnswers[$row][$col] !== '') {
+                $answered++;
+            }
+        }
+        $rowPerformance[] = $answered;
+    }
+    
+    // Calculate column performance
+    $columnPerformance = [];
+    for ($col = 0; $col < $cols; $col++) {
+        $answered = 0;
+        for ($row = 0; $row < $rows - 1; $row++) {
+            if (isset($userAnswers[$row][$col]) && 
+                $userAnswers[$row][$col] !== null && 
+                $userAnswers[$row][$col] !== '') {
+                $answered++;
+            }
+        }
+        $columnPerformance[] = $answered;
+    }
+    
+    $percentage = $totalQuestions > 0 ? ($score / $totalQuestions) * 100 : 0;
+    
+    Log::info('Kraepelin Submit - Results:', [
+        'score' => $score,
+        'total' => $totalQuestions,
+        'correct' => $correctAnswers,
+        'wrong' => $wrongAnswers,
+        'unanswered' => $unanswered,
+        'percentage' => $percentage
+    ]);
+    
+    try {
+        // Save to database
+        $result = KraepelinTestResult::create([
+            'user_id' => $user->id,
+            'score' => $score,
+            'total_questions' => $totalQuestions,
+            'correct_answers' => $correctAnswers,
+            'wrong_answers' => $wrongAnswers,
+            'unanswered' => $unanswered,
+            'time_elapsed' => $timeElapsed,
+            'percentage' => $percentage,
+            'test_data' => json_encode($numberMatrix), // Save the number matrix
+            'answers' => json_encode($userAnswers),
+            'row_performance' => json_encode($rowPerformance),
+            'column_performance' => json_encode($columnPerformance),
+        ]);
+        
+        Log::info('Kraepelin Submit - Saved to database with ID: ' . $result->id);
+        
+        return response()->json([
+            'success' => true,
+            'score' => $score,
+            'total' => $totalQuestions,
+            'correctAnswers' => $correctAnswers,
+            'wrongAnswers' => $wrongAnswers,
+            'unanswered' => $unanswered,
+            'timeElapsed' => $timeElapsed,
+            'percentage' => $percentage,
+            'rowPerformance' => $rowPerformance,
+            'columnPerformance' => $columnPerformance,
+            'message' => 'Hasil tes telah disimpan.'
+        ]);
+        
+    } catch (\Exception $e) {
+        Log::error('Error saving kraepelin test result: ' . $e->getMessage());
+        Log::error('Stack trace: ' . $e->getTraceAsString());
+        
+        return response()->json([
+            'success' => false,
+            'message' => 'Gagal menyimpan hasil tes: ' . $e->getMessage()
+        ], 500);
+    }
+}
 
     private function calculateRowPerformance($userAnswers, $rows, $cols)
     {
