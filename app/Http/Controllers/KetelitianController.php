@@ -6,126 +6,203 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\KetelitianQuestion;
 use App\Models\KetelitianTestResult;
+use App\Models\EmployeeTestAssignment;
 
 class KetelitianController extends Controller
 {
+
     public function index()
-    {
-        $questions = KetelitianQuestion::where('is_active', true)
-            ->inRandomOrder()
-            ->limit(50)
-            ->get()
-            ->map(function ($question) {
-                return [
-                    'left' => $question->left_text,
-                    'right' => $question->right_text,
-                    'answer' => $question->answer
-                ];
-            })
-            ->toArray();
-
-        // Render TestPage.jsx for employee test
-        return Inertia::render('Psychotest/KetelitianTest/TestPage', [
-            'questions' => $questions
-        ]);
-    }
-
-
-    public function submit(Request $request)
 {
     $user = auth()->user();
-    $userAnswers = $request->input('answers');
-    $questions = $request->input('questions');
-    $timeElapsed = $request->input('time_elapsed', 0);
 
-    $score = 0;
-    $correctAnswers = 0;
-    $wrongAnswers = 0;
-    $unanswered = 0;
-    $totalQuestions = count($questions);
+    // Check if employee has access to this test
+    if ($user->nik) {
+        // Check if employee has an active assignment for this test type
+        $assignment = EmployeeTestAssignment::where('nik', $user->nik)
+            ->where('test_type', 'ketelitian')
+            ->whereIn('status', [
+                EmployeeTestAssignment::STATUS_ASSIGNED,
+                EmployeeTestAssignment::STATUS_IN_PROGRESS,
+            ])
+            ->first();
 
-    // Calculate performance per question
-    $performanceByQuestion = [];
-    
-    // Calculate score and performance
-    foreach ($questions as $i => $q) {
-        if (isset($userAnswers[$i]) && $userAnswers[$i] !== '') {
-            if ($userAnswers[$i] === $q['answer']) {
-                $score++;
-                $correctAnswers++;
-                $performanceByQuestion[] = [
-                    'question_number' => $i + 1,
-                    'correct' => true,
-                    'user_answer' => $userAnswers[$i],
-                    'correct_answer' => $q['answer']
-                ];
-            } else {
-                $wrongAnswers++;
-                $performanceByQuestion[] = [
-                    'question_number' => $i + 1,
-                    'correct' => false,
-                    'user_answer' => $userAnswers[$i],
-                    'correct_answer' => $q['answer']
-                ];
+        if (!$assignment) {
+            return redirect()->route('employee.test-assignments.my')
+                ->with('error', 'Anda tidak memiliki akses ke tes ini. Silakan hubungi administrator.');
+        }
+
+        // Check if assignment is still accessible (not expired)
+        if (!$assignment->isAccessible()) {
+            return redirect()->route('employee.test-assignments.my')
+                ->with('error', 'Tes ini sudah melewati batas waktu. Anda tidak dapat mengakses tes ini lagi.');
+        }
+        
+        // For regular users, check if due date is today or in the future
+        if (!$user->hasRole('admin') && !$user->hasRole('super_admin')) {
+            if ($assignment->due_date) {
+                $dueDate = \Carbon\Carbon::parse($assignment->due_date);
+                $today = \Carbon\Carbon::today();
+                
+                if ($dueDate->lessThan($today)) {
+                    // Mark as expired if due date is yesterday or earlier
+                    $assignment->update([
+                        'status' => EmployeeTestAssignment::STATUS_EXPIRED
+                    ]);
+                    
+                    return redirect()->route('employee.test-assignments.my')
+                        ->with('error', 'Tes ini sudah melewati batas waktu. Anda tidak dapat mengakses tes ini lagi.');
+                }
             }
-        } else {
-            $unanswered++;
-            $performanceByQuestion[] = [
-                'question_number' => $i + 1,
-                'correct' => false,
-                'user_answer' => null,
-                'correct_answer' => $q['answer']
-            ];
         }
     }
 
-    $percentage = $totalQuestions > 0 ? ($score / $totalQuestions) * 100 : 0;
-    $accuracy = ($correctAnswers + $wrongAnswers) > 0 
-        ? ($correctAnswers / ($correctAnswers + $wrongAnswers)) * 100 
-        : 0;
-    $completionRate = $totalQuestions > 0 
-        ? (($correctAnswers + $wrongAnswers) / $totalQuestions) * 100 
-        : 0;
-    $averageTimePerQuestion = ($correctAnswers + $wrongAnswers) > 0 
-        ? $timeElapsed / ($correctAnswers + $wrongAnswers) 
-        : null;
+    // Get 50 random active questions from database
+    $questions = KetelitianQuestion::where('is_active', true)
+        ->inRandomOrder()
+        ->limit(50)
+        ->get()
+        ->map(function ($question) {
+            return [
+                'left' => $question->left_text,
+                'right' => $question->right_text,
+                'answer' => $question->answer
+            ];
+        })
+        ->toArray();
 
-    // Save to database
-    $testResult = KetelitianTestResult::create([
-        'user_id' => $user->id,
-        'score' => $score,
-        'total_questions' => $totalQuestions,
-        'correct_answers' => $correctAnswers,
-        'wrong_answers' => $wrongAnswers,
-        'unanswered' => $unanswered,
-        'time_elapsed' => $timeElapsed,
-        'percentage' => $percentage,
-        'accuracy' => $accuracy,
-        'completion_rate' => $completionRate,
-        'average_time_per_question' => $averageTimePerQuestion,
-        'answers' => json_encode($userAnswers),
-        'questions' => json_encode($questions),
-        'performance_by_question' => json_encode($performanceByQuestion),
-        'test_version' => 'v1.0',
-    ]);
+    // If not enough questions in database, show error message
+    if (count($questions) < 50) {
+        return Inertia::render('Psychotest/KetelitianTest/TestPage', [
+            'questions' => $questions,
+            'error' => 'Maaf, belum cukup soal di database. Hanya tersedia ' . count($questions) . ' soal dari 50 soal yang dibutuhkan.'
+        ]);
+    }
 
-    // Return JSON response for AJAX call
-    return response()->json([
-        'success' => true,
-        'test_result_id' => $testResult->id,
-        'score' => $score,
-        'total' => $totalQuestions,
-        'correctAnswers' => $correctAnswers,
-        'wrongAnswers' => $wrongAnswers,
-        'unanswered' => $unanswered,
-        'timeElapsed' => $timeElapsed,
-        'percentage' => $percentage,
-        'accuracy' => $accuracy,
-        'completionRate' => $completionRate,
-        'performanceByQuestion' => $performanceByQuestion,
-        'message' => 'Hasil tes telah disimpan.'
+    // Render TestPage.jsx for employee test
+    return Inertia::render('Psychotest/KetelitianTest/TestPage', [
+        'questions' => $questions
     ]);
 }
+
+
+    public function submit(Request $request)
+    {
+        $user = auth()->user();
+        $userAnswers = $request->input('answers');
+        $questions = $request->input('questions');
+        $timeElapsed = $request->input('time_elapsed', 0);
+
+        $score = 0;
+        $correctAnswers = 0;
+        $wrongAnswers = 0;
+        $unanswered = 0;
+        $totalQuestions = count($questions);
+
+        // Calculate performance per question
+        $performanceByQuestion = [];
+
+        // Calculate score and performance
+        foreach ($questions as $i => $q) {
+            if (isset($userAnswers[$i]) && $userAnswers[$i] !== '') {
+                if ($userAnswers[$i] === $q['answer']) {
+                    $score++;
+                    $correctAnswers++;
+                    $performanceByQuestion[] = [
+                        'question_number' => $i + 1,
+                        'correct' => true,
+                        'user_answer' => $userAnswers[$i],
+                        'correct_answer' => $q['answer']
+                    ];
+                } else {
+                    $wrongAnswers++;
+                    $performanceByQuestion[] = [
+                        'question_number' => $i + 1,
+                        'correct' => false,
+                        'user_answer' => $userAnswers[$i],
+                        'correct_answer' => $q['answer']
+                    ];
+                }
+            } else {
+                $unanswered++;
+                $performanceByQuestion[] = [
+                    'question_number' => $i + 1,
+                    'correct' => false,
+                    'user_answer' => null,
+                    'correct_answer' => $q['answer']
+                ];
+            }
+        }
+
+        $percentage = $totalQuestions > 0 ? ($score / $totalQuestions) * 100 : 0;
+        $accuracy = ($correctAnswers + $wrongAnswers) > 0
+            ? ($correctAnswers / ($correctAnswers + $wrongAnswers)) * 100
+            : 0;
+        $completionRate = $totalQuestions > 0
+            ? (($correctAnswers + $wrongAnswers) / $totalQuestions) * 100
+            : 0;
+        $averageTimePerQuestion = ($correctAnswers + $wrongAnswers) > 0
+            ? $timeElapsed / ($correctAnswers + $wrongAnswers)
+            : null;
+
+        // Save to database
+        $testResult = KetelitianTestResult::create([
+            'user_id' => $user->id,
+            'score' => $score,
+            'total_questions' => $totalQuestions,
+            'correct_answers' => $correctAnswers,
+            'wrong_answers' => $wrongAnswers,
+            'unanswered' => $unanswered,
+            'time_elapsed' => $timeElapsed,
+            'percentage' => $percentage,
+            'accuracy' => $accuracy,
+            'completion_rate' => $completionRate,
+            'average_time_per_question' => $averageTimePerQuestion,
+            'answers' => json_encode($userAnswers),
+            'questions' => json_encode($questions),
+            'performance_by_question' => json_encode($performanceByQuestion),
+            'test_version' => 'v1.0',
+        ]);
+
+        // Complete assignment if employee has one
+        if ($user->nik) {
+            $assignment = EmployeeTestAssignment::where('nik', $user->nik)
+                ->where('test_type', 'ketelitian')
+                ->whereIn('status', [
+                    EmployeeTestAssignment::STATUS_ASSIGNED,
+                    EmployeeTestAssignment::STATUS_IN_PROGRESS,
+                ])
+                ->first();
+
+            if ($assignment) {
+                $assignment->completeTest($score, $totalQuestions, [
+                    'correct_answers' => $correctAnswers,
+                    'wrong_answers' => $wrongAnswers,
+                    'unanswered' => $unanswered,
+                    'time_elapsed' => $timeElapsed,
+                    'percentage' => $percentage,
+                    'accuracy' => $accuracy,
+                    'completion_rate' => $completionRate,
+                ]);
+            }
+        }
+
+        // Return JSON response for AJAX call
+        return response()->json([
+            'success' => true,
+            'test_result_id' => $testResult->id,
+            'score' => $score,
+            'total' => $totalQuestions,
+            'correctAnswers' => $correctAnswers,
+            'wrongAnswers' => $wrongAnswers,
+            'unanswered' => $unanswered,
+            'timeElapsed' => $timeElapsed,
+            'percentage' => $percentage,
+            'accuracy' => $accuracy,
+            'completionRate' => $completionRate,
+            'performanceByQuestion' => $performanceByQuestion,
+            'message' => 'Hasil tes telah disimpan.'
+        ]);
+    }
 
 
     public function questionsIndex(Request $request)

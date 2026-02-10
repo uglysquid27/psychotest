@@ -491,4 +491,66 @@ public function pendingBankAccountChange()
 
         return $this;
     }
+
+    // Add these methods to your Employee.php model:
+
+/**
+ * Get test assignments for this employee
+ */
+public function testAssignments()
+{
+    return $this->hasMany(EmployeeTestAssignment::class, 'nik', 'nik');
+}
+
+/**
+ * Check if employee has access to a specific test
+ */
+public function canAccessTest(string $testType): bool
+{
+    // Admin has access to everything
+    if ($this->role === 'admin') {
+        return true;
+    }
+    
+    // Check if employee is assigned to this test
+    return EmployeeTestAssignment::canAccessTest($this->nik, $testType);
+}
+
+/**
+ * Get all assigned tests
+ */
+public function getAssignedTests(): array
+{
+    return EmployeeTestAssignment::getAssignedTests($this->nik);
+}
+
+/**
+ * Check if employee has any pending tests
+ */
+public function hasPendingTests(): bool
+{
+    return !empty($this->getAssignedTests());
+}
+
+/**
+ * Check if employee can access a specific route
+ */
+public function canAccessRoute(string $routeName): bool
+{
+    // Admin can access everything
+    if ($this->role === 'admin') {
+        return true;
+    }
+    
+    // Get test type from route
+    $testType = EmployeeTestAssignment::getTestTypeFromRoute($routeName);
+    
+    // If route is not a test route, allow access
+    if (!$testType) {
+        return true;
+    }
+    
+    // Check if employee is assigned to this test
+    return $this->canAccessTest($testType);
+}
 }

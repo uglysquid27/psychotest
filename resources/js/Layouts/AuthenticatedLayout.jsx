@@ -1,7 +1,9 @@
+// resources/js/Layouts/AuthenticatedLayout.jsx
+
 import { useState, useEffect } from "react";
 import ApplicationLogo from "@/Components/ApplicationLogo";
 import NavLink from "@/Components/NavLink";
-import { Link, usePage } from "@inertiajs/react";
+import { Link, usePage, router } from "@inertiajs/react";
 import { motion, AnimatePresence } from "framer-motion";
 
 // SVG Icons (with proper definitions)
@@ -95,7 +97,7 @@ const ChevronDownIcon = ({ className = "w-5 h-5", style = {} }) => (
     </svg>
 );
 
-// ICONS FOR ADMIN MENUS
+// ICONS FOR MENUS
 const PsychologyIcon = ({ style = {} }) => (
     <svg
         className="mr-3 w-5 h-5"
@@ -198,6 +200,40 @@ const NumberSeriesIcon = ({ style = {} }) => (
     </svg>
 );
 
+const AssignmentIcon = ({ style = {} }) => (
+    <svg
+        className="mr-3 w-5 h-5"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        style={style}
+    >
+        <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+        />
+    </svg>
+);
+
+const TestManagementIcon = ({ style = {} }) => (
+    <svg
+        className="mr-3 w-5 h-5"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        style={style}
+    >
+        <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+        />
+    </svg>
+);
+
 // Theme definitions with CSS color values
 const themes = {
     kraepelin: {
@@ -287,7 +323,7 @@ const themes = {
     }
 };
 
-// Helper function to detect current page theme - UPDATED FOR ALL PAGES
+// Helper function to detect current page theme
 const detectTheme = (currentRoute) => {
     if (!currentRoute) return themes.default;
     
@@ -302,11 +338,24 @@ const detectTheme = (currentRoute) => {
         return themes.hitungan;
     } else if (route.includes('deret')) {
         return themes.deret;
+    } else if (route.includes('wartegg')) {
+        return themes.default;
+    } else if (route.includes('analogi')) {
+        return themes.default;
+    } else if (route.includes('spasial')) {
+        return themes.default;
+    } else if (route.includes('numerik')) {
+        return themes.default;
+    } else if (route.includes('disc')) {
+        return themes.default;
+    } else if (route.includes('personality')) {
+        return themes.default;
+    } else if (route.includes('test-assignments')) {
+        return themes.default;
     }
     
     // Check for employee dashboard or pages
     if (route.includes('employee')) {
-        // You can set a specific theme for employee pages or use default
         return themes.default;
     }
     
@@ -694,6 +743,19 @@ const adminNavigationConfig = (user, openStates, setOpenState, currentTheme) => 
         {
             type: "dropdown",
             component: createDropdown(
+                TestManagementIcon,
+                "Test Management",
+                "testManagement",
+                [
+                    { href: route("admin.test-assignments.index"), label: "Test Assignments", active: route().current("admin.test-assignments.*") },
+                    { href: route("admin.test-assignments.create"), label: "Assign New Test", active: route().current("admin.test-assignments.create") },
+                ]
+            ),
+            show: true,
+        },
+        {
+            type: "dropdown",
+            component: createDropdown(
                 PsychologyIcon,
                 "Psikotes",
                 "psikotes",
@@ -702,6 +764,12 @@ const adminNavigationConfig = (user, openStates, setOpenState, currentTheme) => 
                     { href: route("ketelitian.index"), label: "Ketelitian Test", active: route().current("ketelitian.index") },
                     { href: route("hitungan.test"), label: "Hitungan Test", active: route().current("hitungan.test") },
                     { href: route("deret.index"), label: "Deret Test", active: route().current("deret.*") },
+                    { href: route("wartegg.index"), label: "Wartegg Test", active: route().current("wartegg.*") },
+                    { href: route("analogi.index"), label: "Analogi Test", active: route().current("analogi.*") },
+                    { href: route("spasial.index"), label: "Spasial Test", active: route().current("spasial.*") },
+                    { href: route("numerik.index"), label: "Numerik Test", active: route().current("numerik.*") },
+                    { href: route("disc.index"), label: "DISC Test", active: route().current("disc.*") },
+                    { href: route("personality.index"), label: "Personality Test", active: route().current("personality.*") },
                 ]
             ),
             show: true,
@@ -748,41 +816,8 @@ const adminNavigationConfig = (user, openStates, setOpenState, currentTheme) => 
     ].filter((item) => item.show);
 };
 
-// Navigation Items Configuration for EMPLOYEE - UPDATED WITH PSIKOTES MENU
+// Navigation Items Configuration for EMPLOYEE
 const employeeNavigationConfig = (user, isForkliftOperator, openStates, setOpenState, currentTheme) => {
-    const createEmployeeDropdown = (IconComponent, label, key, routes) => (
-        <EmployeeDropdown
-            key={key}
-            icon={IconComponent}
-            label={label}
-            isOpen={openStates[key]}
-            setIsOpen={(value) => setOpenState(key, value)}
-            isActive={routes.some(route => route.active)}
-            currentTheme={currentTheme}
-        >
-            {routes.map((item, index) => (
-                <motion.div
-                    key={item.href}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                >
-                    <NavLink
-                        href={item.href}
-                        active={item.active}
-                        className="flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all duration-200"
-                        style={{ color: currentTheme.colors.text }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = `${currentTheme.colors.light}80`}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                        onClick={() => setOpenState(key, false)}
-                    >
-                        <span className="font-bold">{item.label}</span>
-                    </NavLink>
-                </motion.div>
-            ))}
-        </EmployeeDropdown>
-    );
-
     const employeeNavItems = [
         {
             type: "link",
@@ -792,18 +827,10 @@ const employeeNavigationConfig = (user, isForkliftOperator, openStates, setOpenS
             show: true,
         },
         {
-            type: "dropdown",
-            component: createEmployeeDropdown(
-                PsychologyIcon,
-                "Psikotes",
-                "psikotes",
-                [
-                    { href: route("kraepelin.index"), label: "Kraepelin Test", active: route().current("kraepelin.*") },
-                    { href: route("ketelitian.index"), label: "Ketelitian Test", active: route().current("ketelitian.index") },
-                    { href: route("hitungan.test"), label: "Hitungan Test", active: route().current("hitungan.test") },
-                    { href: route("deret.index"), label: "Deret Test", active: route().current("deret.*") },
-                ]
-            ),
+            type: "link",
+            href: route("employee.test-assignments.my"),
+            label: "My Test Assignments",
+            active: route().current("employee.test-assignments.*"),
             show: true,
         },
         {
@@ -867,6 +894,7 @@ export default function AuthenticatedLayout({
     const [dropdownStates, setDropdownStates] = useState({
         dashboard: false,
         attendance: false,
+        testManagement: false,
         psikotes: false,
         ketelitianQuestions: false,
         hitunganQuestions: false,
@@ -895,6 +923,7 @@ export default function AuthenticatedLayout({
             setDropdownStates({
                 dashboard: false,
                 attendance: false,
+                testManagement: false,
                 psikotes: false,
                 ketelitianQuestions: false,
                 hitunganQuestions: false,
@@ -1092,6 +1121,7 @@ export default function AuthenticatedLayout({
                                                 setDropdownStates({
                                                     dashboard: false,
                                                     attendance: false,
+                                                    testManagement: false,
                                                     psikotes: false,
                                                     ketelitianQuestions: false,
                                                     hitunganQuestions: false,

@@ -24,6 +24,7 @@ use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\SubSectionController;
 use App\Http\Controllers\EmployeeDashboardController;
 use App\Http\Controllers\EmployeeProfileController;
+use App\Http\Controllers\EmployeeTestAssignmentController; // Add this
 
 /*
 |--------------------------------------------------------------------------
@@ -132,6 +133,13 @@ Route::middleware(['auth:employee', 'prevent.back'])
     ->group(function () {
         Route::get('/dashboard', [EmployeeDashboardController::class, 'index'])->name('dashboard');
 
+        // Test Assignments
+        Route::get('/test-assignments', [EmployeeTestAssignmentController::class, 'myAssignments'])
+            ->name('test-assignments.my');
+        
+        Route::post('/test-assignments/{id}/start', [EmployeeTestAssignmentController::class, 'startTest'])
+            ->name('test-assignments.start');
+
         // Bank Account Change Routes
         Route::get('/bank-account-change', [BankAccountChangeController::class, 'create'])
             ->name('bank-account-change.create');
@@ -156,6 +164,24 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
     // ============ DASHBOARD ============
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->name('dashboard');
+
+    // ============ TEST ASSIGNMENTS MANAGEMENT ============
+    Route::prefix('admin/test-assignments')->name('admin.test-assignments.')->group(function () {
+        Route::get('/', [EmployeeTestAssignmentController::class, 'index'])->name('index');
+        Route::get('/create', [EmployeeTestAssignmentController::class, 'create'])->name('create');
+        Route::post('/', [EmployeeTestAssignmentController::class, 'store'])->name('store');
+        Route::get('/{assignment}/edit', [EmployeeTestAssignmentController::class, 'edit'])->name('edit');
+        Route::put('/{assignment}', [EmployeeTestAssignmentController::class, 'update'])->name('update');
+        Route::delete('/{assignment}', [EmployeeTestAssignmentController::class, 'destroy'])->name('destroy');
+        
+        // Bulk operations
+        Route::post('/bulk-assign', [EmployeeTestAssignmentController::class, 'bulkAssign'])->name('bulk-assign');
+        Route::post('/bulk-delete', [EmployeeTestAssignmentController::class, 'bulkDelete'])->name('bulk-delete');
+        Route::post('/bulk-toggle-active', [EmployeeTestAssignmentController::class, 'bulkToggleActive'])->name('bulk-toggle-active');
+        
+        // Search
+        Route::get('/search/employees', [EmployeeTestAssignmentController::class, 'searchEmployees'])->name('search-employees');
+    });
 
     // ============ EMPLOYEE ATTENDANCE ============
     Route::prefix('employee-attendance')->group(function () {

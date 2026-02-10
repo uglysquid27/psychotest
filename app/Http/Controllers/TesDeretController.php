@@ -6,41 +6,83 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\DeretQuestion;
 use App\Models\DeretTestResult;
+use App\Models\EmployeeTestAssignment;
 
 class TesDeretController extends Controller
 {
-    // USER TEST FUNCTIONS
-
     public function index()
-    {
-        // Get 5 random active questions from database
-        $questions = DeretQuestion::getTestQuestions(5);
+{
+    $user = auth()->user();
 
-        // Check if $questions is an array and convert to Collection if needed
-        if (is_array($questions)) {
-            $questions = collect($questions);
+    // Check if employee has access to this test
+    if ($user->nik) {
+        // Check if employee has an active assignment for this test type
+        $assignment = EmployeeTestAssignment::where('nik', $user->nik)
+            ->where('test_type', 'deret')
+            ->whereIn('status', [
+                EmployeeTestAssignment::STATUS_ASSIGNED,
+                EmployeeTestAssignment::STATUS_IN_PROGRESS,
+            ])
+            ->first();
+
+        if (!$assignment) {
+            return redirect()->route('employee.test-assignments.my')
+                ->with('error', 'Anda tidak memiliki akses ke tes ini. Silakan hubungi administrator.');
         }
 
-        // Transform the questions for the frontend
-        $formattedQuestions = $questions->map(function($question) {
-            return [
-                'id' => $question['id'] ?? $question->id ?? null,
-                'sequence' => $question['sequence'] ?? $question->sequence ?? [],
-                'answer' => $question['answer'] ?? $question->answer ?? null,
-                'pattern_type' => $question['pattern_type'] ?? $question->pattern_type ?? null,
-                'explanation' => $question['explanation'] ?? $question->explanation ?? null
-            ];
-        })->toArray();
-
-        return Inertia::render('Psychotest/DeretTest/TestPage', [
-            'initialQuestions' => $formattedQuestions
-        ]);
+        // Check if assignment is still accessible (not expired)
+        if (!$assignment->isAccessible()) {
+            return redirect()->route('employee.test-assignments.my')
+                ->with('error', 'Tes ini sudah melewati batas waktu. Anda tidak dapat mengakses tes ini lagi.');
+        }
+        
+        // For regular users, check if due date is today or in the future
+        if (!$user->hasRole('admin') && !$user->hasRole('super_admin')) {
+            if ($assignment->due_date) {
+                $dueDate = \Carbon\Carbon::parse($assignment->due_date);
+                $today = \Carbon\Carbon::today();
+                
+                if ($dueDate->lessThan($today)) {
+                    // Mark as expired if due date is yesterday or earlier
+                    $assignment->update([
+                        'status' => EmployeeTestAssignment::STATUS_EXPIRED
+                    ]);
+                    
+                    return redirect()->route('employee.test-assignments.my')
+                        ->with('error', 'Tes ini sudah melewati batas waktu. Anda tidak dapat mengakses tes ini lagi.');
+                }
+            }
+        }
     }
+
+    // Get 5 random active questions from database
+    $questions = DeretQuestion::getTestQuestions(5);
+
+    // Check if $questions is an array and convert to Collection if needed
+    if (is_array($questions)) {
+        $questions = collect($questions);
+    }
+
+    // Transform the questions for the frontend
+    $formattedQuestions = $questions->map(function ($question) {
+        return [
+            'id' => $question['id'] ?? $question->id ?? null,
+            'sequence' => $question['sequence'] ?? $question->sequence ?? [],
+            'answer' => $question['answer'] ?? $question->answer ?? null,
+            'pattern_type' => $question['pattern_type'] ?? $question->pattern_type ?? null,
+            'explanation' => $question['explanation'] ?? $question->explanation ?? null
+        ];
+    })->toArray();
+
+    return Inertia::render('Psychotest/DeretTest/TestPage', [
+        'initialQuestions' => $formattedQuestions
+    ]);
+}
 
     public function submit(Request $request)
     {
         $user = auth()->user();
-        
+
         // Validate the request
         $validated = $request->validate([
             'userAnswers' => 'required|array',
@@ -63,7 +105,7 @@ class TesDeretController extends Controller
             if (isset($userAnswers[$index]) && $userAnswers[$index] !== '' && $userAnswers[$index] !== null) {
                 $userAnswer = intval($userAnswers[$index]);
                 $correctAnswer = intval($question['answer']);
-                
+
                 if ($userAnswer === $correctAnswer) {
                     $score++;
                     $correctAnswers++;
@@ -97,6 +139,27 @@ class TesDeretController extends Controller
                 'score' => $score,
                 'test_result_id' => $testResult->id
             ]);
+
+            // Complete assignment if employee has one
+            if ($user->nik) {
+                $assignment = EmployeeTestAssignment::where('nik', $user->nik)
+                    ->where('test_type', 'deret')
+                    ->whereIn('status', [
+                        EmployeeTestAssignment::STATUS_ASSIGNED,
+                        EmployeeTestAssignment::STATUS_IN_PROGRESS,
+                    ])
+                    ->first();
+
+                if ($assignment) {
+                    $assignment->completeTest($score, $totalQuestions, [
+                        'correct_answers' => $correctAnswers,
+                        'wrong_answers' => $wrongAnswers,
+                        'unanswered' => $unanswered,
+                        'time_elapsed' => $timeElapsed,
+                        'percentage' => $percentage,
+                    ]);
+                }
+            }
 
             return response()->json([
                 'success' => true,
@@ -238,7 +301,7 @@ class TesDeretController extends Controller
         $csv .= "\"[100,50,25,null,6.25]\",12.5,geometric,2,Bagi 2 setiap langkah,1\n";
         $csv .= "\"[1,4,9,null,25]\",16,square,3,Bilangan kuadrat,1\n";
         $csv .= "\"[2,3,5,null,13]\",8,fibonacci,3,Bilangan Fibonacci,1\n";
-        
+
         return response($csv)
             ->header('Content-Type', 'text/csv; charset=utf-8')
             ->header('Content-Disposition', 'attachment; filename="deret_template.csv"');
