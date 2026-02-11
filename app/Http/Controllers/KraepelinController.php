@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\KraepelinTest;
 use App\Models\KraepelinTestResult;
 use App\Models\Employee;
+use App\Models\KraepelinSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -16,80 +17,305 @@ use App\Models\EmployeeTestAssignment;
 class KraepelinController extends Controller
 {
     /**
-     * Display the Kraepelin test page
+     * Display the Kraepelin test page with settings
      */
+    public function index(Request $request)
+    {
+        $user = auth()->user();
 
-    public function index()
-{
-    $user = auth()->user();
+        // Check if employee has access to this test
+        if ($user->nik) {
+            $assignment = EmployeeTestAssignment::where('nik', $user->nik)
+                ->where('test_type', 'kraepelin')
+                ->whereIn('status', [
+                    EmployeeTestAssignment::STATUS_ASSIGNED,
+                    EmployeeTestAssignment::STATUS_IN_PROGRESS,
+                ])
+                ->first();
 
-    // Check if employee has access to this test
-    if ($user->nik) {
-        // Check if employee has an active assignment for this test type
-        $assignment = EmployeeTestAssignment::where('nik', $user->nik)
-            ->where('test_type', 'kraepelin')
-            ->whereIn('status', [
-                EmployeeTestAssignment::STATUS_ASSIGNED,
-                EmployeeTestAssignment::STATUS_IN_PROGRESS,
-            ])
-            ->first();
+            if (!$assignment) {
+                return redirect()->route('employee.test-assignments.my')
+                    ->with('error', 'Anda tidak memiliki akses ke tes ini. Silakan hubungi administrator.');
+            }
 
-        if (!$assignment) {
-            return redirect()->route('employee.test-assignments.my')
-                ->with('error', 'Anda tidak memiliki akses ke tes ini. Silakan hubungi administrator.');
-        }
-
-        // Check if assignment is still accessible (not expired)
-        if (!$assignment->isAccessible()) {
-            return redirect()->route('employee.test-assignments.my')
-                ->with('error', 'Tes ini sudah melewati batas waktu. Anda tidak dapat mengakses tes ini lagi.');
-        }
-        
-        // For regular users, check if due date is today or in the future
-        if (!$user->hasRole('admin') && !$user->hasRole('super_admin')) {
-            if ($assignment->due_date) {
-                $dueDate = \Carbon\Carbon::parse($assignment->due_date);
-                $today = \Carbon\Carbon::today();
-                
-                if ($dueDate->lessThan($today)) {
-                    // Mark as expired if due date is yesterday or earlier
-                    $assignment->update([
-                        'status' => EmployeeTestAssignment::STATUS_EXPIRED
-                    ]);
+            if (!$assignment->isAccessible()) {
+                return redirect()->route('employee.test-assignments.my')
+                    ->with('error', 'Tes ini sudah melewati batas waktu. Anda tidak dapat mengakses tes ini lagi.');
+            }
+            
+            if (!$user->hasRole('admin') && !$user->hasRole('super_admin')) {
+                if ($assignment->due_date) {
+                    $dueDate = \Carbon\Carbon::parse($assignment->due_date);
+                    $today = \Carbon\Carbon::today();
                     
-                    return redirect()->route('employee.test-assignments.my')
-                        ->with('error', 'Tes ini sudah melewati batas waktu. Anda tidak dapat mengakses tes ini lagi.');
+                    if ($dueDate->lessThan($today)) {
+                        $assignment->update([
+                            'status' => EmployeeTestAssignment::STATUS_EXPIRED
+                        ]);
+                        
+                        return redirect()->route('employee.test-assignments.my')
+                            ->with('error', 'Tes ini sudah melewati batas waktu. Anda tidak dapat mengakses tes ini lagi.');
+                    }
                 }
             }
         }
+
+        // Get test configuration
+        $settingId = $request->get('setting_id');
+        $useCustom = $request->get('use_custom', false);
+        
+        if ($useCustom) {
+            // Custom configuration
+            $rows = $request->get('custom_rows', 45);
+            $columns = $request->get('custom_columns', 60);
+            $timePerColumn = $request->get('custom_time_per_column', 15);
+            $difficulty = 'custom';
+        } elseif ($settingId) {
+            // Get specific setting
+            $setting = KraepelinSetting::findOrFail($settingId);
+            $rows = $setting->rows;
+            $columns = $setting->columns;
+            $timePerColumn = $setting->time_per_column;
+            $difficulty = $setting->difficulty;
+        } else {
+            // Get default active setting
+            $setting = KraepelinSetting::active()->first();
+            if (!$setting) {
+                // Fallback to default values
+                $rows = 45;
+                $columns = 60;
+                $timePerColumn = 15;
+                $difficulty = 'sedang';
+            } else {
+                $rows = $setting->rows;
+                $columns = $setting->columns;
+                $timePerColumn = $setting->time_per_column;
+                $difficulty = $setting->difficulty;
+            }
+        }
+
+        // Calculate totals
+        $totalQuestions = ($rows - 1) * $columns;
+        $totalTime = $columns * $timePerColumn;
+        $totalTimeFormatted = $this->formatTime($totalTime);
+
+        return Inertia::render('Psychotest/KraepelinTest/TestPage', [
+            'testConfig' => [
+                'rows' => $rows,
+                'columns' => $columns,
+                'timePerColumn' => $timePerColumn,
+                'difficulty' => $difficulty,
+                'totalQuestions' => $totalQuestions,
+                'totalTime' => $totalTime,
+                'totalTimeFormatted' => $totalTimeFormatted,
+                'settingId' => $settingId ?? null,
+                'useCustom' => $useCustom,
+                'customRows' => $useCustom ? $rows : null,
+                'customColumns' => $useCustom ? $columns : null,
+                'customTimePerColumn' => $useCustom ? $timePerColumn : null,
+            ]
+        ]);
     }
 
-    return Inertia::render('Psychotest/KraepelinTest/Index');
-}
+    /**
+     * Generate test data based on configuration and difficulty
+     */
+    public function generateTestData(Request $request)
+    {
+        $request->validate([
+            'rows' => 'required|integer|min:20|max:100',
+            'columns' => 'required|integer|min:20|max:100',
+            'difficulty' => 'required|in:mudah,sedang,sulit,custom'
+        ]);
+
+        $rows = $request->rows;
+        $columns = $request->columns;
+        $difficulty = $request->difficulty;
+
+        $testData = $this->generateNumberMatrix($rows, $columns, $difficulty);
+
+        return response()->json([
+            'success' => true,
+            'test_data' => $testData,
+            'rows' => $rows,
+            'columns' => $columns,
+            'total_questions' => ($rows - 1) * $columns
+        ]);
+    }
 
     /**
-     * Start a new Kraepelin test session
+     * Generate number matrix with difficulty-based patterns
+     */
+    private function generateNumberMatrix($rows, $columns, $difficulty)
+    {
+        $matrix = [];
+
+        for ($col = 0; $col < $columns; $col++) {
+            $column = [];
+            $previousPairs = []; // Track recent pairs to avoid repetition
+            
+            for ($row = 0; $row < $rows; $row++) {
+                $num1 = $this->generateNumberBasedOnDifficulty($difficulty, $col, $row);
+                $num2 = $this->generateNumberBasedOnDifficulty($difficulty, $col, $row + 1);
+                
+                // Avoid repetitive patterns (like 4-6-4)
+                $pair = $num1 . $num2;
+                $attempts = 0;
+                while ($this->isRepetitivePattern($pair, $previousPairs) && $attempts < 10) {
+                    $num1 = $this->generateNumberBasedOnDifficulty($difficulty, $col, $row);
+                    $num2 = $this->generateNumberBasedOnDifficulty($difficulty, $col, $row + 1);
+                    $pair = $num1 . $num2;
+                    $attempts++;
+                }
+                
+                // Store pair for repetition check
+                $previousPairs[] = $pair;
+                if (count($previousPairs) > 3) {
+                    array_shift($previousPairs); // Keep only last 3 pairs
+                }
+                
+                $column[] = [
+                    'num1' => $num1,
+                    'num2' => $num2
+                ];
+            }
+            $matrix[] = $column;
+        }
+
+        return $matrix;
+    }
+
+    /**
+     * Generate numbers based on difficulty level
+     */
+    private function generateNumberBasedOnDifficulty($difficulty, $col, $row)
+    {
+        // Use unique seed for each position to ensure consistency
+        $seed = $col * 1000 + $row + crc32($difficulty);
+        mt_srand($seed);
+        
+        switch ($difficulty) {
+            case 'sulit': // Difficult
+                // More varied numbers, includes occasional zeros
+                if (mt_rand(1, 20) === 1) { // 5% chance of zero
+                    return 0;
+                }
+                
+                // Biased distribution to make it more challenging
+                $dist = [
+                    1 => 10, 2 => 10, 3 => 12, 4 => 12, 5 => 12,
+                    6 => 12, 7 => 12, 8 => 10, 9 => 10, 0 => 0
+                ];
+                
+                $rand = mt_rand(1, array_sum($dist));
+                $cumulative = 0;
+                foreach ($dist as $num => $prob) {
+                    $cumulative += $prob;
+                    if ($rand <= $cumulative) {
+                        return $num;
+                    }
+                }
+                return mt_rand(1, 9);
+                
+            case 'sedang': // Medium
+                // Balanced random distribution
+                return mt_rand(1, 9);
+                
+            case 'mudah': // Easy
+                // More predictable, less varied, focuses on middle numbers
+                $easyNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+                $weights = [5, 10, 15, 20, 25, 20, 15, 10, 5];
+                
+                $rand = mt_rand(1, array_sum($weights));
+                $cumulative = 0;
+                foreach ($weights as $index => $weight) {
+                    $cumulative += $weight;
+                    if ($rand <= $cumulative) {
+                        return $easyNumbers[$index];
+                    }
+                }
+                return mt_rand(1, 9);
+                
+            default: // Custom or fallback
+                return mt_rand(1, 9);
+        }
+    }
+
+    /**
+     * Check if pattern is repetitive
+     */
+    private function isRepetitivePattern($currentPair, $previousPairs)
+    {
+        // Check for same number repeated (e.g., 4-4)
+        if (substr($currentPair, 0, 1) == substr($currentPair, 1, 1)) {
+            return true;
+        }
+        
+        // Check for patterns like 4-6-4
+        if (count($previousPairs) >= 2) {
+            $lastTwo = array_slice($previousPairs, -2);
+            
+            // Check if current pair creates a repetitive sequence
+            // Example: if last two pairs were "46" and "64", current "46" would create pattern
+            if (count($lastTwo) >= 2) {
+                $pattern = $lastTwo[0][1] . $lastTwo[1][0] . $currentPair[0];
+                if ($lastTwo[0][0] . $lastTwo[0][1] == $lastTwo[1][1] . $currentPair[1]) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * Start a new Kraepelin test session with settings
      */
     public function start(Request $request)
     {
         $request->validate([
             'employee_id' => 'nullable|exists:employees,id',
-            'duration_minutes' => 'nullable|integer|min:5|max:60'
+            'setting_id' => 'nullable|exists:kraepelin_settings,id',
+            'rows' => 'nullable|integer|min:20|max:100',
+            'columns' => 'nullable|integer|min:20|max:100',
+            'time_per_column' => 'nullable|integer|min:5|max:60',
+            'difficulty' => 'nullable|in:mudah,sedang,sulit,custom'
         ]);
 
         try {
             DB::beginTransaction();
 
-            // Generate test data (20 columns × 40 rows)
-            $testData = $this->generateTestData();
+            // Get configuration
+            if ($request->setting_id) {
+                $setting = KraepelinSetting::findOrFail($request->setting_id);
+                $rows = $setting->rows;
+                $columns = $setting->columns;
+                $timePerColumn = $setting->time_per_column;
+                $difficulty = $setting->difficulty;
+                $settingId = $setting->id;
+            } else {
+                $rows = $request->rows ?? 45;
+                $columns = $request->columns ?? 60;
+                $timePerColumn = $request->time_per_column ?? 15;
+                $difficulty = $request->difficulty ?? 'sedang';
+                $settingId = null;
+            }
+
+            // Generate test data based on difficulty
+            $testData = $this->generateNumberMatrix($rows, $columns, $difficulty);
 
             $kraepelinTest = KraepelinTest::create([
                 'employee_id' => $request->employee_id,
                 'user_id' => Auth::id(),
                 'test_data' => json_encode($testData),
-                'duration_minutes' => $request->duration_minutes ?? 10,
+                'rows' => $rows,
+                'columns' => $columns,
+                'time_per_column' => $timePerColumn,
+                'difficulty' => $difficulty,
+                'duration_minutes' => ceil(($columns * $timePerColumn) / 60),
                 'started_at' => now(),
-                'status' => 'active'
+                'status' => 'active',
+                'kraepelin_setting_id' => $settingId,
             ]);
 
             DB::commit();
@@ -100,7 +326,12 @@ class KraepelinController extends Controller
                 'data' => [
                     'test_id' => $kraepelinTest->id,
                     'test_data' => $testData,
-                    'duration_minutes' => $kraepelinTest->duration_minutes,
+                    'rows' => $rows,
+                    'columns' => $columns,
+                    'time_per_column' => $timePerColumn,
+                    'difficulty' => $difficulty,
+                    'total_questions' => ($rows - 1) * $columns,
+                    'total_time' => $columns * $timePerColumn,
                     'started_at' => $kraepelinTest->started_at->toISOString()
                 ]
             ]);
@@ -129,13 +360,17 @@ class KraepelinController extends Controller
         $timeElapsed = $request->input('time_elapsed', 0);
         $rows = $request->input('rows', 45);
         $cols = $request->input('cols', 60);
+        $difficulty = $request->input('difficulty', 'sedang');
+        $testId = $request->input('test_id');
 
         Log::info('Kraepelin Submit - Received data:', [
             'answers_count' => count($userAnswers),
             'number_matrix_count' => count($numberMatrix),
             'rows' => $rows,
             'cols' => $cols,
-            'time_elapsed' => $timeElapsed
+            'time_elapsed' => $timeElapsed,
+            'difficulty' => $difficulty,
+            'test_id' => $testId
         ]);
 
         $score = 0;
@@ -159,13 +394,6 @@ class KraepelinController extends Controller
 
                 // Get user's answer
                 $userAnswer = $userAnswers[$row][$col] ?? null;
-
-                Log::info("Checking - Col $col, Row $row", [
-                    'num1' => $num1,
-                    'num2' => $num2,
-                    'correct' => $correctAnswer,
-                    'user' => $userAnswer
-                ]);
 
                 if ($userAnswer === null || $userAnswer === '') {
                     $unanswered++;
@@ -222,9 +450,25 @@ class KraepelinController extends Controller
         ]);
 
         try {
+            DB::beginTransaction();
+            
+            // Update the test record if it exists
+            $test = null;
+            if ($testId) {
+                $test = KraepelinTest::find($testId);
+                if ($test) {
+                    $test->update([
+                        'finished_at' => now(),
+                        'time_taken_seconds' => $timeElapsed,
+                        'status' => 'completed'
+                    ]);
+                }
+            }
+
             // Save to database
             $result = KraepelinTestResult::create([
                 'user_id' => $user->id,
+                'kraepelin_test_id' => $testId,
                 'score' => $score,
                 'total_questions' => $totalQuestions,
                 'correct_answers' => $correctAnswers,
@@ -236,6 +480,9 @@ class KraepelinController extends Controller
                 'answers' => json_encode($userAnswers),
                 'row_performance' => json_encode($rowPerformance),
                 'column_performance' => json_encode($columnPerformance),
+                'rows' => $rows,
+                'columns' => $cols,
+                'difficulty' => $difficulty,
             ]);
 
             Log::info('Kraepelin Submit - Saved to database with ID: ' . $result->id);
@@ -257,9 +504,14 @@ class KraepelinController extends Controller
                         'unanswered' => $unanswered,
                         'time_elapsed' => $timeElapsed,
                         'percentage' => $percentage,
+                        'difficulty' => $difficulty,
+                        'rows' => $rows,
+                        'columns' => $cols,
                     ]);
                 }
             }
+
+            DB::commit();
 
             return response()->json([
                 'success' => true,
@@ -272,10 +524,12 @@ class KraepelinController extends Controller
                 'percentage' => $percentage,
                 'rowPerformance' => $rowPerformance,
                 'columnPerformance' => $columnPerformance,
+                'difficulty' => $difficulty,
                 'message' => 'Hasil tes telah disimpan.'
             ]);
 
         } catch (\Exception $e) {
+            DB::rollBack();
             Log::error('Error saving kraepelin test result: ' . $e->getMessage());
             Log::error('Stack trace: ' . $e->getTraceAsString());
 
@@ -286,55 +540,12 @@ class KraepelinController extends Controller
         }
     }
 
-    private function calculateRowPerformance($userAnswers, $rows, $cols)
-    {
-        $rowPerformance = array_fill(0, $rows - 1, 0); // One less row than matrix
-
-        // User answers structure: array[col][row] = answer
-        for ($col = 0; $col < $cols; $col++) {
-            for ($row = 0; $row < $rows - 1; $row++) {
-                if (
-                    isset($userAnswers[$col][$row]) &&
-                    $userAnswers[$col][$row] !== null &&
-                    $userAnswers[$col][$row] !== ''
-                ) {
-                    $rowPerformance[$row]++;
-                }
-            }
-        }
-
-        return $rowPerformance;
-    }
-
-    private function calculateColumnPerformance($userAnswers, $rows, $cols)
-    {
-        $columnPerformance = array_fill(0, $cols, 0);
-
-        for ($col = 0; $col < $cols; $col++) {
-            $answered = 0;
-            if (isset($userAnswers[$col])) {
-                for ($row = 0; $row < $rows - 1; $row++) {
-                    if (
-                        isset($userAnswers[$col][$row]) &&
-                        $userAnswers[$col][$row] !== null &&
-                        $userAnswers[$col][$row] !== ''
-                    ) {
-                        $answered++;
-                    }
-                }
-            }
-            $columnPerformance[$col] = $answered;
-        }
-
-        return $columnPerformance;
-    }
-
     /**
-     * Get test results
+     * Get test results with filtering
      */
     public function results(Request $request)
     {
-        $query = KraepelinTest::with(['result', 'employee', 'user'])
+        $query = KraepelinTest::with(['result', 'employee', 'user', 'setting'])
             ->where('user_id', Auth::id())
             ->orderBy('created_at', 'desc');
 
@@ -346,11 +557,15 @@ class KraepelinController extends Controller
             $query->where('status', $request->status);
         }
 
+        if ($request->has('difficulty')) {
+            $query->where('difficulty', $request->difficulty);
+        }
+
         $tests = $query->paginate($request->per_page ?? 10);
 
         return Inertia::render('KraepelinTest/Results', [
             'tests' => $tests,
-            'filters' => $request->only(['employee_id', 'status'])
+            'filters' => $request->only(['employee_id', 'status', 'difficulty'])
         ]);
     }
 
@@ -359,13 +574,18 @@ class KraepelinController extends Controller
      */
     public function show($id)
     {
-        $test = KraepelinTest::with(['result', 'employee', 'user'])
+        $test = KraepelinTest::with(['result', 'employee', 'user', 'setting'])
             ->where('user_id', Auth::id())
             ->findOrFail($id);
 
         $detailedResults = null;
-        if ($test->result && $test->result->detailed_results) {
-            $detailedResults = json_decode($test->result->detailed_results, true);
+        if ($test->result) {
+            $detailedResults = [
+                'test_data' => json_decode($test->result->test_data, true),
+                'answers' => json_decode($test->result->answers, true),
+                'row_performance' => json_decode($test->result->row_performance, true),
+                'column_performance' => json_decode($test->result->column_performance, true),
+            ];
         }
 
         return Inertia::render('KraepelinTest/Detail', [
@@ -408,103 +628,63 @@ class KraepelinController extends Controller
     }
 
     /**
-     * Generate test data (20 columns × 40 rows)
+     * Get active settings for selection
      */
-    private function generateTestData()
+    public function getActiveSettings()
     {
-        $data = [];
-
-        for ($col = 0; $col < 20; $col++) {
-            $column = [];
-            for ($row = 0; $row < 40; $row++) {
-                $num1 = rand(1, 9);
-                $num2 = rand(1, 9);
-
-                $column[] = [
-                    'num1' => $num1,
-                    'num2' => $num2,
-                    'answer' => $num1 + $num2
+        $settings = KraepelinSetting::active()
+            ->orderBy('difficulty')
+            ->get()
+            ->map(function ($setting) {
+                return [
+                    'id' => $setting->id,
+                    'name' => $setting->name,
+                    'rows' => $setting->rows,
+                    'columns' => $setting->columns,
+                    'time_per_column' => $setting->time_per_column,
+                    'difficulty' => $setting->difficulty,
+                    'description' => $setting->description,
+                    'total_questions' => $setting->total_questions,
+                    'total_time' => $setting->total_time,
+                    'total_time_formatted' => $setting->total_time_formatted,
                 ];
-            }
-            $data[] = $column;
-        }
-
-        return $data;
-    }
-
-    /**
-     * Calculate test results
-     */
-    private function calculateResults($testData, $userAnswers)
-    {
-        $score = 0;
-        $correct = 0;
-        $wrong = 0;
-        $unanswered = 0;
-
-        foreach ($testData as $colIndex => $column) {
-            foreach ($column as $rowIndex => $question) {
-                $userAnswer = $userAnswers[$colIndex][$rowIndex] ?? null;
-                $correctAnswer = ($question['num1'] + $question['num2']) % 10;
-
-                if ($userAnswer === null || $userAnswer === '') {
-                    $unanswered++;
-                } elseif ($userAnswer == $correctAnswer) {
-                    $score++;
-                    $correct++;
-                } else {
-                    $wrong++;
-                }
-            }
-        }
-
-        return [
-            'score' => $score,
-            'correct' => $correct,
-            'wrong' => $wrong,
-            'unanswered' => $unanswered
-        ];
-    }
-
-    public function generateTest(Request $request)
-    {
-        $rows = $request->input('rows', 27);
-        $cols = $request->input('cols', 22);
-
-        $testData = [];
-
-        for ($col = 0; $col < $cols; $col++) {
-            $column = [];
-            for ($row = 0; $row < $rows; $row++) {
-                // Generate random numbers 1-9
-                $column[] = [
-                    'num1' => rand(1, 9),
-                    'num2' => rand(1, 9)
-                ];
-            }
-            $testData[] = $column;
-        }
+            });
 
         return response()->json([
             'success' => true,
-            'test_data' => $testData,
-            'rows' => $rows,
-            'cols' => $cols,
-            'total_questions' => ($rows - 1) * $cols
+            'settings' => $settings
         ]);
+    }
+
+    /**
+     * Format time in seconds to readable format
+     */
+    private function formatTime($seconds)
+    {
+        $minutes = floor($seconds / 60);
+        $remainingSeconds = $seconds % 60;
+        
+        if ($minutes > 0) {
+            return "{$minutes} menit {$remainingSeconds} detik";
+        }
+        return "{$remainingSeconds} detik";
     }
 
     public function resultsIndex(Request $request)
     {
         $perPage = $request->get('per_page', 10);
         $search = $request->get('search', '');
+        $difficulty = $request->get('difficulty', '');
 
-        $results = KraepelinTestResult::with('user')
+        $results = KraepelinTestResult::with(['user', 'test'])
             ->when($search, function ($query, $search) {
                 return $query->whereHas('user', function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
                         ->orWhere('email', 'like', "%{$search}%");
                 });
+            })
+            ->when($difficulty, function ($query, $difficulty) {
+                return $query->where('difficulty', $difficulty);
             })
             ->orderBy('created_at', 'desc')
             ->paginate($perPage);
@@ -513,6 +693,7 @@ class KraepelinController extends Controller
             'results' => $results,
             'filters' => [
                 'search' => $search,
+                'difficulty' => $difficulty,
                 'per_page' => $perPage
             ]
         ]);
@@ -522,19 +703,25 @@ class KraepelinController extends Controller
     {
         $user = auth()->user();
         $perPage = $request->get('per_page', 10);
+        $difficulty = $request->get('difficulty', '');
 
         $results = KraepelinTestResult::where('user_id', $user->id)
+            ->with('test')
+            ->when($difficulty, function ($query, $difficulty) {
+                return $query->where('difficulty', $difficulty);
+            })
             ->orderBy('created_at', 'desc')
             ->paginate($perPage);
 
         return Inertia::render('Psychotest/KraepelinTest/MyResults', [
-            'results' => $results
+            'results' => $results,
+            'filters' => ['difficulty' => $difficulty]
         ]);
     }
 
     public function showResult($id)
     {
-        $result = KraepelinTestResult::with('user')
+        $result = KraepelinTestResult::with(['user', 'test'])
             ->where('user_id', auth()->id())
             ->findOrFail($id);
 
@@ -563,25 +750,4 @@ class KraepelinController extends Controller
         // Weight: 70% accuracy, 30% speed
         return round(($accuracy * 0.7) + ($speed * 0.3), 2);
     }
-
-    /**
-     * Export test results to PDF/Excel (optional)
-     */
-    // public function export(Request $request, $id)
-    // {
-    //     $test = KraepelinTest::with(['result', 'employee', 'user'])
-    //         ->where('user_id', Auth::id())
-    //         ->findOrFail($id);
-
-    //     $format = $request->format ?? 'pdf';
-
-    //     // Implementation for PDF/Excel export would go here
-    //     // This is a placeholder for the export functionality
-
-    //     return response()->json([
-    //         'success' => true,
-    //         'message' => 'Export functionality to be implemented',
-    //         'format' => $format
-    //     ]);
-    // }
 }

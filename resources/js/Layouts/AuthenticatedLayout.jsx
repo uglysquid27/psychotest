@@ -48,6 +48,29 @@ const UserIcon = () => (
     </svg>
 );
 
+const SettingsIcon = ({ style = {} }) => (
+    <svg
+        className="mr-3 w-5 h-5"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        style={style}
+    >
+        <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+        />
+        <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+        />
+    </svg>
+);
+
 const MenuIcon = () => (
     <svg
         className="w-6 h-6"
@@ -250,8 +273,8 @@ const themes = {
             bgVia: "#ffedd5", // orange-50
             bgTo: "#fef3c7", // yellow-50
             border: "#fde68a", // amber-200
-            shadow: "rgba(245, 158, 11, 0.15)" // amber-500 with opacity
-        }
+            shadow: "rgba(245, 158, 11, 0.15)", // amber-500 with opacity
+        },
     },
     ketelitian: {
         name: "Ketelitian",
@@ -267,8 +290,8 @@ const themes = {
             bgVia: "#eef2ff", // indigo-50
             bgTo: "#e0e7ff", // purple-50
             border: "#bfdbfe", // blue-200
-            shadow: "rgba(59, 130, 246, 0.15)" // blue-500 with opacity
-        }
+            shadow: "rgba(59, 130, 246, 0.15)", // blue-500 with opacity
+        },
     },
     hitungan: {
         name: "Hitungan",
@@ -284,8 +307,8 @@ const themes = {
             bgVia: "#d1fae5", // emerald-100
             bgTo: "#a7f3d0", // emerald-200
             border: "#a7f3d0", // emerald-200
-            shadow: "rgba(16, 185, 129, 0.15)" // emerald-500 with opacity
-        }
+            shadow: "rgba(16, 185, 129, 0.15)", // emerald-500 with opacity
+        },
     },
     deret: {
         name: "Deret",
@@ -301,8 +324,8 @@ const themes = {
             bgVia: "#ede9fe", // violet-100
             bgTo: "#ddd6fe", // violet-200
             border: "#ddd6fe", // violet-200
-            shadow: "rgba(139, 92, 246, 0.15)" // violet-500 with opacity
-        }
+            shadow: "rgba(139, 92, 246, 0.15)", // violet-500 with opacity
+        },
     },
     default: {
         name: "Default",
@@ -318,9 +341,9 @@ const themes = {
             bgVia: "#f1f5f9", // gray-50
             bgTo: "#f4f4f5", // zinc-50
             border: "#e2e8f0", // slate-200
-            shadow: "rgba(100, 116, 139, 0.15)" // slate-500 with opacity
-        }
-    }
+            shadow: "rgba(100, 116, 139, 0.15)", // slate-500 with opacity
+        },
+    },
 };
 
 // Helper function to detect current page theme
@@ -331,6 +354,10 @@ const detectTheme = (currentRoute) => {
     
     // Check for specific test pages first
     if (route.includes('kraepelin')) {
+        // Check if it's a settings page
+        if (route.includes('settings')) {
+            return themes.kraepelin; // Use Kraepelin theme for settings too
+        }
         return themes.kraepelin;
     } else if (route.includes('ketelitian')) {
         return themes.ketelitian;
@@ -401,21 +428,27 @@ const ProfileDropdown = ({ user, isEmployee, isAdmin, currentTheme }) => {
                         style={{ borderColor: currentTheme.colors.border }}
                     />
                 ) : (
-                    <div 
+                    <div
                         className="flex justify-center items-center border-2 rounded-full w-10 h-10 font-bold text-white text-lg shadow-lg"
-                        style={{ 
+                        style={{
                             background: `linear-gradient(135deg, ${currentTheme.colors.primary}, ${currentTheme.colors.secondary})`,
-                            borderColor: currentTheme.colors.border
+                            borderColor: currentTheme.colors.border,
                         }}
                     >
                         {userInitial}
                     </div>
                 )}
                 <div className="hidden lg:flex flex-col items-start">
-                    <span className="font-bold text-sm" style={{ color: currentTheme.colors.text }}>
+                    <span
+                        className="font-bold text-sm"
+                        style={{ color: currentTheme.colors.text }}
+                    >
                         {user?.name || "User"}
                     </span>
-                    <span className="text-xs font-medium" style={{ color: currentTheme.colors.textLight }}>
+                    <span
+                        className="text-xs font-medium"
+                        style={{ color: currentTheme.colors.textLight }}
+                    >
                         {user?.role ? user.role.toUpperCase() : "USER"}
                     </span>
                 </div>
@@ -443,30 +476,48 @@ const ProfileDropdown = ({ user, isEmployee, isAdmin, currentTheme }) => {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -10, scale: 0.95 }}
                         className="right-0 z-50 absolute shadow-xl backdrop-blur-md mt-3 py-2 border-2 rounded-2xl w-56"
-                        style={{ 
+                        style={{
                             background: `linear-gradient(135deg, ${currentTheme.colors.bgFrom}, ${currentTheme.colors.bgVia})`,
-                            borderColor: currentTheme.colors.border
+                            borderColor: currentTheme.colors.border,
                         }}
                     >
-                        <div className="px-4 py-3 border-b" style={{ borderColor: `${currentTheme.colors.border}80` }}>
-                            <p className="font-bold text-sm truncate" style={{ color: currentTheme.colors.text }}>
+                        <div
+                            className="px-4 py-3 border-b"
+                            style={{
+                                borderColor: `${currentTheme.colors.border}80`,
+                            }}
+                        >
+                            <p
+                                className="font-bold text-sm truncate"
+                                style={{ color: currentTheme.colors.text }}
+                            >
                                 {user?.name}
                             </p>
-                            <p className="text-xs truncate font-medium" style={{ color: currentTheme.colors.textLight }}>
+                            <p
+                                className="text-xs truncate font-medium"
+                                style={{ color: currentTheme.colors.textLight }}
+                            >
                                 {user?.email || user?.nik}
                             </p>
                         </div>
 
                         {isEmployee ? (
                             <Link
-                                href={route("employee.employees.edit", { employee: user.id })}
+                                href={route("employee.employees.edit", {
+                                    employee: user.id,
+                                })}
                                 className="flex items-center px-4 py-3 border-b text-sm transition-all duration-200"
-                                style={{ 
+                                style={{
                                     borderColor: `${currentTheme.colors.border}80`,
                                     color: currentTheme.colors.text,
                                 }}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = `${currentTheme.colors.light}80`}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                onMouseEnter={(e) =>
+                                    (e.currentTarget.style.backgroundColor = `${currentTheme.colors.light}80`)
+                                }
+                                onMouseLeave={(e) =>
+                                    (e.currentTarget.style.backgroundColor =
+                                        "transparent")
+                                }
                                 onClick={() => setIsOpen(false)}
                             >
                                 <UserIcon />
@@ -479,9 +530,15 @@ const ProfileDropdown = ({ user, isEmployee, isAdmin, currentTheme }) => {
                             method="post"
                             as="button"
                             className="flex items-center px-4 py-3 w-full text-sm text-left transition-all duration-200"
-                            style={{ color: '#dc2626' }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fef2f280'}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                            style={{ color: "#dc2626" }}
+                            onMouseEnter={(e) =>
+                                (e.currentTarget.style.backgroundColor =
+                                    "#fef2f280")
+                            }
+                            onMouseLeave={(e) =>
+                                (e.currentTarget.style.backgroundColor =
+                                    "transparent")
+                            }
                             onClick={() => setIsOpen(false)}
                         >
                             <svg
@@ -535,17 +592,25 @@ const ThemeToggle = ({ isDark, toggleDarkMode }) => (
 );
 
 // Generic Admin Dropdown Component with inline styles
-const AdminDropdown = ({ icon: Icon, label, isOpen, setIsOpen, children, isActive, currentTheme }) => {
+const AdminDropdown = ({
+    icon: Icon,
+    label,
+    isOpen,
+    setIsOpen,
+    children,
+    isActive,
+    currentTheme,
+}) => {
     const activeStyle = {
         background: `linear-gradient(135deg, ${currentTheme.colors.primary}, ${currentTheme.colors.secondary})`,
         borderColor: currentTheme.colors.medium,
-        color: 'white',
-        boxShadow: `0 10px 15px -3px ${currentTheme.colors.shadow}`
+        color: "white",
+        boxShadow: `0 10px 15px -3px ${currentTheme.colors.shadow}`,
     };
 
     const inactiveStyle = {
         color: currentTheme.colors.text,
-        borderColor: 'transparent'
+        borderColor: "transparent",
     };
 
     return (
@@ -560,28 +625,42 @@ const AdminDropdown = ({ icon: Icon, label, isOpen, setIsOpen, children, isActiv
                     if (!isActive) {
                         e.currentTarget.style.background = `linear-gradient(135deg, ${currentTheme.colors.light}, ${currentTheme.colors.bgVia})`;
                         e.currentTarget.style.color = currentTheme.colors.text;
-                        e.currentTarget.style.borderColor = currentTheme.colors.medium;
+                        e.currentTarget.style.borderColor =
+                            currentTheme.colors.medium;
                         e.currentTarget.style.boxShadow = `0 10px 15px -3px ${currentTheme.colors.shadow}`;
                     }
                 }}
                 onMouseLeave={(e) => {
                     if (!isActive) {
-                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.background = "transparent";
                         e.currentTarget.style.color = currentTheme.colors.text;
-                        e.currentTarget.style.borderColor = 'transparent';
-                        e.currentTarget.style.boxShadow = 'none';
+                        e.currentTarget.style.borderColor = "transparent";
+                        e.currentTarget.style.boxShadow = "none";
                     }
                 }}
             >
                 <div className="flex items-center">
-                    <Icon style={{ color: isActive ? 'white' : currentTheme.colors.textLight }} />
+                    <Icon
+                        style={{
+                            color: isActive
+                                ? "white"
+                                : currentTheme.colors.textLight,
+                        }}
+                    />
                     <span className="font-bold ml-3">{label}</span>
                 </div>
                 <motion.div
                     animate={{ rotate: isOpen ? 180 : 0 }}
                     className="transition-transform duration-300"
                 >
-                    <ChevronDownIcon className="w-5 h-5" style={{ color: isActive ? 'white' : currentTheme.colors.textLight }} />
+                    <ChevronDownIcon
+                        className="w-5 h-5"
+                        style={{
+                            color: isActive
+                                ? "white"
+                                : currentTheme.colors.textLight,
+                        }}
+                    />
                 </motion.div>
             </motion.button>
 
@@ -593,11 +672,11 @@ const AdminDropdown = ({ icon: Icon, label, isOpen, setIsOpen, children, isActiv
                         exit={{ opacity: 0, height: 0, scale: 0.95 }}
                         className="mt-2 ml-6 overflow-hidden"
                     >
-                        <div 
+                        <div
                             className="space-y-1 backdrop-blur-sm p-2 border-2 rounded-xl shadow-inner"
-                            style={{ 
+                            style={{
                                 background: `linear-gradient(135deg, ${currentTheme.colors.bgFrom}, ${currentTheme.colors.bgVia})`,
-                                borderColor: currentTheme.colors.border
+                                borderColor: currentTheme.colors.border,
                             }}
                         >
                             {children}
@@ -610,17 +689,25 @@ const AdminDropdown = ({ icon: Icon, label, isOpen, setIsOpen, children, isActiv
 };
 
 // Generic Dropdown Component for Employees
-const EmployeeDropdown = ({ icon: Icon, label, isOpen, setIsOpen, children, isActive, currentTheme }) => {
+const EmployeeDropdown = ({
+    icon: Icon,
+    label,
+    isOpen,
+    setIsOpen,
+    children,
+    isActive,
+    currentTheme,
+}) => {
     const activeStyle = {
         background: `linear-gradient(135deg, ${currentTheme.colors.primary}, ${currentTheme.colors.secondary})`,
         borderColor: currentTheme.colors.medium,
-        color: 'white',
-        boxShadow: `0 10px 15px -3px ${currentTheme.colors.shadow}`
+        color: "white",
+        boxShadow: `0 10px 15px -3px ${currentTheme.colors.shadow}`,
     };
 
     const inactiveStyle = {
         color: currentTheme.colors.text,
-        borderColor: 'transparent'
+        borderColor: "transparent",
     };
 
     return (
@@ -635,28 +722,42 @@ const EmployeeDropdown = ({ icon: Icon, label, isOpen, setIsOpen, children, isAc
                     if (!isActive) {
                         e.currentTarget.style.background = `linear-gradient(135deg, ${currentTheme.colors.light}, ${currentTheme.colors.bgVia})`;
                         e.currentTarget.style.color = currentTheme.colors.text;
-                        e.currentTarget.style.borderColor = currentTheme.colors.medium;
+                        e.currentTarget.style.borderColor =
+                            currentTheme.colors.medium;
                         e.currentTarget.style.boxShadow = `0 10px 15px -3px ${currentTheme.colors.shadow}`;
                     }
                 }}
                 onMouseLeave={(e) => {
                     if (!isActive) {
-                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.background = "transparent";
                         e.currentTarget.style.color = currentTheme.colors.text;
-                        e.currentTarget.style.borderColor = 'transparent';
-                        e.currentTarget.style.boxShadow = 'none';
+                        e.currentTarget.style.borderColor = "transparent";
+                        e.currentTarget.style.boxShadow = "none";
                     }
                 }}
             >
                 <div className="flex items-center">
-                    <Icon style={{ color: isActive ? 'white' : currentTheme.colors.textLight }} />
+                    <Icon
+                        style={{
+                            color: isActive
+                                ? "white"
+                                : currentTheme.colors.textLight,
+                        }}
+                    />
                     <span className="font-bold ml-3">{label}</span>
                 </div>
                 <motion.div
                     animate={{ rotate: isOpen ? 180 : 0 }}
                     className="transition-transform duration-300"
                 >
-                    <ChevronDownIcon className="w-5 h-5" style={{ color: isActive ? 'white' : currentTheme.colors.textLight }} />
+                    <ChevronDownIcon
+                        className="w-5 h-5"
+                        style={{
+                            color: isActive
+                                ? "white"
+                                : currentTheme.colors.textLight,
+                        }}
+                    />
                 </motion.div>
             </motion.button>
 
@@ -668,11 +769,11 @@ const EmployeeDropdown = ({ icon: Icon, label, isOpen, setIsOpen, children, isAc
                         exit={{ opacity: 0, height: 0, scale: 0.95 }}
                         className="mt-2 ml-6 overflow-hidden"
                     >
-                        <div 
+                        <div
                             className="space-y-1 backdrop-blur-sm p-2 border-2 rounded-xl shadow-inner"
-                            style={{ 
+                            style={{
                                 background: `linear-gradient(135deg, ${currentTheme.colors.bgFrom}, ${currentTheme.colors.bgVia})`,
-                                borderColor: currentTheme.colors.border
+                                borderColor: currentTheme.colors.border,
                             }}
                         >
                             {children}
@@ -685,7 +786,12 @@ const EmployeeDropdown = ({ icon: Icon, label, isOpen, setIsOpen, children, isAc
 };
 
 // Navigation Items Configuration for ADMIN
-const adminNavigationConfig = (user, openStates, setOpenState, currentTheme) => {
+const adminNavigationConfig = (
+    user,
+    openStates,
+    setOpenState,
+    currentTheme,
+) => {
     const createDropdown = (IconComponent, label, key, routes) => (
         <AdminDropdown
             key={key}
@@ -693,7 +799,7 @@ const adminNavigationConfig = (user, openStates, setOpenState, currentTheme) => 
             label={label}
             isOpen={openStates[key]}
             setIsOpen={(value) => setOpenState(key, value)}
-            isActive={routes.some(route => route.active)}
+            isActive={routes.some((route) => route.active)}
             currentTheme={currentTheme}
         >
             {routes.map((item, index) => (
@@ -708,8 +814,13 @@ const adminNavigationConfig = (user, openStates, setOpenState, currentTheme) => 
                         active={item.active}
                         className="flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all duration-200"
                         style={{ color: currentTheme.colors.text }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = `${currentTheme.colors.light}80`}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                        onMouseEnter={(e) =>
+                            (e.currentTarget.style.backgroundColor = `${currentTheme.colors.light}80`)
+                        }
+                        onMouseLeave={(e) =>
+                            (e.currentTarget.style.backgroundColor =
+                                "transparent")
+                        }
                         onClick={() => setOpenState(key, false)}
                     >
                         <span className="font-bold">{item.label}</span>
@@ -722,12 +833,13 @@ const adminNavigationConfig = (user, openStates, setOpenState, currentTheme) => 
     return [
         {
             type: "dropdown",
-            component: createDropdown(
-                DashboardIcon,
-                "Dashboard",
-                "dashboard",
-                [{ href: route("dashboard"), label: "Admin Dashboard", active: route().current("dashboard") }]
-            ),
+            component: createDropdown(DashboardIcon, "Dashboard", "dashboard", [
+                {
+                    href: route("dashboard"),
+                    label: "Admin Dashboard",
+                    active: route().current("dashboard"),
+                },
+            ]),
             show: true,
         },
         {
@@ -736,7 +848,13 @@ const adminNavigationConfig = (user, openStates, setOpenState, currentTheme) => 
                 AttendanceIcon,
                 "Attendance",
                 "attendance",
-                [{ href: route("employee-attendance.index"), label: "Employee Attendance", active: route().current("employee-attendance.index") }]
+                [
+                    {
+                        href: route("employee-attendance.index"),
+                        label: "Employee Attendance",
+                        active: route().current("employee-attendance.index"),
+                    },
+                ],
             ),
             show: true,
         },
@@ -747,31 +865,93 @@ const adminNavigationConfig = (user, openStates, setOpenState, currentTheme) => 
                 "Test Management",
                 "testManagement",
                 [
-                    { href: route("admin.test-assignments.index"), label: "Test Assignments", active: route().current("admin.test-assignments.*") },
-                    { href: route("admin.test-assignments.create"), label: "Assign New Test", active: route().current("admin.test-assignments.create") },
-                ]
+                    {
+                        href: route("admin.test-assignments.index"),
+                        label: "Test Assignments",
+                        active: route().current("admin.test-assignments.*"),
+                    },
+                    {
+                        href: route("admin.test-assignments.create"),
+                        label: "Assign New Test",
+                        active: route().current(
+                            "admin.test-assignments.create",
+                        ),
+                    },
+                ],
+            ),
+            show: true,
+        },
+        // ADD NEW KRAEPELIN SETTINGS DROPDOWN HERE
+        {
+            type: "dropdown",
+            component: createDropdown(
+                SettingsIcon,
+                "Test Settings",
+                "testSettings",
+                [
+                    {
+                        href: route("admin.kraepelin.settings.index"),
+                        label: "Kraepelin Settings",
+                        active: route().current("admin.kraepelin.settings.*"),
+                    },
+                ],
             ),
             show: true,
         },
         {
             type: "dropdown",
-            component: createDropdown(
-                PsychologyIcon,
-                "Psikotes",
-                "psikotes",
-                [
-                    { href: route("kraepelin.index"), label: "Kraepelin Test", active: route().current("kraepelin.*") },
-                    { href: route("ketelitian.index"), label: "Ketelitian Test", active: route().current("ketelitian.index") },
-                    { href: route("hitungan.test"), label: "Hitungan Test", active: route().current("hitungan.test") },
-                    { href: route("deret.index"), label: "Deret Test", active: route().current("deret.*") },
-                    { href: route("wartegg.index"), label: "Wartegg Test", active: route().current("wartegg.*") },
-                    { href: route("analogi.index"), label: "Analogi Test", active: route().current("analogi.*") },
-                    { href: route("spasial.index"), label: "Spasial Test", active: route().current("spasial.*") },
-                    { href: route("numerik.index"), label: "Numerik Test", active: route().current("numerik.*") },
-                    { href: route("disc.index"), label: "DISC Test", active: route().current("disc.*") },
-                    { href: route("personality.index"), label: "Personality Test", active: route().current("personality.*") },
-                ]
-            ),
+            component: createDropdown(PsychologyIcon, "Psikotes", "psikotes", [
+                {
+                    href: route("kraepelin.index"),
+                    label: "Kraepelin Test",
+                    active: route().current("kraepelin.*"),
+                },
+                {
+                    href: route("ketelitian.index"),
+                    label: "Ketelitian Test",
+                    active: route().current("ketelitian.index"),
+                },
+                {
+                    href: route("hitungan.test"),
+                    label: "Hitungan Test",
+                    active: route().current("hitungan.test"),
+                },
+                {
+                    href: route("deret.index"),
+                    label: "Deret Test",
+                    active: route().current("deret.*"),
+                },
+                {
+                    href: route("wartegg.index"),
+                    label: "Wartegg Test",
+                    active: route().current("wartegg.*"),
+                },
+                {
+                    href: route("analogi.index"),
+                    label: "Analogi Test",
+                    active: route().current("analogi.*"),
+                },
+                {
+                    href: route("spasial.index"),
+                    label: "Spasial Test",
+                    active: route().current("spasial.*"),
+                },
+                {
+                    href: route("numerik.index"),
+                    label: "Numerik Test",
+                    active: route().current("numerik.*"),
+                },
+                {
+                    href: route("disc.index"),
+                    label: "DISC Test",
+                    active: route().current("disc.*"),
+                },
+                {
+                    href: route("personality.index"),
+                    label: "Personality Test",
+                    active: route().current("personality.*"),
+                },
+            ]),
             show: true,
         },
         {
@@ -781,9 +961,21 @@ const adminNavigationConfig = (user, openStates, setOpenState, currentTheme) => 
                 "Kelola Soal Ketelitian",
                 "ketelitianQuestions",
                 [
-                    { href: route("admin.ketelitian.questions.index"), label: "Kelola Soal Ketelitian", active: route().current("admin.ketelitian.questions.index") },
-                    { href: route("admin.ketelitian.questions.create"), label: "Tambah Soal", active: route().current("admin.ketelitian.questions.create") },
-                ]
+                    {
+                        href: route("admin.ketelitian.questions.index"),
+                        label: "Kelola Soal Ketelitian",
+                        active: route().current(
+                            "admin.ketelitian.questions.index",
+                        ),
+                    },
+                    {
+                        href: route("admin.ketelitian.questions.create"),
+                        label: "Tambah Soal",
+                        active: route().current(
+                            "admin.ketelitian.questions.create",
+                        ),
+                    },
+                ],
             ),
             show: true,
         },
@@ -794,9 +986,21 @@ const adminNavigationConfig = (user, openStates, setOpenState, currentTheme) => 
                 "Kelola Soal Hitungan",
                 "hitunganQuestions",
                 [
-                    { href: route("admin.hitungan.questions.index"), label: "Kelola Soal Hitungan", active: route().current("admin.hitungan.questions.index") },
-                    { href: route("admin.hitungan.questions.create"), label: "Tambah Soal", active: route().current("admin.hitungan.questions.create") },
-                ]
+                    {
+                        href: route("admin.hitungan.questions.index"),
+                        label: "Kelola Soal Hitungan",
+                        active: route().current(
+                            "admin.hitungan.questions.index",
+                        ),
+                    },
+                    {
+                        href: route("admin.hitungan.questions.create"),
+                        label: "Tambah Soal",
+                        active: route().current(
+                            "admin.hitungan.questions.create",
+                        ),
+                    },
+                ],
             ),
             show: true,
         },
@@ -807,9 +1011,17 @@ const adminNavigationConfig = (user, openStates, setOpenState, currentTheme) => 
                 "Kelola Soal Deret",
                 "deretQuestions",
                 [
-                    { href: route("admin.deret.questions.index"), label: "Kelola Soal Deret", active: route().current("admin.deret.questions.index") },
-                    { href: route("admin.deret.questions.create"), label: "Tambah Soal", active: route().current("admin.deret.questions.create") },
-                ]
+                    {
+                        href: route("admin.deret.questions.index"),
+                        label: "Kelola Soal Deret",
+                        active: route().current("admin.deret.questions.index"),
+                    },
+                    {
+                        href: route("admin.deret.questions.create"),
+                        label: "Tambah Soal",
+                        active: route().current("admin.deret.questions.create"),
+                    },
+                ],
             ),
             show: true,
         },
@@ -817,7 +1029,13 @@ const adminNavigationConfig = (user, openStates, setOpenState, currentTheme) => 
 };
 
 // Navigation Items Configuration for EMPLOYEE
-const employeeNavigationConfig = (user, isForkliftOperator, openStates, setOpenState, currentTheme) => {
+const employeeNavigationConfig = (
+    user,
+    isForkliftOperator,
+    openStates,
+    setOpenState,
+    currentTheme,
+) => {
     const employeeNavItems = [
         {
             type: "link",
@@ -843,15 +1061,15 @@ const employeeNavigationConfig = (user, isForkliftOperator, openStates, setOpenS
         {
             type: "link",
             href: route("employee.bank-account-change.create"),
-            label: 'Ganti Rekening',
-            active: route().current('employee.bank-account-change.*'),
+            label: "Ganti Rekening",
+            active: route().current("employee.bank-account-change.*"),
             show: true,
         },
         {
             type: "link",
-            href: route('employee.bank-account-change.history'),
-            label: 'Riwayat Rekening',
-            active: route().current('employee.bank-account-change.history'),
+            href: route("employee.bank-account-change.history"),
+            label: "Riwayat Rekening",
+            active: route().current("employee.bank-account-change.history"),
             show: true,
         },
         {
@@ -886,10 +1104,10 @@ export default function AuthenticatedLayout({
     const user = auth?.user;
     const [isDark, setIsDark] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    
+
     // Detect current theme based on URL - NOW WORKS FOR ALL PAGES
     const currentTheme = detectTheme(url);
-    
+
     // Manage all dropdown states
     const [dropdownStates, setDropdownStates] = useState({
         dashboard: false,
@@ -905,14 +1123,14 @@ export default function AuthenticatedLayout({
     const setDropdownState = (key, value) => {
         if (value === true) {
             const newState = {};
-            Object.keys(dropdownStates).forEach(k => {
+            Object.keys(dropdownStates).forEach((k) => {
                 newState[k] = k === key;
             });
             setDropdownStates(newState);
         } else {
-            setDropdownStates(prev => ({
+            setDropdownStates((prev) => ({
                 ...prev,
-                [key]: value
+                [key]: value,
             }));
         }
     };
@@ -925,6 +1143,7 @@ export default function AuthenticatedLayout({
                 attendance: false,
                 testManagement: false,
                 psikotes: false,
+                testSettings: false, // Add this
                 ketelitianQuestions: false,
                 hitunganQuestions: false,
                 deretQuestions: false,
@@ -934,28 +1153,78 @@ export default function AuthenticatedLayout({
 
     // User role checks
     const isAdmin = user?.role === "admin";
-    const isEmployee = user?.nik && typeof user.nik === "string" && user.nik.trim() !== "";
-    
+    const isEmployee =
+        user?.nik && typeof user.nik === "string" && user.nik.trim() !== "";
+
     // Forklift operator check (for employees only)
     const forkliftOperatorNiks = [
-        "10797", "10485", "10640", "11299", "10933", "11321", "10843", "10866", "11302", "10494",
-        "10803", "11108", "10858", "10786", "11301", "10625", "10833", "10850", "10838", "10954",
-        "10845", "10864", "10859", "10630", "10873", "10855", "10818", "10726", "10871", "11319",
-        "10828", "10781", "10616", "10824", "10484", "11324", "10612", "10798", "10576", "10804", "10821",
+        "10797",
+        "10485",
+        "10640",
+        "11299",
+        "10933",
+        "11321",
+        "10843",
+        "10866",
+        "11302",
+        "10494",
+        "10803",
+        "11108",
+        "10858",
+        "10786",
+        "11301",
+        "10625",
+        "10833",
+        "10850",
+        "10838",
+        "10954",
+        "10845",
+        "10864",
+        "10859",
+        "10630",
+        "10873",
+        "10855",
+        "10818",
+        "10726",
+        "10871",
+        "11319",
+        "10828",
+        "10781",
+        "10616",
+        "10824",
+        "10484",
+        "11324",
+        "10612",
+        "10798",
+        "10576",
+        "10804",
+        "10821",
     ];
-    const isForkliftOperator = isEmployee && user?.nik && forkliftOperatorNiks.includes(user.nik);
+    const isForkliftOperator =
+        isEmployee && user?.nik && forkliftOperatorNiks.includes(user.nik);
 
     // Get navigation items based on user role
-    const navItems = isAdmin 
-        ? adminNavigationConfig(user, dropdownStates, setDropdownState, currentTheme)
-        : employeeNavigationConfig(user, isForkliftOperator, dropdownStates, setDropdownState, currentTheme);
+    const navItems = isAdmin
+        ? adminNavigationConfig(
+              user,
+              dropdownStates,
+              setDropdownState,
+              currentTheme,
+          )
+        : employeeNavigationConfig(
+              user,
+              isForkliftOperator,
+              dropdownStates,
+              setDropdownState,
+              currentTheme,
+          );
 
     // Theme management
     useEffect(() => {
         if (typeof window !== "undefined") {
             const storedTheme = localStorage.getItem("theme");
             const prefersDark = window.matchMedia(
-                "(prefers-color-scheme: dark)"
+                "(prefers-color-scheme: dark)",
             ).matches;
             const shouldBeDark =
                 storedTheme === "dark" || (!storedTheme && prefersDark);
@@ -983,16 +1252,18 @@ export default function AuthenticatedLayout({
     const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : "U";
 
     return (
-        <div 
+        <div
             className="flex lg:flex-row flex-col min-h-screen font-sans antialiased transition-all duration-300"
-            style={{ 
-                background: `linear-gradient(135deg, ${currentTheme.colors.bgFrom}, ${currentTheme.colors.bgVia}, ${currentTheme.colors.bgTo})`
+            style={{
+                background: `linear-gradient(135deg, ${currentTheme.colors.bgFrom}, ${currentTheme.colors.bgVia}, ${currentTheme.colors.bgTo})`,
             }}
         >
             {/* Mobile & Tablet Header */}
-            <header 
+            <header
                 className="lg:hidden top-0 z-40 sticky flex justify-between items-center shadow-lg backdrop-blur-sm p-4"
-                style={{ background: `linear-gradient(135deg, ${currentTheme.colors.primary}, ${currentTheme.colors.secondary}, ${currentTheme.colors.primary})` }}
+                style={{
+                    background: `linear-gradient(135deg, ${currentTheme.colors.primary}, ${currentTheme.colors.secondary}, ${currentTheme.colors.primary})`,
+                }}
             >
                 <motion.button
                     whileHover={{ scale: 1.1 }}
@@ -1040,26 +1311,55 @@ export default function AuthenticatedLayout({
                             stiffness: 200,
                         }}
                         className={`fixed lg:sticky lg:top-0 lg:self-start lg:h-screen top-0 inset-y-0 left-0 w-80 lg:w-96 backdrop-blur-md rounded-2xl shadow-lg border-2 flex flex-col pt-6 z-40 border-r-2 overflow-y-auto ${
-                            isMobileMenuOpen ? 'block' : 'hidden lg:flex'
+                            isMobileMenuOpen ? "block" : "hidden lg:flex"
                         }`}
-                        style={{ 
+                        style={{
                             background: `linear-gradient(135deg, ${currentTheme.colors.bgFrom}, ${currentTheme.colors.bgVia})`,
-                            borderColor: currentTheme.colors.border
+                            borderColor: currentTheme.colors.border,
                         }}
                     >
                         {/* Header */}
-                        <div className="flex justify-between items-center px-6 pb-6 border-b-2" style={{ borderColor: `${currentTheme.colors.border}80` }}>
+                        <div
+                            className="flex justify-between items-center px-6 pb-6 border-b-2"
+                            style={{
+                                borderColor: `${currentTheme.colors.border}80`,
+                            }}
+                        >
                             <Link
-                                href={isAdmin ? "/dashboard" : "/employee/dashboard"}
+                                href={
+                                    isAdmin
+                                        ? "/dashboard"
+                                        : "/employee/dashboard"
+                                }
                                 className="flex items-center space-x-4 hover:opacity-80 transition-opacity"
                             >
-                                <ApplicationLogo className="fill-current w-auto h-10 ease-in ease-out" style={{ color: currentTheme.colors.primary }} />
+                                <ApplicationLogo
+                                    className="fill-current w-auto h-10 ease-in ease-out"
+                                    style={{
+                                        color: currentTheme.colors.primary,
+                                    }}
+                                />
                                 <div>
-                                    <h1 className="font-bold text-lg" style={{ color: currentTheme.colors.text }}>
-                                        {isAdmin ? "Admin Dashboard" : "Employee Portal"}
+                                    <h1
+                                        className="font-bold text-lg"
+                                        style={{
+                                            color: currentTheme.colors.text,
+                                        }}
+                                    >
+                                        {isAdmin
+                                            ? "Admin Dashboard"
+                                            : "Employee Portal"}
                                     </h1>
-                                    <p className="text-xs font-medium" style={{ color: currentTheme.colors.textLight }}>
-                                        {isAdmin ? "Management System" : "Psikotes Platform"}
+                                    <p
+                                        className="text-xs font-medium"
+                                        style={{
+                                            color: currentTheme.colors
+                                                .textLight,
+                                        }}
+                                    >
+                                        {isAdmin
+                                            ? "Management System"
+                                            : "Psikotes Platform"}
                                     </p>
                                 </div>
                             </Link>
@@ -1068,8 +1368,14 @@ export default function AuthenticatedLayout({
                                 onClick={() => setIsMobileMenuOpen(false)}
                                 className="lg:hidden p-2"
                                 style={{ color: currentTheme.colors.textLight }}
-                                onMouseEnter={(e) => e.currentTarget.style.color = currentTheme.colors.text}
-                                onMouseLeave={(e) => e.currentTarget.style.color = currentTheme.colors.textLight}
+                                onMouseEnter={(e) =>
+                                    (e.currentTarget.style.color =
+                                        currentTheme.colors.text)
+                                }
+                                onMouseLeave={(e) =>
+                                    (e.currentTarget.style.color =
+                                        currentTheme.colors.textLight)
+                                }
                                 aria-label="Close menu"
                             >
                                 <CloseIcon />
@@ -1081,39 +1387,65 @@ export default function AuthenticatedLayout({
                             {navItems.map((item, index) => {
                                 if (item.type === "dropdown") {
                                     return (
-                                        <motion.div key={`dropdown-${index}`} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }}>
+                                        <motion.div
+                                            key={`dropdown-${index}`}
+                                            initial={{ opacity: 0, x: -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            transition={{ delay: index * 0.1 }}
+                                        >
                                             {item.component}
                                         </motion.div>
                                     );
                                 }
                                 return (
-                                    <motion.div key={item.href} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }}>
+                                    <motion.div
+                                        key={item.href}
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ delay: index * 0.1 }}
+                                    >
                                         <NavLink
                                             href={item.href}
                                             active={item.active}
                                             className="flex items-center py-4 px-6 text-base font-bold rounded-2xl transition-all duration-300 border-2"
-                                            style={{ 
-                                                color: item.active ? 'white' : currentTheme.colors.text,
-                                                background: item.active ? `linear-gradient(135deg, ${currentTheme.colors.primary}, ${currentTheme.colors.secondary})` : 'transparent',
-                                                borderColor: item.active ? currentTheme.colors.medium : 'transparent',
-                                                boxShadow: item.active ? `0 10px 15px -3px ${currentTheme.colors.shadow}` : 'none'
+                                            style={{
+                                                color: item.active
+                                                    ? "white"
+                                                    : currentTheme.colors.text,
+                                                background: item.active
+                                                    ? `linear-gradient(135deg, ${currentTheme.colors.primary}, ${currentTheme.colors.secondary})`
+                                                    : "transparent",
+                                                borderColor: item.active
+                                                    ? currentTheme.colors.medium
+                                                    : "transparent",
+                                                boxShadow: item.active
+                                                    ? `0 10px 15px -3px ${currentTheme.colors.shadow}`
+                                                    : "none",
                                             }}
                                             onMouseEnter={(e) => {
                                                 if (!item.active) {
                                                     e.currentTarget.style.background = `linear-gradient(135deg, ${currentTheme.colors.light}, ${currentTheme.colors.bgVia})`;
-                                                    e.currentTarget.style.color = currentTheme.colors.text;
-                                                    e.currentTarget.style.borderColor = currentTheme.colors.medium;
+                                                    e.currentTarget.style.color =
+                                                        currentTheme.colors.text;
+                                                    e.currentTarget.style.borderColor =
+                                                        currentTheme.colors.medium;
                                                     e.currentTarget.style.boxShadow = `0 10px 15px -3px ${currentTheme.colors.shadow}`;
-                                                    e.currentTarget.style.transform = 'scale(1.05)';
+                                                    e.currentTarget.style.transform =
+                                                        "scale(1.05)";
                                                 }
                                             }}
                                             onMouseLeave={(e) => {
                                                 if (!item.active) {
-                                                    e.currentTarget.style.background = 'transparent';
-                                                    e.currentTarget.style.color = currentTheme.colors.text;
-                                                    e.currentTarget.style.borderColor = 'transparent';
-                                                    e.currentTarget.style.boxShadow = 'none';
-                                                    e.currentTarget.style.transform = 'scale(1)';
+                                                    e.currentTarget.style.background =
+                                                        "transparent";
+                                                    e.currentTarget.style.color =
+                                                        currentTheme.colors.text;
+                                                    e.currentTarget.style.borderColor =
+                                                        "transparent";
+                                                    e.currentTarget.style.boxShadow =
+                                                        "none";
+                                                    e.currentTarget.style.transform =
+                                                        "scale(1)";
                                                 }
                                             }}
                                             onClick={() => {
@@ -1123,13 +1455,16 @@ export default function AuthenticatedLayout({
                                                     attendance: false,
                                                     testManagement: false,
                                                     psikotes: false,
+                                                    testSettings: false, // Add this
                                                     ketelitianQuestions: false,
                                                     hitunganQuestions: false,
                                                     deretQuestions: false,
                                                 });
                                             }}
                                         >
-                                            <span className="font-bold">{item.label}</span>
+                                            <span className="font-bold">
+                                                {item.label}
+                                            </span>
                                         </NavLink>
                                     </motion.div>
                                 );
@@ -1137,11 +1472,11 @@ export default function AuthenticatedLayout({
                         </nav>
 
                         {/* Mobile & Tablet Profile Section */}
-                        <div 
+                        <div
                             className="lg:hidden space-y-4 backdrop-blur-sm p-6 border-t-2"
-                            style={{ 
+                            style={{
                                 background: `linear-gradient(135deg, ${currentTheme.colors.bgFrom}, ${currentTheme.colors.bgVia})`,
-                                borderColor: `${currentTheme.colors.border}80`
+                                borderColor: `${currentTheme.colors.border}80`,
                             }}
                         >
                             <div className="flex items-center space-x-4">
@@ -1150,24 +1485,39 @@ export default function AuthenticatedLayout({
                                         src={`/storage/${user.photo}`}
                                         alt={user.name}
                                         className="border-2 rounded-full w-12 h-12 object-cover shadow-lg"
-                                        style={{ borderColor: currentTheme.colors.border }}
+                                        style={{
+                                            borderColor:
+                                                currentTheme.colors.border,
+                                        }}
                                     />
                                 ) : (
-                                    <div 
+                                    <div
                                         className="flex justify-center items-center border-2 rounded-full w-12 h-12 font-bold text-white text-lg shadow-lg"
-                                        style={{ 
+                                        style={{
                                             background: `linear-gradient(135deg, ${currentTheme.colors.primary}, ${currentTheme.colors.secondary})`,
-                                            borderColor: currentTheme.colors.border
+                                            borderColor:
+                                                currentTheme.colors.border,
                                         }}
                                     >
                                         {userInitial}
                                     </div>
                                 )}
                                 <div className="flex-1 min-w-0">
-                                    <div className="font-bold text-base truncate" style={{ color: currentTheme.colors.text }}>
+                                    <div
+                                        className="font-bold text-base truncate"
+                                        style={{
+                                            color: currentTheme.colors.text,
+                                        }}
+                                    >
                                         {user?.name || "Loading..."}
                                     </div>
-                                    <div className="text-sm truncate font-medium" style={{ color: currentTheme.colors.textLight }}>
+                                    <div
+                                        className="text-sm truncate font-medium"
+                                        style={{
+                                            color: currentTheme.colors
+                                                .textLight,
+                                        }}
+                                    >
                                         {user?.email || user?.nik || ""}
                                     </div>
                                 </div>
@@ -1176,22 +1526,30 @@ export default function AuthenticatedLayout({
                             <div className="gap-3 grid grid-cols-2">
                                 {isEmployee && (
                                     <Link
-                                        href={route("employee.employees.edit", { employee: user.id })}
+                                        href={route("employee.employees.edit", {
+                                            employee: user.id,
+                                        })}
                                         className="py-3 rounded-xl font-bold text-sm text-center transition-all duration-200 border-2"
-                                        style={{ 
+                                        style={{
                                             color: currentTheme.colors.text,
-                                            borderColor: currentTheme.colors.border,
-                                            background: 'transparent'
+                                            borderColor:
+                                                currentTheme.colors.border,
+                                            background: "transparent",
                                         }}
                                         onMouseEnter={(e) => {
                                             e.currentTarget.style.background = `linear-gradient(135deg, ${currentTheme.colors.light}, ${currentTheme.colors.bgVia})`;
-                                            e.currentTarget.style.borderColor = currentTheme.colors.medium;
+                                            e.currentTarget.style.borderColor =
+                                                currentTheme.colors.medium;
                                         }}
                                         onMouseLeave={(e) => {
-                                            e.currentTarget.style.background = 'transparent';
-                                            e.currentTarget.style.borderColor = currentTheme.colors.border;
+                                            e.currentTarget.style.background =
+                                                "transparent";
+                                            e.currentTarget.style.borderColor =
+                                                currentTheme.colors.border;
                                         }}
-                                        onClick={() => setIsMobileMenuOpen(false)}
+                                        onClick={() =>
+                                            setIsMobileMenuOpen(false)
+                                        }
                                     >
                                         Edit Profile
                                     </Link>
@@ -1201,18 +1559,22 @@ export default function AuthenticatedLayout({
                                     method="post"
                                     as="button"
                                     className="py-3 rounded-xl font-bold text-sm text-center transition-all duration-200 border-2"
-                                    style={{ 
-                                        color: '#dc2626',
-                                        borderColor: '#fecaca',
-                                        background: 'transparent'
+                                    style={{
+                                        color: "#dc2626",
+                                        borderColor: "#fecaca",
+                                        background: "transparent",
                                     }}
                                     onMouseEnter={(e) => {
-                                        e.currentTarget.style.background = '#fef2f280';
-                                        e.currentTarget.style.borderColor = '#fca5a5';
+                                        e.currentTarget.style.background =
+                                            "#fef2f280";
+                                        e.currentTarget.style.borderColor =
+                                            "#fca5a5";
                                     }}
                                     onMouseLeave={(e) => {
-                                        e.currentTarget.style.background = 'transparent';
-                                        e.currentTarget.style.borderColor = '#fecaca';
+                                        e.currentTarget.style.background =
+                                            "transparent";
+                                        e.currentTarget.style.borderColor =
+                                            "#fecaca";
                                     }}
                                     onClick={() => setIsMobileMenuOpen(false)}
                                 >
@@ -1233,9 +1595,9 @@ export default function AuthenticatedLayout({
                 {/* Desktop Header */}
                 <header
                     className={`hidden lg:flex items-center justify-between p-8 backdrop-blur-md rounded-2xl shadow-xl border-2 transition-colors duration-300 mx-8 mt-8 sticky top-0 z-30`}
-                    style={{ 
+                    style={{
                         background: `linear-gradient(135deg, ${currentTheme.colors.bgFrom}, ${currentTheme.colors.bgVia})`,
-                        borderColor: currentTheme.colors.border
+                        borderColor: currentTheme.colors.border,
                     }}
                 >
                     <div className="flex items-center space-x-4">
@@ -1252,7 +1614,10 @@ export default function AuthenticatedLayout({
                         </motion.button>
                         <div className="flex-1">
                             {header && (
-                                <h1 className="font-bold text-2xl transition-colors duration-200" style={{ color: currentTheme.colors.text }}>
+                                <h1
+                                    className="font-bold text-2xl transition-colors duration-200"
+                                    style={{ color: currentTheme.colors.text }}
+                                >
                                     {header}
                                 </h1>
                             )}

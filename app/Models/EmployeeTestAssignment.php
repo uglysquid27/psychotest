@@ -88,50 +88,50 @@ class EmployeeTestAssignment extends Model
         return $this->status === self::STATUS_COMPLETED;
     }
 
-     public function isAccessible()
-    {
-        // If no due date, always accessible
-        if (!$this->due_date) {
-            return true;
-        }
-
-        $dueDate = Carbon::parse($this->due_date);
-        $today = Carbon::today();
-        
-        // Test is accessible if due_date is today or in the future
-        // AND if status is assigned or in_progress
-        if (in_array($this->status, [self::STATUS_ASSIGNED, self::STATUS_IN_PROGRESS])) {
-            // Compare only dates (ignore time)
-            $dueDateOnly = $dueDate->copy()->startOfDay();
-            return $dueDateOnly->greaterThanOrEqualTo($today);
-        }
-        
-        return false;
+    public function isAccessible()
+{
+    // If no due date, always accessible
+    if (!$this->due_date) {
+        return true;
     }
+
+    $dueDate = Carbon::parse($this->due_date);
+    $today = Carbon::today();
+    
+    // Test is accessible if due_date is today or in the future
+    // AND if status is assigned or in_progress
+    if (in_array($this->status, [self::STATUS_ASSIGNED, self::STATUS_IN_PROGRESS])) {
+        // Compare only dates (ignore time)
+        $dueDateOnly = $dueDate->copy()->startOfDay();
+        return $dueDateOnly->greaterThanOrEqualTo($today); // Accessible today and future
+    }
+    
+    return false;
+}
 
     /**
      * Check if assignment is expired
      */
-     public function isExpired()
-    {
-        // If no due date, never expired
-        if (!$this->due_date) {
-            return false;
-        }
-
-        $dueDate = Carbon::parse($this->due_date);
-        $today = Carbon::today();
-        
-        // If due date is yesterday or earlier, it's expired
-        // AND if status is still assigned or in_progress
-        if (in_array($this->status, [self::STATUS_ASSIGNED, self::STATUS_IN_PROGRESS])) {
-            // Compare only dates (ignore time)
-            $dueDateOnly = $dueDate->copy()->startOfDay();
-            return $dueDateOnly->lessThan($today);
-        }
-        
+    public function isExpired()
+{
+    // If no due date, never expired
+    if (!$this->due_date) {
         return false;
     }
+
+    $dueDate = Carbon::parse($this->due_date);
+    $today = Carbon::today();
+    
+    // If due date is tomorrow or earlier, it's expired
+    // AND if status is still assigned or in_progress
+    if (in_array($this->status, [self::STATUS_ASSIGNED, self::STATUS_IN_PROGRESS])) {
+        // Compare only dates (ignore time)
+        $dueDateOnly = $dueDate->copy()->startOfDay();
+        return $dueDateOnly->lessThan($today); // Expired if due date is yesterday or earlier
+    }
+    
+    return false;
+}
 
         public function canAttempt()
     {
@@ -171,26 +171,27 @@ class EmployeeTestAssignment extends Model
         return $this;
     }
 
+    const STATUS_DONE = 'done';
     /**
      * Complete the test with results
      */
     public function completeTest(int $score, int $total, array $results = []): self
-    {
-        $percentage = $total > 0 ? round(($score / $total) * 100, 2) : 0;
+{
+    $percentage = $total > 0 ? round(($score / $total) * 100, 2) : 0;
 
-        $this->update([
-            'status' => self::STATUS_COMPLETED,
-            'completed_at' => now(),
-            'score' => $score,
-            'percentage' => $percentage,
-            'results' => array_merge($results, [
-                'total_questions' => $total,
-                'completed_at' => now()->toISOString(),
-            ]),
-        ]);
+    $this->update([
+        'status' => self::STATUS_COMPLETED, // Change to STATUS_DONE if you want 'done'
+        'completed_at' => now(),
+        'score' => $score,
+        'percentage' => $percentage,
+        'results' => array_merge($results, [
+            'total_questions' => $total,
+            'completed_at' => now()->toISOString(),
+        ]),
+    ]);
 
-        return $this;
-    }
+    return $this;
+}
 
     /**
      * Check if employee can access this test
@@ -338,4 +339,6 @@ class EmployeeTestAssignment extends Model
 
         return $routeTestMap[$routeName] ?? null;
     }
+
+    
 }

@@ -1,6 +1,5 @@
 <?php
 
-// app/Models/KraepelinTest.php
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -15,18 +14,26 @@ class KraepelinTest extends Model
         'employee_id',
         'user_id',
         'test_data',
+        'rows',
+        'columns',
+        'time_per_column',
+        'difficulty',
         'duration_minutes',
         'started_at',
         'finished_at',
         'time_taken_seconds',
         'status',
-        'notes'
+        'notes',
+        'kraepelin_setting_id'
     ];
 
     protected $casts = [
         'started_at' => 'datetime',
         'finished_at' => 'datetime',
         'test_data' => 'array',
+        'rows' => 'integer',
+        'columns' => 'integer',
+        'time_per_column' => 'integer',
         'duration_minutes' => 'integer',
         'time_taken_seconds' => 'integer'
     ];
@@ -57,10 +64,49 @@ class KraepelinTest extends Model
 
     /**
      * Get the test result
-     */public function result()
-{
-    return $this->hasOne(KraepelinTestResult::class, 'kraepelin_test_id');
-}
+     */
+    public function result()
+    {
+        return $this->hasOne(KraepelinTestResult::class);
+    }
+
+    /**
+     * Get the setting used for this test
+     */
+    public function setting()
+    {
+        return $this->belongsTo(KraepelinSetting::class, 'kraepelin_setting_id');
+    }
+
+    /**
+     * Get total questions
+     */
+    public function getTotalQuestionsAttribute()
+    {
+        return ($this->rows - 1) * $this->columns;
+    }
+
+    /**
+     * Get total time in seconds
+     */
+    public function getTotalTimeAttribute()
+    {
+        return $this->columns * $this->time_per_column;
+    }
+
+    /**
+     * Get formatted total time
+     */
+    public function getTotalTimeFormattedAttribute()
+    {
+        $minutes = floor($this->total_time / 60);
+        $seconds = $this->total_time % 60;
+        
+        if ($minutes > 0) {
+            return "{$minutes} menit {$seconds} detik";
+        }
+        return "{$seconds} detik";
+    }
 
     /**
      * Scope for active tests
@@ -102,7 +148,7 @@ class KraepelinTest extends Model
             return false;
         }
 
-        $expiredAt = $this->started_at->addMinutes($this->duration_minutes);
+        $expiredAt = $this->started_at->addSeconds($this->total_time);
         return now()->gt($expiredAt);
     }
 
@@ -115,8 +161,24 @@ class KraepelinTest extends Model
             return 0;
         }
 
-        $totalQuestions = 20 * 40; // 800 questions
-        return round(($this->result->total_answered / $totalQuestions) * 100, 2);
+        $totalQuestions = $this->total_questions;
+        $answered = $this->result->correct_answers + $this->result->wrong_answers;
+        
+        return $totalQuestions > 0 ? round(($answered / $totalQuestions) * 100, 2) : 0;
     }
-    
+
+    /**
+     * Get difficulty label
+     */
+    public function getDifficultyLabelAttribute()
+    {
+        $labels = [
+            'mudah' => 'Mudah',
+            'sedang' => 'Sedang',
+            'sulit' => 'Sulit',
+            'custom' => 'Kustom'
+        ];
+        
+        return $labels[$this->difficulty] ?? $this->difficulty;
+    }
 }

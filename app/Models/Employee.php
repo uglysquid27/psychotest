@@ -553,4 +553,25 @@ public function canAccessRoute(string $routeName): bool
     // Check if employee is assigned to this test
     return $this->canAccessTest($testType);
 }
+
+public function hasRole($role)
+{
+    // Check if this user has the role column
+    // Assuming you have a 'role' column in your employees table
+    if (property_exists($this, 'role') || isset($this->role)) {
+        return $this->role === $role;
+    }
+    
+    // If no role column exists, check user_type or is_admin
+    if (property_exists($this, 'user_type')) {
+        return $this->user_type === $role;
+    }
+    
+    if (property_exists($this, 'is_admin')) {
+        return $role === 'admin' && $this->is_admin;
+    }
+    
+    // Default fallback: only admin can access all tests
+    return false;
+}
 }

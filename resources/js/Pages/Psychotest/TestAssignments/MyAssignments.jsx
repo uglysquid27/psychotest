@@ -139,26 +139,9 @@ const CloseIcon = () => (
 );
 
 export default function MyAssignments({ assignments, testTypes, auth }) {
-    const [filter, setFilter] = useState("all"); // all, pending, completed
+    const [filter, setFilter] = useState("all"); // all, pending, completed, overdue
     const [showExpiredModal, setShowExpiredModal] = useState(false);
     const [expiredAssignment, setExpiredAssignment] = useState(null);
-
-    // Filter assignments
-    const filteredAssignments = assignments.data.filter((assignment) => {
-        if (filter === "pending") {
-            return (
-                assignment.status === "assigned" ||
-                assignment.status === "in_progress"
-            );
-        }
-        if (filter === "completed") {
-            return assignment.status === "completed";
-        }
-        if (filter === "overdue") {
-            return isAssignmentExpired(assignment);
-        }
-        return true;
-    });
 
     // Check if assignment is expired (due date is yesterday or earlier)
     const isAssignmentExpired = (assignment) => {
@@ -212,14 +195,14 @@ export default function MyAssignments({ assignments, testTypes, auth }) {
         );
     };
 
-    // Check if assignment is overdue (past due date but still accessible today)
+    // Check if assignment is overdue (past due time but still today)
     const isAssignmentOverdue = (assignment) => {
         if (!assignment.due_date) return false;
 
         const dueDate = new Date(assignment.due_date);
         const now = new Date();
 
-        // Overdue if current time is past due time but still today
+        // Overdue only if current time is past due time AND it's still today
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
@@ -233,6 +216,36 @@ export default function MyAssignments({ assignments, testTypes, auth }) {
                 assignment.status === "in_progress")
         );
     };
+
+    // Pre-calculate counts for filters
+    const expiredAssignmentsCount =
+        assignments.data.filter(isAssignmentExpired).length;
+    const pendingAssignmentsCount = assignments.data.filter(
+        (a) =>
+            (a.status === "assigned" || a.status === "in_progress") &&
+            !isAssignmentExpired(a),
+    ).length;
+    const completedAssignmentsCount = assignments.data.filter(
+        (a) => a.status === "completed",
+    ).length;
+
+    // Filter assignments
+    const filteredAssignments = assignments.data.filter((assignment) => {
+        if (filter === "pending") {
+            return (
+                (assignment.status === "assigned" ||
+                    assignment.status === "in_progress") &&
+                !isAssignmentExpired(assignment)
+            );
+        }
+        if (filter === "completed") {
+            return assignment.status === "completed";
+        }
+        if (filter === "overdue") {
+            return isAssignmentExpired(assignment);
+        }
+        return true; // "all" filter
+    });
 
     // Start test
     const startTest = (assignment) => {
@@ -284,27 +297,28 @@ export default function MyAssignments({ assignments, testTypes, auth }) {
     };
 
     // Get status text
-    const getStatusText = (status, dueDate) => {
+    const getStatusText = (assignment) => {
+        const { status, due_date } = assignment;
+
         if (status === "completed") return "Completed";
         if (status === "in_progress") return "In Progress";
         if (status === "expired") return "Expired";
 
-        if (isAssignmentExpired({ due_date: dueDate, status }))
-            return "Expired";
-        if (isAssignmentOverdue({ due_date: dueDate, status }))
-            return "Overdue";
+        if (isAssignmentExpired(assignment)) return "Expired";
+        if (isAssignmentOverdue(assignment)) return "Overdue";
         return "Assigned";
     };
 
     // Get status color
-    const getStatusColor = (status, dueDate) => {
+    const getStatusColor = (assignment) => {
+        const { status } = assignment;
+
         if (status === "completed") return "bg-green-100 text-green-800";
         if (status === "in_progress") return "bg-yellow-100 text-yellow-800";
         if (status === "expired") return "bg-red-100 text-red-800";
 
-        if (isAssignmentExpired({ due_date: dueDate, status }))
-            return "bg-red-100 text-red-800";
-        if (isAssignmentOverdue({ due_date: dueDate, status }))
+        if (isAssignmentExpired(assignment)) return "bg-red-100 text-red-800";
+        if (isAssignmentOverdue(assignment))
             return "bg-orange-100 text-orange-800";
         return "bg-blue-100 text-blue-800";
     };
@@ -339,7 +353,20 @@ export default function MyAssignments({ assignments, testTypes, auth }) {
 
         const now = new Date();
         const due = new Date(dueDate);
-        const diffTime = due - now;
+
+        // Set both to start of day for accurate day count
+        const nowStart = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate(),
+        );
+        const dueStart = new Date(
+            due.getFullYear(),
+            due.getMonth(),
+            due.getDate(),
+        );
+
+        const diffTime = dueStart - nowStart;
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
         return diffDays;
@@ -380,6 +407,37 @@ export default function MyAssignments({ assignments, testTypes, auth }) {
         );
 
         return dueOnly.getTime() === todayOnly.getTime();
+    };
+
+    // Get relative time display
+    const getRelativeTime = (dueDate) => {
+        if (!dueDate) return null;
+
+        const now = new Date();
+        const due = new Date(dueDate);
+
+        // Set to start of day
+        const nowStart = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate(),
+        );
+        const dueStart = new Date(
+            due.getFullYear(),
+            due.getMonth(),
+            due.getDate(),
+        );
+
+        const diffTime = dueStart - nowStart;
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 0) return "Today";
+        if (diffDays === 1) return "Tomorrow";
+        if (diffDays === -1) return "Yesterday";
+        if (diffDays > 0) return `In ${diffDays} days`;
+        if (diffDays < 0) return `${Math.abs(diffDays)} days ago`;
+
+        return null;
     };
 
     return (
@@ -454,13 +512,7 @@ export default function MyAssignments({ assignments, testTypes, auth }) {
                                         Pending
                                     </p>
                                     <p className="text-2xl font-bold">
-                                        {
-                                            assignments.data.filter(
-                                                (a) =>
-                                                    a.status === "assigned" ||
-                                                    a.status === "in_progress",
-                                            ).length
-                                        }
+                                        {pendingAssignmentsCount}
                                     </p>
                                 </div>
                             </div>
@@ -488,11 +540,7 @@ export default function MyAssignments({ assignments, testTypes, auth }) {
                                         Completed
                                     </p>
                                     <p className="text-2xl font-bold">
-                                        {
-                                            assignments.data.filter(
-                                                (a) => a.status === "completed",
-                                            ).length
-                                        }
+                                        {completedAssignmentsCount}
                                     </p>
                                 </div>
                             </div>
@@ -520,11 +568,7 @@ export default function MyAssignments({ assignments, testTypes, auth }) {
                                         Expired
                                     </p>
                                     <p className="text-2xl font-bold">
-                                        {
-                                            assignments.data.filter((a) =>
-                                                isAssignmentExpired(a),
-                                            ).length
-                                        }
+                                        {expiredAssignmentsCount}
                                     </p>
                                 </div>
                             </div>
@@ -549,39 +593,19 @@ export default function MyAssignments({ assignments, testTypes, auth }) {
                                 onClick={() => setFilter("pending")}
                                 className={`px-4 py-2 rounded-md ${filter === "pending" ? "bg-indigo-600 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
                             >
-                                Pending (
-                                {
-                                    assignments.data.filter(
-                                        (a) =>
-                                            a.status === "assigned" ||
-                                            a.status === "in_progress",
-                                    ).length
-                                }
-                                )
+                                Pending ({pendingAssignmentsCount})
                             </button>
                             <button
                                 onClick={() => setFilter("completed")}
                                 className={`px-4 py-2 rounded-md ${filter === "completed" ? "bg-indigo-600 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
                             >
-                                Completed (
-                                {
-                                    assignments.data.filter(
-                                        (a) => a.status === "completed",
-                                    ).length
-                                }
-                                )
+                                Completed ({completedAssignmentsCount})
                             </button>
                             <button
                                 onClick={() => setFilter("overdue")}
                                 className={`px-4 py-2 rounded-md ${filter === "overdue" ? "bg-indigo-600 text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
                             >
-                                Expired (
-                                {
-                                    assignments.data.filter((a) =>
-                                        isAssignmentExpired(a),
-                                    ).length
-                                }
-                                )
+                                Expired ({expiredAssignmentsCount})
                             </button>
                         </div>
                     </motion.div>
@@ -686,17 +710,33 @@ export default function MyAssignments({ assignments, testTypes, auth }) {
                                                                         )}{" "}
                                                                     Test
                                                                 </p>
+                                                                {/* Relative time display */}
+                                                                {assignment.due_date &&
+                                                                    !isExpired && (
+                                                                        <div className="text-sm text-gray-600 mt-1">
+                                                                            <span className="font-medium">
+                                                                                Due:{" "}
+                                                                            </span>
+                                                                            {getRelativeTime(
+                                                                                assignment.due_date,
+                                                                            )}{" "}
+                                                                            (
+                                                                            {formatDate(
+                                                                                assignment.due_date,
+                                                                            )}
+                                                                            )
+                                                                        </div>
+                                                                    )}
                                                             </div>
                                                         </div>
 
                                                         {/* Status Badge */}
                                                         <div className="flex flex-wrap items-center gap-2 mt-2">
                                                             <span
-                                                                className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(assignment.status, assignment.due_date)}`}
+                                                                className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(assignment)}`}
                                                             >
                                                                 {getStatusText(
-                                                                    assignment.status,
-                                                                    assignment.due_date,
+                                                                    assignment,
                                                                 )}
                                                             </span>
 
@@ -712,18 +752,20 @@ export default function MyAssignments({ assignments, testTypes, auth }) {
                                                                             isOverdue
                                                                                 ? "bg-orange-100 text-orange-800"
                                                                                 : daysRemaining <=
-                                                                                    1
+                                                                                    0
                                                                                   ? "bg-yellow-100 text-yellow-800"
                                                                                   : "bg-green-100 text-green-800"
                                                                         }`}
                                                                     >
                                                                         {isOverdue
-                                                                            ? `Overdue by ${timePastDue.hours} hours`
-                                                                            : isDueToday(
-                                                                                    assignment.due_date,
-                                                                                )
+                                                                            ? `Overdue by ${timePastDue?.hours || 0} hours`
+                                                                            : daysRemaining ===
+                                                                                0
                                                                               ? "Due Today"
-                                                                              : `${daysRemaining} days remaining`}
+                                                                              : daysRemaining <
+                                                                                  0
+                                                                                ? `${Math.abs(daysRemaining)} days ago`
+                                                                                : `${daysRemaining} days remaining`}
                                                                     </span>
                                                                 )}
 

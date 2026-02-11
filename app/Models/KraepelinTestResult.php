@@ -11,6 +11,7 @@ class KraepelinTestResult extends Model
 
     protected $fillable = [
         'user_id',
+        'kraepelin_test_id',
         'score',
         'total_questions',
         'correct_answers',
@@ -18,10 +19,13 @@ class KraepelinTestResult extends Model
         'unanswered',
         'time_elapsed',
         'percentage',
-        'test_data', // Store the test questions
-        'answers', // Store user answers
-        'row_performance', // Store row-by-row performance
-        'column_performance', // Store column-by-column performance
+        'test_data',
+        'answers',
+        'row_performance',
+        'column_performance',
+        'rows',
+        'columns',
+        'difficulty',
     ];
 
     protected $casts = [
@@ -29,12 +33,19 @@ class KraepelinTestResult extends Model
         'test_data' => 'array',
         'row_performance' => 'array',
         'column_performance' => 'array',
-        'percentage' => 'decimal:2'
+        'percentage' => 'decimal:2',
+        'rows' => 'integer',
+        'columns' => 'integer'
     ];
 
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function test()
+    {
+        return $this->belongsTo(KraepelinTest::class, 'kraepelin_test_id');
     }
 
     /**
@@ -54,6 +65,25 @@ class KraepelinTestResult extends Model
     {
         if ($this->time_elapsed > 0) {
             return round(($this->correct_answers + $this->wrong_answers) / ($this->time_elapsed / 60), 1);
+        }
+        return 0;
+    }
+
+    /**
+     * Get total time allocated
+     */
+    public function getTotalTimeAllocatedAttribute()
+    {
+        return $this->columns * 15; // Default 15 seconds per column
+    }
+
+    /**
+     * Get time usage percentage
+     */
+    public function getTimeUsagePercentageAttribute()
+    {
+        if ($this->total_time_allocated > 0) {
+            return min(100, ($this->time_elapsed / $this->total_time_allocated) * 100);
         }
         return 0;
     }
@@ -140,5 +170,20 @@ class KraepelinTestResult extends Model
             case 'Poor': return 'danger';
             default: return 'secondary';
         }
+    }
+
+    /**
+     * Get difficulty label
+     */
+    public function getDifficultyLabelAttribute()
+    {
+        $labels = [
+            'mudah' => 'Mudah',
+            'sedang' => 'Sedang',
+            'sulit' => 'Sulit',
+            'custom' => 'Kustom'
+        ];
+        
+        return $labels[$this->difficulty] ?? $this->difficulty;
     }
 }

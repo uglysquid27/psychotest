@@ -156,26 +156,61 @@ class EmployeeTestAssignmentController extends Controller
      * Delete assignment
      */
     public function destroy(EmployeeTestAssignment $assignment)
-    {
+{
+    try {
         $assignment->delete();
-
+        
+        // If it's an AJAX request, return JSON
+        if (request()->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Assignment deleted successfully!'
+            ]);
+        }
+        
+        // Otherwise, redirect with success message
         return redirect()->route('admin.test-assignments.index')
             ->with('success', 'Test assignment deleted successfully!');
+    } catch (\Exception $e) {
+        // If it's an AJAX request, return JSON error
+        if (request()->expectsJson()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete assignment: ' . $e->getMessage()
+            ], 500);
+        }
+        
+        // Otherwise, redirect with error message
+        return redirect()->route('admin.test-assignments.index')
+            ->with('error', 'Failed to delete assignment: ' . $e->getMessage());
     }
+}
 
     /**
      * Bulk delete assignments
      */
     public function bulkDelete(Request $request)
-    {
-        $request->validate([
-            'ids' => 'required|array',
-        ]);
+{
+    $request->validate([
+        'ids' => 'required|array',
+    ]);
 
+    try {
         EmployeeTestAssignment::whereIn('id', $request->ids)->delete();
-
-        return response()->json(['message' => 'Assignments deleted successfully']);
+        
+        // Return a JSON response since we're using fetch API
+        return response()->json([
+            'success' => true,
+            'message' => 'Assignments deleted successfully',
+            'deleted_count' => count($request->ids)
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to delete assignments: ' . $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * Bulk assign tests
@@ -194,44 +229,54 @@ class EmployeeTestAssignmentController extends Controller
         $successCount = 0;
         $errors = [];
 
-        foreach ($validated['niks'] as $nik) {
-            try {
-                // Check if already has active assignment
-                $existingAssignment = EmployeeTestAssignment::where('nik', $nik)
-                    ->where('test_type', $validated['test_type'])
-                    ->whereNotIn('status', [
-                        EmployeeTestAssignment::STATUS_COMPLETED,
-                        EmployeeTestAssignment::STATUS_EXPIRED,
-                    ])
-                    ->first();
+        DB::beginTransaction();
+        try {
+            foreach ($validated['niks'] as $nik) {
+                try {
+                    // Check if already has active assignment
+                    $existingAssignment = EmployeeTestAssignment::where('nik', $nik)
+                        ->where('test_type', $validated['test_type'])
+                        ->whereNotIn('status', [
+                            EmployeeTestAssignment::STATUS_COMPLETED,
+                            EmployeeTestAssignment::STATUS_EXPIRED,
+                        ])
+                        ->first();
 
-                if (!$existingAssignment) {
-                    EmployeeTestAssignment::create([
-                        'nik' => $nik,
-                        'test_type' => $validated['test_type'],
-                        'test_name' => $validated['test_name'] ?? $this->getDefaultTestName($validated['test_type']),
-                        'status' => EmployeeTestAssignment::STATUS_ASSIGNED,
-                        'due_date' => $validated['due_date'] ? Carbon::parse($validated['due_date']) : null,
-                        'notes' => $validated['notes'],
-                    ]);
-                    $successCount++;
-                } else {
-                    $errors[] = "NIK {$nik}: Already has an active assignment";
+                    if (!$existingAssignment) {
+                        EmployeeTestAssignment::create([
+                            'nik' => $nik,
+                            'test_type' => $validated['test_type'],
+                            'test_name' => $validated['test_name'] ?? $this->getDefaultTestName($validated['test_type']),
+                            'status' => EmployeeTestAssignment::STATUS_ASSIGNED,
+                            'due_date' => isset($validated['due_date']) ? Carbon::parse($validated['due_date']) : null,
+                            'notes' => $validated['notes'] ?? null,
+                            'assigned_at' => now(),
+                        ]);
+                        $successCount++;
+                    } else {
+                        $errors[] = "NIK {$nik}: Already has an active assignment for this test type";
+                    }
+                } catch (\Exception $e) {
+                    $errors[] = "NIK {$nik}: " . $e->getMessage();
                 }
-            } catch (\Exception $e) {
-                $errors[] = "NIK {$nik}: " . $e->getMessage();
             }
-        }
 
-        $message = "Bulk assignment completed. Success: {$successCount}";
+            DB::commit();
 
-        if ($successCount > 0) {
+            $message = "Bulk assignment completed. Success: {$successCount}";
+
+            if ($successCount > 0) {
+                return redirect()->route('admin.test-assignments.index')
+                    ->with('success', $message)
+                    ->with('bulk_errors', $errors);
+            } else {
+                return redirect()->route('admin.test-assignments.index')
+                    ->with('error', 'No assignments were created. ' . implode(', ', array_slice($errors, 0, 5)));
+            }
+        } catch (\Exception $e) {
+            DB::rollBack();
             return redirect()->route('admin.test-assignments.index')
-                ->with('success', $message)
-                ->with('bulk_errors', array_slice($errors, 0, 10));
-        } else {
-            return redirect()->route('admin.test-assignments.index')
-                ->with('error', 'No assignments were created. ' . implode(', ', $errors));
+                ->with('error', 'Bulk assignment failed: ' . $e->getMessage());
         }
     }
 
@@ -278,33 +323,32 @@ class EmployeeTestAssignmentController extends Controller
     /**
      * Get employee's assigned tests
      */
-    public function myAssignments(Request $request)
-    {
-        $user = auth()->user();
+public function myAssignments(Request $request)
+{
+    $user = auth()->user();
 
-        if (!$user->nik) {
-            return redirect()->back()->with('error', 'NIK not found for this user.');
-        }
-
-        $assignments = EmployeeTestAssignment::where('nik', $user->nik)
-            ->orderBy('status', 'asc')
-            ->orderBy('due_date', 'asc')
-            ->orderBy('created_at', 'desc')
-            ->paginate(10);
-
-        // Mark assignments as expired if due date has passed
-        foreach ($assignments as $assignment) {
-            if ($assignment->isAccessible()) {
-                $assignment->status = 'expired';
-                $assignment->save();
-            }
-        }
-
-        return Inertia::render('Psychotest/TestAssignments/MyAssignments', [
-            'assignments' => $assignments,
-            'testTypes' => EmployeeTestAssignment::getTestTypes(),
-        ]);
+    if (!$user->nik) {
+        return redirect()->back()->with('error', 'NIK not found for this user.');
     }
+
+    $assignments = EmployeeTestAssignment::where('nik', $user->nik)
+        ->orderBy('status', 'asc')
+        ->orderBy('due_date', 'asc')
+        ->orderBy('created_at', 'desc')
+        ->paginate(10);
+
+    // Mark assignments as expired if due date has passed (after the day)
+    foreach ($assignments as $assignment) {
+        if ($assignment->isExpired() && $assignment->status !== self::STATUS_COMPLETED) {
+            $assignment->update(['status' => self::STATUS_EXPIRED]);
+        }
+    }
+
+    return Inertia::render('Psychotest/TestAssignments/MyAssignments', [
+        'assignments' => $assignments,
+        'testTypes' => EmployeeTestAssignment::getTestTypes(),
+    ]);
+}
 
     /**
      * Start a test (update status to in_progress)

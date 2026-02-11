@@ -78,6 +78,14 @@ export default function TestAssignmentsIndex({ assignments, filters, testTypes, 
         notes: '',
         niks: [],
     });
+    
+    // State for assignments to enable real-time updates
+    const [localAssignments, setLocalAssignments] = useState(assignments.data);
+
+    // Update local assignments when prop changes
+    useEffect(() => {
+        setLocalAssignments(assignments.data);
+    }, [assignments.data]);
 
     // Apply filters
     const applyFilters = () => {
@@ -105,7 +113,7 @@ export default function TestAssignmentsIndex({ assignments, filters, testTypes, 
     // Handle selection
     const handleSelectAll = (e) => {
         if (e.target.checked) {
-            setSelectedAssignments(assignments.data.map(item => item.id));
+            setSelectedAssignments(localAssignments.map(item => item.id));
         } else {
             setSelectedAssignments([]);
         }
@@ -119,19 +127,87 @@ export default function TestAssignmentsIndex({ assignments, filters, testTypes, 
         );
     };
 
-    // Bulk delete
+    // Bulk delete - Fixed version
     const handleBulkDelete = () => {
         if (selectedAssignments.length === 0) return;
         
-        router.post(route('admin.test-assignments.bulk-delete'), {
-            ids: selectedAssignments,
-        }, {
-            onSuccess: () => {
+        // Create form data
+        const formData = new FormData();
+        formData.append('ids', JSON.stringify(selectedAssignments));
+        
+        // Use fetch API instead of router.post to handle JSON response
+        fetch(route('admin.test-assignments.bulk-delete'), {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({ ids: selectedAssignments }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message === 'Assignments deleted successfully') {
+                // Remove deleted assignments from local state
+                setLocalAssignments(prev => 
+                    prev.filter(assignment => !selectedAssignments.includes(assignment.id))
+                );
+                
+                // Update pagination info
+                assignments.total = assignments.total - selectedAssignments.length;
+                assignments.from = Math.max(1, assignments.from - selectedAssignments.length);
+                assignments.to = Math.max(0, assignments.to - selectedAssignments.length);
+                
+                // Clear selection and close modal
                 setSelectedAssignments([]);
                 setShowDeleteModal(false);
-            },
-            preserveScroll: true,
+                
+                // Show success message (you might want to add a toast notification)
+                console.log(data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error deleting assignments:', error);
         });
+    };
+
+    // Single delete
+    const handleDelete = (id) => {
+        if (confirm('Are you sure you want to delete this assignment?')) {
+            // Use fetch API for single delete too
+            fetch(route('admin.test-assignments.destroy', id), {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+            })
+            .then(response => {
+                if (response.ok) {
+                    // Remove from local state
+                    setLocalAssignments(prev => 
+                        prev.filter(assignment => assignment.id !== id)
+                    );
+                    
+                    // Update pagination info
+                    assignments.total = assignments.total - 1;
+                    
+                    console.log('Assignment deleted successfully');
+                }
+            })
+            .catch(error => {
+                console.error('Error deleting assignment:', error);
+            });
+        }
+    };
+
+    // Update bulk assign data
+    const updateBulkAssignData = (field, value) => {
+        setBulkAssignData(prev => ({
+            ...prev,
+            [field]: value
+        }));
     };
 
     // Bulk assign
@@ -151,6 +227,14 @@ export default function TestAssignmentsIndex({ assignments, filters, testTypes, 
                     notes: '',
                     niks: [],
                 });
+                // Refresh the page to show new assignments
+                get(route('admin.test-assignments.index'), {
+                    preserveState: true,
+                    preserveScroll: true,
+                });
+            },
+            onError: (errors) => {
+                console.error('Bulk assign failed:', errors);
             },
         });
     };
@@ -184,6 +268,7 @@ export default function TestAssignmentsIndex({ assignments, filters, testTypes, 
 
     // Get employee initials
     const getInitials = (name) => {
+        if (!name) return 'EE';
         return name
             .split(' ')
             .map(word => word[0])
@@ -348,7 +433,7 @@ export default function TestAssignmentsIndex({ assignments, filters, testTypes, 
                         className="bg-white overflow-hidden shadow-sm sm:rounded-lg"
                     >
                         <div className="p-0">
-                            {assignments.data.length === 0 ? (
+                            {localAssignments.length === 0 ? (
                                 <div className="text-center py-12">
                                     <div className="text-gray-400 mb-4">
                                         <AssignmentIcon className="w-16 h-16 mx-auto opacity-50" />
@@ -377,7 +462,7 @@ export default function TestAssignmentsIndex({ assignments, filters, testTypes, 
                                                 <th className="px-6 py-3 text-left">
                                                     <input
                                                         type="checkbox"
-                                                        checked={selectedAssignments.length === assignments.data.length && assignments.data.length > 0}
+                                                        checked={selectedAssignments.length === localAssignments.length && localAssignments.length > 0}
                                                         onChange={handleSelectAll}
                                                         className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                                     />
@@ -403,11 +488,12 @@ export default function TestAssignmentsIndex({ assignments, filters, testTypes, 
                                             </tr>
                                         </thead>
                                         <tbody className="bg-white divide-y divide-gray-200">
-                                            {assignments.data.map((assignment) => (
+                                            {localAssignments.map((assignment) => (
                                                 <motion.tr
                                                     key={assignment.id}
                                                     initial={{ opacity: 0 }}
                                                     animate={{ opacity: 1 }}
+                                                    exit={{ opacity: 0 }}
                                                     className="hover:bg-gray-50 transition-colors"
                                                 >
                                                     <td className="px-6 py-4 whitespace-nowrap">
@@ -429,7 +515,7 @@ export default function TestAssignmentsIndex({ assignments, filters, testTypes, 
                                                             ) : (
                                                                 <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
                                                                     <span className="text-indigo-800 font-bold text-sm">
-                                                                        {getInitials(assignment.employee?.name || 'EE')}
+                                                                        {getInitials(assignment.employee?.name)}
                                                                     </span>
                                                                 </div>
                                                             )}
@@ -459,10 +545,10 @@ export default function TestAssignmentsIndex({ assignments, filters, testTypes, 
                                                         <div className="text-sm text-gray-900">
                                                             <div className="flex items-center">
                                                                 <ClockIcon className="w-3 h-3 mr-1 text-gray-400" />
-                                                                Assigned: {formatDate(assignment.assigned_at)}
+                                                                Assigned: {formatDate(assignment.created_at)}
                                                             </div>
                                                             {assignment.due_date && (
-                                                                <div className={`flex items-center mt-1 ${assignment.isOverdue ? 'text-red-600' : 'text-gray-500'}`}>
+                                                                <div className={`flex items-center mt-1 ${new Date(assignment.due_date) < new Date() ? 'text-red-600' : 'text-gray-500'}`}>
                                                                     <ClockIcon className="w-3 h-3 mr-1" />
                                                                     Due: {formatDate(assignment.due_date)}
                                                                 </div>
@@ -499,10 +585,7 @@ export default function TestAssignmentsIndex({ assignments, filters, testTypes, 
                                                                 Edit
                                                             </Link>
                                                             <button
-                                                                onClick={() => {
-                                                                    setSelectedAssignments([assignment.id]);
-                                                                    setShowDeleteModal(true);
-                                                                }}
+                                                                onClick={() => handleDelete(assignment.id)}
                                                                 className="text-red-600 hover:text-red-900 flex items-center"
                                                             >
                                                                 <TrashIcon className="mr-1" />
@@ -517,7 +600,7 @@ export default function TestAssignmentsIndex({ assignments, filters, testTypes, 
                                 </div>
                             )}
 
-                            {/* Pagination */}
+                            {/* Pagination - Use the original assignments prop for pagination info */}
                             {assignments.data.length > 0 && (
                                 <div className="px-6 py-4 border-t border-gray-200">
                                     <div className="flex items-center justify-between">
@@ -604,7 +687,7 @@ export default function TestAssignmentsIndex({ assignments, filters, testTypes, 
                         onClose={() => setShowBulkAssignModal(false)}
                         onSubmit={handleBulkAssign}
                         data={bulkAssignData}
-                        setData={setBulkAssignData}
+                        updateData={updateBulkAssignData}
                         testTypes={testTypes}
                     />
                 )}
@@ -614,10 +697,13 @@ export default function TestAssignmentsIndex({ assignments, filters, testTypes, 
 }
 
 // Bulk Assign Modal Component
-function BulkAssignModal({ show, onClose, onSubmit, data, setData, testTypes }) {
+function BulkAssignModal({ show, onClose, onSubmit, data, updateData, testTypes }) {
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [loading, setLoading] = useState(false);
+
+    // Make sure data.niks is always an array
+    const niks = data.niks || [];
 
     const searchEmployees = async () => {
         if (!searchTerm.trim()) {
@@ -640,15 +726,19 @@ function BulkAssignModal({ show, onClose, onSubmit, data, setData, testTypes }) 
     };
 
     const addEmployee = (employee) => {
-        if (!data.niks.includes(employee.nik)) {
-            setData('niks', [...data.niks, employee.nik]);
+        if (!niks.includes(employee.nik)) {
+            updateData('niks', [...niks, employee.nik]);
         }
         setSearchTerm('');
         setSearchResults([]);
     };
 
     const removeEmployee = (nik) => {
-        setData('niks', data.niks.filter(n => n !== nik));
+        updateData('niks', niks.filter(n => n !== nik));
+    };
+
+    const handleInputChange = (field, value) => {
+        updateData(field, value);
     };
 
     return (
@@ -685,8 +775,8 @@ function BulkAssignModal({ show, onClose, onSubmit, data, setData, testTypes }) 
                             Test Type *
                         </label>
                         <select
-                            value={data.test_type}
-                            onChange={e => setData('test_type', e.target.value)}
+                            value={data.test_type || ''}
+                            onChange={e => handleInputChange('test_type', e.target.value)}
                             className="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
                             required
                         >
@@ -704,8 +794,8 @@ function BulkAssignModal({ show, onClose, onSubmit, data, setData, testTypes }) 
                         </label>
                         <input
                             type="text"
-                            value={data.test_name}
-                            onChange={e => setData('test_name', e.target.value)}
+                            value={data.test_name || ''}
+                            onChange={e => handleInputChange('test_name', e.target.value)}
                             placeholder="Custom test name"
                             className="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
                         />
@@ -718,8 +808,8 @@ function BulkAssignModal({ show, onClose, onSubmit, data, setData, testTypes }) 
                         </label>
                         <input
                             type="date"
-                            value={data.due_date}
-                            onChange={e => setData('due_date', e.target.value)}
+                            value={data.due_date || ''}
+                            onChange={e => handleInputChange('due_date', e.target.value)}
                             className="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
                         />
                     </div>
@@ -730,8 +820,8 @@ function BulkAssignModal({ show, onClose, onSubmit, data, setData, testTypes }) 
                             Notes (Optional)
                         </label>
                         <textarea
-                            value={data.notes}
-                            onChange={e => setData('notes', e.target.value)}
+                            value={data.notes || ''}
+                            onChange={e => handleInputChange('notes', e.target.value)}
                             rows={3}
                             placeholder="Additional notes..."
                             className="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
@@ -778,13 +868,13 @@ function BulkAssignModal({ show, onClose, onSubmit, data, setData, testTypes }) 
                         )}
 
                         {/* Selected Employees */}
-                        {data.niks.length > 0 && (
+                        {niks.length > 0 && (
                             <div className="mt-4">
                                 <div className="text-sm font-medium text-gray-700 mb-2">
-                                    Selected Employees ({data.niks.length})
+                                    Selected Employees ({niks.length})
                                 </div>
                                 <div className="flex flex-wrap gap-2">
-                                    {data.niks.map((nik, index) => (
+                                    {niks.map((nik, index) => (
                                         <div
                                             key={index}
                                             className="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full flex items-center"
@@ -816,10 +906,10 @@ function BulkAssignModal({ show, onClose, onSubmit, data, setData, testTypes }) 
                         <button
                             type="button"
                             onClick={onSubmit}
-                            disabled={!data.test_type || data.niks.length === 0}
+                            disabled={!data.test_type || niks.length === 0}
                             className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Assign to {data.niks.length} Employee{data.niks.length !== 1 ? 's' : ''}
+                            Assign to {niks.length} Employee{niks.length !== 1 ? 's' : ''}
                         </button>
                     </div>
                 </div>

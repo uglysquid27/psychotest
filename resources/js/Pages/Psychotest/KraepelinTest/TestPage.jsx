@@ -21,10 +21,12 @@ ChartJS.register(
     Legend
 );
 
-export default function KraepelinSimple() {
-  const ROWS = 45;
-  const COLS = 60;
-  const TIME_PER_COL = 15;
+export default function KraepelinSimple({ testConfig }) {
+  // Use dynamic configuration from props
+  const ROWS = testConfig?.rows || 45;
+  const COLS = testConfig?.columns || 60;
+  const TIME_PER_COL = testConfig?.timePerColumn || 15;
+  const DIFFICULTY = testConfig?.difficulty || 'sedang';
 
   const [currentRow, setCurrentRow] = useState(ROWS - 2);
   const [currentCol, setCurrentCol] = useState(0);
@@ -38,27 +40,94 @@ export default function KraepelinSimple() {
   const [performanceData, setPerformanceData] = useState([]);
   const [rowPerformance, setRowPerformance] = useState([]);
   const [columnPerformance, setColumnPerformance] = useState([]);
-  const [answerMatrix, setAnswerMatrix] = useState([]); // New: matrix of answer status
+  const [answerMatrix, setAnswerMatrix] = useState([]);
   const [showGuide, setShowGuide] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [testId, setTestId] = useState(null);
   const keypadRef = useRef(null);
   const rowRefs = useRef([]);
   const containerRef = useRef(null);
   const activeQuestionRef = useRef(null);
 
   useEffect(() => {
+    initializeTest();
+  }, [ROWS, COLS, DIFFICULTY]);
+
+  const initializeTest = async () => {
+  setIsLoading(true);
+  
+  try {
+    // Generate test data from backend with configuration
+    const response = await axios.post(route('kraepelin.generate-test-data'), {
+      rows: ROWS,
+      columns: COLS,
+      difficulty: DIFFICULTY
+    });
+
+    if (response.data.success) {
+      const matrix = response.data.test_data;
+      const formattedMatrix = [];
+      
+      // Convert to 2D array format for the frontend
+      for (let col = 0; col < COLS; col++) {
+        const column = [];
+        for (let row = 0; row < ROWS; row++) {
+          // Backend returns {num1: x, num2: y} structure
+          // We just need num1 for the display matrix
+          column.push(matrix[col][row].num1);
+        }
+        formattedMatrix.push(column);
+      }
+      
+      setNumberMatrix(formattedMatrix);
+      setUserAnswers(Array(ROWS).fill().map(() => Array(COLS).fill(null)));
+    }
+  } catch (error) {
+    console.error('Failed to generate test data:', error);
+    // Fallback to local generation
+    generateRandomMatrix();
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+  const generateRandomMatrix = () => {
     const matrix = [];
     for (let r = 0; r < ROWS; r++) {
       const row = [];
       for (let c = 0; c < COLS; c++) {
-        row.push(Math.floor(Math.random() * 9) + 1);
+        // Generate numbers based on difficulty
+        let num;
+        switch (DIFFICULTY) {
+          case 'sulit':
+            // Hard: more varied numbers, includes 0 occasionally
+            num = Math.random() < 0.05 ? 0 : Math.floor(Math.random() * 9) + 1;
+            break;
+          case 'mudah':
+            // Easy: focus on middle numbers
+            const easyNumbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+            const weights = [5, 10, 15, 20, 25, 20, 15, 10, 5];
+            const rand = Math.random() * 100;
+            let cumulative = 0;
+            for (let i = 0; i < easyNumbers.length; i++) {
+              cumulative += weights[i];
+              if (rand <= cumulative) {
+                num = easyNumbers[i];
+                break;
+              }
+            }
+            num = num || Math.floor(Math.random() * 9) + 1;
+            break;
+          default: // sedang
+            num = Math.floor(Math.random() * 9) + 1;
+        }
+        row.push(num);
       }
       matrix.push(row);
     }
     setNumberMatrix(matrix);
     setUserAnswers(Array(ROWS).fill().map(() => Array(COLS).fill(null)));
-    setIsLoading(false);
-  }, []);
+  };
 
   // Auto-scroll to active question within container only
   useEffect(() => {
@@ -114,10 +183,27 @@ export default function KraepelinSimple() {
     return () => clearInterval(timer);
   }, [isTimerRunning, timeLeft, isLoading]);
 
-  const startTest = () => {
-    setIsTimerRunning(true);
-    setShowGuide(false);
-  };
+  const startTest = async () => {
+    try {
+        const response = await axios.post(route('kraepelin.start'), {
+            rows: ROWS,
+            columns: COLS,
+            time_per_column: TIME_PER_COL,
+            difficulty: DIFFICULTY,
+            setting_id: testConfig?.settingId || null
+        });
+
+        if (response.data.success) {
+            setTestId(response.data.data.test_id); // This should set the testId
+            setIsTimerRunning(true);
+            setShowGuide(false);
+        }
+    } catch (error) {
+        console.error('Failed to start test:', error);
+        setIsTimerRunning(true);
+        setShowGuide(false);
+    }
+};
 
   const handleNumberClick = (digit) => {
     if (isLoading) return;
@@ -264,7 +350,9 @@ export default function KraepelinSimple() {
         number_matrix: numberMatrix,
         time_elapsed: totalTimeElapsed,
         rows: ROWS,
-        cols: COLS
+        cols: COLS,
+        difficulty: DIFFICULTY,
+        test_id: testId
     };
     
     try {
@@ -381,6 +469,15 @@ export default function KraepelinSimple() {
       return "Lebih dari setengah jalan! Kamu melakukan dengan luar biasa! 🎯";
     } else {
       return "Hampir selesai! Selesaikan dengan kuat, kamu bisa! 🏆";
+    }
+  };
+
+  const getDifficultyLabel = () => {
+    switch (DIFFICULTY) {
+      case 'mudah': return 'Mudah';
+      case 'sedang': return 'Sedang';
+      case 'sulit': return 'Sulit';
+      default: return 'Kustom';
     }
   };
 
@@ -501,7 +598,7 @@ export default function KraepelinSimple() {
         <h3 className="text-lg md:text-xl font-semibold text-slate-800 mb-4 md:mb-6" style={{fontFamily: "'Raleway', sans-serif"}}>
           Matrix Jawaban
           <span className="text-sm font-normal text-slate-600 ml-3">
-            ({ROWS - 1} baris × {COLS} kolom)
+            ({ROWS - 1} baris × {COLS} kolom) - {getDifficultyLabel()}
           </span>
         </h3>
         
@@ -633,7 +730,10 @@ export default function KraepelinSimple() {
     <AuthenticatedLayout
       header={
         <h2 className="text-xl font-semibold leading-tight text-gray-800">
-          Tes Kraepelin
+          Tes Kraepelin - {getDifficultyLabel()}
+          <span className="text-sm font-normal text-gray-600 ml-3">
+            {ROWS}×{COLS} • {TIME_PER_COL}s/kolom • {testConfig?.totalTimeFormatted}
+          </span>
         </h2>
       }
     >
@@ -695,6 +795,10 @@ export default function KraepelinSimple() {
                 </h1>
                 <p className="text-base md:text-xl text-amber-50 font-medium" style={{fontFamily: "'Inter', sans-serif"}}>
                   Ukur konsentrasi dan kecepatan perhitungan mental Anda
+                  <br />
+                  <span className="text-amber-100 text-sm md:text-base">
+                    Konfigurasi: {ROWS} baris × {COLS} kolom • {TIME_PER_COL}s per kolom • {getDifficultyLabel()}
+                  </span>
                 </p>
               </div>
 
@@ -732,6 +836,8 @@ export default function KraepelinSimple() {
                       <h3 className="text-lg md:text-xl font-bold text-slate-800 mb-2 md:mb-3" style={{fontFamily: "'Raleway', sans-serif"}}>Batasan Waktu</h3>
                       <p className="text-sm md:text-base text-slate-600 leading-relaxed" style={{fontFamily: "'Inter', sans-serif"}}>
                         Setiap kolom memiliki waktu <span className="font-bold text-amber-700">{TIME_PER_COL} detik</span>. Timer akan berpindah ke kolom berikutnya secara otomatis.
+                        <br />
+                        <span className="text-amber-600 font-medium">Total waktu: {testConfig?.totalTimeFormatted}</span>
                       </p>
                     </div>
                   </div>
@@ -802,10 +908,10 @@ export default function KraepelinSimple() {
               <div className="mb-6 md:mb-8">
                 <div className="flex justify-between items-center mb-3 md:mb-4">
                   <span className="text-sm md:text-base font-semibold text-slate-700" style={{fontFamily: "'Raleway', sans-serif"}}>
-                    Kolom {currentCol + 1} dari {COLS}
+                    Kolom {currentCol + 1} dari {COLS} • Tingkat: {getDifficultyLabel()}
                   </span>
                   <span className="text-xs md:text-sm font-medium text-slate-500">
-                    {Math.round((currentCol / COLS) * 100)}% selesai
+                    {Math.round((currentCol / COLS) * 100)}% selesai • {testConfig?.totalQuestions} soal
                   </span>
                 </div>
                 <div className="h-3 md:h-4 bg-slate-100 rounded-full overflow-hidden shadow-inner">
@@ -933,7 +1039,7 @@ export default function KraepelinSimple() {
                   </h1>
                 </div>
                 <p className="text-center text-base md:text-xl text-amber-50 font-medium" style={{fontFamily: "'Inter', sans-serif"}}>
-                  Lihat hasil dan analisis performa Anda di bawah
+                  Lihat hasil dan analisis performa Anda di bawah • Tingkat: {getDifficultyLabel()}
                 </p>
               </div>
 
@@ -997,10 +1103,10 @@ export default function KraepelinSimple() {
 
                   <div className="fade-in-up soft-beige-shadow bg-white rounded-3xl p-4 md:p-6 border border-purple-100" style={{animationDelay: '0.6s'}}>
                     <h3 className="text-base md:text-lg font-semibold text-slate-800 mb-2 md:mb-3" style={{fontFamily: "'Raleway', sans-serif"}}>Kecepatan</h3>
-                    <div className="text-3xl md:text-4xl font-bold text-purple-600 mb-2 md:mb-3">{((score.correct + score.wrong) / (COLS * (ROWS - 1)) * 100).toFixed(1)}%</div>
+                    <div className="text-3xl md:text-4xl font-bold text-purple-600 mb-2 md:mb-3">{((score.correct + score.wrong) / ((COLS * (ROWS - 1)) || 1) * 100).toFixed(1)}%</div>
                     <p className="text-xs md:text-sm text-slate-600 mb-3 md:mb-4">Tingkat penyelesaian soal</p>
                     <div className="h-2 md:h-3 bg-purple-50 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-purple-400 to-pink-500 rounded-full transition-all duration-1000" style={{width: `${((score.correct + score.wrong) / (COLS * (ROWS - 1)) * 100)}%`}}></div>
+                      <div className="h-full bg-gradient-to-r from-purple-400 to-pink-500 rounded-full transition-all duration-1000" style={{width: `${((score.correct + score.wrong) / ((COLS * (ROWS - 1)) || 1) * 100)}%`}}></div>
                     </div>
                   </div>
                 </div>

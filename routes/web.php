@@ -18,7 +18,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmployeeSum;
 use App\Http\Controllers\BankAccountChangeController;
 use App\Http\Controllers\PermitController;
-use App\Http\Controllers\ScheduleController;
+use App\Http\Controllers\KraepelinSettingController;
 use App\Http\Controllers\ManPowerRequestController;
 use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\SubSectionController;
@@ -234,4 +234,25 @@ Route::middleware(['auth:web', 'prevent.back'])->group(function () {
         Route::post('/bulk-toggle-active', [TesDeretController::class, 'bulkToggleActive'])->name('questions.bulk-toggle-active');
         Route::post('/bulk-delete', [TesDeretController::class, 'bulkDelete'])->name('questions.bulk-delete');
     });
+
+    // In your web.php routes file
+Route::prefix('admin/kraepelin')->name('admin.kraepelin.')->group(function () {
+    // Settings routes
+    Route::prefix('settings')->name('settings.')->group(function () {
+        Route::get('/', [KraepelinSettingController::class, 'index'])->name('index');
+        Route::get('/create', [KraepelinSettingController::class, 'create'])->name('create');
+        Route::post('/', [KraepelinSettingController::class, 'store'])->name('store');
+        Route::get('/{setting}', [KraepelinSettingController::class, 'show'])->name('show');
+        Route::get('/{setting}/edit', [KraepelinSettingController::class, 'edit'])->name('edit');
+        Route::put('/{setting}', [KraepelinSettingController::class, 'update'])->name('update');
+        Route::delete('/{setting}', [KraepelinSettingController::class, 'destroy'])->name('destroy');
+        Route::post('/bulk-toggle-active', [KraepelinSettingController::class, 'bulkToggleActive'])->name('bulk-toggle-active');
+        Route::post('/bulk-delete', [KraepelinSettingController::class, 'bulkDelete'])->name('bulk-delete');
+        Route::get('/active', [KraepelinSettingController::class, 'getActiveSettings'])->name('active');
+        Route::get('/default', [KraepelinSettingController::class, 'getDefaultSetting'])->name('default');
+    });
+    
+    // Results routes
+    Route::get('/results', [KraepelinController::class, 'resultsIndex'])->name('results.index');
+});
 });
