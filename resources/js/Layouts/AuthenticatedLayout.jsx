@@ -591,7 +591,7 @@ const ThemeToggle = ({ isDark, toggleDarkMode }) => (
     </motion.label>
 );
 
-// Generic Admin Dropdown Component with inline styles
+// Generic Admin Dropdown Component with inline styles - ERROR PROOF DESIGN
 const AdminDropdown = ({
     icon: Icon,
     label,
@@ -785,48 +785,51 @@ const EmployeeDropdown = ({
     );
 };
 
-// Navigation Items Configuration for ADMIN
+// Navigation Items Configuration for ADMIN - ERROR PROOF DESIGN
 const adminNavigationConfig = (
     user,
     openStates,
     setOpenState,
     currentTheme,
 ) => {
-    const createDropdown = (IconComponent, label, key, routes) => (
+    const createDropdown = (IconComponent, label, key, routes = []) => (
         <AdminDropdown
             key={key}
             icon={IconComponent}
             label={label}
-            isOpen={openStates[key]}
+            isOpen={openStates[key] || false}
             setIsOpen={(value) => setOpenState(key, value)}
-            isActive={routes.some((route) => route.active)}
+            isActive={routes && Array.isArray(routes) ? routes.some((route) => route?.active) : false}
             currentTheme={currentTheme}
         >
-            {routes.map((item, index) => (
-                <motion.div
-                    key={item.href}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                >
-                    <NavLink
-                        href={item.href}
-                        active={item.active}
-                        className="flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all duration-200"
-                        style={{ color: currentTheme.colors.text }}
-                        onMouseEnter={(e) =>
-                            (e.currentTarget.style.backgroundColor = `${currentTheme.colors.light}80`)
-                        }
-                        onMouseLeave={(e) =>
-                            (e.currentTarget.style.backgroundColor =
-                                "transparent")
-                        }
-                        onClick={() => setOpenState(key, false)}
+            {routes && Array.isArray(routes) && routes.map((item, index) => {
+                if (!item || !item.href) return null;
+                return (
+                    <motion.div
+                        key={item.href || `nav-item-${index}`}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.05 }}
                     >
-                        <span className="font-bold">{item.label}</span>
-                    </NavLink>
-                </motion.div>
-            ))}
+                        <NavLink
+                            href={item.href}
+                            active={item.active}
+                            className="flex items-center px-4 py-3 rounded-xl font-bold text-sm transition-all duration-200"
+                            style={{ color: currentTheme.colors.text }}
+                            onMouseEnter={(e) =>
+                                (e.currentTarget.style.backgroundColor = `${currentTheme.colors.light}80`)
+                            }
+                            onMouseLeave={(e) =>
+                                (e.currentTarget.style.backgroundColor =
+                                    "transparent")
+                            }
+                            onClick={() => setOpenState(key, false)}
+                        >
+                            <span className="font-bold">{item.label || 'Untitled'}</span>
+                        </NavLink>
+                    </motion.div>
+                );
+            })}
         </AdminDropdown>
     );
 
@@ -873,26 +876,7 @@ const adminNavigationConfig = (
                     {
                         href: route("admin.test-assignments.create"),
                         label: "Assign New Test",
-                        active: route().current(
-                            "admin.test-assignments.create",
-                        ),
-                    },
-                ],
-            ),
-            show: true,
-        },
-        // ADD NEW KRAEPELIN SETTINGS DROPDOWN HERE
-        {
-            type: "dropdown",
-            component: createDropdown(
-                SettingsIcon,
-                "Test Settings",
-                "testSettings",
-                [
-                    {
-                        href: route("admin.kraepelin.settings.index"),
-                        label: "Kraepelin Settings",
-                        active: route().current("admin.kraepelin.settings.*"),
+                        active: route().current("admin.test-assignments.create"),
                     },
                 ],
             ),
@@ -957,6 +941,22 @@ const adminNavigationConfig = (
         {
             type: "dropdown",
             component: createDropdown(
+                SettingsIcon,
+                "Kelola Soal Kraepelin",
+                "kraepelinQuestions",
+                [
+                    {
+                        href: route("admin.kraepelin.settings.index"),
+                        label: "Kraepelin Settings",
+                        active: route().current("admin.kraepelin.settings.*"),
+                    },
+                ],
+            ),
+            show: true,
+        },
+        {
+            type: "dropdown",
+            component: createDropdown(
                 QuestionIcon,
                 "Kelola Soal Ketelitian",
                 "ketelitianQuestions",
@@ -964,16 +964,12 @@ const adminNavigationConfig = (
                     {
                         href: route("admin.ketelitian.questions.index"),
                         label: "Kelola Soal Ketelitian",
-                        active: route().current(
-                            "admin.ketelitian.questions.index",
-                        ),
+                        active: route().current("admin.ketelitian.questions.index"),
                     },
                     {
                         href: route("admin.ketelitian.questions.create"),
                         label: "Tambah Soal",
-                        active: route().current(
-                            "admin.ketelitian.questions.create",
-                        ),
+                        active: route().current("admin.ketelitian.questions.create"),
                     },
                 ],
             ),
@@ -989,16 +985,12 @@ const adminNavigationConfig = (
                     {
                         href: route("admin.hitungan.questions.index"),
                         label: "Kelola Soal Hitungan",
-                        active: route().current(
-                            "admin.hitungan.questions.index",
-                        ),
+                        active: route().current("admin.hitungan.questions.index"),
                     },
                     {
                         href: route("admin.hitungan.questions.create"),
                         label: "Tambah Soal",
-                        active: route().current(
-                            "admin.hitungan.questions.create",
-                        ),
+                        active: route().current("admin.hitungan.questions.create"),
                     },
                 ],
             ),
@@ -1108,12 +1100,13 @@ export default function AuthenticatedLayout({
     // Detect current theme based on URL - NOW WORKS FOR ALL PAGES
     const currentTheme = detectTheme(url);
 
-    // Manage all dropdown states
+    // Manage all dropdown states - ERROR PROOF DESIGN
     const [dropdownStates, setDropdownStates] = useState({
         dashboard: false,
         attendance: false,
         testManagement: false,
         psikotes: false,
+        kraepelinQuestions: false,
         ketelitianQuestions: false,
         hitunganQuestions: false,
         deretQuestions: false,
@@ -1135,7 +1128,7 @@ export default function AuthenticatedLayout({
         }
     };
 
-    // Close all dropdowns when mobile menu closes
+    // Close all dropdowns when mobile menu closes - ERROR PROOF DESIGN
     useEffect(() => {
         if (!isMobileMenuOpen) {
             setDropdownStates({
@@ -1143,7 +1136,7 @@ export default function AuthenticatedLayout({
                 attendance: false,
                 testManagement: false,
                 psikotes: false,
-                testSettings: false, // Add this
+                kraepelinQuestions: false,
                 ketelitianQuestions: false,
                 hitunganQuestions: false,
                 deretQuestions: false,
@@ -1455,7 +1448,7 @@ export default function AuthenticatedLayout({
                                                     attendance: false,
                                                     testManagement: false,
                                                     psikotes: false,
-                                                    testSettings: false, // Add this
+                                                    kraepelinQuestions: false,
                                                     ketelitianQuestions: false,
                                                     hitunganQuestions: false,
                                                     deretQuestions: false,

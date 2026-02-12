@@ -133,12 +133,19 @@ Route::middleware(['auth:employee', 'prevent.back'])
     ->group(function () {
         Route::get('/dashboard', [EmployeeDashboardController::class, 'index'])->name('dashboard');
 
-        // Test Assignments
-        Route::get('/test-assignments', [EmployeeTestAssignmentController::class, 'myAssignments'])
+        // Test Assignments - SINGLE DEFINITION
+        Route::get('/test-assignments/my', [EmployeeTestAssignmentController::class, 'myAssignments'])
             ->name('test-assignments.my');
-        
+
         Route::post('/test-assignments/{id}/start', [EmployeeTestAssignmentController::class, 'startTest'])
             ->name('test-assignments.start');
+
+        Route::post('/test-assignments/complete/{testType}', [EmployeeTestAssignmentController::class, 'completeTest'])
+            ->name('test-assignments.complete');
+
+        // FIXED: Result route - use 'assignment' parameter name to match controller
+        Route::get('/test-assignments/result/{testType}/{assignment}', [EmployeeTestAssignmentController::class, 'getTestResult'])
+            ->name('test-assignments.result');
 
         // Bank Account Change Routes
         Route::get('/bank-account-change', [BankAccountChangeController::class, 'create'])

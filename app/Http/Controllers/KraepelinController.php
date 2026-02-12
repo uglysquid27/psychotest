@@ -345,6 +345,9 @@ class KraepelinController extends Controller
         }
     }
 
+    /**
+     * Submit test results - FIXED VERSION
+     */
     public function submit(Request $request)
     {
         if (!auth()->check()) {
@@ -354,7 +357,7 @@ class KraepelinController extends Controller
             ], 401);
         }
 
-        $user = auth()->user();
+        $authUser = auth()->user();
         $userAnswers = $request->input('answers', []);
         $numberMatrix = $request->input('number_matrix', []);
         $timeElapsed = $request->input('time_elapsed', 0);
@@ -370,7 +373,9 @@ class KraepelinController extends Controller
             'cols' => $cols,
             'time_elapsed' => $timeElapsed,
             'difficulty' => $difficulty,
-            'test_id' => $testId
+            'test_id' => $testId,
+            'auth_user_id' => $authUser->id,
+            'auth_user_nik' => $authUser->nik ?? null
         ]);
 
         $score = 0;
@@ -382,7 +387,6 @@ class KraepelinController extends Controller
         // Calculate score from number_matrix
         for ($col = 0; $col < $cols; $col++) {
             for ($row = 0; $row < $rows - 1; $row++) {
-                // Get numbers from the matrix
                 $num1 = $numberMatrix[$row][$col] ?? null;
                 $num2 = $numberMatrix[$row + 1][$col] ?? null;
 
@@ -391,8 +395,6 @@ class KraepelinController extends Controller
                 }
 
                 $correctAnswer = ($num1 + $num2) % 10;
-
-                // Get user's answer
                 $userAnswer = $userAnswers[$row][$col] ?? null;
 
                 if ($userAnswer === null || $userAnswer === '') {
@@ -465,9 +467,16 @@ class KraepelinController extends Controller
                 }
             }
 
+            // FIXED: Simply use the authenticated user's ID
+            // After running the SQL migration that removes the foreign key constraint,
+            // this will work for both admin users AND employees
+            $userId = $authUser->id;
+            
+            Log::info('Kraepelin Submit - Saving result with user_id: ' . $userId);
+
             // Save to database
-            $result = KraepelinTestResult::create([
-                'user_id' => $user->id,
+            $resultData = [
+                'user_id' => $userId, // This will now accept both user IDs and employee IDs
                 'kraepelin_test_id' => $testId,
                 'score' => $score,
                 'total_questions' => $totalQuestions,
@@ -483,13 +492,15 @@ class KraepelinController extends Controller
                 'rows' => $rows,
                 'columns' => $cols,
                 'difficulty' => $difficulty,
-            ]);
+            ];
 
-            Log::info('Kraepelin Submit - Saved to database with ID: ' . $result->id);
+            $result = KraepelinTestResult::create($resultData);
+
+            Log::info('Kraepelin Submit - Saved to database with ID: ' . $result->id . ' and user_id: ' . $result->user_id);
 
             // Complete assignment if employee has one
-            if ($user->nik) {
-                $assignment = EmployeeTestAssignment::where('nik', $user->nik)
+            if ($authUser->nik) {
+                $assignment = EmployeeTestAssignment::where('nik', $authUser->nik)
                     ->where('test_type', 'kraepelin')
                     ->whereIn('status', [
                         EmployeeTestAssignment::STATUS_ASSIGNED,
@@ -508,6 +519,8 @@ class KraepelinController extends Controller
                         'rows' => $rows,
                         'columns' => $cols,
                     ]);
+                    
+                    Log::info('Kraepelin Submit - Completed assignment for NIK: ' . $authUser->nik);
                 }
             }
 

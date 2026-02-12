@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\Employee;
 use App\Models\EmployeeTestAssignment;
+use App\Models\KraepelinTestResult;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
@@ -432,5 +433,86 @@ public function myAssignments(Request $request)
             'success' => true,
             'message' => 'Test completed and assignment updated.',
         ]);
+    }
+
+      /**
+     * Show Kraepelin test result
+     */
+    public function showKraepelinResult($id)
+    {
+        $user = auth()->user();
+
+        // Get the assignment
+        $assignment = EmployeeTestAssignment::where('id', $id)
+            ->where('nik', $user->nik)
+            ->where('test_type', 'kraepelin')
+            ->firstOrFail();
+
+        // Get the test result
+        $result = KraepelinTestResult::where('user_id', $user->id)
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        if (!$result) {
+            return redirect()->route('employee.test-assignments.my')
+                ->with('error', 'Test result not found.');
+        }
+
+        // Get test configuration
+        $testConfig = [
+            'rows' => $result->rows ?? 45,
+            'columns' => $result->columns ?? 60,
+            'timePerColumn' => 15, // Default, you might want to store this in the result
+            'difficulty' => $result->difficulty ?? 'sedang',
+            'totalQuestions' => $result->total_questions ?? (($result->rows - 1) * $result->columns),
+            'totalTime' => ($result->columns ?? 60) * 15,
+            'totalTimeFormatted' => $this->formatTime(($result->columns ?? 60) * 15),
+        ];
+
+        return Inertia::render('Psychotest/KraepelinTest/TestResult', [
+            'result' => $result,
+            'testConfig' => $testConfig,
+            'assignment' => $assignment
+        ]);
+    }
+
+    /**
+     * Get test result link for assignment
+     */
+    public function getTestResult($testType, $assignmentId)
+    {
+        $user = auth()->user();
+
+        $assignment = EmployeeTestAssignment::where('id', $assignmentId)
+            ->where('nik', $user->nik)
+            ->where('test_type', $testType)
+            ->firstOrFail();
+
+        switch ($testType) {
+            case 'kraepelin':
+                return $this->showKraepelinResult($assignmentId);
+            
+            // Add other test types here
+            // case 'wartegg':
+            //     return $this->showWarteggResult($assignmentId);
+            
+            default:
+                return redirect()->route('employee.test-assignments.my')
+                    ->with('error', 'Result view not available for this test type.');
+        }
+    }
+
+    /**
+     * Format time in seconds to readable format
+     */
+    private function formatTime($seconds)
+    {
+        $minutes = floor($seconds / 60);
+        $remainingSeconds = $seconds % 60;
+        
+        if ($minutes > 0) {
+            return "{$minutes} menit {$remainingSeconds} detik";
+        }
+        return "{$remainingSeconds} detik";
     }
 }
